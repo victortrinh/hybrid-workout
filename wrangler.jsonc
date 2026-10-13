@@ -3,6 +3,12 @@
   "name": "compromised",
   "main": "src/worker/index.ts",
   "compatibility_date": "2026-10-01",
+  // Production lives on the free compromised.<subdomain>.workers.dev address,
+  // behind Cloudflare Access (ADR-0001, docs/deploy.md). Per-version preview
+  // URLs are off: they are separate hostnames the Access application would not
+  // cover.
+  "workers_dev": true,
+  "preview_urls": false,
   // The Worker serves the built SPA. Anything that isn't a file falls back to
   // index.html so /plan and /progress load on refresh; /api/* always reaches Hono.
   "assets": {
@@ -12,7 +18,11 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "compromised"
+      "database_name": "compromised",
+      // Add "database_id" here once the production database exists
+      // (docs/deploy.md, step 2). The id is not a secret: it only works with
+      // credentials for Victor's Cloudflare account.
+      "migrations_dir": "migrations"
     }
   ],
   "observability": { "enabled": true }

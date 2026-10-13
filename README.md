@@ -56,7 +56,14 @@ npm run preview
 
 Builds, then serves that build from the Worker with `wrangler dev` (http://localhost:8787), the same way production will.
 
-Deploying behind Cloudflare Access is a separate step (issue #3).
+## Deploy
+
+```bash
+npm run deploy           # test, build, then wrangler deploy
+npm run db:migrate:prod  # apply new migrations to the production D1
+```
+
+Production is the Worker on its workers.dev address, behind Cloudflare Access with an email one-time code. The one-time setup (Wrangler sign-in, the production database, the Access application) is in [docs/deploy.md](docs/deploy.md).
 
 ## Layout
 
@@ -64,6 +71,8 @@ Deploying behind Cloudflare Access is a separate step (issue #3).
 src/domain/   Pure TypeScript: calendar (local dates in Toronto), the Program as data, the Coach
 src/app/      The React app: shell, screens, components, design tokens (styles.css)
 src/worker/   The Hono API and the Worker entry
+migrations/   D1 migrations, applied with Wrangler
+scripts/      Small Node scripts (check:access)
 e2e/          Playwright + axe specs
 prototype/    The approved clickable prototype (reference only)
 ```
