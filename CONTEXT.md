@@ -1,4 +1,4 @@
-# Hybrid Workout
+# Compromised
 
 A personal coach for one athlete's 27-week program toward a sub-20 5K and a HYROX Men's Open race on 21 April 2027. It turns the program into today's session and adapts it to what has been logged.
 

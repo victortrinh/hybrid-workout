@@ -10,7 +10,7 @@ related_targets: []
 Scope: clickable design prototype of the app shell and three surfaces, used to pick and record the visual system before the spec. Visitor mode: Operate.
 Audience and job: one athlete; know what to do now and at what target (Today), follow it mid-effort at arm's length (Live session), see whether the Program is working (Progress).
 Constraints: mobile-first for Today and Live session, desktop-first for Progress, both responsive; system light/dark; WCAG 2.2 AA; funny-blunt Coach copy; sample data labelled as such.
-Unresolved: product name ("Compromised" is the working name).
+Product name: Compromised (confirmed).
 
 ## Direction contract
 

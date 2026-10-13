@@ -39,7 +39,7 @@ A coach for exactly one Program and one athlete. It knows the plan, the race dat
 - Settings: treadmill units (km/h default, mph option), Environment defaults, equipment profile, integrations, export.
 - Free to run; works offline in the gym; English only; America/Toronto time zone.
 - Units: distances and speeds are metric (km, m, km/h, with an mph option for the treadmill); every weight is in pounds (lb), matching the gym's plates and dumbbells.
-- Undecided: the product name (working name chosen during the design directions, to be confirmed).
+- Product name: **Compromised** (confirmed 13 Oct 2026). HYROX athletes call running on legs tired from the Stations "compromised running".
 
 ## Brand Commitments
 
