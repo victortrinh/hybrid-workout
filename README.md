@@ -40,6 +40,8 @@ npm run check
 
 Type-checks the app, the Worker and the tooling.
 
+GitHub Actions runs all three on every pull request and on pushes to `main` (`.github/workflows/ci.yml`). When the end-to-end step fails, the Playwright report and traces are uploaded as an artifact.
+
 ## Build
 
 ```bash
