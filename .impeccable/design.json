@@ -1,0 +1,770 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-13T20:58:44.051497+00:00",
+  "title": "Design System: Compromised",
+  "extensions": {
+    "colorMeta": {
+      "cobalt": {
+        "role": "primary",
+        "displayName": "Montréal Cobalt",
+        "canonical": "#1B3BB8",
+        "tonalRamp": [
+          "#060049",
+          "#060978",
+          "#1531AA",
+          "#345ACD",
+          "#5B83EA",
+          "#84AAFF",
+          "#A8CCFF",
+          "#CEEEFF"
+        ]
+      },
+      "cobalt-hover": {
+        "role": "primary",
+        "displayName": "Deep Cobalt",
+        "canonical": "#15309A",
+        "tonalRamp": [
+          "#040045",
+          "#061172",
+          "#1A379F",
+          "#3C5FBC",
+          "#6385DA",
+          "#8CACF7",
+          "#AFCDFF",
+          "#D4EEFF"
+        ]
+      },
+      "cobalt-soft": {
+        "role": "primary",
+        "displayName": "Cobalt Haze",
+        "canonical": "rgba(255,255,255,.32)"
+      },
+      "on-cobalt": {
+        "role": "primary",
+        "displayName": "On-Cobalt White",
+        "canonical": "#FFFFFF",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#262626",
+          "#454545",
+          "#666666",
+          "#898989",
+          "#AEAEAE",
+          "#CECECE",
+          "#EEEEEE"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Paper",
+        "canonical": "#FFFFFF",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#262626",
+          "#454545",
+          "#666666",
+          "#898989",
+          "#AEAEAE",
+          "#CECECE",
+          "#EEEEEE"
+        ]
+      },
+      "sunk": {
+        "role": "neutral",
+        "displayName": "Sunk",
+        "canonical": "#F4F5F8",
+        "tonalRamp": [
+          "#0A0B0D",
+          "#262628",
+          "#444547",
+          "#656668",
+          "#88898C",
+          "#ADAEB1",
+          "#CDCED0",
+          "#EDEEF1"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#121212",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#262626",
+          "#454545",
+          "#666666",
+          "#898989",
+          "#AEAEAE",
+          "#CECECE",
+          "#EEEEEE"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted",
+        "canonical": "#4D4F57",
+        "tonalRamp": [
+          "#090B11",
+          "#24262D",
+          "#43454C",
+          "#64666E",
+          "#868992",
+          "#ABADB7",
+          "#CBCDD7",
+          "#EBEEF8"
+        ]
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Rule",
+        "canonical": "#E3E4E8",
+        "tonalRamp": [
+          "#0A0B0E",
+          "#262629",
+          "#444548",
+          "#656669",
+          "#88898C",
+          "#ADAEB1",
+          "#CCCDD1",
+          "#EDEEF2"
+        ]
+      },
+      "edge": {
+        "role": "neutral",
+        "displayName": "Edge",
+        "canonical": "#6F727B",
+        "tonalRamp": [
+          "#090B11",
+          "#24262E",
+          "#42454D",
+          "#63666F",
+          "#868992",
+          "#AAAEB7",
+          "#CACDD7",
+          "#EBEEF9"
+        ]
+      },
+      "link": {
+        "role": "primary",
+        "displayName": "Link Cobalt",
+        "canonical": "#1B3BB8",
+        "tonalRamp": [
+          "#060049",
+          "#060978",
+          "#1531AA",
+          "#345ACD",
+          "#5B83EA",
+          "#84AAFF",
+          "#A8CCFF",
+          "#CEEEFF"
+        ]
+      },
+      "speed": {
+        "role": "secondary",
+        "displayName": "Track Red",
+        "canonical": "#D9302A",
+        "tonalRamp": [
+          "#2F0000",
+          "#5B0000",
+          "#8A0000",
+          "#BB1C1A",
+          "#E84A3F",
+          "#FF7C6E",
+          "#FFA394",
+          "#FFCABB"
+        ]
+      },
+      "threshold": {
+        "role": "secondary",
+        "displayName": "Burnt Orange",
+        "canonical": "#C76100",
+        "tonalRamp": [
+          "#250000",
+          "#4C0C00",
+          "#762A00",
+          "#A24800",
+          "#CE6A1B",
+          "#F09458",
+          "#FFB782",
+          "#FFDBAC"
+        ]
+      },
+      "hyrox": {
+        "role": "secondary",
+        "displayName": "Infield Green",
+        "canonical": "#1E8A3E",
+        "tonalRamp": [
+          "#001400",
+          "#003300",
+          "#005618",
+          "#0F7B33",
+          "#439F58",
+          "#75C382",
+          "#9CE2A6",
+          "#C3FFCB"
+        ]
+      },
+      "strength": {
+        "role": "secondary",
+        "displayName": "Plate Violet",
+        "canonical": "#6A3FB5",
+        "tonalRamp": [
+          "#140038",
+          "#300362",
+          "#502690",
+          "#7149BC",
+          "#9272DB",
+          "#B59BF9",
+          "#D4BEFF",
+          "#F4E1FF"
+        ]
+      },
+      "easy": {
+        "role": "secondary",
+        "displayName": "Warm-up Grey",
+        "canonical": "#6A6E78",
+        "tonalRamp": [
+          "#080B12",
+          "#23262F",
+          "#41454E",
+          "#626670",
+          "#858993",
+          "#A9AEB9",
+          "#C9CED9",
+          "#EAEEFA"
+        ]
+      },
+      "alert": {
+        "role": "tertiary",
+        "displayName": "Alert Orange",
+        "canonical": "#C76100",
+        "tonalRamp": [
+          "#250000",
+          "#4C0C00",
+          "#762A00",
+          "#A24800",
+          "#CE6A1B",
+          "#F09458",
+          "#FFB782",
+          "#FFDBAC"
+        ]
+      },
+      "good": {
+        "role": "tertiary",
+        "displayName": "Done Green",
+        "canonical": "#1E8A3E",
+        "tonalRamp": [
+          "#001400",
+          "#003300",
+          "#005618",
+          "#0F7B33",
+          "#439F58",
+          "#75C382",
+          "#9CE2A6",
+          "#C3FFCB"
+        ]
+      },
+      "paper-dark": {
+        "role": "neutral",
+        "displayName": "Paper (dark theme)",
+        "canonical": "#0F1115",
+        "tonalRamp": [
+          "#090B0F",
+          "#24262B",
+          "#43454A",
+          "#63666B",
+          "#86898F",
+          "#ABAEB4",
+          "#CBCED4",
+          "#EBEEF5"
+        ]
+      },
+      "sunk-dark": {
+        "role": "neutral",
+        "displayName": "Sunk (dark theme)",
+        "canonical": "#171A20",
+        "tonalRamp": [
+          "#090B11",
+          "#23262D",
+          "#42454C",
+          "#62666E",
+          "#858991",
+          "#AAAEB6",
+          "#CACED6",
+          "#EAEFF7"
+        ]
+      },
+      "ink-dark": {
+        "role": "neutral",
+        "displayName": "Ink (dark theme)",
+        "canonical": "#F1F1EE",
+        "tonalRamp": [
+          "#0B0B09",
+          "#272724",
+          "#454543",
+          "#666664",
+          "#898987",
+          "#AEAEAB",
+          "#CECECB",
+          "#EFEFEC"
+        ]
+      },
+      "muted-dark": {
+        "role": "neutral",
+        "displayName": "Muted (dark theme)",
+        "canonical": "#A6A9B1",
+        "tonalRamp": [
+          "#090B10",
+          "#24262C",
+          "#42454C",
+          "#63666D",
+          "#868991",
+          "#ABAEB6",
+          "#CACED6",
+          "#EBEEF7"
+        ]
+      },
+      "rule-dark": {
+        "role": "neutral",
+        "displayName": "Rule (dark theme)",
+        "canonical": "#2A2E36",
+        "tonalRamp": [
+          "#080B12",
+          "#23262E",
+          "#41454E",
+          "#62666F",
+          "#848993",
+          "#A9AEB8",
+          "#C9CED8",
+          "#E9EFF9"
+        ]
+      },
+      "edge-dark": {
+        "role": "neutral",
+        "displayName": "Edge (dark theme)",
+        "canonical": "#8A8E97",
+        "tonalRamp": [
+          "#080B11",
+          "#23262E",
+          "#41454D",
+          "#62666E",
+          "#858992",
+          "#AAAEB7",
+          "#C9CED7",
+          "#EAEEF8"
+        ]
+      },
+      "link-dark": {
+        "role": "primary",
+        "displayName": "Link Cobalt (dark theme)",
+        "canonical": "#9DB0FF",
+        "tonalRamp": [
+          "#060820",
+          "#1D2345",
+          "#38416D",
+          "#566299",
+          "#7585C6",
+          "#96A9F6",
+          "#B6C9FF",
+          "#D9EBFF"
+        ]
+      },
+      "speed-dark": {
+        "role": "secondary",
+        "displayName": "Track Red (dark theme)",
+        "canonical": "#FF6A5C",
+        "tonalRamp": [
+          "#270000",
+          "#500001",
+          "#7D1C17",
+          "#AC3930",
+          "#DE564A",
+          "#FF7B6C",
+          "#FFA291",
+          "#FFC8B8"
+        ]
+      },
+      "threshold-dark": {
+        "role": "secondary",
+        "displayName": "Burnt Orange (dark theme)",
+        "canonical": "#FF9F3D",
+        "tonalRamp": [
+          "#1D0200",
+          "#421900",
+          "#6A3500",
+          "#955400",
+          "#C2741D",
+          "#F19536",
+          "#FFB65F",
+          "#FFDA8E"
+        ]
+      },
+      "hyrox-dark": {
+        "role": "secondary",
+        "displayName": "Infield Green (dark theme)",
+        "canonical": "#4CC673",
+        "tonalRamp": [
+          "#001300",
+          "#00320A",
+          "#005523",
+          "#177A3D",
+          "#34A159",
+          "#52CA77",
+          "#80E89C",
+          "#ABFFC1"
+        ]
+      },
+      "strength-dark": {
+        "role": "secondary",
+        "displayName": "Plate Violet (dark theme)",
+        "canonical": "#B395FF",
+        "tonalRamp": [
+          "#0F0225",
+          "#2B1A4C",
+          "#4A3776",
+          "#6C56A3",
+          "#9176D2",
+          "#B699FF",
+          "#D5BBFF",
+          "#F5DEFF"
+        ]
+      },
+      "easy-dark": {
+        "role": "secondary",
+        "displayName": "Warm-up Grey (dark theme)",
+        "canonical": "#9BA0AA",
+        "tonalRamp": [
+          "#080B12",
+          "#23262E",
+          "#41454E",
+          "#62666F",
+          "#848993",
+          "#A9AEB8",
+          "#C9CED8",
+          "#E9EFF9"
+        ]
+      },
+      "alert-dark": {
+        "role": "tertiary",
+        "displayName": "Alert Orange (dark theme)",
+        "canonical": "#FF9F3D",
+        "tonalRamp": [
+          "#1D0200",
+          "#421900",
+          "#6A3500",
+          "#955400",
+          "#C2741D",
+          "#F19536",
+          "#FFB65F",
+          "#FFDA8E"
+        ]
+      },
+      "good-dark": {
+        "role": "tertiary",
+        "displayName": "Done Green (dark theme)",
+        "canonical": "#4CC673",
+        "tonalRamp": [
+          "#001300",
+          "#00320A",
+          "#005523",
+          "#177A3D",
+          "#34A159",
+          "#52CA77",
+          "#80E89C",
+          "#ABFFC1"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "numeral": {
+        "displayName": "Numeral",
+        "purpose": "Striped race countdown; the screen hero number."
+      },
+      "numeral-live": {
+        "displayName": "Numeral Live",
+        "purpose": "Striped live target speed or load."
+      },
+      "figure": {
+        "displayName": "Figure",
+        "purpose": "Solid live timer and incline."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Next Session and Live sheet questions."
+      },
+      "headline-page": {
+        "displayName": "Headline Page",
+        "purpose": "Plan and Progress titles."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Section and panel headings."
+      },
+      "title-sm": {
+        "displayName": "Title Small",
+        "purpose": "Phase headings in Plan."
+      },
+      "prescription": {
+        "displayName": "Prescription",
+        "purpose": "Target speed, incline or load under the next Session."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Coach Suggestions, row names, button labels."
+      },
+      "body-quiet": {
+        "displayName": "Body Quiet",
+        "purpose": "Meta lines, reasons, subtitles (muted)."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Tabs, lane names, legend, table headers, tag."
+      },
+      "brand": {
+        "displayName": "Brand",
+        "purpose": "Uppercase wordmark only."
+      }
+    },
+    "fontSource": {
+      "family": "Archivo",
+      "axes": {
+        "wdth": "62..125",
+        "wght": "400..900"
+      },
+      "prototype": "Google Fonts css2",
+      "production": "Self-host the Archivo variable font (wdth 62-125, wght 400-900)."
+    },
+    "themes": {
+      "strategy": "prefers-color-scheme by default; :root[data-theme=light|dark] manual override. Cobalt, cobalt-hover, cobalt-soft and on-cobalt are constant; paper-side tokens swap to their -dark values."
+    },
+    "cssVariables": {
+      "--cobalt": "cobalt",
+      "--cobalt-hover": "cobalt-hover",
+      "--cobalt-soft": "cobalt-soft",
+      "--paper": "paper",
+      "--sunk": "sunk",
+      "--ink": "ink",
+      "--muted": "muted",
+      "--rule": "rule",
+      "--edge": "edge",
+      "--link": "link",
+      "--speed": "speed",
+      "--thr": "threshold",
+      "--hyrox": "hyrox",
+      "--str": "strength",
+      "--easy": "easy",
+      "--alert": "alert",
+      "--good": "good",
+      "--pad": "spacing.pad",
+      "--radius": "rounded.sm"
+    },
+    "stripedNumeral": {
+      "stripeWidth": "max(2px, round(fontSize * 0.03))",
+      "gap": "fontSize * 0.085",
+      "minStripes": 3,
+      "span": "glyph actualBoundingBoxAscent, ending at the baseline",
+      "stripeColor": "surface colour (cobalt on the field)",
+      "decimalPoint": "solid, stacked above stripes"
+    },
+    "focus": {
+      "value": "3px solid var(--link); outline-offset 2px",
+      "onField": "outline-color #fff"
+    },
+    "shadows": [
+      {
+        "name": "popover-lift",
+        "value": "0 10px 30px rgba(0,0,0,.18)",
+        "purpose": "Floating settings popover only; the system is otherwise flat."
+      }
+    ],
+    "motion": [
+      {
+        "name": "lane-fill",
+        "value": "width .9s cubic-bezier(.16,1,.3,1)",
+        "purpose": "Every lane fill (Phase, block, set group)."
+      },
+      {
+        "name": "rest-tick",
+        "value": "width 1s linear",
+        "purpose": "Rest timer bar, ticking each second."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "transition:none; animation:none",
+        "purpose": "All motion removed under prefers-reduced-motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "desktop",
+        "value": "960px",
+        "purpose": "Side rail replaces tab bar; 48px gutters; Progress 12-column grid."
+      }
+    ],
+    "containers": [
+      {
+        "name": "progress",
+        "value": "1280px"
+      },
+      {
+        "name": "plan",
+        "value": "900px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one main action per region: Start session, Pause, Back to Today.",
+      "html": "<button class=\"ds-btn ds-btn-primary\">Start session</button>",
+      "css": ":host{--cobalt:#1B3BB8;--cobalt-hover:#15309A;--cobalt-soft:rgba(255,255,255,.32);--paper:#FFFFFF;--sunk:#F4F5F8;--ink:#121212;--muted:#4D4F57;--rule:#E3E4E8;--edge:#6F727B;--link:#1B3BB8;--speed:#D9302A;--thr:#C76100;--hyrox:#1E8A3E;--str:#6A3FB5;--easy:#6A6E78;--good:#1E8A3E;--radius:4px;font-family:Archivo,system-ui,sans-serif;font-variant-numeric:tabular-nums} .ds-btn{min-height:54px;border-radius:var(--radius);display:inline-grid;place-items:center;font:700 17px Archivo,system-ui,sans-serif;padding:0 20px;border:0;cursor:pointer}.ds-btn-primary{background:var(--cobalt);color:#fff}.ds-btn-primary:hover{background:var(--cobalt-hover)}.ds-btn:focus-visible{outline:3px solid var(--link);outline-offset:2px}"
+    },
+    {
+      "name": "Line Button",
+      "kind": "button",
+      "refersTo": "button-line",
+      "description": "Secondary action beside a primary: Log after, Skip block, Finish session.",
+      "html": "<button class=\"ds-btn-line\">Log after</button>",
+      "css": ":host{--cobalt:#1B3BB8;--cobalt-hover:#15309A;--cobalt-soft:rgba(255,255,255,.32);--paper:#FFFFFF;--sunk:#F4F5F8;--ink:#121212;--muted:#4D4F57;--rule:#E3E4E8;--edge:#6F727B;--link:#1B3BB8;--speed:#D9302A;--thr:#C76100;--hyrox:#1E8A3E;--str:#6A3FB5;--easy:#6A6E78;--good:#1E8A3E;--radius:4px;font-family:Archivo,system-ui,sans-serif;font-variant-numeric:tabular-nums} .ds-btn-line{min-height:54px;border-radius:var(--radius);font:700 17px Archivo,system-ui,sans-serif;padding:0 20px;border:0;cursor:pointer;background:var(--paper);color:var(--ink);box-shadow:inset 0 0 0 2px var(--ink)}.ds-btn-line:hover{background:var(--sunk)}.ds-btn-line:focus-visible{outline:3px solid var(--link);outline-offset:2px}"
+    },
+    {
+      "name": "Link Button",
+      "kind": "button",
+      "refersTo": "link-button",
+      "description": "Underlined cobalt choice in Coach Suggestions; the quiet variant is ink without underline.",
+      "html": "<span class=\"ds-row\"><button class=\"ds-link\">Accept</button><button class=\"ds-link ds-quiet\">Keep 2 × 12′</button></span>",
+      "css": ":host{--cobalt:#1B3BB8;--cobalt-hover:#15309A;--cobalt-soft:rgba(255,255,255,.32);--paper:#FFFFFF;--sunk:#F4F5F8;--ink:#121212;--muted:#4D4F57;--rule:#E3E4E8;--edge:#6F727B;--link:#1B3BB8;--speed:#D9302A;--thr:#C76100;--hyrox:#1E8A3E;--str:#6A3FB5;--easy:#6A6E78;--good:#1E8A3E;--radius:4px;font-family:Archivo,system-ui,sans-serif;font-variant-numeric:tabular-nums} .ds-row{display:flex;gap:20px}.ds-link{background:none;border:0;cursor:pointer;color:var(--link);font:700 15px Archivo,system-ui,sans-serif;text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:4px;padding:8px 0}.ds-link:hover{text-decoration-thickness:3px}.ds-quiet{color:var(--ink);text-decoration:none}.ds-link:focus-visible{outline:3px solid var(--link);outline-offset:2px}"
+    },
+    {
+      "name": "Pressed Toggle Group",
+      "kind": "chip",
+      "refersTo": "toggle",
+      "description": "Pain scale, RPE and area choices; pressed inverts to ink.",
+      "html": "<div class=\"ds-tg\"><button aria-pressed=\"false\">RPE 6</button><button aria-pressed=\"true\">RPE 7</button><button aria-pressed=\"false\">RPE 8</button></div>",
+      "css": ":host{--cobalt:#1B3BB8;--cobalt-hover:#15309A;--cobalt-soft:rgba(255,255,255,.32);--paper:#FFFFFF;--sunk:#F4F5F8;--ink:#121212;--muted:#4D4F57;--rule:#E3E4E8;--edge:#6F727B;--link:#1B3BB8;--speed:#D9302A;--thr:#C76100;--hyrox:#1E8A3E;--str:#6A3FB5;--easy:#6A6E78;--good:#1E8A3E;--radius:4px;font-family:Archivo,system-ui,sans-serif;font-variant-numeric:tabular-nums} .ds-tg{display:flex;gap:6px}.ds-tg button{min-width:44px;min-height:46px;padding:0 10px;border:0;cursor:pointer;border-radius:var(--radius);background:var(--paper);color:var(--ink);box-shadow:inset 0 0 0 2px var(--edge);font:700 14px Archivo,system-ui,sans-serif}.ds-tg button:hover{background:var(--sunk)}.ds-tg button[aria-pressed=\"true\"]{background:var(--ink);color:var(--paper);box-shadow:none}.ds-tg button:focus-visible{outline:3px solid var(--link);outline-offset:2px}"
+    },
+    {
+      "name": "Status Tag",
+      "kind": "chip",
+      "refersTo": "status-tag",
+      "description": "Cobalt Next marker on the Up next Week row.",
+      "html": "<span class=\"ds-tag\">Next</span>",
+      "css": ":host{--cobalt:#1B3BB8;--cobalt-hover:#15309A;--cobalt-soft:rgba(255,255,255,.32);--paper:#FFFFFF;--sunk:#F4F5F8;--ink:#121212;--muted:#4D4F57;--rule:#E3E4E8;--edge:#6F727B;--link:#1B3BB8;--speed:#D9302A;--thr:#C76100;--hyrox:#1E8A3E;--str:#6A3FB5;--easy:#6A6E78;--good:#1E8A3E;--radius:4px;font-family:Archivo,system-ui,sans-serif;font-variant-numeric:tabular-nums} .ds-tag{display:inline-block;padding:4px 8px;border-radius:var(--radius);font:700 13px Archivo,system-ui,sans-serif;background:var(--cobalt);color:#fff}"
+    },
+    {
+      "name": "Navigation",
+      "kind": "nav",
+      "refersTo": "side-nav-item",
+      "description": "Desktop cobalt side rail; active item inverts to white.",
+      "html": "<nav class=\"ds-side\"><span class=\"ds-brand\">COMPROMISED</span><a href=\"#\" aria-current=\"page\"><svg viewBox=\"0 0 24 24\"><path d=\"M3 8h18M3 12h18M3 16h18\"/></svg>Today</a><a href=\"#\"><svg viewBox=\"0 0 24 24\"><rect x=\"4\" y=\"4\" width=\"16\" height=\"16\" rx=\"1\"/><path d=\"M4 10h16M10 4v16\"/></svg>Plan</a><a href=\"#\"><svg viewBox=\"0 0 24 24\"><path d=\"M4 19V5M4 19h16M8 15l4-4 3 3 5-6\"/></svg>Progress</a></nav>",
+      "css": ":host{--cobalt:#1B3BB8;--cobalt-hover:#15309A;--cobalt-soft:rgba(255,255,255,.32);--paper:#FFFFFF;--sunk:#F4F5F8;--ink:#121212;--muted:#4D4F57;--rule:#E3E4E8;--edge:#6F727B;--link:#1B3BB8;--speed:#D9302A;--thr:#C76100;--hyrox:#1E8A3E;--str:#6A3FB5;--easy:#6A6E78;--good:#1E8A3E;--radius:4px;font-family:Archivo,system-ui,sans-serif;font-variant-numeric:tabular-nums} .ds-side{display:grid;gap:4px;width:240px;background:var(--cobalt);color:#fff;padding:28px 24px}.ds-brand{font-weight:800;font-stretch:125%;font-size:20px;letter-spacing:.02em;margin-bottom:32px}.ds-side a{display:flex;align-items:center;gap:12px;color:#fff;text-decoration:none;font-weight:700;font-size:17px;padding:10px 12px;border-radius:var(--radius)}.ds-side a:hover{background:rgba(255,255,255,.12)}.ds-side a[aria-current=\"page\"]{background:#fff;color:var(--cobalt)}.ds-side a:focus-visible{outline:3px solid #fff;outline-offset:2px}.ds-side svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}"
+    },
+    {
+      "name": "Field Band with Striped Numeral",
+      "kind": "custom",
+      "refersTo": "field-band",
+      "description": "Cobalt countdown band: striped hero numeral and five Phase lanes. Stripe phase is computed at runtime from glyph ascent; values here are a static approximation.",
+      "html": "<header class=\"ds-field\"><div class=\"ds-num\">168</div><p class=\"ds-cap\">days to the race · Wed 21 April</p><div class=\"ds-lanes\"><div class=\"ds-ph cur\"><span>Foundation</span><span class=\"ds-lane\"><i style=\"width:42%\"></i></span></div><div class=\"ds-ph\"><span>5K development</span><span class=\"ds-lane\"><i></i></span></div><div class=\"ds-ph\"><span>HYROX build</span><span class=\"ds-lane\"><i></i></span></div><div class=\"ds-ph\"><span>Race specific</span><span class=\"ds-lane\"><i></i></span></div><div class=\"ds-ph\"><span>Taper</span><span class=\"ds-lane\"><i></i></span></div></div></header>",
+      "css": ":host{--cobalt:#1B3BB8;--cobalt-hover:#15309A;--cobalt-soft:rgba(255,255,255,.32);--paper:#FFFFFF;--sunk:#F4F5F8;--ink:#121212;--muted:#4D4F57;--rule:#E3E4E8;--edge:#6F727B;--link:#1B3BB8;--speed:#D9302A;--thr:#C76100;--hyrox:#1E8A3E;--str:#6A3FB5;--easy:#6A6E78;--good:#1E8A3E;--radius:4px;font-family:Archivo,system-ui,sans-serif;font-variant-numeric:tabular-nums} .ds-field{background:var(--cobalt);color:#fff;padding:16px 20px 20px}.ds-num{position:relative;display:inline-block;font-size:150px;font-weight:900;font-stretch:125%;letter-spacing:-.04em;line-height:.88}.ds-num::after{content:\"\";position:absolute;left:-2px;right:-2px;top:6%;height:72%;background:repeating-linear-gradient(to bottom,transparent 0 12.8px,var(--cobalt) 12.8px 17.3px)}.ds-cap{font-size:18px;font-weight:600;margin:10px 0 0}.ds-lanes{display:grid;gap:6px;margin-top:18px}.ds-ph{display:grid;grid-template-columns:128px 1fr;gap:10px;align-items:center;font-size:13px;font-weight:600}.ds-ph.cur{font-weight:800}.ds-lane{position:relative;height:5px;background:var(--cobalt-soft);overflow:hidden}.ds-ph.cur .ds-lane{height:8px}.ds-lane i{position:absolute;inset:0 auto 0 0;background:#fff;width:0;transition:width .9s cubic-bezier(.16,1,.3,1)}"
+    },
+    {
+      "name": "Live Block Lanes",
+      "kind": "custom",
+      "refersTo": "lane-track-paper",
+      "description": "One lane per block in a treadmill Live session, coloured by Session type; the current block grows.",
+      "html": "<div class=\"ds-lv\"><div class=\"ds-l\"><span>Warm-up</span><span class=\"t\">10 min</span><span class=\"bar\" style=\"--c:var(--easy)\"><i style=\"width:100%\"></i></span></div><div class=\"ds-l cur\"><span>Rep 1</span><span class=\"t\">12.2 km/h</span><span class=\"bar\" style=\"--c:var(--thr)\"><i style=\"width:52%\"></i></span></div><div class=\"ds-l\"><span>Jog</span><span class=\"t\">2 min</span><span class=\"bar\" style=\"--c:var(--easy)\"><i></i></span></div></div>",
+      "css": ":host{--cobalt:#1B3BB8;--cobalt-hover:#15309A;--cobalt-soft:rgba(255,255,255,.32);--paper:#FFFFFF;--sunk:#F4F5F8;--ink:#121212;--muted:#4D4F57;--rule:#E3E4E8;--edge:#6F727B;--link:#1B3BB8;--speed:#D9302A;--thr:#C76100;--hyrox:#1E8A3E;--str:#6A3FB5;--easy:#6A6E78;--good:#1E8A3E;--radius:4px;font-family:Archivo,system-ui,sans-serif;font-variant-numeric:tabular-nums} .ds-lv{display:grid;gap:12px;color:var(--ink)}.ds-l{display:grid;grid-template-columns:1fr auto;gap:6px 10px;font-size:15px;font-weight:600}.ds-l .t{color:var(--muted)}.ds-l .bar{grid-column:1/-1;height:12px;background:var(--rule);position:relative;overflow:hidden}.ds-l .bar i{position:absolute;inset:0 auto 0 0;width:0;background:var(--c)}.ds-l.cur{font-size:17px;font-weight:800}.ds-l.cur .bar{height:26px}"
+    },
+    {
+      "name": "Week Lane Row",
+      "kind": "custom",
+      "refersTo": "lane-track-paper",
+      "description": "Plan and Weekly completion row: Week number, five Session-type cells (filled = done, tall = Key session), note.",
+      "html": "<div class=\"ds-wk cur\"><span class=\"no\">03</span><span class=\"cells\"><i class=\"f\" style=\"--c:var(--speed)\"></i><i style=\"--c:var(--str)\"></i><i class=\"k\" style=\"--c:var(--thr)\"></i><i style=\"--c:var(--hyrox)\"></i><i style=\"--c:var(--easy)\"></i></span><span class=\"ph\">In progress</span></div>",
+      "css": ":host{--cobalt:#1B3BB8;--cobalt-hover:#15309A;--cobalt-soft:rgba(255,255,255,.32);--paper:#FFFFFF;--sunk:#F4F5F8;--ink:#121212;--muted:#4D4F57;--rule:#E3E4E8;--edge:#6F727B;--link:#1B3BB8;--speed:#D9302A;--thr:#C76100;--hyrox:#1E8A3E;--str:#6A3FB5;--easy:#6A6E78;--good:#1E8A3E;--radius:4px;font-family:Archivo,system-ui,sans-serif;font-variant-numeric:tabular-nums} .ds-wk{display:grid;grid-template-columns:40px 1fr 88px;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--rule);color:var(--ink)}.ds-wk .no{font-weight:800;font-stretch:125%}.ds-wk.cur{background:var(--sunk)}.ds-wk.cur .no{color:var(--link)}.ds-wk .cells{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}.ds-wk .cells i{display:block;height:12px;box-shadow:inset 0 0 0 2px var(--c)}.ds-wk .cells i.f{background:var(--c)}.ds-wk .cells i.k{height:18px}.ds-wk .ph{font-size:13px;color:var(--muted);font-weight:600;text-align:right}"
+    },
+    {
+      "name": "Ruled Panel",
+      "kind": "card",
+      "refersTo": "empty-state",
+      "description": "Progress panel: no card, a 2px ink top rule; empty state is the one sunk block.",
+      "html": "<section class=\"ds-panel\"><h2>HYROX stations</h2><p class=\"sub\">Times from Race simulations</p><div class=\"ds-empty\">No Race simulation yet. First one is Week 18, Feb 15. Enjoy the peace.</div></section>",
+      "css": ":host{--cobalt:#1B3BB8;--cobalt-hover:#15309A;--cobalt-soft:rgba(255,255,255,.32);--paper:#FFFFFF;--sunk:#F4F5F8;--ink:#121212;--muted:#4D4F57;--rule:#E3E4E8;--edge:#6F727B;--link:#1B3BB8;--speed:#D9302A;--thr:#C76100;--hyrox:#1E8A3E;--str:#6A3FB5;--easy:#6A6E78;--good:#1E8A3E;--radius:4px;font-family:Archivo,system-ui,sans-serif;font-variant-numeric:tabular-nums} .ds-panel{border-top:2px solid var(--ink);padding:14px 0 24px;color:var(--ink)}.ds-panel h2{margin:0;font-size:26px;font-weight:850;font-stretch:75%;letter-spacing:-.01em;line-height:1.02}.ds-panel .sub{font-size:15px;color:var(--muted);margin:4px 0 0}.ds-empty{margin-top:12px;padding:18px;background:var(--sunk);border-radius:var(--radius);font-weight:600}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Lanes '76",
+    "overview": "Training run in lanes. The world borrows the Montréal 1976 Olympic identity: five parallel stripes, track lane lines, striped lettering. Progress is never a ring and never a card; it is parallel bars filling left to right, one lane per Phase, block, set group or Session type. A cobalt field owns the shell (countdown band, primary actions, active navigation, rest timer) and stays the same cobalt in light and dark themes; everything else sits on paper and is divided by ink rules.\n\nDensity is athletic: one big number, one instruction, then rows. Numbers are the heroes and are set expanded and black at 900 weight with horizontal stripes cut through them; headings are condensed and heavy; everything else is regular-width Archivo at 600. The surface is flat: rules, tonal sinks and fills do the structural work, not shadows or containers. The Coach's copy is blunt and dry, and every line carries the number and the reason.\n\nThe category default (rounded cards, progress rings, gradient hero, a single sporty neon accent) is the confirmed anti-reference.",
+    "keyCharacteristics": [
+      "Cobalt field band at the top of Today and every Live session, constant across themes.",
+      "Striped numerals for the race countdown, the live target speed and the live target load.",
+      "Five-lane progress everywhere progress is shown.",
+      "Five Session-type lane colours that mean the same thing on every screen.",
+      "2px ink rules and 1px hairlines instead of cards; square 4px corners.",
+      "Underlined links, tabular figures throughout."
+    ],
+    "rules": [
+      {
+        "name": "The Constant Field Rule",
+        "body": "Cobalt is the same in light and dark. Only paper-side tokens change with the theme; the field band, its white type and its lanes never do.",
+        "section": "colors"
+      },
+      {
+        "name": "The Lane Colour Rule",
+        "body": "A Session-type colour means that Session type and nothing else. Never use `speed` red as a generic error or `hyrox` green as generic success outside the two shared status aliases.",
+        "section": "colors"
+      },
+      {
+        "name": "The Never Colour Alone Rule",
+        "body": "Every lane colour is paired with a name (legend, row label, block label), and filled vs. outlined cells carry done vs. planned independently of hue.",
+        "section": "colors"
+      },
+      {
+        "name": "The Two Widths Rule",
+        "body": "Numbers that matter are expanded (width 125) at 900; headings are condensed (width 75) at 850; everything else is width 100. No third display width.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Rule",
+        "body": "`font-variant-numeric: tabular-nums` is set on the body; every figure in the product aligns in columns, including timers that tick.",
+        "section": "typography"
+      },
+      {
+        "name": "The Striped Numeral Rule",
+        "body": "Striped numerals are reserved for the single hero number of a screen (countdown, live target speed, live target load). Stripes are phased from the glyph's cap top to the baseline so whole bands land on both edges; the stripe colour is the surface colour (cobalt on the field); the decimal point stays solid above the stripes.",
+        "section": "typography"
+      },
+      {
+        "name": "The One Answer Rule",
+        "body": "Each screen opens with one hero number or one instruction in the first viewport; everything else follows as rows.",
+        "section": "layout"
+      },
+      {
+        "name": "The Rule-Not-Card Rule",
+        "body": "Content groups are separated by a 2px ink top rule (panels, the Suggestion, the held-pace check, the tab bar) and 1px hairlines between rows. No bordered or shadowed cards on paper.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do show progress as parallel lanes filling left to right (5px on the field, 12px on paper, 26px for the live current block).",
+      "Do keep cobalt (`#1B3BB8`) constant across light and dark themes; theme only the paper side.",
+      "Do stripe only the screen's hero number, phased top to baseline, with a solid decimal point.",
+      "Do separate groups with a 2px ink rule and rows with a 1px `rule` hairline.",
+      "Do use 4px corners on controls and square ends on lanes, cells and bars.",
+      "Do underline links (2px at 4px offset) and keep tabular figures everywhere.",
+      "Do pair every lane colour with its Session-type name.",
+      "Do write Coach lines that state the number and the reason first, the joke second (\"Slept 5 h 41. Bold strategy. Reps cut to 2 × 10′.\")."
+    ],
+    "donts": [
+      "Don't use progress rings, donut charts or pill-shaped progress bars.",
+      "Don't put content in bordered or shadowed cards; the popover is the only floating, shadowed surface.",
+      "Don't reuse a Session-type colour for anything other than its Session type.",
+      "Don't add a second accent hue to the shell, or gradients to the field.",
+      "Don't stripe body figures, timers or table values; they stay solid.",
+      "Don't set display type at a third width or in a different family.",
+      "Don't write cheerleading or motivational-poster copy, or a joke that hides the instruction."
+    ]
+  }
+}

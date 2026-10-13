@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=390">
+<title>Compromised — Today (Métro Line)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--navy:#0E2240;--ground:#EEF0EC;--panel:#FFFFFF;--ink:#14181F;--muted:#4A5361;--rule:#D3D7D2;
+    --green:#1E9A50;--orange:#EE7F1A;--blue:#1C6ED6;--yellow:#F2C200}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:390px;height:844px;overflow:hidden;background:var(--ground);color:var(--ink);
+    font-family:Barlow,system-ui,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+  .band{background:var(--navy);color:#fff;padding:14px 20px 16px}
+  .status{display:flex;justify-content:space-between;font-size:14px;font-weight:600;opacity:.9}
+  .top{display:flex;justify-content:space-between;align-items:center;margin-top:14px}
+  .brand{font-family:"Barlow Condensed";font-weight:700;font-size:26px;letter-spacing:.01em}
+  .avatar{width:32px;height:32px;border-radius:50%;background:#fff;color:var(--navy);display:grid;place-items:center;font-weight:700}
+  .where{display:flex;justify-content:space-between;margin-top:12px;font-size:15px;font-weight:500}
+  .where b{font-weight:700}
+  .line{margin-top:14px;display:block}
+  .tags{display:flex;justify-content:space-between;font-size:13px;font-weight:600;margin-top:4px;color:#C9D3E3}
+  main{padding:18px 20px 0}
+  h1{font-family:"Barlow Condensed";font-weight:700;font-size:40px;line-height:1;letter-spacing:-.01em}
+  h1 span{color:#157A3F}
+  .rx{margin-top:10px;font-size:22px;font-weight:600}
+  .meta{margin-top:4px;color:var(--muted);font-size:15px}
+  .actions{display:flex;gap:10px;margin-top:14px}
+  .btn{flex:1;height:52px;border-radius:26px;border:0;font:600 17px Barlow;display:grid;place-items:center}
+  .primary{background:var(--navy);color:#fff}
+  .ghost{flex:0 0 auto;padding:0 20px;background:transparent;color:var(--navy);box-shadow:inset 0 0 0 2px var(--navy)}
+  .sugg{margin-top:16px;background:var(--panel);border-radius:14px;padding:14px 16px;display:grid;grid-template-columns:28px 1fr;gap:10px;
+    box-shadow:0 2px 10px rgba(14,34,64,.08)}
+  .dot{width:22px;height:22px;border-radius:50%;background:var(--yellow);box-shadow:inset 0 0 0 5px #fff,0 0 0 2px var(--yellow);margin-top:2px}
+  .sugg p{font-size:16px;line-height:1.35}
+  .sugg .why{color:var(--muted);font-size:14px;margin-top:2px}
+  .sugg .row{display:flex;gap:16px;margin-top:10px;align-items:center}
+  .accept{background:var(--yellow);color:var(--ink);border-radius:18px;height:36px;padding:0 16px;font:600 15px Barlow;border:0}
+  .keep{font:600 15px Barlow;color:var(--navy);background:none;border:0}
+  h2{font-family:"Barlow Condensed";font-weight:700;font-size:22px;margin-top:20px;display:flex;justify-content:space-between;align-items:baseline}
+  h2 small{font:500 14px Barlow;color:var(--muted)}
+  .stops{position:relative;margin-top:8px;padding-left:40px}
+  .stop{position:relative;height:46px;display:flex;flex-direction:column;justify-content:center}
+  .stop .n{font-size:17px;font-weight:600}
+  .stop .d{font-size:14px;color:var(--muted)}
+  .stop::before{content:"";position:absolute;left:-26px;top:0;bottom:0;width:6px;background:var(--green)}
+  .stop:first-child::before{top:50%}
+  .stop.opt::before{background:none;border-left:6px dotted var(--green);width:0}
+  .stop.opt:last-child::before{bottom:50%}
+  .m{position:absolute;left:-31px;top:50%;width:16px;height:16px;margin-top:-8px;border-radius:50%;background:#fff;box-shadow:0 0 0 4px var(--green)}
+  .done .m{background:var(--green)}
+  .done .n{text-decoration:line-through;text-decoration-thickness:2px;color:var(--muted)}
+  .key .m{width:24px;height:24px;margin-top:-12px;left:-35px;background:var(--navy);box-shadow:0 0 0 4px #fff,0 0 0 8px var(--green)}
+  .chip{display:inline-block;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#12703A;margin-left:8px}
+  nav{position:absolute;left:0;right:0;bottom:0;height:78px;background:var(--panel);border-top:1px solid var(--rule);display:flex;justify-content:space-around;padding-top:10px}
+  nav a{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:13px;font-weight:600;color:var(--muted);text-decoration:none}
+  nav a.on{color:var(--navy)}
+  nav svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+</style>
+</head>
+<body>
+<header class="band">
+  <div class="status"><span>18:42</span><span>87%</span></div>
+  <div class="top"><span class="brand">Compromised</span><span class="avatar" aria-label="Settings">V</span></div>
+  <div class="where"><span><b>Week 3</b> · Foundation</span><span>Race Apr 21 · <b>168 days</b></span></div>
+  <svg class="line" width="350" height="28" viewBox="0 0 350 28" aria-label="Program line, week 3 of 27">
+    <line x1="8" y1="14" x2="72" y2="14" stroke="#1E9A50" stroke-width="6"/>
+    <line x1="72" y1="14" x2="175" y2="14" stroke="#EE7F1A" stroke-width="6"/>
+    <line x1="175" y1="14" x2="278" y2="14" stroke="#1C6ED6" stroke-width="6"/>
+    <line x1="278" y1="14" x2="336" y2="14" stroke="#F2C200" stroke-width="6"/>
+    <g fill="#fff">
+      <circle cx="8" cy="14" r="3.2"/><circle cx="20.8" cy="14" r="3.2"/><circle cx="46.5" cy="14" r="2.4"/><circle cx="59.3" cy="14" r="2.4"/><circle cx="72" cy="14" r="2.4"/>
+      <circle cx="84.9" cy="14" r="2.4"/><circle cx="97.7" cy="14" r="2.4"/><circle cx="110.6" cy="14" r="2.4"/><circle cx="123.4" cy="14" r="2.4"/><circle cx="136.3" cy="14" r="2.4"/>
+      <circle cx="149.1" cy="14" r="2.4"/><circle cx="162" cy="14" r="2.4"/><circle cx="174.8" cy="14" r="2.4"/><circle cx="187.7" cy="14" r="2.4"/><circle cx="200.5" cy="14" r="2.4"/>
+      <circle cx="213.4" cy="14" r="2.4"/><circle cx="226.2" cy="14" r="2.4"/><circle cx="239.1" cy="14" r="2.4"/><circle cx="251.9" cy="14" r="2.4"/><circle cx="264.8" cy="14" r="2.4"/>
+      <circle cx="277.6" cy="14" r="2.4"/><circle cx="290.5" cy="14" r="2.4"/><circle cx="303.3" cy="14" r="2.4"/><circle cx="316.2" cy="14" r="2.4"/><circle cx="329" cy="14" r="2.4"/>
+    </g>
+    <circle cx="33.7" cy="14" r="8" fill="#0E2240" stroke="#fff" stroke-width="3.5"/>
+    <circle cx="341.5" cy="14" r="7" fill="#0E2240" stroke="#fff" stroke-width="3"/><circle cx="341.5" cy="14" r="2.6" fill="#fff"/>
+  </svg>
+  <div class="tags"><span>You are here</span><span>5K dev</span><span>HYROX build</span><span>Race</span></div>
+</header>
+<main>
+  <h1>Next stop: <span>Threshold</span></h1>
+  <p class="rx">2 × 12′ at 12.2 km/h · 1%</p>
+  <p class="meta">Treadmill · 45 min · Key session this Week</p>
+  <div class="actions"><span class="btn primary">Start session</span><span class="btn ghost">Log after</span></div>
+  <section class="sugg">
+    <span class="dot" aria-hidden="true"></span>
+    <div>
+      <p>Slept 5 h 41. Bold. Reps trimmed to 2 × 10′.</p>
+      <p class="why">Ring: 5 h 41 asleep, HRV 38 ms (7-day avg 52)</p>
+      <div class="row"><span class="accept">Accept</span><span class="keep">Keep 2 × 12′</span></div>
+    </div>
+  </section>
+  <h2>This Week's stops <small>3 left · 5 days</small></h2>
+  <div class="stops">
+    <div class="stop done"><span class="m"></span><span class="n">Speed</span><span class="d">Mon · 5 × 3′ hard</span></div>
+    <div class="stop key"><span class="m"></span><span class="n">Threshold<span class="chip">Next</span></span><span class="d">2 × 12′ at threshold</span></div>
+    <div class="stop"><span class="m"></span><span class="n">Strength</span><span class="d">Squat 3 × 5 · 72.5 kg</span></div>
+    <div class="stop"><span class="m"></span><span class="n">HYROX</span><span class="d">3 × (600 m + sled, carry)</span></div>
+    <div class="stop opt"><span class="m"></span><span class="n">Easy run</span><span class="d">Optional · 25 min</span></div>
+  </div>
+</main>
+<nav>
+  <a class="on" href="#"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg>Today</a>
+  <a href="#"><svg viewBox="0 0 24 24"><path d="M3 12h18"/><circle cx="6" cy="12" r="2.5"/><circle cx="12" cy="12" r="2.5"/><circle cx="18" cy="12" r="2.5"/></svg>Plan</a>
+  <a href="#"><svg viewBox="0 0 24 24"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 15l4-4 3 3 5-6"/></svg>Progress</a>
+</nav>
+</body>
+</html>

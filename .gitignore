@@ -1,0 +1,11 @@
+# OS
+.DS_Store
+
+# Personal Claude Code settings (machine-specific paths)
+.claude/settings.local.json
+
+# Impeccable session state and review captures (regenerated per session)
+.impeccable/config.local.json
+.impeccable/hook.cache.json
+.impeccable/questions/
+.impeccable/review/

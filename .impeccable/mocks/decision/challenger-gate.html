@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=390">
+<title>Compromised — Today (Gate Board)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chivo:wght@400;600;800;900&family=Chivo+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{--board:#14181D;--row:#1F252C;--line:#2C333B;--steel:#9AA1A9;--panel:#E7E9EA;--paper:#FFFFFF;--ink:#0B0D10;--muted:#555C64;--alert:#FFD400}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:390px;height:844px;overflow:hidden;background:var(--panel);color:var(--ink);font-family:Chivo,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  .mono{font-family:"Chivo Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+  .board{background:var(--board);color:#F2F3F4;padding:14px 16px 16px}
+  .status{display:flex;justify-content:space-between;font-size:14px;font-weight:600}
+  .top{display:flex;justify-content:space-between;align-items:center;margin-top:12px}
+  .brand{font-weight:900;font-size:19px;letter-spacing:.06em}
+  .clock{font-size:15px;color:var(--steel)}
+  .race{display:flex;justify-content:space-between;margin-top:10px;font-size:14px;color:var(--steel)}
+  .race b{color:#fff}
+  table{width:100%;border-collapse:collapse;margin-top:12px}
+  th{font:700 12px "Chivo Mono",monospace;letter-spacing:.08em;color:var(--steel);text-align:left;padding:0 6px 8px;border-bottom:1px solid var(--line)}
+  td{font:500 15px "Chivo Mono",monospace;padding:0 6px;height:42px;border-bottom:1px solid var(--line);white-space:nowrap}
+  td:first-child{font-weight:700}
+  tr.now td{background:var(--row)}
+  .tag{display:inline-block;font:700 12px "Chivo Mono",monospace;padding:4px 7px;border-radius:2px;letter-spacing:.04em}
+  .now .tag{background:var(--alert);color:var(--ink)}
+  .ready{color:#7CD1A0}
+  .wait{color:var(--steel)}
+  tr.gone td{color:#8B929A;text-decoration:line-through}
+  .pass{margin:14px 14px 0;background:var(--paper);border-radius:12px;position:relative;box-shadow:0 6px 18px rgba(11,13,16,.14)}
+  .pass::before,.pass::after{content:"";position:absolute;top:104px;width:20px;height:20px;border-radius:50%;background:var(--panel)}
+  .pass::before{left:-10px}.pass::after{right:-10px}
+  .head{padding:16px 18px 18px;border-bottom:2px dashed #C7CBCF}
+  .head small{font:700 12px "Chivo Mono",monospace;letter-spacing:.08em;color:var(--muted)}
+  .head h1{font-weight:900;font-size:38px;letter-spacing:-.01em;line-height:1.05;margin-top:2px}
+  .head p{font-size:15px;color:var(--muted);margin-top:2px}
+  .seg{display:grid;grid-template-columns:repeat(4,1fr);padding:14px 10px 4px}
+  .seg div{padding:0 8px;border-left:1px solid #DADDE0}
+  .seg div:first-child{border-left:0}
+  .seg span{display:block;font:700 11px "Chivo Mono",monospace;letter-spacing:.08em;color:var(--muted)}
+  .seg b{display:block;font:700 19px "Chivo Mono",monospace;margin-top:4px}
+  .changed{margin:10px 14px 0;background:var(--alert);border-radius:6px;padding:10px 12px}
+  .changed p{font-size:15px;font-weight:600;line-height:1.3}
+  .changed .row{display:flex;gap:16px;margin-top:8px;font-weight:800;font-size:14px}
+  .changed .row span:first-child{background:var(--ink);color:var(--alert);padding:6px 12px;border-radius:3px}
+  .changed .row span:last-child{padding:6px 0}
+  .go{margin:12px 14px 0;height:52px;border-radius:8px;background:var(--ink);color:#fff;display:grid;place-items:center;font-weight:800;font-size:17px;letter-spacing:.02em}
+  nav{position:absolute;left:0;right:0;bottom:0;height:78px;background:var(--paper);border-top:1px solid #D2D5D8;display:flex;justify-content:space-around;padding-top:10px}
+  nav a{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:13px;font-weight:600;color:var(--muted);text-decoration:none}
+  nav a.on{color:var(--ink)}
+  nav svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+</style>
+</head>
+<body>
+<header class="board">
+  <div class="status"><span>18:42</span><span>87%</span></div>
+  <div class="top"><span class="brand">COMPROMISED</span><span class="clock mono">WED 04 NOV</span></div>
+  <div class="race mono"><span>WK 03 · FOUNDATION</span><span>RACE APR 21 · <b>168 D</b></span></div>
+  <table class="mono" aria-label="This Week's Sessions">
+    <thead><tr><th>SESSION</th><th>TARGET</th><th>STATUS</th></tr></thead>
+    <tbody>
+      <tr class="now"><td>THRESHOLD</td><td>12.2 KM/H</td><td><span class="tag">NOW</span></td></tr>
+      <tr><td>STRENGTH</td><td>SQ 72.5 KG</td><td class="ready">READY</td></tr>
+      <tr><td>HYROX</td><td>3×600 M</td><td class="wait">THU+</td></tr>
+      <tr><td>EASY RUN</td><td>25 MIN</td><td class="wait">OPTIONAL</td></tr>
+      <tr class="gone"><td>SPEED</td><td>5×3′</td><td>DONE MON</td></tr>
+    </tbody>
+  </table>
+</header>
+<section class="pass" aria-label="Next session">
+  <div class="head"><small>NEXT SESSION · KEY</small><h1>Threshold</h1><p>Treadmill · warm-up 10′ · cooldown 10′</p></div>
+  <div class="seg">
+    <div><span>SPEED</span><b>12.2</b></div>
+    <div><span>INCLINE</span><b>1%</b></div>
+    <div><span>REPS</span><b>2×12′</b></div>
+    <div><span>TOTAL</span><b>45′</b></div>
+  </div>
+</section>
+<section class="changed">
+  <p>Changed: slept 5 h 41, HRV 38 ms. Reps 2 × 12′ → 2 × 10′. Bed exists, by the way.</p>
+  <div class="row"><span>Accept</span><span>Keep 2 × 12′</span></div>
+</section>
+<div class="go">Start session</div>
+<nav>
+  <a class="on" href="#"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 10h16"/></svg>Today</a>
+  <a href="#"><svg viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h9"/></svg>Plan</a>
+  <a href="#"><svg viewBox="0 0 24 24"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 15l4-4 3 3 5-6"/></svg>Progress</a>
+</nav>
+</body>
+</html>

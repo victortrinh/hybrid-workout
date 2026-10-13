@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "design-system-font",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/*.html"
+        ],
+        "createdAt": "2026-10-13T20:59:50.185Z",
+        "reason": "Agent: spent direction-round sketches of unchosen worlds (Métro, Gate Board, canon) intentionally use their own fonts; they are not shipping surfaces of the Lanes '76 system"
+      }
+    ]
+  }
+}
