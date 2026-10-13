@@ -9,3 +9,12 @@
 .impeccable/hook.cache.json
 .impeccable/questions/
 .impeccable/review/
+
+# Build and tooling
+node_modules/
+dist/
+.wrangler/
+.wrangler-e2e/
+.dev.vars
+playwright-report/
+test-results/

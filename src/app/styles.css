@@ -1,0 +1,265 @@
+/* Scan only the app's own source: not the prototype, the design mocks or the Worker's generated types. */
+@import 'tailwindcss' source('../');
+@source not '../worker';
+/* Archivo variable, self-hosted: width 62–125 and weight axes in one file per subset. */
+@import '@fontsource-variable/archivo/wdth.css';
+
+/*
+ * Lanes '76 tokens (DESIGN.md, .impeccable/design.json).
+ *
+ * The raw custom properties keep the sidecar's names (--cobalt, --paper, --thr…)
+ * so component CSS and the prototype read the same. Only paper-side tokens
+ * change with the theme; the cobalt field is constant (The Constant Field Rule).
+ * The system setting decides light or dark; [data-theme] on <html> overrides it.
+ */
+:root {
+  --cobalt: #1b3bb8;
+  --cobalt-hover: #15309a;
+  --cobalt-soft: rgba(255, 255, 255, 0.32);
+  --on-cobalt: #ffffff;
+
+  --paper: #ffffff;
+  --sunk: #f4f5f8;
+  --ink: #121212;
+  --muted: #4d4f57;
+  --rule: #e3e4e8;
+  --edge: #6f727b;
+  --link: #1b3bb8;
+
+  --speed: #d9302a;
+  --thr: #c76100;
+  --hyrox: #1e8a3e;
+  --str: #6a3fb5;
+  --easy: #6a6e78;
+  --alert: #c76100;
+  --good: #1e8a3e;
+
+  --space-hair: 4px;
+  --space-xs: 6px;
+  --space-sm: 10px;
+  --space-md: 14px;
+  --pad: 20px;
+  --space-lg: 24px;
+  --gutter: 48px;
+  --radius: 4px;
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --paper: #0f1115;
+    --sunk: #171a20;
+    --ink: #f1f1ee;
+    --muted: #a6a9b1;
+    --rule: #2a2e36;
+    --edge: #8a8e97;
+    --link: #9db0ff;
+    --speed: #ff6a5c;
+    --thr: #ff9f3d;
+    --hyrox: #4cc673;
+    --str: #b395ff;
+    --easy: #9ba0aa;
+    --alert: #ff9f3d;
+    --good: #4cc673;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme='dark'] {
+  --paper: #0f1115;
+  --sunk: #171a20;
+  --ink: #f1f1ee;
+  --muted: #a6a9b1;
+  --rule: #2a2e36;
+  --edge: #8a8e97;
+  --link: #9db0ff;
+  --speed: #ff6a5c;
+  --thr: #ff9f3d;
+  --hyrox: #4cc673;
+  --str: #b395ff;
+  --easy: #9ba0aa;
+  --alert: #ff9f3d;
+  --good: #4cc673;
+  color-scheme: dark;
+}
+
+/* The same tokens as Tailwind theme values: bg-cobalt, text-muted, text-headline, p-pad, desktop:… */
+@theme inline {
+  --color-cobalt: var(--cobalt);
+  --color-cobalt-hover: var(--cobalt-hover);
+  --color-cobalt-soft: var(--cobalt-soft);
+  --color-on-cobalt: var(--on-cobalt);
+  --color-paper: var(--paper);
+  --color-sunk: var(--sunk);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-rule: var(--rule);
+  --color-edge: var(--edge);
+  --color-link: var(--link);
+  --color-speed: var(--speed);
+  --color-threshold: var(--thr);
+  --color-hyrox: var(--hyrox);
+  --color-strength: var(--str);
+  --color-easy: var(--easy);
+  --color-alert: var(--alert);
+  --color-good: var(--good);
+
+  --spacing-hair: var(--space-hair);
+  --spacing-pad: var(--pad);
+  --spacing-gutter: var(--gutter);
+}
+
+@theme {
+  --font-sans: 'Archivo Variable', Archivo, system-ui, sans-serif;
+
+  --text-numeral: clamp(120px, 38vw, 170px);
+  --text-numeral--line-height: 0.88;
+  --text-numeral--letter-spacing: -0.04em;
+  --text-numeral--font-weight: 900;
+  --text-numeral-live: clamp(120px, 40vw, 220px);
+  --text-numeral-live--line-height: 0.88;
+  --text-numeral-live--letter-spacing: -0.04em;
+  --text-numeral-live--font-weight: 900;
+  --text-figure: clamp(56px, 16vw, 88px);
+  --text-figure--line-height: 0.9;
+  --text-figure--letter-spacing: -0.03em;
+  --text-figure--font-weight: 900;
+  --text-headline: 40px;
+  --text-headline--line-height: 1.02;
+  --text-headline--letter-spacing: -0.01em;
+  --text-headline--font-weight: 850;
+  --text-headline-page: 44px;
+  --text-headline-page--line-height: 1.02;
+  --text-headline-page--letter-spacing: -0.01em;
+  --text-headline-page--font-weight: 850;
+  --text-title: 26px;
+  --text-title--line-height: 1.02;
+  --text-title--letter-spacing: -0.01em;
+  --text-title--font-weight: 850;
+  --text-title-sm: 20px;
+  --text-title-sm--line-height: 1.02;
+  --text-title-sm--letter-spacing: -0.01em;
+  --text-title-sm--font-weight: 850;
+  --text-prescription: 21px;
+  --text-prescription--font-weight: 600;
+  --text-body: 17px;
+  --text-body--line-height: 1.3;
+  --text-body--font-weight: 600;
+  --text-body-quiet: 15px;
+  --text-body-quiet--font-weight: 400;
+  --text-label: 13px;
+  --text-label--font-weight: 700;
+  --text-brand: 20px;
+  --text-brand--letter-spacing: 0.02em;
+  --text-brand--font-weight: 800;
+
+  --radius-sm: 4px;
+
+  --breakpoint-desktop: 60rem;
+  --container-plan: 900px;
+  --container-progress: 1280px;
+
+  --shadow-popover: 0 10px 30px rgba(0, 0, 0, 0.18);
+  --ease-lane: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    scrollbar-color: var(--edge) var(--paper);
+  }
+  /* The prototype sets type at the font's own line height; tokens that need more say so. */
+  html {
+    line-height: normal;
+  }
+  body {
+    min-height: 100dvh;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection {
+    background: var(--cobalt);
+    color: #fff;
+  }
+  :focus-visible {
+    outline: 3px solid var(--link);
+    outline-offset: 2px;
+  }
+  /* Headings take focus only from script, after a screen change, to move screen readers along. */
+  [tabindex='-1']:focus {
+    outline: none;
+  }
+  /* On the cobalt field (band, side rail) focus turns white. */
+  .on-field :focus-visible {
+    outline-color: #fff;
+  }
+  /* The Two Widths Rule: headings condensed and heavy. */
+  h1,
+  h2,
+  h3 {
+    font-stretch: 75%;
+    font-weight: 850;
+    letter-spacing: -0.01em;
+    line-height: 1.02;
+  }
+}
+
+@layer components {
+  /*
+   * Striped numeral. The ::after paints stripes in the surface colour over the
+   * glyphs; StripedNumeral phases them from the glyph top to the baseline by
+   * setting --st (top), --ch (height), --per (period) and --band (gap).
+   */
+  .stripe-num {
+    position: relative;
+    display: inline-block;
+    font-weight: 900;
+    font-stretch: 125%;
+    letter-spacing: -0.04em;
+    line-height: 0.88;
+    white-space: nowrap;
+  }
+  .stripe-num::after {
+    content: '';
+    position: absolute;
+    left: -2px;
+    right: -2px;
+    top: var(--st, 0);
+    height: var(--ch, 100%);
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      to bottom,
+      transparent 0 var(--band, 11px),
+      var(--stripe, var(--cobalt)) var(--band, 11px) var(--per, 15px)
+    );
+  }
+  /* The decimal point stays solid, above the stripes. */
+  .stripe-num .pt {
+    position: relative;
+    z-index: 1;
+  }
+  .stripe-num .bl {
+    display: inline-block;
+    width: 0;
+    height: 0;
+    vertical-align: baseline;
+  }
+
+  /* Field lane: a flat bar with hard ends that fills left to right. */
+  .lane-fill {
+    transition: width 0.9s var(--ease-lane);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}
