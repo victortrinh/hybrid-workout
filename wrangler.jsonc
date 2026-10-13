@@ -19,9 +19,9 @@
     {
       "binding": "DB",
       "database_name": "compromised",
-      // Add "database_id" here once the production database exists
-      // (docs/deploy.md, step 2). The id is not a secret: it only works with
-      // credentials for Victor's Cloudflare account.
+      // Production database (docs/deploy.md, step 2). The id is not a secret:
+      // it only works with credentials for Victor's Cloudflare account.
+      "database_id": "a2776333-114c-4317-a444-af71a518457f",
       "migrations_dir": "migrations"
     }
   ],
