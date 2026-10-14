@@ -55,9 +55,11 @@ export function Workouts({ activities }: { activities: Activity[] }) {
             The Recovery Shortcut’s: <Code>CF-Access-Client-Id</Code> and <Code>CF-Access-Client-Secret</Code>
           </Field>
           <Field term="Body">
-            <Code>type</Code>, <Code>start</Code> and <Code>end</Code> (text, ISO 8601), <Code>distance</Code> (text
-            with its unit, optional), <Code>heartRates</Code> (text: the heart-rate samples during the workout, one per
-            line) and <Code>indoor</Code> (optional, true or false). The server works out the average and the maximum.
+            <Code>type</Code> (text: the workout type, fixed per automation), <Code>start</Code> and <Code>end</Code>{' '}
+            (text, ISO 8601), <Code>heartRates</Code> (text: the heart-rate samples during the workout, one per line)
+            and <Code>distanceSamples</Code> (text: each distance sample’s value, unit and source, one per line). The
+            server works out average and maximum heart rate, and counts distance from one device only, so the phone and
+            the watch never add up twice.
           </Field>
         </dl>
         <pre
@@ -70,7 +72,7 @@ export function Workouts({ activities }: { activities: Activity[] }) {
               type: 'Running',
               start: '2026-11-04T07:12:00-05:00',
               end: '2026-11-04T07:54:30-05:00',
-              distance: '8.12 km',
+              distanceSamples: '0.52 km Victor’s Apple Watch\n0.48 km Victor’s Apple Watch',
               heartRates: '140\n152\n161\n171',
             },
             null,
@@ -78,7 +80,8 @@ export function Workouts({ activities }: { activities: Activity[] }) {
           )}
         </pre>
         <p className="mt-2 text-body-quiet text-muted">
-          Sending the same workout again just replaces it, so the Shortcut can send the whole last day every time.
+          Sending the same workout again just replaces it. No indoor flag: Apple Watch automations only know “Running”, so
+          the treadmill months in Settings decide, and a treadmill run asks for the console distance.
         </p>
       </section>
 
@@ -86,29 +89,49 @@ export function Workouts({ activities }: { activities: Activity[] }) {
         <h2 id="steps" className="text-title-sm">
           Build it
         </h2>
+        <p className="mt-2 text-body-quiet text-muted">
+          Shortcuts can’t read a workout back from Health, so two automations time it: one saves the time a workout
+          starts, the other sends it when it ends, with the heart rate and distance Health has for that window.
+        </p>
         <ol className="mt-3 grid list-decimal gap-3 pl-6 text-body">
-          <li>Shortcuts app → Shortcuts → +. Name it “Compromised workouts”.</li>
           <li>
-            <b>Find Health Samples</b> where Type is Workouts and Start Date is in the last 1 day.
+            New Shortcut, “Compromised workout start”: <b>Date</b> (Current Date) → <b>Format Date</b>, ISO 8601 with
+            the time → <b>Save File</b> to the Shortcuts folder, Ask Where to Save off, Subpath{' '}
+            <Code>compromised-workout-start.txt</Code>, Overwrite If File Exists on.
           </li>
           <li>
-            <b>Repeat with Each</b> Health Sample. Inside it, <b>Find Health Samples</b> where Type is Heart Rate, Start
-            Date is after Repeat Item’s Start Date and End Date is before Repeat Item’s End Date. Then{' '}
-            <b>Combine Text</b>: those samples’ Value, with New Lines.
+            New Shortcut, “Compromised workouts”. In its ⓘ details, turn on Receive Text as input. Then: <b>Wait</b> 60
+            seconds, so the watch syncs → <b>Get File</b> from the Shortcuts folder,{' '}
+            <Code>compromised-workout-start.txt</Code> → <b>Get Dates from Input</b> → <b>Set Variable</b> Start →{' '}
+            <b>Date</b> (Current Date) → <b>Set Variable</b> End.
           </li>
           <li>
-            Still inside the repeat, <b>Get Contents of URL</b>: the address above, Method POST, the two headers,
-            Request Body JSON with Text type = Repeat Item’s Type, Text start = Repeat Item’s Start Date and Text end =
-            Repeat Item’s End Date (both Date Format ISO 8601, with the time), Text distance = Repeat Item’s Distance if
-            offered, and Text heartRates = Combined Text.
+            <b>Find Health Samples</b> where Type is Heart Rate, Start Date is after Start and End Date is before End →{' '}
+            <b>Get Details of Health Sample</b>: Value → <b>Combine Text</b> with New Lines → <b>Set Variable</b> HR.
           </li>
           <li>
-            Finish a short workout on the watch, then run the Shortcut once and allow Health access and the connection.
-            “Last workout received” above should show it.
+            <b>Find Health Samples</b> where Type is Walking + Running Distance, the same dates → <b>Repeat with
+            Each</b>: a <b>Text</b> of Repeat Item’s Value, a space, its Unit, a space, its Source → after End Repeat,{' '}
+            <b>Combine Text</b> Repeat Results with New Lines → <b>Set Variable</b> Distance.
           </li>
           <li>
-            Automation → + → Apple Watch Workout → When any workout ends → Run Immediately, then the Shortcut. If your
-            iPhone doesn’t offer that trigger, use Time of Day, daily, in the evening.
+            <b>Get Contents of URL</b>: the address above, Method POST, the two headers, Request Body JSON with Text
+            type = Shortcut Input, Text start = Start and Text end = End (Date Format ISO 8601, with the time), Text
+            heartRates = HR and Text distanceSamples = Distance.
+          </li>
+          <li>
+            Automation → + → Apple Watch Workout → Any workout, Is Started → Run Immediately → “Compromised workout
+            start”.
+          </li>
+          <li>
+            For each workout type you start on the watch (Running, Traditional Strength Training, Functional Strength
+            Training, Mixed Cardio…): Automation → + → Apple Watch Workout → that type, Is Ended → Run Immediately →{' '}
+            <b>Text</b> with the type’s name exactly as listed → <b>Run Shortcut</b> “Compromised workouts” with the
+            Text as input.
+          </li>
+          <li>
+            Do a short workout. A minute after it ends, “Last workout received” above should show it. The first time,
+            allow Health access and Always Allow the connection.
           </li>
         </ol>
       </section>

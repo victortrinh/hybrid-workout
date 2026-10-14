@@ -214,23 +214,29 @@ curl -i -X POST https://compromised.<your-subdomain>.workers.dev/api/activities 
 - `302` or `403` from Access: 8b's path doesn't match. Check for a typo in `api/activities`, and that the token chosen is `Recovery Shortcut`.
 - `401` from the Worker: the same causes as in 7e.
 
-#### 8d. Build the Shortcut (iPhone)
+#### 8d. Build the Shortcuts and automations (iPhone)
 
-The app has the same steps with your address filled in: Today → your initial (Settings) → **Workout Shortcut setup**.
+Shortcuts can't read a workout back from Health (there's no Workouts type in **Find Health Samples**), so the Apple Watch Workout automation does the timing: one automation saves when a workout starts, others send it when it ends, with the heart rate and distance Health has for that window. The app has the same steps with your address filled in: Today → your initial (Settings) → **Workout Shortcut setup**.
 
-1. **Shortcuts** app → **Shortcuts** tab → **+** → rename it `Compromised workouts`.
-2. **Find Health Samples**: **Type is Workouts**, **Start Date is in the last 1 day**.
-3. **Repeat with Each** (input: Health Samples). Inside it:
-   1. **Find Health Samples**: **Type is Heart Rate**, **Start Date is after** Repeat Item → Start Date, **End Date is before** Repeat Item → End Date.
-   2. **Combine Text**: those samples' **Value**, with **New Lines**.
-   3. **Get Contents of URL**, URL `https://compromised.<your-subdomain>.workers.dev/api/activities`, **Method** POST, the same two headers as the Recovery Shortcut, **Request Body** JSON:
-      - **Text** `type` = Repeat Item → **Type** (Health's name, like `Running` or `Functional Strength Training`).
-      - **Text** `start` = Repeat Item → **Start Date**, Date Format **ISO 8601** with the time; **Text** `end` = Repeat Item → **End Date**, the same.
-      - **Text** `distance` = Repeat Item → **Distance**, if Shortcuts offers it (`8.12 km` is fine: the server reads the unit). Leave it out otherwise.
-      - **Text** `heartRates` = Combined Text.
-      - Optional, if your Shortcut can tell: **Boolean** `indoor`. Without it, the app goes by the treadmill months in Settings, and a type named `Indoor Run` or `Outdoor Run` counts too.
-4. Finish a short workout on the watch, then tap ▶. Allow Health access and **Always Allow** the connection. Settings → Workout Shortcut setup → **Last workout received** should show it.
-5. **Automation** tab → **+** → **Apple Watch Workout** → **When any workout ends** → **Run Immediately** → `Compromised workouts`. If your iPhone doesn't offer that trigger, use **Time of Day**, daily, in the evening. Resending a workout replaces it, so sending the whole last day every time is fine.
+1. **Start Shortcut.** Shortcuts → **+** → name it `Compromised workout start`:
+   1. **Date** (Current Date).
+   2. **Format Date**: **ISO 8601**, with the time.
+   3. **Save File**: to the **Shortcuts** folder in iCloud Drive, **Ask Where to Save** off, **Subpath** `compromised-workout-start.txt`, **Overwrite If File Exists** on.
+2. **Send Shortcut.** **+** → name it `Compromised workouts`. In its ⓘ details, turn on **Receive** Text as input (if there's none: Continue). Then:
+   1. **Wait** 60 seconds: the watch syncs its samples to the phone after the workout.
+   2. **Get File** from the Shortcuts folder, `compromised-workout-start.txt` → **Get Dates from Input** → **Set Variable** `Start`.
+   3. **Date** (Current Date) → **Set Variable** `End`.
+   4. **Find Health Samples**: **Type is Heart Rate**, **Start Date is after** Start, **End Date is before** End → **Get Details of Health Sample**: **Value** → **Combine Text** with **New Lines** → **Set Variable** `HR`.
+   5. **Find Health Samples**: **Type is Walking + Running Distance**, the same two dates → **Repeat with Each**: a **Text** with Repeat Item → **Value**, a space, Repeat Item → **Unit**, a space, Repeat Item → **Source** → after **End Repeat**, **Combine Text** Repeat Results with **New Lines** → **Set Variable** `Distance`. (The phone and the watch both log distance; the server counts one device only.)
+   6. **Get Contents of URL**: `https://compromised.<your-subdomain>.workers.dev/api/activities`, **Method** POST, the two headers from the Recovery Shortcut, **Request Body** JSON: **Text** `type` = Shortcut Input; **Text** `start` = Start and **Text** `end` = End, both Date Format **ISO 8601** with the time; **Text** `heartRates` = HR; **Text** `distanceSamples` = Distance.
+3. **Start automation.** **Automation** → **+** → **Apple Watch Workout** → **Any** workout, **Is Started** → **Run Immediately** → `Compromised workout start`.
+4. **End automations, one per workout type you start on the watch.** **Automation** → **+** → **Apple Watch Workout** → that type (for example **Running**), **Is Ended** → **Run Immediately** → **Text** with the type's name exactly as the list shows it → **Run Shortcut** `Compromised workouts`, input the Text. Likely types:
+   - **Running**: Speed, Threshold, Easy runs and 5K tests.
+   - **Traditional Strength Training**: Strength only.
+   - **Functional Strength Training**, **Mixed Cardio** or **Mixed Metabolic Cardio Training**: HYROX, a Race simulation, or Strength.
+   - Anything else (a walk) never matches a Session, so it needs no automation.
+5. Apple Watch automations only know **Running**, not indoor or outdoor, so the treadmill months in Settings decide: in those months a run asks for the console distance. Leave that prompt if a run was actually outside.
+6. Do a short Running workout. About a minute after it ends, Settings → Workout Shortcut setup → **Last workout received** should show it. The first run asks for Health access and the connection: allow both, **Always Allow**. If nothing arrives, open the automation's last run in Shortcuts to see which step failed.
 
 #### 8e. The first real workout
 
