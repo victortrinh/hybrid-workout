@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { localDate } from './calendar'
-import type { LoggedStatus, SessionLog } from './log'
+import type { LoggedStatus, SessionLog, StationLog } from './log'
 import type { Environment } from './paces'
 import { program } from './program/program'
 import {
@@ -8,17 +8,22 @@ import {
   fiveKProgress,
   GOAL_SECONDS,
   plannedAt,
+  recoveryTrend,
+  stationTimes,
   trainingLoad,
   weekOf,
   weeklyCompletion,
+  workingWeightRows,
 } from './progress'
+import type { RecoveryNight } from './recovery'
+import type { WorkingWeightChange } from './weights'
 
 let n = 0
 function log(
   week: number,
   sessionId: string,
   date: string,
-  extra: Partial<Pick<SessionLog, 'status' | 'minutes' | 'rpe' | 'resultSeconds' | 'environment' | 'updatedAt'>> = {},
+  extra: Partial<Pick<SessionLog, 'status' | 'minutes' | 'rpe' | 'resultSeconds' | 'environment' | 'stations' | 'updatedAt'>> = {},
 ): SessionLog {
   n += 1
   return {
@@ -181,5 +186,93 @@ describe('Training load', () => {
     expect(weekOf(program, localDate('2026-10-26'))).toBe(2)
     expect(weekOf(program, localDate('2027-04-21'))).toBe(27)
     expect(weekOf(program, localDate('2027-04-26'))).toBeNull()
+  })
+})
+
+describe('Working weights', () => {
+  const change = (lift: WorkingWeightChange['lift'], week: number, pounds: number, reason: WorkingWeightChange['reason']) =>
+    ({ lift, week, date: localDate('2026-10-21'), pounds, reason }) as WorkingWeightChange
+
+  it('has a row per calibrated lift, in Program order: first value, current value and the last change', () => {
+    const rows = workingWeightRows([
+      change('romanian-deadlift', 1, 135, 'calibration'),
+      change('back-squat', 1, 185, 'calibration'),
+      change('back-squat', 2, 190, 'all-reps-easy'),
+      change('back-squat', 4, 180, 'two-holds'),
+    ])
+    expect(rows.map((r) => [r.lift, r.first.pounds, r.current, r.last.reason, r.last.week, r.before])).toEqual([
+      ['back-squat', 185, 180, 'two-holds', 4, 190],
+      ['romanian-deadlift', 135, 135, 'calibration', 1, null],
+    ])
+  })
+
+  it('is empty before any calibration', () => {
+    expect(workingWeightRows([])).toEqual([])
+  })
+})
+
+describe('recovery trend', () => {
+  const night = (date: string, sleepMinutes: number, hrvMs: number | null): RecoveryNight => ({
+    date: localDate(date),
+    sleepMinutes,
+    hrvMs,
+    restingHeartRate: null,
+    source: 'Ultrahuman',
+    receivedAt: `${date}T11:00:00.000Z`,
+  })
+
+  it('is the 14 mornings to today, with a gap where no night was sent', () => {
+    const trend = recoveryTrend(
+      [night('2026-11-04', 341, 38), night('2026-11-02', 450, 52), night('2026-10-20', 400, 50)],
+      localDate('2026-11-04'),
+    )
+    expect(trend).toHaveLength(14)
+    expect(trend[0].date).toBe('2026-10-22')
+    expect(trend.at(-1)).toMatchObject({ date: '2026-11-04', night: { sleepMinutes: 341 } })
+    expect(trend.at(-2)!.night).toBeNull()
+    expect(trend.filter((t) => t.night).length).toBe(2)
+  })
+})
+
+describe('HYROX Station times', () => {
+  const line = (round: number, part: StationLog['part'], seconds: number | null): StationLog => ({
+    round,
+    part,
+    pounds: null,
+    meters: null,
+    reps: null,
+    seconds,
+  })
+
+  it('names the first Race simulation before there is one', () => {
+    const times = stationTimes(program, [], localDate('2026-11-04'))
+    expect(times.simulations).toEqual([])
+    expect(times.rounds).toEqual({})
+    expect(times.firstSimulation).toEqual({ week: 18, startDate: '2027-02-15' })
+  })
+
+  it("takes each Race simulation's Station splits, and each Station's latest HYROX round", () => {
+    const hyrox = (week: number, date: string, seconds: number) =>
+      log(week, 'hyrox', date, {
+        stations: [line(1, 'round', seconds), line(1, 'run', null), line(1, 'sled-push', null), line(1, 'sled-pull', null)],
+      })
+    const simulation = log(18, 'race-simulation', '2027-02-20', {
+      stations: [line(1, 'run', 300), line(1, 'skierg', 260), line(2, 'run', 310), line(2, 'sled-push', 190)],
+    })
+    const times = stationTimes(
+      program,
+      [hyrox(3, '2026-11-07', 600), hyrox(5, '2026-11-21', 560), simulation],
+      localDate('2027-02-21'),
+    )
+    expect(times.simulations).toEqual([{ week: 18, date: '2027-02-20', stations: { skierg: 260, 'sled-push': 190 } }])
+    expect(times.rounds['sled-push']).toEqual({ week: 5, date: '2026-11-21', round: 1, seconds: 560 })
+    expect(times.rounds.skierg).toBeUndefined()
+  })
+
+  it('leaves out what was skipped or is still ahead', () => {
+    const skipped = log(18, 'race-simulation', '2027-02-20', { status: 'skipped', stations: [line(1, 'skierg', 260)] })
+    expect(stationTimes(program, [skipped], localDate('2027-02-21')).simulations).toEqual([])
+    const ahead = log(18, 'race-simulation', '2027-02-20', { stations: [line(1, 'skierg', 260)] })
+    expect(stationTimes(program, [ahead], localDate('2027-02-19')).simulations).toEqual([])
   })
 })

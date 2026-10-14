@@ -25,7 +25,7 @@ import {
   type Suggestion,
   type SuggestionDecision,
 } from './suggestion'
-import { strengthState, type WorkingWeights } from './weights'
+import { strengthState, type WorkingWeightChange, type WorkingWeights } from './weights'
 
 export interface CoachInput {
   program: Program
@@ -145,6 +145,8 @@ export interface CoachDay {
   suggestions: Suggestion[]
   /** Each lift's Working weight; a lift without one is found in its next Strength session. */
   workingWeights: WorkingWeights
+  /** Every time a Working weight was set or moved, oldest first. */
+  workingWeightChanges: WorkingWeightChange[]
   /** The Pain report standing today, and what the pain rules make of it; null before the first. */
   pain: StandingPain | null
   /** Last night's Recovery data and what it means for today; null when the Shortcut sent none. */
@@ -246,6 +248,7 @@ export function coach({
     paces: fiveKTest?.resultSeconds ? trainingPaces(fiveKTest.resultSeconds) : null,
     suggestions,
     workingWeights: strength.weights,
+    workingWeightChanges: strength.changes,
     pain: standing && { ...standing, level: painLevel(standing.report.score, standing.previous?.score ?? null) },
     recovery,
     recoveryChange: recovered.change,

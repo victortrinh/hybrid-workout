@@ -12,6 +12,14 @@ export interface SeedLog {
   environment?: 'indoor' | 'outdoor'
   /** A Strength session's sets: what the Coach reads for the Working weights. */
   sets?: { exercise: number; set: number; lift: string | null; pounds: number | null; reps: number; rpe: number }[]
+  /** A HYROX session's rounds or a Race simulation's splits. */
+  stations?: { round: number; part: string; pounds: number | null; meters: number | null; reps: number | null; seconds: number | null }[]
+}
+
+/** What else the server holds: decisions on Suggestions, and nights from the morning Shortcut. */
+export interface SeedExtras {
+  suggestionDecisions?: Record<string, unknown>[]
+  recoveryNights?: Record<string, unknown>[]
 }
 
 /** A log as the server answers it: every field there, none missing. */
@@ -46,6 +54,7 @@ export async function serveHistory(
   logs: SeedLog[],
   /** Where to put the Pain reports the page sends, for tests that check them. */
   painReports: Record<string, unknown>[] = [],
+  { suggestionDecisions = [], recoveryNights = [] }: SeedExtras = {},
 ): Promise<Record<string, unknown>[]> {
   const sent: Record<string, unknown>[] = []
   const history = logs.map((l) => toLog(l, 'served'))
@@ -55,7 +64,9 @@ export async function serveHistory(
       sent.push(...(body.sessionLogs ?? []))
       painReports.push(...(body.painReports ?? []))
     }
-    return route.fulfill({ json: { sessionLogs: [...history, ...sent], suggestionDecisions: [], painReports } })
+    return route.fulfill({
+      json: { sessionLogs: [...history, ...sent], suggestionDecisions, painReports, recoveryNights },
+    })
   })
   return sent
 }
