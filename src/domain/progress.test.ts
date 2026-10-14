@@ -32,6 +32,8 @@ function log(
     notes: null,
     resultSeconds: null,
     environment: null,
+    distanceMeters: null,
+    intervals: [],
     updatedAt: `${date}T20:00:00.000Z`,
     ...extra,
   }

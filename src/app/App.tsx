@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef } from 'react'
 import { addDays } from '../domain/calendar'
 import { Link, RouterProvider } from 'react-aria-components'
 import { coach, findWeek, keyDeadline, prescribedWeek, type CoachDay } from '../domain/coach'
+import { liveLog, startRun } from '../domain/live'
+import { logFor } from '../domain/log'
 import type { Environment, RunContext } from '../domain/paces'
 import type { Session } from '../domain/program/types'
 import { environmentOn } from '../domain/settings'
@@ -13,6 +15,8 @@ import { navigate, SCREEN_PATH, useRoute, type Route, type Screen } from './rout
 import { NotFound } from './screens/NotFound'
 import { Plan } from './screens/Plan'
 import { Progress } from './screens/Progress'
+import { unlockSound } from './liveCues'
+import { Live } from './screens/Live'
 import { LogAfter } from './screens/LogAfter'
 import { Today } from './screens/Today'
 import { WeekScreen } from './screens/Week'
@@ -20,6 +24,7 @@ import { usePicked } from './usePicked'
 import { editedAt, useDecisions } from './useDecisions'
 import { useSessionLogs } from './useSessionLogs'
 import { environmentKey, useSettings } from './useSettings'
+import { useLiveRun } from './useLiveRun'
 import { useToday } from './useToday'
 
 const NAV = [
@@ -31,6 +36,7 @@ const NAV = [
 const TITLES: Record<Screen, string> = {
   today: 'Today',
   log: 'Log after',
+  live: 'Live session',
   plan: 'Plan',
   week: 'Week',
   progress: 'Progress',
@@ -65,6 +71,13 @@ export function App() {
   }
   const setEnvironment = (week: number, session: Session, environment: Environment) =>
     override(week, session.id, environment)
+  const [live, setLive] = useLiveRun()
+  /** Start session: the clock starts at the tap, in the Environment Today shows for it. */
+  const startLive = (week: number, session: Session) => {
+    unlockSound()
+    setLive(startRun({ week, session, date: today, environment: runContext(week, session).environment }, Date.now()))
+    navigate(SCREEN_PATH.live)
+  }
   const route = useRoute()
   const week =
     route.screen === 'week' || route.screen === 'log' ? prescribedWeek(program, route.week ?? 0, logs, decisions) : null
@@ -73,6 +86,34 @@ export function App() {
     (route.screen === 'week' && !week) || (route.screen === 'log' && !logged) ? 'not-found' : route.screen
   useScreenChange(screen, screen === 'week' && week ? `Week ${week.number}` : TITLES[screen], route)
   const navScreen = NAV_SCREEN[screen] ?? screen
+
+  if (screen === 'live') {
+    // Full screen, no navigation: nothing on it moves or competes with the clock.
+    return (
+      <RouterProvider navigate={navigate}>
+        <main id="main">
+          <Live
+            run={live}
+            runContext={{ paces: day.paces, unit: settings.unit, environment: live?.environment ?? 'indoor' }}
+            onChange={setLive}
+            onSave={(run, finish) => {
+              const existing = logFor(logs, run.week, run.sessionId)
+              save({
+                ...liveLog(run, Date.now(), {
+                  ...finish,
+                  id: existing?.id ?? crypto.randomUUID(),
+                  updatedAt: editedAt(existing?.updatedAt),
+                }),
+                notes: existing?.notes ?? null,
+              })
+              setLive(null)
+              navigate(SCREEN_PATH.today)
+            }}
+          />
+        </main>
+      </RouterProvider>
+    )
+  }
 
   return (
     <RouterProvider navigate={navigate}>
@@ -100,6 +141,8 @@ export function App() {
               onEnvironment={setEnvironment}
               settings={settings}
               onSettings={change}
+              live={live}
+              onStart={startLive}
             />
           )}
           {screen === 'log' && week && logged && (

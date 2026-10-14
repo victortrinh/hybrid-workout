@@ -12,8 +12,13 @@ const valid = {
   notes: 'Held it.',
   resultSeconds: null,
   environment: null,
+  distanceMeters: null,
+  intervals: [],
   updatedAt: '2026-11-04T17:00:00.000Z',
 }
+
+const held = { block: 1, rep: 1, targetPace: 292, held: true, actualPace: null }
+const changed = { block: 3, rep: 2, targetPace: 292, held: false, actualPace: 298 }
 
 describe('parseSessionLog', () => {
   it('accepts a complete log', () => {
@@ -38,6 +43,13 @@ describe('parseSessionLog', () => {
     expect(parseSessionLog(older)).toMatchObject({ resultSeconds: null, environment: null })
   })
 
+  it('accepts a Live session’s console distance and reps, and treats missing ones as none', () => {
+    const live = { ...valid, environment: 'indoor', distanceMeters: 9400, intervals: [held, changed] }
+    expect(parseSessionLog(live)).toEqual(live)
+    const { distanceMeters, intervals, ...older } = valid
+    expect(parseSessionLog(older)).toMatchObject({ distanceMeters: null, intervals: [] })
+  })
+
   it.each([
     ['a missing id', { id: undefined }],
     ['a short id', { id: 'abc' }],
@@ -54,6 +66,12 @@ describe('parseSessionLog', () => {
     ['a 5K time under 12 minutes', { resultSeconds: 600 }],
     ['a 5K time that is not whole seconds', { resultSeconds: 1380.5 }],
     ['an Environment that is neither', { environment: 'pool' }],
+    ['a console distance under 100 m', { distanceMeters: 50 }],
+    ['reps that are not a list', { intervals: 'held' }],
+    ['a rep logged twice', { intervals: [held, { ...held, rep: 2 }] }],
+    ['a held rep with an actual pace', { intervals: [{ ...held, actualPace: 298 }] }],
+    ['a changed rep with no actual pace', { intervals: [{ ...changed, actualPace: null }] }],
+    ['a rep at 1:00/km', { intervals: [{ ...changed, actualPace: 60 }] }],
     ['an updatedAt with a local offset', { updatedAt: '2026-11-04T12:00:00-05:00' }],
   ])('rejects %s', (_, change) => {
     expect(() => parseSessionLog({ ...valid, ...change })).toThrow()

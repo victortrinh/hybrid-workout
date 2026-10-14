@@ -28,10 +28,30 @@ export interface SessionLog {
   notes: string | null
   /** A 5K test's time in seconds; it sets the Training paces. Null for every other Session. */
   resultSeconds: number | null
-  /** Where a run happened. Recorded with each 5K test result. */
+  /** Where a run happened. Recorded with each 5K test result and each Live run session. */
   environment: Environment | null
+  /** The treadmill console's distance in metres: the watch guesses wrong indoors. */
+  distanceMeters: number | null
+  /** One per interval rep of a Live session: held the target, or what was run instead. */
+  intervals: IntervalLog[]
   /** ISO instant of the last edit. */
   updatedAt: string
+}
+
+/**
+ * One rep of a Live session. Paces are seconds per km whatever the units, so
+ * a treadmill speed and an outdoor pace are stored the same way.
+ */
+export interface IntervalLog {
+  /** The rep's Block in the Live session, from 0. */
+  block: number
+  /** 1 for the first rep. */
+  rep: number
+  /** The target it was run against; null while runs are RPE only. */
+  targetPace: number | null
+  held: boolean
+  /** What was run instead, when not held. */
+  actualPace: number | null
 }
 
 /** Everything the device needs from the server. More records join as they arrive. */
@@ -41,6 +61,11 @@ export interface SyncState {
 }
 
 export const NOTES_MAX = 2000
+/** A treadmill console reading from 100 m to 100 km is believable. */
+export const DISTANCE_METERS = [100, 100_000] as const
+/** A pace from 2:00/km (30 km/h) to 20:00/km (a walk). */
+export const PACE_SECONDS = [120, 1200] as const
+const MAX_INTERVALS = 50
 const ID = /^[A-Za-z0-9_-]{8,64}$/
 const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/
 
@@ -77,6 +102,8 @@ export function parseSessionLog(value: unknown): SessionLog {
   if (environment !== null && !ENVIRONMENTS.includes(environment as Environment)) {
     throw new Error(`environment must be one of ${ENVIRONMENTS.join(', ')}`)
   }
+  const distanceMeters = optionalInteger(v.distanceMeters, 'distanceMeters', ...DISTANCE_METERS)
+  const intervals = parseIntervals(v.intervals ?? [])
   const updatedAt = v.updatedAt
   if (typeof updatedAt !== 'string' || !INSTANT.test(updatedAt) || Number.isNaN(Date.parse(updatedAt))) {
     throw new Error('updatedAt must be an ISO instant in UTC')
@@ -93,8 +120,32 @@ export function parseSessionLog(value: unknown): SessionLog {
     notes: notes === null || notes.trim() === '' ? null : notes,
     resultSeconds,
     environment: environment as Environment | null,
+    distanceMeters,
+    intervals,
     updatedAt,
   }
+}
+
+function parseIntervals(value: unknown): IntervalLog[] {
+  if (!Array.isArray(value) || value.length > MAX_INTERVALS) {
+    throw new Error(`intervals must be a list of at most ${MAX_INTERVALS}`)
+  }
+  const seen = new Set<number>()
+  return value.map((item, i) => {
+    if (typeof item !== 'object' || item === null) throw new Error(`intervals[${i}] must be an object`)
+    const v = item as Record<string, unknown>
+    const block = optionalInteger(v.block, `intervals[${i}].block`, 0, 99)
+    const rep = optionalInteger(v.rep, `intervals[${i}].rep`, 1, 99)
+    if (block === null || rep === null) throw new Error(`intervals[${i}] needs a block and a rep`)
+    if (seen.has(block)) throw new Error(`intervals[${i}]: block ${block} is logged twice`)
+    seen.add(block)
+    if (typeof v.held !== 'boolean') throw new Error(`intervals[${i}].held must be true or false`)
+    const targetPace = optionalInteger(v.targetPace, `intervals[${i}].targetPace`, ...PACE_SECONDS)
+    const actualPace = optionalInteger(v.actualPace, `intervals[${i}].actualPace`, ...PACE_SECONDS)
+    if (v.held && actualPace !== null) throw new Error(`intervals[${i}]: a held rep has no actual pace`)
+    if (!v.held && actualPace === null) throw new Error(`intervals[${i}]: a changed rep needs its actual pace`)
+    return { block, rep, targetPace, held: v.held, actualPace }
+  })
 }
 
 function optionalInteger(value: unknown, name: string, min: number, max: number): number | null {

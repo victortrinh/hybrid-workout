@@ -4,12 +4,14 @@
  */
 import { useSyncExternalStore } from 'react'
 
-export type Screen = 'today' | 'log' | 'plan' | 'week' | 'progress' | 'not-found'
+export type Screen = 'today' | 'log' | 'live' | 'plan' | 'week' | 'progress' | 'not-found'
 
-const PATHS: Record<string, Screen> = { '/': 'today', '/plan': 'plan', '/progress': 'progress' }
+const PATHS: Record<string, Screen> = { '/': 'today', '/live': 'live', '/plan': 'plan', '/progress': 'progress' }
 
 export const SCREEN_PATH: Record<Exclude<Screen, 'log' | 'week' | 'not-found'>, string> = {
   today: '/',
+  /** The Live session running on this device, whichever it is. */
+  live: '/live',
   plan: '/plan',
   progress: '/progress',
 }

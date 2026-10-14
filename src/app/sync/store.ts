@@ -45,7 +45,7 @@ export async function openIndexedDbStore(): Promise<LocalStore> {
   return {
     async load() {
       const [logs, outbox] = await transact('readonly', (logs, outbox) => [logs.getAll(), outbox.getAll()])
-      return { logs: logs.result as SessionLog[], outbox: outbox.result as SessionLog[] }
+      return { logs: (logs.result as SessionLog[]).map(upgrade), outbox: (outbox.result as SessionLog[]).map(upgrade) }
     },
     write: (log) =>
       transact('readwrite', (logs, outbox) => {
@@ -71,6 +71,9 @@ export async function openIndexedDbStore(): Promise<LocalStore> {
       }),
   }
 }
+
+/** Logs stored before Live sessions had no console distance or reps. */
+const upgrade = (log: SessionLog): SessionLog => ({ ...log, distanceMeters: log.distanceMeters ?? null, intervals: log.intervals ?? [] })
 
 /** A store that forgets on reload: for tests, and for browsers that block IndexedDB. */
 export function memoryStore(): LocalStore {
