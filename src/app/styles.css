@@ -121,6 +121,10 @@
   --text-numeral-live--line-height: 0.88;
   --text-numeral-live--letter-spacing: -0.04em;
   --text-numeral-live--font-weight: 900;
+  --text-numeral-lift: clamp(84px, 26vw, 150px);
+  --text-numeral-lift--line-height: 0.88;
+  --text-numeral-lift--letter-spacing: -0.04em;
+  --text-numeral-lift--font-weight: 900;
   --text-figure: clamp(56px, 16vw, 88px);
   --text-figure--line-height: 0.9;
   --text-figure--letter-spacing: -0.03em;

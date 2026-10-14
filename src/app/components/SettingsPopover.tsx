@@ -1,4 +1,5 @@
 import { Button, Checkbox, CheckboxGroup, DialogTrigger, Label, Popover, Text } from 'react-aria-components'
+import { EQUIPMENT, EQUIPMENT_LABEL, type Equipment } from '../../domain/equipment'
 import { UNIT_LABEL, type SpeedUnit } from '../../domain/paces'
 import { MONTHS, type Settings, type Theme } from '../../domain/settings'
 import { Segmented } from './Segmented'
@@ -14,9 +15,14 @@ const UNIT_OPTIONS = (['kmh', 'mph'] as const).map((value) => ({ value, label: U
   label: string
 }[]
 
+/** Toggle (DESIGN.md): paper with a 2px inset edge stroke; selected inverts to ink. */
+const toggleClass =
+  'grid min-h-11 cursor-pointer place-items-center rounded-sm text-[15px] font-bold shadow-[inset_0_0_0_2px_var(--edge)] data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-link data-selected:bg-ink data-selected:text-paper data-selected:shadow-none'
+
 /**
  * Settings, from the athlete's initial on the field band: theme, treadmill
- * units and which months run on the treadmill. Every change applies at once.
+ * units, which months run on the treadmill, and the Equipment profile. Every
+ * change applies at once.
  */
 export function SettingsPopover({
   settings,
@@ -40,7 +46,7 @@ export function SettingsPopover({
         aria-label="Settings"
         placement="bottom end"
         offset={8}
-        className="w-[264px] rounded-sm border-2 border-ink bg-paper p-[14px] text-ink shadow-[0_10px_30px_rgba(0,0,0,.18)] outline-none"
+        className="w-[264px] overflow-y-auto rounded-sm border-2 border-ink bg-paper p-[14px] text-ink shadow-[0_10px_30px_rgba(0,0,0,.18)] outline-none"
       >
         <div className="grid gap-3">
           <Segmented
@@ -65,17 +71,31 @@ export function SettingsPopover({
             <Label className="text-[18px] font-bold">Treadmill months</Label>
             <div className="grid grid-cols-4 gap-1.5">
               {MONTHS.map((month) => (
-                <Checkbox
-                  key={month}
-                  value={month}
-                  className="grid min-h-11 cursor-pointer place-items-center rounded-sm text-[15px] font-bold shadow-[inset_0_0_0_2px_var(--edge)] data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-link data-selected:bg-ink data-selected:text-paper data-selected:shadow-none"
-                >
+                <Checkbox key={month} value={month} className={toggleClass}>
                   {month}
                 </Checkbox>
               ))}
             </div>
             <Text slot="description" className="text-[12px] text-muted">
               Runs in these months are Indoor, as treadmill speed and incline. The rest are Outdoor, as pace per km.
+            </Text>
+          </CheckboxGroup>
+          <CheckboxGroup
+            value={settings.equipment}
+            onChange={(equipment) => onChange({ equipment: equipment as Equipment[] })}
+            className="grid gap-2"
+          >
+            <Label className="text-[18px] font-bold">Equipment</Label>
+            <div className="grid gap-1.5">
+              {EQUIPMENT.map((item) => (
+                <Checkbox key={item} value={item} className={`${toggleClass} px-3`}>
+                  {EQUIPMENT_LABEL[item]}
+                </Checkbox>
+              ))}
+            </div>
+            <Text slot="description" className="text-[12px] text-muted">
+              What your gym has. Anything missing gets a Substitution: dumbbell calf raises for the machines, sprints
+              for the jumps.
             </Text>
           </CheckboxGroup>
         </div>

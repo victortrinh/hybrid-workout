@@ -56,6 +56,15 @@ app.post('/sync', async (c) => {
       `delete from interval_logs where session_log_id = ?1
          and exists (select 1 from session_logs where id = ?1 and updated_at = ?2)`,
     )
+    const clearSets = c.env.DB.prepare(
+      `delete from set_logs where session_log_id = ?1
+         and exists (select 1 from session_logs where id = ?1 and updated_at = ?2)`,
+    )
+    const addSet = c.env.DB.prepare(
+      `insert into set_logs (session_log_id, exercise, "set", lift, pounds, reps, rpe)
+       select ?1, ?2, ?3, ?4, ?5, ?6, ?7
+       where exists (select 1 from session_logs where id = ?1 and updated_at = ?8)`,
+    )
     const addRep = c.env.DB.prepare(
       `insert into interval_logs (session_log_id, block, rep, target_pace, held, actual_pace)
        select ?1, ?2, ?3, ?4, ?5, ?6
@@ -71,6 +80,8 @@ app.post('/sync', async (c) => {
         ...l.intervals.map((i) =>
           addRep.bind(l.id, i.block, i.rep, i.targetPace, i.held ? 1 : 0, i.actualPace, l.updatedAt),
         ),
+        clearSets.bind(l.id, l.updatedAt),
+        ...l.sets.map((s) => addSet.bind(l.id, s.exercise, s.set, s.lift, s.pounds, s.reps, s.rpe, l.updatedAt)),
       ]),
     )
   }
@@ -120,6 +131,7 @@ function parseLogs(raw: unknown): SessionLog[] {
         throw new Error('Only a 5K test has a result time')
       }
       if (log.intervals.length > 0 && !isLiveRun(session)) throw new Error('Only a run Session has reps to log')
+      if (log.sets.length > 0 && session.type !== 'strength') throw new Error('Only a Strength session has sets to log')
       return log
     } catch (error) {
       throw new Error(`sessionLogs[${i}]: ${error instanceof Error ? error.message : 'invalid'}`)
@@ -151,6 +163,16 @@ interface IntervalRow {
   actual_pace: number | null
 }
 
+interface SetRow {
+  session_log_id: string
+  exercise: number
+  set: number
+  lift: string | null
+  pounds: number | null
+  reps: number
+  rpe: number
+}
+
 interface DecisionRow {
   id: string
   decision: string
@@ -159,13 +181,16 @@ interface DecisionRow {
 }
 
 async function readState(db: D1Database): Promise<SyncState> {
-  const [{ results }, decisions, intervals] = (await db.batch<SessionLogRow | DecisionRow | IntervalRow>([
+  const [{ results }, decisions, intervals, setRows] = (await db.batch<SessionLogRow | DecisionRow | IntervalRow | SetRow>([
     db.prepare('select * from session_logs order by date, updated_at'),
     db.prepare('select * from suggestion_decisions order by updated_at'),
     db.prepare('select * from interval_logs order by session_log_id, block'),
-  ])) as [D1Result<SessionLogRow>, D1Result<DecisionRow>, D1Result<IntervalRow>]
+    db.prepare('select * from set_logs order by session_log_id, exercise, "set"'),
+  ])) as [D1Result<SessionLogRow>, D1Result<DecisionRow>, D1Result<IntervalRow>, D1Result<SetRow>]
   const reps = new Map<string, IntervalRow[]>()
   for (const row of intervals.results) reps.set(row.session_log_id, [...(reps.get(row.session_log_id) ?? []), row])
+  const sets = new Map<string, SetRow[]>()
+  for (const row of setRows.results) sets.set(row.session_log_id, [...(sets.get(row.session_log_id) ?? []), row])
   return {
     suggestionDecisions: decisions.results.map((row) =>
       parseDecision({ id: row.id, decision: row.decision, date: row.date, updatedAt: row.updated_at }),
@@ -189,6 +214,14 @@ async function readState(db: D1Database): Promise<SyncState> {
           targetPace: rep.target_pace,
           held: rep.held === 1,
           actualPace: rep.actual_pace,
+        })),
+        sets: (sets.get(row.id) ?? []).map((s) => ({
+          exercise: s.exercise,
+          set: s.set,
+          lift: s.lift,
+          pounds: s.pounds,
+          reps: s.reps,
+          rpe: s.rpe,
         })),
         updatedAt: row.updated_at,
       }),

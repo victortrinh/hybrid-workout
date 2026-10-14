@@ -25,4 +25,9 @@ describe('settings', () => {
     expect(custom.unit).toBe('mph')
     expect(custom.environmentByMonth.slice(0, 3)).toEqual(['outdoor', 'indoor', 'indoor'])
   })
+
+  it('default to the athlete’s gym: floor space, no calf machines', () => {
+    expect(DEFAULT_SETTINGS.equipment).toEqual(['floor-space'])
+    expect(parseSettings({ equipment: ['seated-calf-machine', 'rower'] }).equipment).toEqual(['seated-calf-machine'])
+  })
 })

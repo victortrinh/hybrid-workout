@@ -7,6 +7,7 @@
  */
 import { localDate, type LocalDate } from './calendar'
 import { ENVIRONMENTS, FIVE_K_SECONDS, type Environment } from './paces'
+import { LIFTS, type LiftId } from './program/types'
 import type { SuggestionDecision } from './suggestion'
 
 export const LOGGED_STATUSES = ['done', 'partial', 'skipped', 'swapped'] as const
@@ -34,6 +35,8 @@ export interface SessionLog {
   distanceMeters: number | null
   /** One per interval rep of a Live session: held the target, or what was run instead. */
   intervals: IntervalLog[]
+  /** One per set logged in a Live Strength session, in Exercise and set order. */
+  sets: SetLog[]
   /** ISO instant of the last edit. */
   updatedAt: string
 }
@@ -54,6 +57,23 @@ export interface IntervalLog {
   actualPace: number | null
 }
 
+/**
+ * One set of a Live Strength session. Loads are pounds, the smallest step
+ * 5 lb. The Coach reads each lift's sets to find and progress its Working weight.
+ */
+export interface SetLog {
+  /** The Exercise's place among the Session's lifts, from 0. */
+  exercise: number
+  /** 1 for the first set. */
+  set: number
+  /** Null for bodyweight work: pull-ups and push-ups. */
+  lift: LiftId | null
+  pounds: number | null
+  /** Per leg, for a single-leg Exercise. */
+  reps: number
+  rpe: number
+}
+
 /** Everything the device needs from the server. More records join as they arrive. */
 export interface SyncState {
   sessionLogs: SessionLog[]
@@ -66,6 +86,9 @@ export const DISTANCE_METERS = [100, 100_000] as const
 /** A pace from 2:00/km (30 km/h) to 20:00/km (a walk). */
 export const PACE_SECONDS = [120, 1200] as const
 const MAX_INTERVALS = 50
+const MAX_SETS = 60
+/** From an empty hand to a heavy squat: anything else is a typo. */
+export const POUNDS = [0, 1000] as const
 const ID = /^[A-Za-z0-9_-]{8,64}$/
 const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/
 
@@ -104,6 +127,7 @@ export function parseSessionLog(value: unknown): SessionLog {
   }
   const distanceMeters = optionalInteger(v.distanceMeters, 'distanceMeters', ...DISTANCE_METERS)
   const intervals = parseIntervals(v.intervals ?? [])
+  const sets = parseSets(v.sets ?? [])
   const updatedAt = v.updatedAt
   if (typeof updatedAt !== 'string' || !INSTANT.test(updatedAt) || Number.isNaN(Date.parse(updatedAt))) {
     throw new Error('updatedAt must be an ISO instant in UTC')
@@ -122,8 +146,34 @@ export function parseSessionLog(value: unknown): SessionLog {
     environment: environment as Environment | null,
     distanceMeters,
     intervals,
+    sets,
     updatedAt,
   }
+}
+
+function parseSets(value: unknown): SetLog[] {
+  if (!Array.isArray(value) || value.length > MAX_SETS) throw new Error(`sets must be a list of at most ${MAX_SETS}`)
+  const seen = new Set<string>()
+  return value.map((item, i) => {
+    if (typeof item !== 'object' || item === null) throw new Error(`sets[${i}] must be an object`)
+    const v = item as Record<string, unknown>
+    const exercise = optionalInteger(v.exercise, `sets[${i}].exercise`, 0, 19)
+    const set = optionalInteger(v.set, `sets[${i}].set`, 1, 20)
+    const reps = optionalInteger(v.reps, `sets[${i}].reps`, 0, 100)
+    const rpe = optionalInteger(v.rpe, `sets[${i}].rpe`, 1, 10)
+    if (exercise === null || set === null || reps === null || rpe === null) {
+      throw new Error(`sets[${i}] needs an exercise, a set, reps and an RPE`)
+    }
+    const key = `${exercise}/${set}`
+    if (seen.has(key)) throw new Error(`sets[${i}]: set ${set} of exercise ${exercise} is logged twice`)
+    seen.add(key)
+    const lift = v.lift ?? null
+    if (lift !== null && !LIFTS.includes(lift as LiftId)) throw new Error(`sets[${i}].lift must be one of ${LIFTS.join(', ')}`)
+    const pounds = optionalInteger(v.pounds, `sets[${i}].pounds`, ...POUNDS)
+    if (pounds !== null && pounds % 5 !== 0) throw new Error(`sets[${i}].pounds must be a multiple of 5`)
+    if (lift !== null && pounds === null) throw new Error(`sets[${i}]: a lift needs its load`)
+    return { exercise, set, lift: lift as LiftId | null, pounds, reps, rpe }
+  })
 }
 
 function parseIntervals(value: unknown): IntervalLog[] {

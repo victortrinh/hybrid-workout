@@ -7,8 +7,6 @@ import {
   Label,
   Link,
   NumberField,
-  Radio,
-  RadioGroup,
   Text,
   TextField,
 } from 'react-aria-components'
@@ -29,6 +27,7 @@ import {
   type LiveRun,
   type LiveTarget,
 } from '../../domain/live'
+import { isLifts, type LiveLifts, type LiveSession } from '../../domain/lifts'
 import { PACE_SECONDS } from '../../domain/log'
 import { clock, KM_PER_MILE, parseClock, type RunContext } from '../../domain/paces'
 import type { Lane } from '../../domain/program/types'
@@ -38,6 +37,17 @@ import { blockChangeCue, keepAwake, letSleep, unlockSound } from '../liveCues'
 import { finishLine, liveLine } from '../liveCopy'
 import { navigate, SCREEN_PATH } from '../router'
 import { validateTime } from './LogAfter'
+import { Lifting, type LiftsFinish } from './LiveLifts'
+import {
+  DiscardButton,
+  groupLabel,
+  inputClass,
+  lineButton,
+  linkButton,
+  OverallRpe,
+  primaryButton,
+  quietButton,
+} from './liveUi'
 
 /** What the finish sheet hands back to be saved as the Session log. */
 export interface LiveFinish {
@@ -54,22 +64,10 @@ const LANE_BG: Record<Lane, string> = {
   easy: 'bg-easy',
 }
 
-const primaryButton =
-  'min-h-[54px] flex-1 cursor-pointer rounded-sm bg-cobalt px-5 text-[17px] font-bold text-on-cobalt hover:bg-cobalt-hover data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-link'
-const lineButton =
-  'inline-grid min-h-[54px] flex-1 cursor-pointer place-items-center rounded-sm px-5 text-[17px] font-bold text-ink shadow-[inset_0_0_0_2px_var(--ink)] hover:bg-sunk data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-link'
-const linkButton =
-  'cursor-pointer py-2 text-[15px] font-bold text-link underline decoration-2 underline-offset-4 hover:decoration-[3px] data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-link'
-const quietButton =
-  'cursor-pointer py-2 text-[15px] font-bold text-ink hover:underline hover:decoration-2 hover:underline-offset-4 data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-link'
-/** Toggle (DESIGN.md): paper with a 2px inset edge stroke; selected inverts to ink. */
-const toggleClass =
-  'grid min-h-11 cursor-pointer place-items-center rounded-sm px-1 text-center text-[15px] font-bold shadow-[inset_0_0_0_2px_var(--edge)] data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-link data-selected:bg-ink data-selected:text-paper data-selected:shadow-none'
-const inputClass =
-  'h-11 w-32 rounded-sm bg-paper px-3 text-center text-[17px] font-bold shadow-[inset_0_0_0_2px_var(--edge)] outline-none placeholder:font-semibold placeholder:text-muted focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-link data-invalid:shadow-[inset_0_0_0_2px_var(--ink)]'
-const groupLabel = 'block text-[17px] font-bold'
 
 /**
+ * A Live session: sets at the rack (LiveLifts.tsx), or a run against the clock.
+ *
  * A Live run session: the cobalt field with the Block, its target speed huge
  * and striped, and the time left; a lane per Block below; Pause and Skip
  * block pinned to the bottom where a thumb finds them.
@@ -80,18 +78,20 @@ const groupLabel = 'block text-[17px] font-bold'
  * pause, an answer. So a tap is never lost to a re-render.
  */
 export function Live({
-  run,
+  live,
   runContext,
   onChange,
   onSave,
+  onSaveLifts,
 }: {
-  run: LiveRun | null
+  live: LiveSession | null
   /** Paces and units now; the Environment is the run's own. */
   runContext: RunContext
-  onChange: (run: LiveRun | null) => void
+  onChange: (live: LiveSession | null) => void
   onSave: (run: LiveRun, finish: LiveFinish) => void
+  onSaveLifts: (lifts: LiveLifts, finish: LiftsFinish) => void
 }) {
-  if (!run) {
+  if (!live) {
     return (
       <div className="px-pad pt-6 desktop:px-gutter desktop:pt-7">
         <h1 tabIndex={-1} className="text-headline">
@@ -104,7 +104,8 @@ export function Live({
       </div>
     )
   }
-  return <Running run={run} runContext={runContext} onChange={onChange} onSave={onSave} />
+  if (isLifts(live)) return <Lifting lifts={live} onChange={onChange} onSave={onSaveLifts} />
+  return <Running run={live} runContext={runContext} onChange={onChange} onSave={onSave} />
 }
 
 function Running({
@@ -482,7 +483,6 @@ function FinishSheet({
   const [distance, setDistance] = useState(Number.NaN)
   const [rpe, setRpe] = useState<number | null>(null)
   const [missingRpe, setMissingRpe] = useState(false)
-  const [discarding, setDiscarding] = useState(false)
 
   function submit(event: FormEvent) {
     event.preventDefault()
@@ -534,26 +534,14 @@ function FinishSheet({
         </NumberField>
       )}
 
-      <RadioGroup
-        value={rpe === null ? null : String(rpe)}
+      <OverallRpe
+        value={rpe}
+        missing={missingRpe}
         onChange={(v) => {
-          setRpe(Number(v))
+          setRpe(v)
           setMissingRpe(false)
         }}
-        className="grid gap-2"
-      >
-        <Label className={groupLabel}>Overall RPE</Label>
-        <div className="grid grid-cols-5 gap-1.5">
-          {Array.from({ length: 10 }, (_, i) => String(i + 1)).map((v) => (
-            <Radio key={v} value={v} className={toggleClass}>
-              {v}
-            </Radio>
-          ))}
-        </div>
-        <Text slot="description" className={`text-body-quiet ${missingRpe ? 'font-bold text-ink' : 'text-muted'}`}>
-          {missingRpe ? 'Pick one first. The Coach runs on it.' : 'The whole Session. 7 is about three left in the tank; 10 is nothing left.'}
-        </Text>
-      </RadioGroup>
+      />
 
       <div className="flex flex-wrap gap-2.5">
         <Button type="submit" className={`${primaryButton} desktop:flex-none`}>
@@ -565,9 +553,7 @@ function FinishSheet({
           </Button>
         )}
       </div>
-      <Button onPress={() => (discarding ? onDiscard() : setDiscarding(true))} className={`justify-self-start ${quietButton}`}>
-        {discarding ? 'Tap again to throw it away' : 'Discard session'}
-      </Button>
+      <DiscardButton onDiscard={onDiscard} />
     </Form>
   )
 }

@@ -222,6 +222,7 @@ describe('liveLog', () => {
       environment: 'indoor',
       distanceMeters: 9400,
       intervals: [{ block: 1, rep: 1, targetPace: 292, held: true, actualPace: null }],
+      sets: [],
       updatedAt: '2026-11-04T18:00:00.000Z',
     })
   })

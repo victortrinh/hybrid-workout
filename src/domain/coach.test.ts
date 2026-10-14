@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { daysBetween, isoWeekday, localDate, localDateIn, type LocalDate } from './calendar'
+import { DEFAULT_EQUIPMENT, equipWeek } from './equipment'
 import { coach, findWeek, keyDeadline, prescribedWeek, programStart, weekOutcome, type CoachInput } from './coach'
 import type { LoggedStatus, SessionLog } from './log'
 import { program } from './program/program'
@@ -30,6 +31,7 @@ function keysDoneBefore(today: LocalDate, p: Program = program): SessionLog[] {
           environment: null,
           distanceMeters: null,
           intervals: [],
+          sets: [],
           updatedAt: '2026-10-01T12:00:00.000Z',
         })),
     )
@@ -243,6 +245,7 @@ function log(week: number, sessionId: string, date: string, status: LoggedStatus
     environment: null,
     distanceMeters: null,
     intervals: [],
+    sets: [],
     updatedAt,
   }
 }
@@ -634,7 +637,8 @@ describe('the re-entry Suggestion', () => {
 
   it('counts Sessions the Coach Skipped at the end of Sunday', () => {
     const day = inWeek11(week10({ speed: 'done', strength: 'done' }))
-    expect(day.suggestions[0].trigger.skipped.map((s) => s.sessionId)).toEqual(['threshold', 'hyrox'])
+    const [reEntry] = day.suggestions
+    expect(reEntry.kind === 're-entry' && reEntry.trigger.skipped.map((s) => s.sessionId)).toEqual(['threshold', 'hyrox'])
   })
 
   it('does not count the Key session while it is carried over', () => {
@@ -665,7 +669,7 @@ describe('the re-entry Suggestion', () => {
   it('changes nothing until it is Accepted', () => {
     const day = inWeek11(week10(TWO_SKIPPED))
     expect(day.upNext).toMatchObject({ id: 'speed', headline: '4 × 4′', minutes: 45 })
-    expect(day.week).toBe(findWeek(program, 11))
+    expect(day.week).toEqual(equipWeek(findWeek(program, 11)!, DEFAULT_EQUIPMENT))
   })
 
   it('lightens every Prescription of the Week by a third once Accepted', () => {
@@ -689,6 +693,6 @@ describe('the re-entry Suggestion', () => {
     const logs = [...keysDoneBefore(localDate('2026-12-21')), ...week10(TWO_SKIPPED)]
     expect(prescribedWeek(program, 11, logs, [decided('accepted')])?.sessions[0].headline).toBe('3 × 4′')
     expect(prescribedWeek(program, 11, logs, [decided('kept')])?.sessions[0].headline).toBe('4 × 4′')
-    expect(prescribedWeek(program, 10, logs, [decided('accepted')])).toBe(findWeek(program, 10))
+    expect(prescribedWeek(program, 10, logs, [decided('accepted')])).toEqual(equipWeek(findWeek(program, 10)!, DEFAULT_EQUIPMENT))
   })
 })

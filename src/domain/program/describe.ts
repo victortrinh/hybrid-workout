@@ -6,10 +6,12 @@
  * effort and RPE. Lifts read as sets and reps until there are Working weights.
  */
 import { runTarget, type RunContext } from '../paces'
+import { prescribedPounds, roundToFive, type WorkingWeights } from '../weights'
 import type {
   Block,
   Exercise,
   Lane,
+  LiftId,
   Prescription,
   RunEffort,
   Session,
@@ -42,12 +44,16 @@ export interface SessionDescription {
   meta: string
 }
 
-export function describeSession(session: Session, run?: RunContext): SessionDescription {
+/**
+ * `weights` turns lifts into pounds: "Squat 3 × 5 at 185 lb". Without them,
+ * or for a lift that has none yet, a lift reads as sets and reps.
+ */
+export function describeSession(session: Session, run?: RunContext, weights?: WorkingWeights): SessionDescription {
   const main = session.blocks.filter((b) => b.main)
   return {
     heading: `${SESSION_TYPES[session.type].name}, ${session.headline}`,
     summary: summary(session, main),
-    target: target(session, main, run),
+    target: target(session, main, run, weights),
     meta: [
       `${session.minutes} min`,
       session.key && 'Key session this Week',
@@ -79,7 +85,7 @@ function summary(session: Session, main: Block[]): string {
   }
 }
 
-function target(session: Session, main: Block[], run?: RunContext): string {
+function target(session: Session, main: Block[], run?: RunContext, weights?: WorkingWeights): string {
   const rx = firstPrescription(main)
   switch (rx?.kind) {
     case 'intervals': {
@@ -113,7 +119,13 @@ function target(session: Session, main: Block[], run?: RunContext): string {
     case 'sets': {
       const calibration = calibrationRpe(session)
       if (calibration) return `Ramp each lift to RPE ${calibration} to find its Working weight`
-      return [mainLifts(main), rx.rpe && `RPE ${range(rx.rpe)}`, rx.rpeCap && `RPE ≤ ${rx.rpeCap}`, loadWords(rx.load)]
+      const pounds = weights && prescribedPounds(rx, weights)
+      return [
+        mainLifts(main, weights),
+        rx.rpe && `RPE ${range(rx.rpe)}`,
+        rx.rpeCap && `RPE ≤ ${rx.rpeCap}`,
+        typeof pounds === 'number' ? '' : loadWords(rx.load),
+      ]
         .filter(Boolean)
         .join(' · ')
     }
@@ -145,10 +157,25 @@ function calibrationRpe(session: Session): number | undefined {
 
 const SHORT_LIFT: Record<string, string> = { 'Back squat': 'Squat', 'Romanian deadlift': 'RDL' }
 
-function mainLifts(main: Block[]): string {
+/** A lift as the Coach names it: "Squat", "RDL", "Single-leg calf raise". */
+export const LIFT_NAME: Record<LiftId, string> = {
+  'back-squat': 'Squat',
+  'romanian-deadlift': 'RDL',
+  'bulgarian-split-squat': 'Bulgarian split squat',
+  'single-leg-calf-raise': 'Single-leg calf raise',
+  'seated-calf-raise': 'Loaded seated calf raise',
+  'standing-calf-raise-machine': 'Standing calf raise',
+  'seated-calf-raise-machine': 'Seated calf raise',
+}
+
+function mainLifts(main: Block[], weights?: WorkingWeights): string {
   return main
     .flatMap((b) => b.exercises)
-    .map((e) => (e.prescription.kind === 'sets' ? `${SHORT_LIFT[e.name] ?? e.name} ${e.prescription.sets} × ${e.prescription.reps}` : e.name))
+    .map(({ name, prescription: rx }) => {
+      if (rx.kind !== 'sets') return name
+      const pounds = weights && prescribedPounds(rx, weights)
+      return `${SHORT_LIFT[name] ?? name} ${rx.sets} × ${rx.reps}${typeof pounds === 'number' ? ` at ${pounds} lb` : ''}`
+    })
     .join(', ')
 }
 
@@ -223,8 +250,6 @@ function loadWords(load: StrengthLoad): string {
   }
 }
 
-/** Pounds rounded to the nearest 5 lb, the smallest step in the gym. */
-export const roundToFive = (pounds: number) => Math.round(pounds / 5) * 5
 
 /**
  * "200 lb", "2 × 30 lb", "13 lb ball", or nothing for a Station without a load.
@@ -240,6 +265,8 @@ export function stationLoad(station: Station, percent = 100): string {
 
 const SUBSTITUTION_REASON: Record<SubstitutionReason, string> = {
   'no-floor-space': 'no floor space',
+  'no-calf-machine': 'no standing calf machine',
+  'no-seated-calf-machine': 'no seated calf machine',
   readiness: 'Readiness says no jumps',
 }
 
@@ -257,10 +284,11 @@ export function describeExercise(
   exercise: Exercise,
   stations: Record<StationId, Station>,
   run?: RunContext,
+  weights?: WorkingWeights,
 ): ExerciseLine {
   return {
     name: exercise.name,
-    detail: prescriptionWords(exercise.prescription, stations, run),
+    detail: prescriptionWords(exercise.prescription, stations, run, weights),
     note: exercise.note,
     substitutions: (exercise.substitutions ?? []).map((s) => substitutionWords(s, stations)),
   }
@@ -274,7 +302,12 @@ function substitutionWords(substitution: Substitution, stations: Record<StationI
   return `${when[0].toUpperCase()}${when.slice(1)}: ${options}`
 }
 
-function prescriptionWords(rx: Prescription, stations: Record<StationId, Station>, run?: RunContext): string {
+function prescriptionWords(
+  rx: Prescription,
+  stations: Record<StationId, Station>,
+  run?: RunContext,
+  weights?: WorkingWeights,
+): string {
   switch (rx.kind) {
     case 'run': {
       const amount = rx.meters ? km(rx.meters) : rx.minutes ? `${rx.minutes} min` : ''
@@ -291,9 +324,10 @@ function prescriptionWords(rx: Prescription, stations: Record<StationId, Station
       return `${rx.reps} × ${rx.meters} m · ${range(rx.percentOfMax)}% of max`
     case 'sets': {
       const reps = typeof rx.reps === 'number' ? `${rx.reps}` : range(rx.reps)
+      const pounds = weights && prescribedPounds(rx, weights)
       return [
         `${rx.sets} × ${reps}${rx.perLeg ? ' / leg' : ''}`,
-        loadWords(rx.load),
+        typeof pounds === 'number' ? `${pounds} lb` : loadWords(rx.load),
         rx.rpe && `RPE ${range(rx.rpe)}`,
         rx.rpeCap && `RPE ≤ ${rx.rpeCap}`,
         rx.restSeconds && `${range(rx.restSeconds)}″ rest`,
