@@ -75,13 +75,13 @@ export function parseActivity(value: unknown, receivedAt: string): Activity {
   const km = number(v.distanceKm, 'distanceKm')
   const meters = number(v.distanceMeters, 'distanceMeters')
   const withUnit = distance(v.distance)
-  const sampled = distanceSamples(v.distanceSamples)
+  const sampled = distanceSamples(v.distanceSamples, [start, end])
   const distanceMeters =
     sampled ?? withUnit ?? (km !== null ? Math.round(km * 1000) : meters !== null ? Math.round(meters) : null)
   if (distanceMeters !== null && (distanceMeters < 1 || distanceMeters > 100_000)) {
     throw new Error('distance must be at most 100 km')
   }
-  const rates = heartRates(v.heartRates)
+  const rates = heartRates(v.heartRates, [start, end])
   const average = rates.length > 0 ? rates.reduce((a, b) => a + b, 0) / rates.length : number(v.averageHeartRate, 'averageHeartRate')
   const max = rates.length > 0 ? Math.max(...rates) : number(v.maxHeartRate, 'maxHeartRate')
   const id = new Date(start).toISOString().slice(0, 19) + 'Z'
@@ -129,24 +129,46 @@ function distance(value: unknown): number | null {
   return n === 0 ? null : Math.round(n * METERS_PER[(match[2] ?? 'km').toLowerCase()])
 }
 
+/** A sample within this much of the workout still counts: the automations fire a few seconds off. */
+const WINDOW_SLACK_MS = 60_000
+/** A sample's own time on its line: `2026-11-04T07:20:00-05:00`. */
+const SAMPLE_TIME = /(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)/
+
+/**
+ * Splits one sample per line into its value and the rest, keeping only the
+ * samples whose own time (when the line has one) falls within the workout.
+ * The Shortcut reads Health samples from a fixed window, not the workout's,
+ * because Shortcuts can't filter on a date read back from text.
+ */
+function samplesIn(value: string, name: string, [start, end]: readonly [number, number]): string[] {
+  const lines = value.split(/[\n\r]+/).map((l) => l.trim()).filter(Boolean)
+  if (lines.length > 20_000) throw new Error(`${name} has too many samples`)
+  return lines.flatMap((line) => {
+    const time = SAMPLE_TIME.exec(line)
+    if (!time) return [line]
+    const at = Date.parse(time[1])
+    if (Number.isNaN(at)) throw new Error(`${name}: "${time[1]}" isn't a date and time`)
+    if (at < start - WINDOW_SLACK_MS || at > end + WINDOW_SLACK_MS) return []
+    return [line.replace(time[1], ' ').replace(/\s+/g, ' ').trim()]
+  })
+}
+
 /**
  * Health's Walking + Running Distance samples over the workout, one per line:
- * the value, its unit if any (km when none), then the device that measured
- * it. The iPhone and the watch both write distance for the same stretch, so
- * each device's samples are added up and the device with the most counts:
- * nothing is counted twice.
+ * the value, its unit if any (km when none), the sample's time if any, then
+ * the device that measured it. The iPhone and the watch both write distance
+ * for the same stretch, so each device's samples are added up and the device
+ * with the most counts: nothing is counted twice.
  */
-function distanceSamples(value: unknown): number | null {
+function distanceSamples(value: unknown, window: readonly [number, number]): number | null {
   if (value === undefined || value === null || value === '') return null
   if (typeof value !== 'string') throw new Error('distanceSamples must be text, one sample per line')
-  const lines = value.split(/[\n\r]+/).map((l) => l.trim()).filter(Boolean)
-  if (lines.length > 20_000) throw new Error('distanceSamples has too many samples')
   const bySource = new Map<string, number>()
-  for (const line of lines) {
+  for (const line of samplesIn(value, 'distanceSamples', window)) {
     const match = /^([\d.,]+)\s*(km|mi|m)?\b\s*(.*)$/i.exec(line)
     const n = match ? Number(match[1].replace(',', '.')) : NaN
     if (!match || !Number.isFinite(n)) {
-      throw new Error(`distanceSamples must be "value unit source" per line (got "${line.slice(0, 40)}")`)
+      throw new Error(`distanceSamples must be "value unit time source" per line (got "${line.slice(0, 40)}")`)
     }
     const source = match[3].trim() || 'unknown'
     bySource.set(source, (bySource.get(source) ?? 0) + n * METERS_PER[(match[2] ?? 'km').toLowerCase()])
@@ -155,10 +177,14 @@ function distanceSamples(value: unknown): number | null {
   return most > 0 ? most : null
 }
 
-/** Health's heart-rate samples over the workout: a list, or text with one per line. */
-function heartRates(value: unknown): number[] {
+/** Health's heart-rate samples over the workout: a list, or text with one per line, each with its time if any. */
+function heartRates(value: unknown, window: readonly [number, number]): number[] {
   if (value === undefined || value === null || value === '' || value === 0) return []
-  const items = Array.isArray(value) ? value : typeof value === 'string' ? value.split(/[\n\r;,]+/) : null
+  const items = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? samplesIn(value.replace(/[;,]+/g, '\n'), 'heartRates', window)
+      : null
   if (!items || items.length > 20_000) throw new Error('heartRates must be a list of numbers')
   return items
     .map((item) => (typeof item === 'string' ? item.trim() : item))

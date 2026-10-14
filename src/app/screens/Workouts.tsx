@@ -56,10 +56,10 @@ export function Workouts({ activities }: { activities: Activity[] }) {
           </Field>
           <Field term="Body">
             <Code>type</Code> (text: the workout type, fixed per automation), <Code>start</Code> and <Code>end</Code>{' '}
-            (text, ISO 8601), <Code>heartRates</Code> (text: the heart-rate samples during the workout, one per line)
-            and <Code>distanceSamples</Code> (text: each distance sample’s value, unit and source, one per line). The
-            server works out average and maximum heart rate, and counts distance from one device only, so the phone and
-            the watch never add up twice.
+            (text, ISO 8601), <Code>heartRates</Code> (text: each heart-rate sample’s value and time, one per line)
+            and <Code>distanceSamples</Code> (text: each distance sample’s value, unit, time and source, one per line).
+            The server keeps the samples between start and end, works out average and maximum heart rate, and counts
+            distance from one device only, so the phone and the watch never add up twice.
           </Field>
         </dl>
         <pre
@@ -72,8 +72,9 @@ export function Workouts({ activities }: { activities: Activity[] }) {
               type: 'Running',
               start: '2026-11-04T07:12:00-05:00',
               end: '2026-11-04T07:54:30-05:00',
-              distanceSamples: '0.52 km Victor’s Apple Watch\n0.48 km Victor’s Apple Watch',
-              heartRates: '140\n152\n161\n171',
+              distanceSamples:
+                '0.52 km 2026-11-04T07:15:00-05:00 Victor’s Apple Watch\n0.48 km 2026-11-04T07:18:00-05:00 Victor’s Apple Watch',
+              heartRates: '140 2026-11-04T07:13:00-05:00\n152 2026-11-04T07:20:00-05:00',
             },
             null,
             2,
@@ -101,23 +102,27 @@ export function Workouts({ activities }: { activities: Activity[] }) {
           </li>
           <li>
             New Shortcut, “Compromised workouts”. In its ⓘ details, turn on Receive Text as input. Then: <b>Wait</b> 60
-            seconds, so the watch syncs → <b>Get File</b> from the Shortcuts folder,{' '}
-            <Code>compromised-workout-start.txt</Code> → <b>Get Dates from Input</b> → <b>Set Variable</b> Start →{' '}
-            <b>Date</b> (Current Date) → <b>Set Variable</b> End.
+            seconds, so the watch syncs → <b>Get File</b> from the Shortcuts folder, the exact name the first Shortcut
+            saved → <b>Get Text from Input</b> → <b>Set Variable</b> Start → <b>Date</b> (Current Date) →{' '}
+            <b>Format Date</b>, ISO 8601 with the time → <b>Set Variable</b> End. No Get Dates from Input: it misreads
+            ISO dates.
           </li>
           <li>
-            <b>Find Health Samples</b> where Type is Heart Rate, Start Date is after Start and End Date is before End →{' '}
-            <b>Get Details of Health Sample</b>: Value → <b>Combine Text</b> with New Lines → <b>Set Variable</b> HR.
+            <b>Find Health Samples</b> where Type is Heart Rate and Start Date is in the last 4 hours → <b>Repeat with
+            Each</b>: a <b>Text</b> of Repeat Item’s Value, a space, its Start Date (Date Format ISO 8601, with the time)
+            → after End Repeat, <b>Combine Text</b> Repeat Results with New Lines → <b>Set Variable</b> HR. The server
+            keeps only the samples between start and end.
           </li>
           <li>
-            <b>Find Health Samples</b> where Type is Walking + Running Distance, the same dates → <b>Repeat with
-            Each</b>: a <b>Text</b> of Repeat Item’s Value, a space, its Unit, a space, its Source → after End Repeat,{' '}
-            <b>Combine Text</b> Repeat Results with New Lines → <b>Set Variable</b> Distance.
+            <b>Find Health Samples</b> where Type is Walking + Running Distance and Start Date is in the last 4 hours →{' '}
+            <b>Repeat with Each</b>: a <b>Text</b> of Repeat Item’s Value, a space, its Unit, a space, its Start Date (ISO
+            8601, with the time), a space, its Source → <b>Combine Text</b> Repeat Results with New Lines →{' '}
+            <b>Set Variable</b> Distance.
           </li>
           <li>
             <b>Get Contents of URL</b>: the address above, Method POST, the two headers, Request Body JSON with Text
-            type = Shortcut Input, Text start = Start and Text end = End (Date Format ISO 8601, with the time), Text
-            heartRates = HR and Text distanceSamples = Distance.
+            type = Shortcut Input, Text start = Start, Text end = End, Text heartRates = HR and Text distanceSamples =
+            Distance.
           </li>
           <li>
             Automation → + → Apple Watch Workout → Any workout, Is Started → Run Immediately → “Compromised workout
