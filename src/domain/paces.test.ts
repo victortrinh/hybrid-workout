@@ -4,6 +4,7 @@ import { coach, findWeek } from './coach'
 import type { LoggedStatus, SessionLog } from './log'
 import {
   clock,
+  clockInput,
   formatPace,
   latestFiveKTest,
   paceFor,
@@ -101,6 +102,18 @@ describe('units', () => {
     expect(parseClock('1:23:00')).toBeNull()
     expect(clock(1380)).toBe('23:00')
     expect(clock(545)).toBe('9:05')
+  })
+
+  it('reads clock times typed on a number pad, with no colon', () => {
+    expect(parseClock('1945')).toBe(1185)
+    expect(parseClock('452')).toBe(292)
+    expect(parseClock('1960')).toBeNull()
+    expect(parseClock('12345')).toBeNull()
+    expect(clockInput('1')).toBe('1')
+    expect(clockInput('45')).toBe('45')
+    expect(clockInput('452')).toBe('4:52')
+    expect(clockInput('1945')).toBe('19:45')
+    expect(clockInput('19456')).toBe('19:45')
   })
 })
 

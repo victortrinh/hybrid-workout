@@ -64,7 +64,7 @@ export function liftsStartLine(lifts: LiveLifts): string {
 }
 
 /** After a set is logged at its default RPE. */
-export const loggedLine = (set: number, rpe: number) => `Set ${set} logged at RPE ${rpe}. Change it below if that was a lie.`
+export const loggedLine = (set: number, rpe: number) => `Set ${set} logged at RPE ${rpe}. Tap the RPE if that was a lie.`
 
 /** After the athlete changes a set's RPE. */
 export function rpeLine(rpe: number): string {

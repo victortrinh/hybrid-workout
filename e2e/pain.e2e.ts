@@ -19,22 +19,34 @@ const WEEK_2 = [
   ...weekDone(2, ['strength', 'threshold', 'hyrox'], '2026-10-28'),
 ] as const
 
+/** Shin 2 from Monday, outside any Session: still standing on Wednesday. */
+const SHIN_2 = {
+  id: 'seed-shin-2',
+  date: '2026-11-02',
+  score: 2,
+  area: 'shin',
+  week: null,
+  sessionId: null,
+  updatedAt: '2026-11-02T12:00:00.000Z',
+}
+
 test('pain 4 before a Speed session: the accelerations go to the bike and the reps drop', async ({ page }) => {
-  const reports: Record<string, unknown>[] = []
+  const reports: Record<string, unknown>[] = [SHIN_2]
   await serveHistory(page, [...WEEK_2], reports)
   await page.clock.setFixedTime(WEEK_3)
   await page.goto('/')
 
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Speed, 5 × 3′')
-  await page.getByRole('button', { name: 'Start session' }).click()
+  await page.getByRole('button', { name: /^Start / }).click()
 
-  // The pain step comes first, with No one tap away.
-  const step = page.getByRole('region', { name: 'Anything hurt?' })
-  await expect(step.getByRole('button', { name: 'No. Let’s go' })).toBeFocused()
-  await step.getByRole('button', { name: 'Yes' }).click()
+  // Pain stands, so Start asks whether it still does, with Gone one tap away.
+  const step = page.getByRole('region', { name: 'Up next' })
+  await expect(step).toContainText('Shin 2 last time.')
+  await expect(step.getByRole('button', { name: 'Gone' })).toBeFocused()
+  await step.getByRole('button', { name: 'Changed' }).click()
   await pick(step, '4')
   await pick(step, 'Achilles / calf')
-  await expect(step).toContainText('Pain 4. No jumps, fewer reps. Your tendons will thank you.')
+  await expect(step).toContainText('Pain 4 and rising. No jumps, fewer reps, before it gets a vote.')
   await expectNoAxeViolations(page)
   await step.getByRole('button', { name: 'Start with that' }).click()
 
@@ -66,14 +78,13 @@ test('pain 4 before a Speed session: the accelerations go to the bike and the re
   })
 })
 
-test('No at Start is one tap, and starts the Session as written', async ({ page }) => {
+test('with nothing hurting on record, Start is one tap and starts the Session as written', async ({ page }) => {
   const reports: Record<string, unknown>[] = []
   await serveHistory(page, [...WEEK_2], reports)
   await page.clock.setFixedTime(WEEK_3)
   await page.goto('/')
 
-  await page.getByRole('button', { name: 'Start session' }).click()
-  await page.getByRole('button', { name: 'No. Let’s go' }).click()
+  await page.getByRole('button', { name: /^Start / }).click()
   await expect(page).toHaveURL('/live')
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Speed, 5 × 3′')
   await expect.poll(() => reports.at(-1)).toMatchObject({ score: 0, area: null, week: 3, sessionId: 'speed' })
@@ -102,8 +113,33 @@ test('Something hurts from Today: pain 6 makes the day easy bike or rest once Ac
   await suggestion.getByRole('button', { name: 'Accept' }).click()
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Speed, easy bike 30′ or rest')
   // Nothing to run: Log after it instead.
-  await expect(page.getByRole('button', { name: 'Start session' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /^Start / })).toHaveCount(0)
   await expect(page.getByRole('link', { name: 'Log after' })).toBeVisible()
+})
+
+test('Gone records a 0 and starts; next time Start is one tap again', async ({ page }) => {
+  const reports: Record<string, unknown>[] = [SHIN_2]
+  await serveHistory(page, [...WEEK_2], reports)
+  await page.clock.setFixedTime(WEEK_3)
+  await page.goto('/')
+
+  await page.getByRole('button', { name: /^Start / }).click()
+  await page.getByRole('region', { name: 'Up next' }).getByRole('button', { name: 'Gone' }).click()
+  await expect(page).toHaveURL('/live')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Speed, 5 × 3′')
+  await expect.poll(() => reports.at(-1)).toMatchObject({ score: 0, area: null, week: 3, sessionId: 'speed' })
+})
+
+test('Same repeats the standing report: pain 2 changes nothing, so it starts at once', async ({ page }) => {
+  const reports: Record<string, unknown>[] = [SHIN_2]
+  await serveHistory(page, [...WEEK_2], reports)
+  await page.clock.setFixedTime(WEEK_3)
+  await page.goto('/')
+
+  await page.getByRole('button', { name: /^Start / }).click()
+  await page.getByRole('region', { name: 'Up next' }).getByRole('button', { name: 'Same' }).click()
+  await expect(page).toHaveURL('/live')
+  await expect.poll(() => reports.at(-1)).toMatchObject({ score: 2, area: 'shin', week: 3, sessionId: 'speed' })
 })
 
 test('Log after asks too, and links the report to the Session', async ({ page }) => {

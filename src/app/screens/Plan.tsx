@@ -33,7 +33,8 @@ export function Plan({ program, day }: { program: Program; day: CoachDay }) {
           </h2>
           <ul className="mt-1.5">
             {phase.weeks.map((week) => (
-              <li key={week.number}>
+              // The current Week is where Plan opens: the shell scrolls it into the thumb's reach.
+              <li key={week.number} data-scroll-anchor={week.number === current ? '' : undefined}>
                 <WeekRow week={week} current={week.number === current} />
               </li>
             ))}

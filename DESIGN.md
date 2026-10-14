@@ -301,7 +301,7 @@ Dark theme lifts each to a brighter sibling (`*-dark`) for contrast on near-blac
 
 Mobile-first single column with a 20px page pad (`spacing.pad`). At 960px the shell becomes a 240px sticky cobalt side rail plus content; the bottom tab bar disappears and page gutters grow to 48px (`spacing.gutter`). Today on desktop runs the field band full width with the countdown and Phase lanes side by side, then two equal columns. Progress uses a 12-column grid (40px column gap) with panels spanning 8/4, 8/4, 6/6 and 12, capped at 1280px; Plan is capped at 900px.
 
-Vertical rhythm is tight within a group and generous between groups: 4–6px inside lane stacks, 10–14px between a heading and its rows, 18–28px between related blocks (a Coach line under its target, the actions under it, the blocks of a Session), and `section` (36px) between the top-level groups of a screen (Up next and the Week list on Today, each Session on the Week screen). When the gap inside a group matches the gap between groups, the screen reads as one wall of text. Week rows are 14px top and bottom, exercise rows 12px; Plan week rows 7px. Touch targets are at least 44px; primary buttons 54px; the current set's Log button 52px. The tab bar respects `env(safe-area-inset-bottom)`, and page content clears it by its height plus that inset, so the last row never sits under it. The Live field respects the top inset.
+Vertical rhythm is tight within a group and generous between groups: 4–6px inside lane stacks, 10–14px between a heading and its rows, 18–28px between related blocks (a Coach line under its target, the actions under it, the blocks of a Session), and `section` (36px) between the top-level groups of a screen (Up next and the Week list on Today, each Session on the Week screen). When the gap inside a group matches the gap between groups, the screen reads as one wall of text. Week rows are 14px top and bottom, exercise rows 12px; Plan week rows 7px. Touch targets are at least 44px, link buttons included; primary buttons and everything in a Live action bar 54px. The tab bar (and any action bar docked above it) respects `env(safe-area-inset-bottom)`, and page content clears the dock by its measured height, so the last row never sits under it. The Live field respects the top inset.
 
 ### Named Rules
 **The One Answer Rule.** Each screen opens with one hero number or one instruction in the first viewport; everything else follows as rows. A screen has at most one cobalt primary: on the Week screen it is the Session Today offers as Next (tagged Next, with Today's Start / Log after pair); every other Session gets a line Start and a Log after link.
@@ -332,12 +332,12 @@ Blunt, full-height and wide.
 - **Primary:** cobalt fill, white label, grows to fill the action row. One primary per region.
 - **Line:** paper fill with a 2px inset ink stroke; hover sinks to `sunk`.
 - **Hover / Focus:** primary deepens to `cobalt-hover`. Focus is a 3px `link` outline at 2px offset everywhere, switched to white inside the field.
-- **Link button:** 15px/700 `link`, 2px underline at 4px offset, thickening to 3px on hover. The quiet variant is ink with no underline (secondary choice in a Suggestion, Undo).
+- **Link button:** 15px/700 `link`, 2px underline at 4px offset, thickening to 3px on hover. The quiet variant is ink with no underline (secondary choice in a Suggestion, Undo). Both keep a 44px tap height however short their label: the padding is invisible, the target isn't.
 
 ### Toggles and steppers
 - **Toggle (pain scale, area, RPE, segmented settings):** paper with 2px inset `edge` stroke, 4px corners; pressed state inverts to ink fill with paper text. Segmented controls share one 2px ink border.
 - **Stepper:** 44px square, 2px inset `edge` stroke, 20px stroked plus/minus icon.
-- **Log set:** edge-stroked; the current set's button turns cobalt and grows to 52px; a logged set drops its stroke and turns `good`.
+- **Log set:** in the rows, edge-stroked, the current set's stroked in ink; a logged set drops its stroke and turns `good`. The cobalt Log set lives in the action bar (below), the one primary on the screen.
 
 ### Status tag
 - **Style:** cobalt fill, white 13px/700 label, 4px 8px padding. Used for "Next" only.
@@ -361,8 +361,15 @@ The cobalt header of Today and every Live session: brand and avatar row, the str
 - **Lane chip:** five 3px stacked bars in the Session-type colour, 36px wide, leading each Week row on Today.
 - **Motion:** fills animate width over 0.9s with `cubic-bezier(.16,1,.3,1)`; the rest bar ticks linearly over 1s. All transitions are removed under reduced motion.
 
+### Action bar (the thumb rule)
+On the phone a screen's primary action sits at the bottom, where the thumb already is; the top keeps what is read or rarely touched (End, back links, Settings).
+- **Today:** docked in a fixed slot just above the tab bar: paper, a 2px ink top rule, 12px padding. It holds Start (named for the Session it starts) or Resume, and the "Still hurts?" step when pain stands. Page content clears the dock by its measured height (`--dock-height`).
+- **Live sessions:** sticky at the foot of the screen with the home-indicator inset: Pause and Skip block on a run; on a strength session, −/+ load steppers at 54px and a cobalt "Log set 2 · 190 lb", then Finish session once every set is logged.
+- **Finish sheets:** Save log (and Keep going) pinned to the bottom edge; Overall RPE starts on the Coach's guess, said as a guess.
+- **Desktop (≥960px):** no dock; the same bar renders in place under the content it acts on.
+
 ### Rest timer
-Sticky cobalt strip at the bottom of a strength Live session: "Rest", an 8px field lane, and the countdown at 26px/900 expanded.
+Sticky cobalt strip at the bottom of a strength Live session, in two rows: "Rest", an 8px field lane, the countdown at 26px/900 expanded and Skip; then the set's RPE as a white-stroked 54px chip and the next set's Log set in white with a cobalt label. Tapping the RPE swaps the row for six white-stroked toggles; the picked one inverts to white, as the side rail's active item does.
 
 ### Charts
 SVG on paper: 12px/600 muted axis text, `rule` gridlines, Session-type stacked bars, `link` plan and HRV lines, `speed` goal line, square markers, one bold ink annotation for the latest value.

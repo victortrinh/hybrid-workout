@@ -257,8 +257,9 @@ export type ActivityOutcome =
  * answers come first. Then, in start order, an Activity attaches to the one
  * fitting Session logged as trained on its day, of any Week (done early or
  * late), or, with none logged that day, the one fitting Session of its own
- * Week still Planned; with more than one, it asks. A Session takes at most
- * one Activity.
+ * Week still Planned. With more than one logged that day, the one whose Live
+ * session overlaps the Activity in time wins; otherwise it asks. A Session
+ * takes at most one Activity.
  */
 export function matchActivities(
   program: Program,
@@ -286,17 +287,24 @@ export function matchActivities(
     const fits = (week: number, session: Session) =>
       FITS[activity.kind].includes(session.type) && !claimed.has(`${week}/${session.id}`)
     const doneThatDay = new Map<string, Candidate>()
+    const overlapping = new Map<string, Candidate>()
     for (const l of logs) {
       const session = findWeek(program, l.week)?.sessions.find((s) => s.id === l.sessionId)
       if (session && l.date === activity.date && trained(l) && fits(l.week, session)) {
         doneThatDay.set(`${l.week}/${session.id}`, { week: l.week, session })
+        if (overlaps(activity, l)) overlapping.set(`${l.week}/${session.id}`, { week: l.week, session })
       }
     }
     const week = weekOn(program, activity.date)
     const planned = (week?.sessions ?? [])
       .filter((s) => fits(week!.number, s) && !logs.some((l) => l.week === week!.number && l.sessionId === s.id))
       .map((session) => ({ week: week!.number, session }))
-    const candidates = doneThatDay.size > 0 ? [...doneThatDay.values()] : planned
+    const candidates =
+      doneThatDay.size > 1 && overlapping.size === 1
+        ? [...overlapping.values()]
+        : doneThatDay.size > 0
+          ? [...doneThatDay.values()]
+          : planned
     if (candidates.length === 1) {
       const [{ week: number, session }] = candidates
       claimed.add(`${number}/${session.id}`)
@@ -308,6 +316,19 @@ export function matchActivities(
     }
   }
   return activities.map((a) => outcomes.get(a.id)!)
+}
+
+/**
+ * Whether a Session log's time on the clock overlaps the Activity. A Live
+ * session saves when it finishes, so its log ran for `minutes` up to `updatedAt`.
+ */
+function overlaps(activity: Activity, log: SessionLog): boolean {
+  if (log.minutes === null) return false
+  const end = Date.parse(log.updatedAt)
+  const start = end - log.minutes * 60_000
+  const from = Date.parse(activity.startedAt)
+  const to = from + activity.minutes * 60_000
+  return Number.isFinite(end) && Number.isFinite(from) && start < to && from < end
 }
 
 /** The Week holding `date`, if the Program has encoded it. */

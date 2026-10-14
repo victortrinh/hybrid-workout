@@ -53,7 +53,7 @@ test('a Session logged with no signal syncs once back online, and another browse
 
   // In the gym: no signal. The log saves on the phone and Today moves on.
   await context.setOffline(true)
-  await page.getByRole('link', { name: 'Log after' }).click()
+  await page.getByRole('link', { name: 'Log it after instead' }).click()
   await page.getByRole('radio', { name: '8', exact: true }).check({ force: true })
   await page.getByRole('button', { name: 'Save log' }).click()
   await expect(page).toHaveURL('/')

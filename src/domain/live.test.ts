@@ -7,6 +7,7 @@ import {
   answerStations,
   blockLeft,
   end,
+  heldUnanswered,
   isLive,
   isLiveRun,
   isOver,
@@ -210,6 +211,20 @@ describe('the Live run clock', () => {
       { block: 1, rep: 1, targetPace: 292, held: true, actualPace: null },
       { block: 3, rep: 2, targetPace: 292, held: false, actualPace: 298 },
     ])
+  })
+
+  it('takes silence as Held it, except for a rep cut short', () => {
+    let quiet = advance(start(session(3, 'threshold')), at(45))
+    quiet = heldUnanswered(answer(quiet, 3, 292, 298), indoor)
+    expect(quiet.asks).toEqual([])
+    expect(quiet.intervals.map((i) => [i.block, i.held])).toEqual([
+      [1, true],
+      [3, false],
+    ])
+
+    let cut = advance(start(session(3, 'threshold')), at(15))
+    cut = heldUnanswered(nextBlock(cut, at(15)), indoor)
+    expect(cut.intervals).toEqual([])
   })
 })
 

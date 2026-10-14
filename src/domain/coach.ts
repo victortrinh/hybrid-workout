@@ -73,6 +73,7 @@ export interface BucketEntry {
 
 /** A workout more than one Session fits: Today asks which. */
 export type ActivityQuestion = Extract<ActivityOutcome, { state: 'ambiguous' }>
+export type ActivityAttached = Extract<ActivityOutcome, { state: 'attached' }> & { session: Session }
 
 /** How far back Today still asks about a workout. */
 export const ACTIVITY_QUESTION_DAYS = 7
@@ -158,6 +159,8 @@ export interface CoachDay {
   recoveryChange: 'short-sleep' | 'easy-day' | null
   /** Workouts from the last week that fit more than one Session, oldest first. */
   activityQuestions: ActivityQuestion[]
+  /** Today's workouts the Coach attached on its own, oldest first: said once, so it's never silent. */
+  activitiesAttached: ActivityAttached[]
 }
 
 export interface StandingPain {
@@ -256,6 +259,13 @@ export function coach({
     activityQuestions: matched
       .filter((o): o is ActivityQuestion => o.state === 'ambiguous')
       .filter((o) => o.activity.date <= today && daysBetween(o.activity.date, today) < ACTIVITY_QUESTION_DAYS)
+      .sort((a, b) => a.activity.startedAt.localeCompare(b.activity.startedAt)),
+    activitiesAttached: matched
+      .flatMap((o): ActivityAttached[] => {
+        if (o.state !== 'attached' || o.by !== 'coach' || o.activity.date !== today) return []
+        const session = findWeek(program, o.week)?.sessions.find((s) => s.id === o.sessionId)
+        return session ? [{ ...o, session }] : []
+      })
       .sort((a, b) => a.activity.startedAt.localeCompare(b.activity.startedAt)),
   }
 }

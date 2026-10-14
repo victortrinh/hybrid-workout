@@ -9,7 +9,7 @@ export function NotFound() {
       <p className="mt-3">
         <Link
           href="/"
-          className="py-2 text-[15px] font-bold text-link underline decoration-2 underline-offset-4 hover:decoration-[3px]"
+          className="inline-flex min-h-11 items-center text-[15px] font-bold text-link underline decoration-2 underline-offset-4 hover:decoration-[3px]"
         >
           Back to Today
         </Link>

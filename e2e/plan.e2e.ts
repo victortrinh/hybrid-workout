@@ -73,3 +73,15 @@ test('Race week loads from a deep link, and unknown Weeks say so', async ({ page
   await page.goto('/plan/week/28')
   await expect(page.getByRole('heading', { level: 1, name: 'Nothing here.' })).toBeVisible()
 })
+
+test('Plan opens on the current Week, a third of the way down, within the thumb’s reach', async ({ page }) => {
+  // Wednesday of Week 16: far enough down the list that the top of Plan would hide it.
+  await page.clock.setFixedTime(new Date('2027-02-03T12:00:00-05:00'))
+  await page.goto('/plan')
+  const current = page.locator('[aria-current="date"]')
+  await expect(current).toHaveAccessibleName(/^Week 16, from/)
+  const box = (await current.boundingBox())!
+  const height = page.viewportSize()!.height
+  expect(box.y).toBeGreaterThan(height * 0.2)
+  expect(box.y + box.height).toBeLessThan(height * 0.6)
+})
