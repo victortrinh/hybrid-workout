@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Five Phase lanes filling left to right on the cobalt field (DESIGN.md, Lanes '76). Kept inside the maskable safe zone. -->
+  <rect width="512" height="512" fill="#1B3BB8"/>
+  <g fill="rgba(255,255,255,.32)">
+    <rect x="116" y="158" width="280" height="22"/>
+    <rect x="116" y="198" width="280" height="22"/>
+    <rect x="116" y="238" width="280" height="36"/>
+    <rect x="116" y="292" width="280" height="22"/>
+    <rect x="116" y="332" width="280" height="22"/>
+  </g>
+  <g fill="#FFFFFF">
+    <rect x="116" y="158" width="280" height="22"/>
+    <rect x="116" y="198" width="280" height="22"/>
+    <rect x="116" y="238" width="168" height="36"/>
+  </g>
+</svg>

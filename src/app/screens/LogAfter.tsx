@@ -39,7 +39,8 @@ const STATUS_HINT: Record<LoggedStatus, string> = {
 
 /**
  * Log after: what happened in one Session, written after the fact. Saving
- * goes straight back to Today, which shows the log at once.
+ * stores it on the phone and goes straight back to Today, which shows the log
+ * at once, signal or not.
  */
 export function LogAfter({
   week,
@@ -52,7 +53,7 @@ export function LogAfter({
   session: Session
   logs: SessionLog[]
   today: LocalDate
-  onSave: (log: SessionLog) => Promise<boolean>
+  onSave: (log: SessionLog) => void
 }) {
   const existing = logFor(logs, week.number, session.id)
   const days = Array.from({ length: 7 }, (_, i) => addDays(week.startDate, i))
@@ -70,7 +71,7 @@ export function LogAfter({
   function submit(event: FormEvent) {
     event.preventDefault()
     if (!date) return
-    void onSave({
+    onSave({
       id: existing?.id ?? crypto.randomUUID(),
       week: week.number,
       sessionId: session.id,

@@ -36,11 +36,12 @@ const NAV_SCREEN: Partial<Record<Screen, Screen>> = { week: 'plan', log: 'today'
 
 /**
  * The shell: a cobalt side rail from 960px, a bottom tab bar below it. The
- * Coach runs here, on the device, against today's date in Toronto.
+ * Coach runs here, on the device, against today's date in Toronto and the
+ * Session logs stored on the device, so Today works without signal.
  */
 export function App() {
   const today = useToday()
-  const { logs, save, error } = useSessionLogs()
+  const { logs, save, pending, error } = useSessionLogs()
   const [picked, pick] = usePicked()
   const day = useMemo(() => coach({ program, today, logs, picked }), [today, logs, picked])
   const route = useRoute()
@@ -66,6 +67,7 @@ export function App() {
             <Today
               day={day}
               weekCount={program.weekCount}
+              pending={pending}
               error={error}
               onPick={(sessionId) => day.week && pick(day.week.number, sessionId, today)}
             />

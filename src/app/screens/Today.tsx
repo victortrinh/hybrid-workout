@@ -16,12 +16,15 @@ import { logPath } from '../router'
 export function Today({
   day,
   weekCount,
+  pending,
   error,
   onPick,
 }: {
   day: CoachDay
   weekCount: number
-  /** A failed load or save, said once under Up next. */
+  /** Logs saved on this device that the server hasn't taken yet. */
+  pending: number
+  /** A log the server refused or the device couldn't store, said once under Up next. */
   error: string | null
   /** Makes a Session of the Bucket today's Session instead of Up next. */
   onPick: (sessionId: string) => void
@@ -32,7 +35,7 @@ export function Today({
       className="desktop:grid desktop:grid-cols-2 desktop:gap-x-12 desktop:px-gutter"
     >
       <FieldBand day={day} weekCount={weekCount} />
-      <UpNext day={day} weekCount={weekCount} error={error} />
+      <UpNext day={day} weekCount={weekCount} pending={pending} error={error} />
       <ThisWeek day={day} onPick={onPick} />
     </section>
   )
@@ -115,7 +118,17 @@ function PhaseLanes({ phases }: { phases: PhaseProgress[] }) {
   )
 }
 
-function UpNext({ day, weekCount, error }: { day: CoachDay; weekCount: number; error: string | null }) {
+function UpNext({
+  day,
+  weekCount,
+  pending,
+  error,
+}: {
+  day: CoachDay
+  weekCount: number
+  pending: number
+  error: string | null
+}) {
   const { position, upNext, week } = day
   let heading: string
   let target: string
@@ -163,7 +176,12 @@ function UpNext({ day, weekCount, error }: { day: CoachDay; weekCount: number; e
           </Link>
         </div>
       )}
-      <div aria-live="polite">{error && <p className="mt-3 text-body">{error}</p>}</div>
+      <div aria-live="polite">
+        {error && <p className="mt-3 text-body">{error}</p>}
+        {pending > 0 && (
+          <p className="mt-3 text-body-quiet text-muted">{plural(pending, 'log')} on this phone, waiting to sync.</p>
+        )}
+      </div>
     </div>
   )
 }
