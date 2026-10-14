@@ -10,7 +10,11 @@ import { backLink, Code, Field } from './Shortcut'
  */
 export function Workouts({ activities }: { activities: Activity[] }) {
   const endpoint = `${location.origin}/api/activities`
-  const last = activities.at(-1)
+  // The one that arrived last, whatever day it was: a resent older workout counts.
+  const last = activities.reduce<Activity | undefined>(
+    (latest, a) => (!latest || a.receivedAt > latest.receivedAt ? a : latest),
+    undefined,
+  )
   return (
     <div className="px-pad pt-6 pb-8 desktop:max-w-plan desktop:px-gutter desktop:pt-9">
       <p>
