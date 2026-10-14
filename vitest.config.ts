@@ -7,5 +7,8 @@ export default defineConfig({
   test: {
     include: ['src/**/*.test.{ts,tsx}'],
     environment: 'node',
+    // The clock seam guard (src/app/clockSeam.test.ts) globs the sources; a
+    // cached transform would miss a file added since the last run.
+    fsModuleCache: false,
   },
 })

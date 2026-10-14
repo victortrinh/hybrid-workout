@@ -16,6 +16,7 @@ import {
 } from 'react-aria-components'
 import type { Activity } from '../../domain/activity'
 import { addDays, daysBetween, type LocalDate } from '../../domain/calendar'
+import { nowMs } from '../../domain/clock'
 import { DISTANCE_METERS, LOGGED_STATUSES, logDays, logFor, NOTES_MAX, type LoggedStatus, type SessionLog } from '../../domain/log'
 import { clock, FIVE_K_SECONDS, parseClock, type Environment } from '../../domain/paces'
 import type { PainArea } from '../../domain/pain'
@@ -401,7 +402,7 @@ export function validateTime(text: string): string | null {
 
 /** Now, or just after the edit it replaces if this device's clock is behind the one that wrote it. */
 function editedAt(existing: SessionLog | null): string {
-  const now = Date.now()
+  const now = nowMs()
   const after = existing ? Date.parse(existing.updatedAt) + 1 : now
   return new Date(Math.max(now, after)).toISOString()
 }

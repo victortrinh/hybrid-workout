@@ -7,6 +7,7 @@ import { Hono } from 'hono'
 import { isServiceToken } from './access'
 import { parseActivity, parseActivityAnswer, type Activity, type ActivityAnswer } from '../domain/activity'
 import { localDateIn } from '../domain/calendar'
+import { nowDate } from '../domain/clock'
 import { findWeek } from '../domain/coach'
 import { isCircuit, isLiveRun } from '../domain/live'
 import { parseSessionLog, type SessionLog, type StationPart, type SyncState } from '../domain/log'
@@ -32,7 +33,7 @@ app.get('/state', async (c) => c.json(await readState(c.env.DB)))
 
 /** Data export: every table as stored, in one JSON file. */
 app.get('/export.json', async (c) => {
-  const now = new Date()
+  const now = nowDate()
   const tables = await readTables(c.env.DB)
   const body = {
     exportedAt: now.toISOString(),
@@ -46,7 +47,7 @@ app.get('/export.json', async (c) => {
 
 /** Data export: one CSV per table, zipped. */
 app.get('/export.zip', async (c) => {
-  const now = new Date()
+  const now = nowDate()
   const tables = await readTables(c.env.DB)
   const files = EXPORT_TABLES.map((t) => ({ name: `${t}.csv`, content: toCsv(tables[t]) }))
   return c.body(zip(files), 200, {
@@ -177,7 +178,7 @@ app.post('/recovery', async (c) => {
   }
   let night: RecoveryNight
   try {
-    night = parseRecoveryNight(await c.req.json(), new Date().toISOString())
+    night = parseRecoveryNight(await c.req.json(), nowDate().toISOString())
   } catch (error) {
     return c.json({ error: error instanceof Error ? error.message : 'Invalid request' }, 400)
   }
@@ -206,7 +207,7 @@ app.post('/activities', async (c) => {
   }
   let activity: Activity
   try {
-    activity = parseActivity(await c.req.json(), new Date().toISOString())
+    activity = parseActivity(await c.req.json(), nowDate().toISOString())
   } catch (error) {
     return c.json({ error: error instanceof Error ? error.message : 'Invalid request' }, 400)
   }

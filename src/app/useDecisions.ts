@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { nowMs } from '../domain/clock'
 import type { SyncState } from '../domain/log'
 import { mergeDecisions, type SuggestionDecision } from '../domain/suggestion'
 
@@ -58,7 +59,7 @@ export function useDecisions(): Decisions {
 
 /** Now, or just after the decision it replaces if this device's clock is behind the one that wrote it: the later one must win on sync. */
 export function editedAt(previous: string | undefined): string {
-  const now = Date.now()
+  const now = nowMs()
   return new Date(Math.max(now, previous ? Date.parse(previous) + 1 : now)).toISOString()
 }
 
