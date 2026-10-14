@@ -15,7 +15,7 @@ export function Shortcut({ nights }: { nights: RecoveryNight[] }) {
     <div className="px-pad pt-6 pb-8 desktop:max-w-plan desktop:px-gutter desktop:pt-9">
       <p>
         <Link href="/" className={backLink}>
-          Today
+          ← Today
         </Link>
       </p>
       <h1 tabIndex={-1} className="mt-2 text-headline-page">
@@ -26,7 +26,7 @@ export function Shortcut({ nights }: { nights: RecoveryNight[] }) {
         it once. Never type a number.
       </p>
 
-      <section aria-labelledby="last-night" className="mt-6 border-t-2 border-ink pt-3.5">
+      <section aria-labelledby="last-night" className="mt-section border-t-2 border-ink pt-3.5">
         <h2 id="last-night" className="text-title-sm">
           Last night received
         </h2>
@@ -42,7 +42,7 @@ export function Shortcut({ nights }: { nights: RecoveryNight[] }) {
         )}
       </section>
 
-      <section aria-labelledby="request" className="mt-6 border-t-2 border-ink pt-3.5">
+      <section aria-labelledby="request" className="mt-section border-t-2 border-ink pt-3.5">
         <h2 id="request" className="text-title-sm">
           What it sends
         </h2>
@@ -86,14 +86,14 @@ export function Shortcut({ nights }: { nights: RecoveryNight[] }) {
         </p>
       </section>
 
-      <section aria-labelledby="steps" className="mt-6 border-t-2 border-ink pt-3.5">
+      <section aria-labelledby="steps" className="mt-section border-t-2 border-ink pt-3.5">
         <h2 id="steps" className="text-title-sm">
           Build it
         </h2>
         <p className="mt-2 text-body-quiet text-muted">
           No Source filter needed: the server counts overlapping entries from the Watch and the ring once.
         </p>
-        <ol className="mt-3 grid list-decimal gap-3 pl-6 text-body">
+        <ol className="mt-3 grid list-decimal gap-3 pl-6 text-[17px] leading-[1.4] font-normal">
           <li>Shortcuts app → Shortcuts → +. Name it “Compromised recovery”.</li>
           <li>
             <b>Find Health Samples</b> where Type is Sleep, Start Date is in the last 2 days, Value is not Awake and
@@ -130,7 +130,7 @@ export function Shortcut({ nights }: { nights: RecoveryNight[] }) {
 }
 
 export const backLink =
-  'py-2 text-[15px] font-bold text-link underline decoration-2 underline-offset-4 hover:decoration-[3px] data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-link'
+  'inline-block py-2 text-[15px] font-bold text-link underline decoration-2 underline-offset-4 hover:decoration-[3px] data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-link'
 
 export function Field({ term, children }: { term: string; children: ReactNode }) {
   return (

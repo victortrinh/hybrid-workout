@@ -102,6 +102,7 @@ typography:
     fontFamily: "Archivo, system-ui, sans-serif"
     fontSize: "15px"
     fontWeight: 400
+    lineHeight: 1.4
     fontFeature: "\"tnum\" 1"
   label:
     fontFamily: "Archivo, system-ui, sans-serif"
@@ -125,6 +126,7 @@ spacing:
   md: "14px"
   pad: "20px"
   lg: "24px"
+  section: "36px"
   gutter: "48px"
 components:
   button-primary:
@@ -284,7 +286,7 @@ Dark theme lifts each to a brighter sibling (`*-dark`) for contrast on near-blac
 - **Title** (850, width 75, 26px): section and panel headings; 24px exercise names, 22px live header, **Title Small** 20px for Phase headings in Plan.
 - **Prescription** (600, 21px): the target line under the next Session heading.
 - **Body** (600, 17px, 1.3): Coach Suggestions, Week row names, button labels; live Coach line at 18px.
-- **Body Quiet** (400, 15px, muted): meta lines, Suggestion reasons (14px), panel subtitles.
+- **Body Quiet** (400, 15px, 1.4, muted): meta lines, exercise notes and substitutions, Suggestion reasons (14px), panel subtitles. The looser line height keeps wrapped muted lines legible.
 - **Label** (700, 13px): tab labels, Phase lane names, legend, table headers, status tag.
 - **Brand** (800, width 125, 20px, +0.02em, uppercase): the wordmark only.
 
@@ -299,10 +301,12 @@ Dark theme lifts each to a brighter sibling (`*-dark`) for contrast on near-blac
 
 Mobile-first single column with a 20px page pad (`spacing.pad`). At 960px the shell becomes a 240px sticky cobalt side rail plus content; the bottom tab bar disappears and page gutters grow to 48px (`spacing.gutter`). Today on desktop runs the field band full width with the countdown and Phase lanes side by side, then two equal columns. Progress uses a 12-column grid (40px column gap) with panels spanning 8/4, 8/4, 6/6 and 12, capped at 1280px; Plan is capped at 900px.
 
-Vertical rhythm is tight and uneven by intent: 4–6px inside lane stacks, 10–14px between a heading and its rows, 18–24px between groups. Week rows are 11px top and bottom; Plan week rows 7px. Touch targets are at least 44px; primary buttons 54px; the current set's Log button 52px. The tab bar respects `env(safe-area-inset-bottom)` and the Live field respects the top inset.
+Vertical rhythm is tight within a group and generous between groups: 4–6px inside lane stacks, 10–14px between a heading and its rows, 18–28px between related blocks (a Coach line under its target, the actions under it, the blocks of a Session), and `section` (36px) between the top-level groups of a screen (Up next and the Week list on Today, each Session on the Week screen). When the gap inside a group matches the gap between groups, the screen reads as one wall of text. Week rows are 14px top and bottom, exercise rows 12px; Plan week rows 7px. Touch targets are at least 44px; primary buttons 54px; the current set's Log button 52px. The tab bar respects `env(safe-area-inset-bottom)`, and page content clears it by its height plus that inset, so the last row never sits under it. The Live field respects the top inset.
 
 ### Named Rules
-**The One Answer Rule.** Each screen opens with one hero number or one instruction in the first viewport; everything else follows as rows.
+**The One Answer Rule.** Each screen opens with one hero number or one instruction in the first viewport; everything else follows as rows. A screen has at most one cobalt primary: on the Week screen it is the Session Today offers as Next (tagged Next, with Today's Start / Log after pair); every other Session gets a line Start and a Log after link.
+
+**The Exercise Row Rule.** In an exercise row the name is 700 and the prescription after it is 400: the numbers stand out by tabular figures, not by weight. Notes follow in Body Quiet; a substitution ("Instead, if…") sits apart behind a 2px `edge` left rule. Setup steps (the Shortcut pages) follow the same contrast: the step text is 400, the action names in it bold. In a strength Live session each exercise is its own block, 20px above and below its hairline.
 
 ## Elevation & Depth
 

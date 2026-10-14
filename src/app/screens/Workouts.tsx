@@ -19,7 +19,7 @@ export function Workouts({ activities }: { activities: Activity[] }) {
     <div className="px-pad pt-6 pb-8 desktop:max-w-plan desktop:px-gutter desktop:pt-9">
       <p>
         <Link href="/" className={backLink}>
-          Today
+          ← Today
         </Link>
       </p>
       <h1 tabIndex={-1} className="mt-2 text-headline-page">
@@ -30,7 +30,7 @@ export function Workouts({ activities }: { activities: Activity[] }) {
         duration, heart rate, distance. Build it once.
       </p>
 
-      <section aria-labelledby="last-workout" className="mt-6 border-t-2 border-ink pt-3.5">
+      <section aria-labelledby="last-workout" className="mt-section border-t-2 border-ink pt-3.5">
         <h2 id="last-workout" className="text-title-sm">
           Last workout received
         </h2>
@@ -44,7 +44,7 @@ export function Workouts({ activities }: { activities: Activity[] }) {
         )}
       </section>
 
-      <section aria-labelledby="request" className="mt-6 border-t-2 border-ink pt-3.5">
+      <section aria-labelledby="request" className="mt-section border-t-2 border-ink pt-3.5">
         <h2 id="request" className="text-title-sm">
           What it sends
         </h2>
@@ -90,7 +90,7 @@ export function Workouts({ activities }: { activities: Activity[] }) {
         </p>
       </section>
 
-      <section aria-labelledby="steps" className="mt-6 border-t-2 border-ink pt-3.5">
+      <section aria-labelledby="steps" className="mt-section border-t-2 border-ink pt-3.5">
         <h2 id="steps" className="text-title-sm">
           Build it
         </h2>
@@ -98,7 +98,7 @@ export function Workouts({ activities }: { activities: Activity[] }) {
           Shortcuts can’t read a workout back from Health, so two automations time it: one saves the time a workout
           starts, the other sends it when it ends, with the heart rate and distance Health has for that window.
         </p>
-        <ol className="mt-3 grid list-decimal gap-3 pl-6 text-body">
+        <ol className="mt-3 grid list-decimal gap-3 pl-6 text-[17px] leading-[1.4] font-normal">
           <li>
             New Shortcut, “Compromised workout start”: <b>Date</b> (Current Date) → <b>Format Date</b>, ISO 8601 with
             the time → <b>Save File</b> to the Shortcuts folder, Ask Where to Save off, Subpath{' '}

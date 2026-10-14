@@ -56,6 +56,8 @@ export function WeekScreen({
   const sunday = addDays(week.startDate, 6)
   /** Early or late: whatever is done here today still counts for this Week. */
   const when = current ? null : daysBetween(day.today, week.startDate) > 0 ? 'early' : daysBetween(sunday, day.today) > 0 ? 'late' : null
+  /** The Session Today offers as Next, when it is one of this Week's: it gets the one cobalt Start. */
+  const nextUp = day.bucket.find((e) => e.state === 'next' && e.week === week.number)?.session.id
 
   return (
     <div className="px-pad pt-4 desktop:max-w-plan desktop:px-gutter desktop:pt-7">
@@ -71,9 +73,9 @@ export function WeekScreen({
           .join(' · ')}
       </p>
 
-      {when && <p className="mt-2 text-body">{nb(outsideWeekLine(when, week.number, week.startDate, sunday))}</p>}
+      {when && <p className="mt-4 text-body">{nb(outsideWeekLine(when, week.number, week.startDate, sunday))}</p>}
 
-      <p className="mt-1 text-body-quiet text-muted">
+      <p className="mt-1.5 text-body-quiet text-muted">
         {day.fiveKTest?.resultSeconds
           ? `Paces from the ${clock(day.fiveKTest.resultSeconds)} 5K test on ${shortDay(day.fiveKTest.date)}`
           : 'Runs go by RPE until the baseline 5K test sets the Training paces'}
@@ -94,6 +96,7 @@ export function WeekScreen({
           program={program}
           run={runContext(week.number, session)}
           weights={weights}
+          next={!current && session.id === nextUp}
         >
           {current ? (
             <p className="mt-3 text-body-quiet text-muted">
@@ -109,6 +112,7 @@ export function WeekScreen({
               session={session}
               headingId={`session-${session.id}`}
               log={logFor(logs, week.number, session.id)}
+              next={session.id === nextUp}
               live={live}
               asking={asking === session.id}
               refocus={dismissed === session.id}
@@ -145,16 +149,19 @@ export function WeekScreen({
 }
 
 /**
- * Start session and Log after for a Session of another Week. Start is a line
- * button, not cobalt: a Week has no single answer, Today does. Start asks the
- * pain step first, as Today does; a trained log leaves only Edit log. While
- * a Live session runs, only its own Session offers Resume.
+ * Start session and Log after for a Session of another Week. The Session Today
+ * offers as Next gets Today's pair, a cobalt Start and a line Log after, so the
+ * screen still has one answer; every other Start is a line button with Log
+ * after as a link. Start asks the pain step first, as Today does; a trained
+ * log leaves only Edit log. While a Live session runs, only its own Session
+ * offers Resume.
  */
 function SessionActions({
   week,
   session,
   headingId,
   log,
+  next,
   live,
   asking,
   refocus,
@@ -167,6 +174,8 @@ function SessionActions({
   /** The Session's heading: every action names the Session it acts on. */
   headingId: string
   log: SessionLog | null
+  /** Today's Next Session: its Start is the primary action. */
+  next: boolean
   live: LiveSession | null
   asking: boolean
   /** Back from the pain step with "Not now": focus returns to Start session. */
@@ -181,7 +190,7 @@ function SessionActions({
   const status = log ? `${STATUS_LABEL[log.status]}, ${shortDay(log.date)}` : null
   const statusId = `${headingId}-status`
   return (
-    <div className="mt-3">
+    <div className="mt-4">
       {(status || (live && !running && startable)) && (
         <p id={statusId} className="text-body-quiet text-muted">
           {[status, live && !running && startable && nb(`${live.heading} is running. Finish it first.`)]
@@ -189,7 +198,7 @@ function SessionActions({
             .join(' · ')}
         </p>
       )}
-      <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1">
+      <div className={`mt-2 flex flex-wrap items-center ${next ? 'gap-2.5' : 'gap-x-5 gap-y-1'}`}>
         {running ? (
           <Link
             href={SCREEN_PATH.live}
@@ -205,7 +214,7 @@ function SessionActions({
               autoFocus={refocus}
               onPress={() => onAsk(true)}
               aria-describedby={headingId}
-              className={`${lineAction} flex-none`}
+              className={next ? primaryAction : `${lineAction} flex-none`}
             >
               Start session
             </Button>
@@ -214,7 +223,7 @@ function SessionActions({
         <Link
           href={logPath(week, session.id)}
           aria-describedby={status ? `${headingId} ${statusId}` : headingId}
-          className={linkClass}
+          className={next ? `${lineAction} no-underline` : linkClass}
         >
           {log ? 'Edit log' : 'Log after'}
         </Link>
@@ -228,24 +237,28 @@ function SessionDetail({
   program,
   run,
   weights,
+  next = false,
   children,
 }: {
   session: Session
   program: Program
   run: RunContext
   weights?: WorkingWeights
+  /** Today's Next Session, tagged as on Today's Week list. */
+  next?: boolean
   /** What can be done with it: start or log it, or where to from. */
   children?: React.ReactNode
 }) {
   const description = describeSession(session, run, weights)
   const headingId = `session-${session.id}`
   return (
-    <section aria-labelledby={headingId} className="mt-7 border-t-2 border-ink pt-3">
-      <div className="grid grid-cols-[36px_1fr] items-center gap-3">
+    <section aria-labelledby={headingId} className="mt-section border-t-2 border-ink pt-3.5">
+      <div className="grid grid-cols-[36px_1fr_auto] items-center gap-3">
         <LaneChip lane={SESSION_TYPES[session.type].lane} />
         <h2 id={headingId} className="text-title">
           {nb(description.heading)}
         </h2>
+        {next && <span className="rounded-sm bg-cobalt px-2 py-1 text-label text-on-cobalt">Next</span>}
       </div>
       <p className="mt-1.5 text-body-quiet text-muted">
         {[description.meta, session.date && longDay(session.date)].filter(Boolean).join(' · ')}
@@ -254,7 +267,7 @@ function SessionDetail({
       {children}
 
       {session.blocks.map((block, i) => (
-        <div key={`${block.name}-${i}`} className="mt-4">
+        <div key={`${block.name}-${i}`} className="mt-7">
           <h3 className="flex items-baseline justify-between gap-3 text-title-sm">
             {block.name}
             {block.minutes !== undefined && (
@@ -263,18 +276,19 @@ function SessionDetail({
               </small>
             )}
           </h3>
-          <ul className="mt-1">
+          <ul className="mt-1.5">
             {block.exercises.map((exercise, j) => {
               const line = describeExercise(exercise, program.stations, run, weights)
               return (
-                <li key={`${exercise.name}-${j}`} className="border-b border-rule py-2">
+                <li key={`${exercise.name}-${j}`} className="border-b border-rule py-3">
+                  {/* The name carries the weight; the numbers read by tabular figures, not boldness. */}
                   <span className="block text-body font-bold">
                     {line.name}
-                    {line.detail && <span className="font-semibold"> · {nb(line.detail)}</span>}
+                    {line.detail && <span className="font-normal"> · {nb(line.detail)}</span>}
                   </span>
-                  {line.note && <span className="block text-body-quiet text-muted">{line.note}</span>}
+                  {line.note && <span className="mt-0.5 block text-body-quiet text-muted">{line.note}</span>}
                   {line.substitutions.map((sub) => (
-                    <span key={sub} className="block text-body-quiet text-muted">
+                    <span key={sub} className="mt-2 block border-l-2 border-edge pl-3 text-body-quiet text-muted">
                       Instead, if {sub.charAt(0).toLowerCase()}
                       {sub.slice(1)}
                     </span>

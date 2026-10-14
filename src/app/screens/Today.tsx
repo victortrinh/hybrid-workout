@@ -270,7 +270,7 @@ function UpNext({
       <p className="mt-2 text-prescription">{nb(target)}</p>
       {meta && <p className="mt-1 text-body-quiet text-muted">{meta}</p>}
       {upNext && position.kind === 'before-start' && (
-        <p className="mt-2 text-body">
+        <p className="mt-3.5 text-body">
           {nb(outsideWeekLine('early', 1, position.startsOn, addDays(position.startsOn, 6)))}
         </p>
       )}
@@ -308,7 +308,7 @@ function UpNext({
         />
       )}
       {live ? (
-        <div className="mt-4 flex gap-2.5">
+        <div className="mt-5 flex gap-2.5">
           <Link href={SCREEN_PATH.live} className={`${primaryAction} no-underline`}>
             Resume {nb(live.heading)}
           </Link>
@@ -323,7 +323,7 @@ function UpNext({
           onCancel={() => setAsking(false)}
         />
       ) : upNext && upNextWeek && (
-        <div className="mt-4 flex gap-2.5">
+        <div className="mt-5 flex gap-2.5">
           {isLive(upNext) && (
             <Button onPress={() => setAsking(true)} className={primaryAction}>
               Start session
@@ -378,7 +378,7 @@ function WhichSession({
   return (
     <section
       aria-label="Which Session was this?"
-      className="mt-[18px] border-t-2 border-b border-t-ink border-b-rule py-3.5"
+      className="mt-[18px] border-t-2 border-t-ink py-3.5 desktop:border-b desktop:border-b-rule"
     >
       <p className="text-[17px] leading-[1.3] font-semibold">Which Session was this?</p>
       <p className="mt-1 text-[14px] text-muted">
@@ -403,7 +403,7 @@ function ConsoleDistance({ entry }: { entry: BucketEntry }) {
   const { activity, session, week } = entry
   if (!activity) return null
   return (
-    <section aria-label="Console distance" className="mt-[18px] border-t-2 border-b border-t-ink border-b-rule py-3.5">
+    <section aria-label="Console distance" className="mt-[18px] border-t-2 border-t-ink py-3.5 desktop:border-b desktop:border-b-rule">
       <p className="text-[17px] leading-[1.3] font-semibold">
         {nb(`${SESSION_TYPES[session.type].name} on the treadmill, ${shortWeekday(activity.date)}. What did the console say?`)}
       </p>
@@ -434,7 +434,7 @@ function SuggestionNote({ suggestion, onDecide }: { suggestion: Suggestion; onDe
     <section
       aria-label="Coach’s Suggestion"
       aria-live="polite"
-      className="mt-[18px] border-t-2 border-b border-t-ink border-b-rule py-3.5"
+      className="mt-[18px] border-t-2 border-t-ink py-3.5 desktop:border-b desktop:border-b-rule"
     >
       <p className="text-[17px] leading-[1.3] font-semibold">
         {decision === 'open' ? copy.line : decision === 'accepted' ? copy.accepted : copy.kept}
@@ -587,7 +587,7 @@ function ThisWeek({
 
   return (
     <div className="px-pad desktop:px-0 desktop:pt-7">
-      <h2 className="mt-[22px] flex items-baseline justify-between gap-3 text-title">
+      <h2 className="mt-section flex items-baseline justify-between gap-3 border-t-2 border-ink pt-3.5 text-title desktop:mt-[22px] desktop:border-t-0 desktop:pt-0">
         {inWeek ? 'This Week' : `Week ${week.number}`}
         <small className="text-[14px] font-medium tracking-normal text-muted font-stretch-100%">{aside}</small>
       </h2>
@@ -611,7 +611,7 @@ function ThisWeek({
   )
 }
 
-const rowClass = 'grid w-full grid-cols-[36px_1fr_auto] items-center gap-3 py-[11px] text-left'
+const rowClass = 'grid w-full grid-cols-[36px_1fr_auto] items-center gap-3 py-3.5 text-left'
 
 /**
  * One Session of the Bucket. Planned rows are buttons that make the Session
