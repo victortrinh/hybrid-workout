@@ -60,6 +60,9 @@ _Avoid_: active workout
 What actually happened in a Session: actual sets, reps, loads, times, RPE and notes.
 _Avoid_: entry, record
 
+**Station log**:
+One line of a HYROX session or Race simulation log: a round's time, or a run or Station with the load, distance and split actually done.
+
 **Block**:
 A timed part of a Session, such as warm-up, intervals, circuit or cooldown.
 

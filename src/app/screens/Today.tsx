@@ -1,7 +1,7 @@
 import { Button, Link } from 'react-aria-components'
 import { addDays } from '../../domain/calendar'
 import type { BucketEntry, CoachDay, PhaseProgress, RestReason } from '../../domain/coach'
-import { isLiveRun, type LiveRun } from '../../domain/live'
+import { isLive, type LiveRun } from '../../domain/live'
 import type { Environment, RunContext } from '../../domain/paces'
 import { describeSession, SESSION_TYPES } from '../../domain/program/describe'
 import type { Session } from '../../domain/program/types'
@@ -241,7 +241,7 @@ function UpNext({
         </div>
       ) : upNext && upNextWeek && position.kind === 'in-week' && (
         <div className="mt-4 flex gap-2.5">
-          {isLiveRun(upNext) && (
+          {isLive(upNext) && (
             <Button onPress={() => onStart(upNextWeek, upNext)} className={primaryAction}>
               Start session
             </Button>
