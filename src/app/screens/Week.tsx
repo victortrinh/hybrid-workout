@@ -255,10 +255,10 @@ function SessionDetail({
 
       {session.blocks.map((block, i) => (
         <div key={`${block.name}-${i}`} className="mt-4">
-          <h3 className="flex items-baseline justify-between gap-3 text-[18px]">
+          <h3 className="flex items-baseline justify-between gap-3 text-title-sm">
             {block.name}
             {block.minutes !== undefined && (
-              <small className="text-[14px] font-medium tracking-normal text-muted font-stretch-100%">
+              <small className="text-body-quiet tracking-normal text-muted font-stretch-100%">
                 {block.minutes} min
               </small>
             )}
@@ -268,13 +268,13 @@ function SessionDetail({
               const line = describeExercise(exercise, program.stations, run, weights)
               return (
                 <li key={`${exercise.name}-${j}`} className="border-b border-rule py-2">
-                  <span className="block text-[16px] font-bold">
+                  <span className="block text-body font-bold">
                     {line.name}
                     {line.detail && <span className="font-semibold"> · {nb(line.detail)}</span>}
                   </span>
-                  {line.note && <span className="block text-[14px] text-muted">{line.note}</span>}
+                  {line.note && <span className="block text-body-quiet text-muted">{line.note}</span>}
                   {line.substitutions.map((sub) => (
-                    <span key={sub} className="block text-[14px] text-muted">
+                    <span key={sub} className="block text-body-quiet text-muted">
                       Instead, if {sub.charAt(0).toLowerCase()}
                       {sub.slice(1)}
                     </span>
