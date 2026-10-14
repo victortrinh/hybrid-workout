@@ -80,6 +80,6 @@ test('Settings has the Shortcut setup page, with the address and the headers', a
   await expect(page.getByText(new URL('/api/recovery', page.url()).href)).toBeVisible()
   await expect(page.getByText('CF-Access-Client-Id', { exact: true })).toBeVisible()
   await expect(page.getByText('CF-Access-Client-Secret', { exact: true })).toBeVisible()
-  await expect(page.getByRole('list').filter({ hasText: 'Find Health Samples' }).getByRole('listitem')).toHaveCount(9)
+  await expect(page.getByRole('list').filter({ hasText: 'Find Health Samples' }).getByRole('listitem')).toHaveCount(8)
   await expectNoAxeViolations(page)
 })

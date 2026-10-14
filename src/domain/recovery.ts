@@ -7,7 +7,7 @@
  * on top of that is a Suggestion to make the day easy. No night, no change:
  * the athlete is never asked to type it in.
  */
-import { addDays, localDate, type LocalDate } from './calendar'
+import { addDays, localDate, localDateIn, type LocalDate } from './calendar'
 import type { Block, Exercise, Prescription, Range, RunEffort, Session } from './program/types'
 
 export interface RecoveryNight {
@@ -190,8 +190,7 @@ const SOURCE = /^[\p{L}\p{N} ._'’()-]{1,64}$/u
 export function parseRecoveryNight(value: unknown, receivedAt: string): RecoveryNight {
   if (typeof value !== 'object' || value === null) throw new Error('The body must be an object')
   const v = value as Record<string, unknown>
-  if (typeof v.date !== 'string') throw new Error('date must be an ISO date (yyyy-MM-dd)')
-  const date = localDate(v.date.trim())
+  const date = morning(v.date, receivedAt)
   const sleepMinutes = reading(v.sleepMinutes, 'sleepMinutes', [1, 24 * 60])
   if (sleepMinutes === null) throw new Error('No sleep in Apple Health from the ring yet: open the Ultrahuman app, then run the Shortcut again')
   const hrvMs = reading(v.hrvMs, 'hrvMs', [1, 300])
@@ -200,6 +199,23 @@ export function parseRecoveryNight(value: unknown, receivedAt: string): Recovery
     throw new Error('source must be the device name, up to 64 characters')
   }
   return { date, sleepMinutes, hrvMs, restingHeartRate, source: v.source.trim(), receivedAt }
+}
+
+/**
+ * The morning a night is for: `yyyy-MM-dd` as sent, the day in Toronto of a
+ * full timestamp, or, with no date at all, the day it arrived in Toronto. The
+ * Shortcut runs in the morning, so it can leave the date out.
+ */
+function morning(value: unknown, receivedAt: string): LocalDate {
+  if (value === undefined || value === null || (typeof value === 'string' && value.trim() === '')) {
+    return localDateIn(new Date(receivedAt))
+  }
+  if (typeof value !== 'string') throw new Error('date must be yyyy-MM-dd, or left out for today')
+  const text = value.trim()
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return localDate(text)
+  const instant = new Date(text)
+  if (/^\d{4}-\d{2}-\d{2}T/.test(text) && !Number.isNaN(instant.getTime())) return localDateIn(instant)
+  throw new Error(`date must be yyyy-MM-dd, or left out for today (got "${text.slice(0, 40)}")`)
 }
 
 /** A number, or numeric text; missing, empty or 0 is no reading. */

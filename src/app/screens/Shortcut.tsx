@@ -59,13 +59,14 @@ export function Shortcut({ nights }: { nights: RecoveryNight[] }) {
             <Code>CF-Access-Client-Secret</Code>: the service token’s Client Secret
           </Field>
           <Field term="Body">
-            <Code>date</Code> (text, this morning as yyyy-MM-dd), <Code>sleepMinutes</Code>, <Code>hrvMs</Code>,{' '}
-            <Code>restingHeartRate</Code> (numbers) and <Code>source</Code> (text, the ring’s name)
+            <Code>sleepMinutes</Code>, <Code>hrvMs</Code>, <Code>restingHeartRate</Code> (numbers) and{' '}
+            <Code>source</Code> (text, the ring’s name). The night counts for the day it arrives; add{' '}
+            <Code>date</Code> (yyyy-MM-dd) only to send another day’s.
           </Field>
         </dl>
         <pre className="mt-3 overflow-x-auto rounded-sm bg-sunk p-3 text-[14px]">
           {JSON.stringify(
-            { date: '2026-12-16', sleepMinutes: 341, hrvMs: 38, restingHeartRate: 52, source: 'Ultrahuman' },
+            { sleepMinutes: 341, hrvMs: 38, restingHeartRate: 52, source: 'Ultrahuman' },
             null,
             2,
           )}
@@ -103,12 +104,8 @@ export function Shortcut({ nights }: { nights: RecoveryNight[] }) {
             first, limit 1. <b>Get Details</b>: Value. <b>Set Variable</b> RHR.
           </li>
           <li>
-            <b>Format Date</b>: Current Date, custom format <Code>yyyy-MM-dd</Code>. <b>Set Variable</b> Morning.
-          </li>
-          <li>
-            <b>Get Contents of URL</b>: the address above, Method POST, the two headers, Request Body JSON with date =
-            Morning, sleepMinutes = Sleep, hrvMs = HRV, restingHeartRate = RHR (all three as Number) and source =
-            “Ultrahuman”.
+            <b>Get Contents of URL</b>: the address above, Method POST, the two headers, Request Body JSON with sleepMinutes =
+            Sleep, hrvMs = HRV, restingHeartRate = RHR (all three as Number) and source = “Ultrahuman”.
           </li>
           <li>
             Run it once and allow Health access and the connection. “Last night received” above should show the same
