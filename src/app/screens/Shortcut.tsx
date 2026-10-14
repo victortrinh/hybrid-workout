@@ -130,7 +130,7 @@ export function Shortcut({ nights }: { nights: RecoveryNight[] }) {
 }
 
 export const backLink =
-  'inline-block py-2 text-[15px] font-bold text-link underline decoration-2 underline-offset-4 hover:decoration-[3px] data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-link'
+  'inline-flex min-h-11 items-center text-[15px] font-bold text-link underline decoration-2 underline-offset-4 hover:decoration-[3px] data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-link'
 
 export function Field({ term, children }: { term: string; children: ReactNode }) {
   return (

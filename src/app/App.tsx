@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { isTreadmill, matchActivities, type Activity } from '../domain/activity'
 import { addDays } from '../domain/calendar'
 import { nowDate, nowMs } from '../domain/clock'
@@ -13,6 +13,7 @@ import { mergeDecisions, painId } from '../domain/suggestion'
 import type { Session } from '../domain/program/types'
 import { environmentOn } from '../domain/settings'
 import { program } from '../domain/program/program'
+import { DockContext } from './components/ActionBar'
 import { Icon } from './components/Icons'
 import { StripedNumeral } from './components/StripedNumeral'
 import { longDay } from './format'
@@ -95,6 +96,8 @@ export function App() {
   const setEnvironment = (week: number, session: Session, environment: Environment) =>
     override(week, session.id, environment)
   const [live, setLive] = useLiveRun()
+  /** The slot above the tab bar where a screen's ActionBar docks on the phone. */
+  const [dock, setDock] = useState<HTMLElement | null>(null)
   /** A Pain report given now, for a Session or (with neither) from Something hurts. */
   const painReport = (score: number, area: PainArea | null, week: number | null, sessionId: string | null): PainReport => ({
     id: crypto.randomUUID(),
@@ -211,8 +214,9 @@ export function App() {
       </a>
       <div className="grid min-h-dvh desktop:grid-cols-[240px_1fr]">
         <SideRail screen={navScreen} day={day} />
-        {/* Clear of the fixed tab bar (about 70px plus the home-indicator inset), with room to spare. */}
-        <main id="main" className="min-w-0 pb-[calc(112px+env(safe-area-inset-bottom))] desktop:pb-12">
+        {/* Clear of the fixed dock (the tab bar, any ActionBar, the home-indicator inset), with room to spare. */}
+        <DockContext value={dock}>
+        <main id="main" className="min-w-0 pb-[calc(var(--dock-height,70px)+42px)] desktop:pb-12">
           {screen === 'today' && (
             <Today
               day={day}
@@ -269,22 +273,36 @@ export function App() {
           {screen === 'workouts' && <Workouts activities={activities} />}
           {screen === 'not-found' && <NotFound />}
         </main>
-        <TabBar screen={navScreen} />
+        </DockContext>
+        <Dock slotRef={setDock}>
+          <TabBar screen={navScreen} />
+        </Dock>
       </div>
     </RouterProvider>
   )
 }
 
-/** New title on every screen; on a change of screen, back to the top with focus on the heading. */
+/**
+ * New title on every screen; on a change of screen, back to the top with
+ * focus on the heading. A screen that marks where the athlete will look
+ * (Plan's current Week) opens there instead, a third of the way down.
+ */
 function useScreenChange(screen: Screen, title: string, route: Route) {
   const key = `${screen}/${route.week ?? ''}/${route.sessionId ?? ''}`
-  const previous = useRef(key)
+  const previous = useRef<string | null>(null)
   useEffect(() => {
     document.title = `${title} · Compromised`
     if (previous.current === key) return
+    const first = previous.current === null
     previous.current = key
-    window.scrollTo(0, 0)
-    document.querySelector<HTMLElement>('main h1')?.focus()
+    const anchor = document.querySelector<HTMLElement>('main [data-scroll-anchor]')
+    if (anchor) {
+      const top = anchor.getBoundingClientRect().top + window.scrollY - window.innerHeight / 3
+      window.scrollTo(0, Math.max(0, top))
+    } else if (!first) {
+      window.scrollTo(0, 0)
+    }
+    if (!first) document.querySelector<HTMLElement>('main h1')?.focus({ preventScroll: true })
   }, [key, title])
 }
 
@@ -315,11 +333,36 @@ function SideRail({ screen, day }: { screen: Screen; day: CoachDay }) {
   )
 }
 
+/**
+ * Fixed to the bottom on the phone: a slot for the screen's ActionBar, then
+ * the tab bar. Its height goes to --dock-height so the page always scrolls clear of it.
+ */
+function Dock({ slotRef, children }: { slotRef: (element: HTMLElement | null) => void; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const element = ref.current
+    if (!element) return
+    const root = document.documentElement
+    const observer = new ResizeObserver(() => root.style.setProperty('--dock-height', `${element.offsetHeight}px`))
+    observer.observe(element)
+    return () => {
+      observer.disconnect()
+      root.style.removeProperty('--dock-height')
+    }
+  }, [])
+  return (
+    <div ref={ref} className="fixed inset-x-0 bottom-0 z-20 desktop:hidden">
+      <div ref={slotRef} />
+      {children}
+    </div>
+  )
+}
+
 function TabBar({ screen }: { screen: Screen }) {
   return (
     <nav
       aria-label="Main"
-      className="fixed inset-x-0 bottom-0 z-20 flex justify-around border-t-2 border-ink bg-paper pt-2 pb-[calc(8px+env(safe-area-inset-bottom))] desktop:hidden"
+      className="flex justify-around border-t-2 border-ink bg-paper pt-2 pb-[calc(8px+env(safe-area-inset-bottom))]"
     >
       {NAV.map((item) => (
         <Link

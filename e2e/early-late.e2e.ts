@@ -43,8 +43,7 @@ test('before the Program, a Week 1 Session tapped on Today is started early from
   await expect(page.getByRole('link', { name: /Start a Week 1 Session early/ })).toHaveCount(0)
   await expectNoAxeViolations(page)
 
-  await page.getByRole('button', { name: 'Start session' }).click()
-  await page.getByRole('button', { name: 'No. Let’s go' }).click()
+  await page.getByRole('button', { name: /^Start / }).click()
   await expect(page).toHaveURL('/live')
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^Threshold, /)
 })
@@ -56,11 +55,10 @@ test('in Week 3, a Week 1 Session never done is started late from its Week', asy
 
   await expect(page.getByText('Late. Week 1 closed Sun 25 Oct.')).toBeVisible()
   const speed = page.getByRole('region', { name: /^Speed/ })
-  await speed.getByRole('button', { name: 'Start session' }).click()
-  await expect(page.getByRole('heading', { name: 'Anything hurt?' })).toBeVisible()
   await expectNoAxeViolations(page)
 
-  await page.getByRole('button', { name: 'No. Let’s go' }).click()
+  // Nothing hurts on record: Start is one tap, straight to the Live session.
+  await speed.getByRole('button', { name: 'Start session' }).click()
   await expect(page).toHaveURL('/live')
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^Speed, /)
 })

@@ -221,6 +221,13 @@ describe('matchActivities', () => {
     expect(outcome.state === 'ambiguous' && outcome.candidates.map((c) => c.session.id)).toEqual(['speed', 'easy'])
   })
 
+  it('picks, of two run Sessions logged that day, the one whose Live session ran while the watch did', () => {
+    const activity = run('2026-11-04T07:00:00-05:00')
+    const live = { ...log('speed', '2026-11-04'), updatedAt: '2026-11-04T12:50:00.000Z' }
+    const [outcome] = matchActivities(program, [activity], [live, log('easy', '2026-11-04')], [])
+    expect(outcome).toMatchObject({ state: 'attached', sessionId: 'speed', by: 'coach' })
+  })
+
   it('takes the athlete’s answer, and “none of these” leaves it unattached without asking again', () => {
     const activity = run('2026-11-04T07:00:00-05:00')
     expect(matchActivities(program, [activity], [], [answer(activity.id, 'easy')])[0]).toMatchObject({

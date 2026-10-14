@@ -463,6 +463,18 @@ export function answer(run: LiveRun, block: number, targetPace: number | null, a
   }
 }
 
+/**
+ * Every rep still waiting on Held it or Changed, answered Held it: silence
+ * means the target was held. A rep cut short with Skip block isn't held, so it stays out.
+ */
+export function heldUnanswered(run: LiveRun, context: RunContext): LiveRun {
+  return run.asks.reduce((next, block) => {
+    const b = run.blocks[block]
+    if (b.rep === null || run.skipped.includes(block)) return next
+    return answer(next, block, liveTarget(b, context)?.pace ?? null, null)
+  }, run)
+}
+
 /** What a HYROX round or a Race simulation Station actually was, when it wasn't as written. */
 export interface StationChange {
   /** A HYROX round's run. */
@@ -545,6 +557,26 @@ export interface LiveLogInput {
   /** A 5K test's time; only kept on a Done 5K test. */
   resultSeconds: number | null
   updatedAt: string
+}
+
+/** What each Session type usually feels like overall, when its Blocks don't say. */
+const TYPICAL_RPE: Record<SessionType, number> = {
+  speed: 8,
+  strength: 7,
+  threshold: 7,
+  hyrox: 8,
+  easy: 4,
+  '5k-test': 10,
+  'race-simulation': 9,
+}
+
+/**
+ * The Overall RPE the finish sheet starts on: the top of the hardest RPE the
+ * Session's work asks for, else what its Session type usually feels like.
+ */
+export function predictedRpe(run: LiveRun): number {
+  const asked = run.blocks.filter((b) => b.work).flatMap((b) => (b.effort?.rpe ? [b.effort.rpe[1]] : []))
+  return asked.length > 0 ? Math.max(...asked) : TYPICAL_RPE[run.type]
 }
 
 /** The Session log a finished Live session saves. */

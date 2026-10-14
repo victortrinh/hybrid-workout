@@ -219,6 +219,15 @@ export const endRest = (lifts: LiveLifts): LiveLifts => (lifts.rest ? { ...lifts
 export const finish = (lifts: LiveLifts): LiveLifts => ({ ...lifts, ending: true, rest: null })
 export const keepGoing = (lifts: LiveLifts): LiveLifts => ({ ...lifts, ending: false })
 
+/**
+ * The Overall RPE the finish sheet starts on: the hardest set logged, since a
+ * Session feels like its worst set. Null with nothing logged, so nothing is guessed.
+ */
+export function predictedLiftsRpe(lifts: LiveLifts): number | null {
+  const done = lifts.sets.flat().filter((s) => s.done)
+  return done.length === 0 ? null : Math.max(...done.map((s) => s.rpe))
+}
+
 /** Done when every set the Program asks for is logged; Partial otherwise. */
 export function liftsStatus(lifts: LiveLifts): 'done' | 'partial' {
   return lifts.exercises.every((e, i) => lifts.sets[i].filter((s) => s.done).length >= e.sets) ? 'done' : 'partial'

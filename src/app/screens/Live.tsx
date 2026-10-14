@@ -18,11 +18,13 @@ import {
   blockLeft,
   distanceSeconds,
   end,
+  heldUnanswered,
   isOver,
   liveStatus,
   liveTarget,
   nextBlock,
   pause,
+  predictedRpe,
   resume,
   type LiveBlock,
   type LiveRun,
@@ -33,7 +35,7 @@ import {
 import { nowMs } from '../../domain/clock'
 import { isLifts, type LiveLifts, type LiveSession } from '../../domain/lifts'
 import { PACE_SECONDS, STATION_METERS, STATION_POUNDS, STATION_REPS } from '../../domain/log'
-import { clock, KM_PER_MILE, parseClock, type RunContext } from '../../domain/paces'
+import { clock, clockInput, KM_PER_MILE, parseClock, type RunContext } from '../../domain/paces'
 import { poundsWords } from '../../domain/program/describe'
 import { stations } from '../../domain/program/program'
 import type { Lane } from '../../domain/program/types'
@@ -46,6 +48,7 @@ import { validateTime } from './LogAfter'
 import { Lifting, type LiftsFinish } from './LiveLifts'
 import {
   DiscardButton,
+  finishBarClass,
   groupLabel,
   inputClass,
   lineButton,
@@ -104,7 +107,7 @@ export function Live({
           Nothing running.
         </h1>
         <p className="mt-2 text-prescription">Start a Session from Today.</p>
-        <Link href={SCREEN_PATH.today} className={`mt-4 inline-block ${linkButton}`}>
+        <Link href={SCREEN_PATH.today} className={`mt-4 ${linkButton}`}>
           ← Today
         </Link>
       </div>
@@ -267,7 +270,8 @@ function Running({
         )}
       </header>
 
-      <div className="flex-1 px-pad pb-6 desktop:max-w-plan desktop:px-gutter">
+      {/* On the finish sheet its actions sit on the screen's bottom edge, so no padding under them. */}
+      <div className={`flex flex-1 flex-col px-pad desktop:max-w-plan desktop:px-gutter ${over ? 'desktop:pb-6' : 'pb-6'}`}>
         <HeldCheck
           run={run}
           context={context}
@@ -275,7 +279,7 @@ function Running({
           onStations={(b, change) => act((r) => answerStations(r, b, change))}
         />
         {over ? (
-          <FinishSheet run={run} context={context} onKeepGoing={() => act(resume)} onSave={(f) => onSave(run, f)} onDiscard={() => {
+          <FinishSheet run={run} context={context} onKeepGoing={() => act(resume)} onSave={(f) => onSave(heldUnanswered(run, context), f)} onDiscard={() => {
               onChange(null)
               navigate(SCREEN_PATH.today)
             }}
@@ -435,7 +439,13 @@ function Lanes({
   )
 }
 
-/** After each rep, one tap: Held it, or Changed with what was run instead. The oldest rep waiting goes first. */
+/** The Blocks that ask something once over: a rep, a HYROX round, a Race simulation's Station. */
+const asksAfter = (block: LiveBlock) => block.rep !== null || block.kind === 'round' || block.kind === 'station'
+
+/**
+ * After a rep: Held it, or Changed with what was run instead. Saying nothing
+ * is Held it, so the tap is only for a rep that wasn't.
+ */
 function HeldCheck({
   run,
   context,
@@ -450,8 +460,11 @@ function HeldCheck({
   const [changing, setChanging] = useState<number | null>(null)
   const [speed, setSpeed] = useState(Number.NaN)
   const [pace, setPace] = useState('')
-  const asked = run.asks[0]
-  if (asked === undefined) return null
+  // Only the Block just finished asks: one left alone was held (or as written), and saves that way.
+  let latest = Math.min(run.block, run.blocks.length) - 1
+  while (latest >= 0 && !asksAfter(run.blocks[latest])) latest -= 1
+  if (latest < 0 || !run.asks.includes(latest)) return null
+  const asked = latest
 
   const block = run.blocks[asked]
   if (block.kind === 'round' || block.kind === 'station') {
@@ -477,6 +490,7 @@ function HeldCheck({
       <p className="text-body">
         {block.name}: {question}
       </p>
+      <p className="text-body-quiet text-muted">Say nothing and it logs as held.</p>
       {changing === asked ? (
         <Form onSubmit={submit} className="mt-2 flex flex-wrap items-end gap-3">
           {indoor ? (
@@ -497,7 +511,7 @@ function HeldCheck({
           ) : (
             <TextField
               value={pace}
-              onChange={setPace}
+              onChange={(text) => setPace(clockInput(text))}
               isRequired
               autoFocus
               inputMode="numeric"
@@ -654,7 +668,8 @@ function FinishSheet({
   const mile = context.unit === 'mph'
   const [time, setTime] = useState(covered === null ? '' : clock(covered))
   const [distance, setDistance] = useState(Number.NaN)
-  const [rpe, setRpe] = useState<number | null>(null)
+  const [predicted] = useState(() => predictedRpe(run))
+  const [rpe, setRpe] = useState<number | null>(predicted)
   const [missingRpe, setMissingRpe] = useState(false)
 
   function submit(event: FormEvent) {
@@ -670,9 +685,16 @@ function FinishSheet({
   }
 
   return (
-    <Form onSubmit={submit} className="mt-4 grid gap-6 border-t-2 border-ink pt-4">
+    <Form onSubmit={submit} className="mt-4 flex flex-1 flex-col gap-6 border-t-2 border-ink pt-4">
       {result && (
-        <TextField value={time} onChange={setTime} isRequired validate={validateTime} inputMode="numeric" className="grid gap-2">
+        <TextField
+          value={time}
+          onChange={(text) => setTime(clockInput(text))}
+          isRequired
+          validate={validateTime}
+          inputMode="numeric"
+          className="grid gap-2"
+        >
           {({ isInvalid }) => (
             <>
               <Label className={groupLabel}>5 km time</Label>
@@ -710,13 +732,15 @@ function FinishSheet({
       <OverallRpe
         value={rpe}
         missing={missingRpe}
+        predicted={predicted}
         onChange={(v) => {
           setRpe(v)
           setMissingRpe(false)
         }}
       />
 
-      <div className="flex flex-wrap gap-2.5">
+      <DiscardButton onDiscard={onDiscard} />
+      <div className={finishBarClass}>
         <Button type="submit" className={`${primaryButton} desktop:flex-none`}>
           Save log
         </Button>
@@ -726,7 +750,6 @@ function FinishSheet({
           </Button>
         )}
       </div>
-      <DiscardButton onDiscard={onDiscard} />
     </Form>
   )
 }

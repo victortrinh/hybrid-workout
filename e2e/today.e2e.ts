@@ -88,3 +88,20 @@ test('phases the countdown stripes from the glyph top to the baseline', async ({
   expect(Math.abs(periods - Math.round(periods))).toBeLessThan(0.01)
   expect(Math.round(periods)).toBeGreaterThanOrEqual(3)
 })
+
+test('on the phone, Start sits in the bottom bar, in the thumb’s reach without scrolling', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name === 'desktop', 'Desktop keeps Start in place, under Up next.')
+  await serveHistory(page, weekDone(2, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-10-26'))
+  await page.clock.setFixedTime(WEEK_3)
+  await page.goto('/')
+
+  const start = page.getByRole('region', { name: 'Up next' }).getByRole('button', { name: 'Start Speed' })
+  const box = (await start.boundingBox())!
+  const height = page.viewportSize()!.height
+  expect(box.y).toBeGreaterThan(height * 0.6)
+  expect(box.y + box.height).toBeLessThanOrEqual(height)
+  expect(box.height).toBeGreaterThanOrEqual(54)
+  // Still there after scrolling to the Week list.
+  await page.getByRole('heading', { name: 'This Week' }).scrollIntoViewIfNeeded()
+  await expect(start).toBeInViewport()
+})

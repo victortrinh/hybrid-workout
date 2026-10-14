@@ -7,17 +7,18 @@ import { logFor, trained, type SessionLog } from '../../domain/log'
 import { clock, type RunContext } from '../../domain/paces'
 import { describeExercise, describeSession, SESSION_TYPES } from '../../domain/program/describe'
 import type { Program, Session, Week } from '../../domain/program/types'
+import type { PainReport } from '../../domain/pain'
 import type { WorkingWeights } from '../../domain/weights'
 import { outsideWeekLine } from '../coachCopy'
 import { lineAction, primaryAction } from '../components/actions'
 import { LaneChip } from '../components/LaneChip'
-import { PainStep, type PainAtStart } from '../components/PainStep'
+import { asksPain, PAIN_FREE, PainStep, type PainAtStart } from '../components/PainStep'
 import { longDay, nb, shortDay, STATUS_LABEL, weekRange } from '../format'
 import { logPath, SCREEN_PATH, weekPath } from '../router'
 import { weekMark } from './Plan'
 
 const linkClass =
-  'inline-block py-2 text-[15px] font-bold text-link underline decoration-2 underline-offset-4 hover:decoration-[3px]'
+  'inline-flex min-h-11 items-center text-[15px] font-bold text-link underline decoration-2 underline-offset-4 hover:decoration-[3px]'
 
 /**
  * One Week: its dates, Phase and marks, then every Session of the Bucket with
@@ -116,7 +117,7 @@ export function WeekScreen({
               live={live}
               asking={asking === session.id}
               refocus={dismissed === session.id}
-              previousPain={day.pain?.report.score ?? null}
+              standing={day.pain?.report ?? null}
               onAsk={(ask) => {
                 setAsking(ask ? session.id : null)
                 setDismissed(ask ? null : session.id)
@@ -152,7 +153,7 @@ export function WeekScreen({
  * Start session and Log after for a Session of another Week. The Session Today
  * offers as Next gets Today's pair, a cobalt Start and a line Log after, so the
  * screen still has one answer; every other Start is a line button with Log
- * after as a link. Start asks the pain step first, as Today does; a trained
+ * after as a link. Start asks the pain step first when pain stands, as Today does; a trained
  * log leaves only Edit log. While a Live session runs, only its own Session
  * offers Resume.
  */
@@ -165,7 +166,7 @@ function SessionActions({
   live,
   asking,
   refocus,
-  previousPain,
+  standing,
   onAsk,
   onStart,
 }: {
@@ -180,11 +181,18 @@ function SessionActions({
   asking: boolean
   /** Back from the pain step with "Not now": focus returns to Start session. */
   refocus: boolean
-  previousPain: number | null
+  /** The Pain report standing now: above 0, Start asks whether it still hurts. */
+  standing: PainReport | null
   onAsk: (asking: boolean) => void
   onStart: (pain: PainAtStart) => void
 }) {
-  if (asking && !live) return <PainStep previous={previousPain} onAnswer={onStart} onCancel={() => onAsk(false)} />
+  if (asking && !live && standing) {
+    return (
+      <div className="mt-4 border-t-2 border-ink pt-3.5">
+        <PainStep standing={standing} onAnswer={onStart} onCancel={() => onAsk(false)} />
+      </div>
+    )
+  }
   const running = live !== null && live.week === week && live.sessionId === session.id
   const startable = isLive(session) && !(log && trained(log))
   const status = log ? `${STATUS_LABEL[log.status]}, ${shortDay(log.date)}` : null
@@ -212,7 +220,7 @@ function SessionActions({
           !live && (
             <Button
               autoFocus={refocus}
-              onPress={() => onAsk(true)}
+              onPress={() => (asksPain(standing) ? onAsk(true) : onStart({ ...PAIN_FREE }))}
               aria-describedby={headingId}
               className={next ? primaryAction : `${lineAction} flex-none`}
             >

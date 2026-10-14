@@ -47,8 +47,8 @@ const HISTORY: SeedLog[] = [
   },
 ]
 
-/** The set the screen leads with: the only one whose Log set is primary. */
-const currentLog = (page: Page) => page.locator('li[aria-current="step"]').getByRole('button', { name: /^Log / })
+/** The set the screen leads with: Log set in the bar under the thumb, the only primary. */
+const currentLog = (page: Page) => page.getByRole('button', { name: /^Log set \d+ · / })
 
 /** axe waits on timers of its own, so the clock runs while it scans. */
 async function scan(page: Page) {
@@ -69,8 +69,7 @@ test('a full Strength session: a load change, RPEs, a missed rep, then the Coach
   await expect(page.getByRole('heading', { level: 1 }).locator('xpath=following-sibling::p[1]')).toHaveText(
     'Squat 3 × 5 at 185 lb, RDL 3 × 6 at 135 lb · RPE 7',
   )
-  await page.getByRole('button', { name: 'Start session' }).click()
-  await page.getByRole('button', { name: 'No. Let’s go' }).click()
+  await page.getByRole('button', { name: /^Start / }).click()
 
   await expect(page).toHaveURL('/live')
   const band = page.locator('header')
@@ -84,14 +83,15 @@ test('a full Strength session: a load change, RPEs, a missed rep, then the Coach
   await expect(page.getByRole('heading', { name: 'Single-leg calf raise' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Loaded seated calf raise' })).toBeVisible()
 
-  // Only the current set's Log set is primary; the other sets wait their turn.
+  // The bar leads with the current set and its load; the rows wait their turn.
   const squat = page.getByRole('region', { name: 'Back squat' })
   const set = (n: number) => squat.getByRole('listitem', { name: `Back squat, set ${n}` })
-  await expect(currentLog(page)).toHaveAccessibleName('Log Back squat, set 1')
+  await expect(currentLog(page)).toHaveAccessibleName('Log set 1 · 185 lb, Back squat')
+  await expect(page.locator('li[aria-current="step"]')).toHaveAccessibleName('Back squat, set 1')
 
   // Set 1, then the rest timer: in place, counting down.
   await currentLog(page).click()
-  await expect(band.locator('[aria-live]')).toHaveText('Set 1 logged at RPE 7. Change it below if that was a lie.')
+  await expect(band.locator('[aria-live]')).toHaveText('Set 1 logged at RPE 7. Tap the RPE if that was a lie.')
   const rest = page.getByRole('timer', { name: 'Rest left' })
   await expect(rest).toHaveText('2:00')
   const restBefore = await rest.elementHandle()
@@ -99,15 +99,23 @@ test('a full Strength session: a load change, RPEs, a missed rep, then the Coach
   await expect(rest).toHaveText('1:30')
   expect(await rest.evaluate((el, before) => el === before, restBefore)).toBe(true)
 
-  // RPE per set, defaulting to the target.
+  // RPE per set, defaulting to the target: shown in the rest bar, changed from there in two taps.
   const rpe1 = page.getByRole('radiogroup', { name: 'RPE for Back squat, set 1' })
   await expect(rpe1.getByRole('radio', { name: '7' })).toBeChecked()
-  await rpe1.getByRole('radio', { name: '8' }).check({ force: true })
+  await page.getByRole('button', { name: 'Set 1 at RPE 7. Change' }).click()
+  // Picking closes the toggles, so click the label rather than check (which reads the radio back).
+  await page
+    .getByRole('radiogroup', { name: 'RPE for Back squat, set 1, from the rest bar' })
+    .locator('label')
+    .filter({ hasText: /^8$/ })
+    .click()
+  await expect(rpe1.getByRole('radio', { name: '8' })).toBeChecked()
+  await expect(page.getByRole('button', { name: 'Set 1 at RPE 8. Change' })).toBeVisible()
   await expect(band.locator('[aria-live]')).toHaveText('Two left. Fine. Do not get greedy.')
 
   // Heavier on set 2: set 3 follows, the logged set doesn't.
   await set(2).getByRole('button', { name: /Heavier/ }).click()
-  await expect(set(2).getByRole('textbox')).toHaveValue('190')
+    await expect(set(2).getByRole('textbox')).toHaveValue('190')
   await expect(set(3).getByRole('textbox')).toHaveValue('190')
   await expect(set(1).getByRole('textbox')).toHaveValue('185')
   await expect(band.locator('.stripe-num')).toHaveText('190')
@@ -148,7 +156,8 @@ test('a full Strength session: a load change, RPEs, a missed rep, then the Coach
 
   await page.getByRole('button', { name: 'Finish session' }).click()
   await expect(page.getByText('Session over')).toBeVisible()
-  await page.getByRole('radio', { name: '8', exact: true }).check({ force: true })
+  // Overall RPE starts on the hardest set logged.
+  await expect(page.getByRole('radio', { name: '8', exact: true })).toBeChecked()
   await scan(page)
   await page.getByRole('button', { name: 'Save log' }).click()
 
@@ -181,6 +190,29 @@ test('a full Strength session: a load change, RPEs, a missed rep, then the Coach
   await expect(suggestion).toContainText('RDL is 140 lb now. Same face, more plates.')
 })
 
+test('as prescribed, a Strength session is one tap per set plus three: Start, Finish, Save', async ({ page }) => {
+  const sent = await serveHistory(page, HISTORY)
+  await page.clock.install({ time: WEEK_3 })
+  await page.goto('/')
+  await page.clock.pauseAt(new Date(WEEK_3.getTime() + 1000))
+  await page.getByRole('list').filter({ hasText: 'Threshold' }).getByRole('button', { name: /^Strength/ }).click()
+
+  let taps = 0
+  const tap = async (button: ReturnType<Page['getByRole']>) => {
+    taps += 1
+    await button.click()
+  }
+  await tap(page.getByRole('button', { name: /^Start / }))
+  // Under the thumb every time: the bar's Log set, during the rest too.
+  for (let i = 0; i < 15; i++) await tap(currentLog(page))
+  await tap(page.getByRole('button', { name: 'Finish session' }))
+  await tap(page.getByRole('button', { name: 'Save log' }))
+
+  await expect(page).toHaveURL('/')
+  expect(taps).toBe(15 + 3)
+  await expect.poll(() => sent.at(-1)).toMatchObject({ sessionId: 'strength', status: 'done', rpe: 7 })
+})
+
 test('Week 1 calibrates: ramp to RPE 7, and that load is the Working weight', async ({ page }) => {
   const wednesday = new Date('2026-10-21T12:00:00-04:00')
   const sent = await serveHistory(page, [])
@@ -191,8 +223,7 @@ test('Week 1 calibrates: ramp to RPE 7, and that load is the Working weight', as
   const bucket = page.getByRole('list').filter({ hasText: 'Threshold' })
   await bucket.getByRole('button', { name: /^Strength/ }).click()
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Strength, find Working weights')
-  await page.getByRole('button', { name: 'Start session' }).click()
-  await page.getByRole('button', { name: 'No. Let’s go' }).click()
+  await page.getByRole('button', { name: /^Start / }).click()
 
   const band = page.locator('header')
   await expect(band.locator('.stripe-num')).toHaveText('45')

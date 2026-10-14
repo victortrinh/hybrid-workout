@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Button, Link } from 'react-aria-components'
 import { addDays } from '../../domain/calendar'
 import type { Activity } from '../../domain/activity'
-import type { ActivityQuestion, BucketEntry, CoachDay, PhaseProgress, RestReason } from '../../domain/coach'
+import type { ActivityAttached, ActivityQuestion, BucketEntry, CoachDay, PhaseProgress, RestReason } from '../../domain/coach'
 import { isLive, type LiveSession } from '../../domain/lifts'
 import type { Environment, RunContext } from '../../domain/paces'
 import { painLevel, type PainArea } from '../../domain/pain'
@@ -15,7 +15,8 @@ import { FieldLane } from '../components/FieldLane'
 import { LaneChip } from '../components/LaneChip'
 import { buttonBase, lineAction, primaryAction, quietButton } from '../components/actions'
 import { answered, PainFields, type PainAnswer } from '../components/PainFields'
-import { PainStep, type PainAtStart } from '../components/PainStep'
+import { ActionBar } from '../components/ActionBar'
+import { asksPain, PAIN_FREE, PainStep, type PainAtStart } from '../components/PainStep'
 import { Segmented } from '../components/Segmented'
 import { SettingsPopover } from '../components/SettingsPopover'
 import { StripedNumeral } from '../components/StripedNumeral'
@@ -218,8 +219,11 @@ function UpNext({
   onAnswer: (activity: Activity, week: number | null, sessionId: string | null) => void
 }) {
   const [asking, setAsking] = useState(false)
+  /** Back from the pain step with Not now: focus returns to Start. */
+  const [refocus, setRefocus] = useState(false)
   const { position, upNext } = day
-  const previousPain = day.pain?.report.score ?? null
+  const standing = day.pain?.report ?? null
+  const previousPain = standing?.score ?? null
   const upNextWeek = day.bucket.find((e) => e.state === 'next')?.week
   const run = upNext && upNextWeek ? runContext(upNextWeek, upNext) : undefined
   /** Where to start a Session early: Week 1 before the Program, the next Week once this one is all logged. */
@@ -277,7 +281,7 @@ function UpNext({
       {ahead && (
         <Link
           href={weekPath(ahead)}
-          className="mt-2 inline-block py-2 text-[15px] font-bold text-link underline decoration-2 underline-offset-4 hover:decoration-[3px]"
+          className="mt-2 inline-flex min-h-11 items-center text-[15px] font-bold text-link underline decoration-2 underline-offset-4 hover:decoration-[3px]"
         >
           Can’t wait? Start a Week {ahead} Session early
         </Link>
@@ -307,32 +311,57 @@ function UpNext({
           onChange={(environment) => onEnvironment(upNextWeek, upNext, environment)}
         />
       )}
+      {upNext && upNextWeek && !live && isLive(upNext) && (
+        <Link
+          href={logPath(upNextWeek, upNext.id)}
+          className="mt-1 inline-flex min-h-11 items-center text-[15px] font-bold text-link underline decoration-2 underline-offset-4 hover:decoration-[3px]"
+        >
+          Log it after instead
+        </Link>
+      )}
       {live ? (
-        <div className="mt-5 flex gap-2.5">
-          <Link href={SCREEN_PATH.live} className={`${primaryAction} no-underline`}>
-            Resume {nb(live.heading)}
-          </Link>
-        </div>
-      ) : upNext && upNextWeek && asking && isLive(upNext) ? (
-        <PainStep
-          previous={previousPain}
-          onAnswer={(pain) => {
-            setAsking(false)
-            onStart(upNextWeek, upNext, pain)
-          }}
-          onCancel={() => setAsking(false)}
-        />
-      ) : upNext && upNextWeek && (
-        <div className="mt-5 flex gap-2.5">
-          {isLive(upNext) && (
-            <Button onPress={() => setAsking(true)} className={primaryAction}>
-              Start session
-            </Button>
-          )}
-          <Link href={logPath(upNextWeek, upNext.id)} className={`${lineAction} no-underline`}>
-            Log after
-          </Link>
-        </div>
+        <ActionBar label="Up next">
+          <div className="flex gap-2.5">
+            <Link href={SCREEN_PATH.live} className={`${primaryAction} no-underline`}>
+              Resume {nb(live.heading)}
+            </Link>
+          </div>
+        </ActionBar>
+      ) : upNext && upNextWeek && asking && standing && isLive(upNext) ? (
+        <ActionBar label="Up next">
+          <PainStep
+            standing={standing}
+            onAnswer={(pain) => {
+              setAsking(false)
+              onStart(upNextWeek, upNext, pain)
+            }}
+            onCancel={() => {
+              setAsking(false)
+              setRefocus(true)
+            }}
+          />
+        </ActionBar>
+      ) : (
+        upNext &&
+        upNextWeek && (
+          <ActionBar label="Up next">
+            <div className="flex gap-2.5">
+              {isLive(upNext) ? (
+                <Button
+                  autoFocus={refocus}
+                  onPress={() => (asksPain(standing) ? setAsking(true) : onStart(upNextWeek, upNext, { ...PAIN_FREE }))}
+                  className={primaryAction}
+                >
+                  {nb(`Start ${SESSION_TYPES[upNext.type].name}`)}
+                </Button>
+              ) : (
+                <Link href={logPath(upNextWeek, upNext.id)} className={`${primaryAction} no-underline`}>
+                  Log after
+                </Link>
+              )}
+            </div>
+          </ActionBar>
+        )
       )}
       {!asking && <SomethingHurts previous={previousPain} onReport={onSomethingHurts} />}
       <div aria-live="polite">
@@ -347,6 +376,14 @@ function UpNext({
         .map((s) => (
           <SuggestionNote key={s.id} suggestion={s} onDecide={(d) => onDecide(s, d)} />
         ))}
+      {day.activitiesAttached.map((a) => (
+        <AttachedNote
+          key={a.activity.id}
+          attached={a}
+          treadmill={treadmill(a.activity)}
+          onDetach={() => onAnswer(a.activity, null, null)}
+        />
+      ))}
       {day.activityQuestions.map((q) => (
         <WhichSession
           key={q.activity.id}
@@ -361,6 +398,32 @@ function UpNext({
           <ConsoleDistance key={e.activity!.id} entry={e} />
         ))}
     </div>
+  )
+}
+
+/** A workout the Coach attached on its own: said in one line, undone in one tap. */
+function AttachedNote({
+  attached,
+  treadmill,
+  onDetach,
+}: {
+  attached: ActivityAttached
+  treadmill: boolean
+  onDetach: () => void
+}) {
+  const { activity, session } = attached
+  return (
+    <section aria-label="From the watch" className="mt-[18px] border-t-2 border-t-ink py-3.5 desktop:border-b desktop:border-b-rule">
+      <p className="text-[17px] leading-[1.3] font-semibold">
+        {nb(`The watch’s ${activity.workoutType.toLowerCase()} went to ${SESSION_TYPES[session.type].name}.`)}
+      </p>
+      <p className="mt-1 text-[14px] text-muted">
+        {nb(`${timeOfDay(activity.startedAt)} · ${activitySummary(activity, treadmill)}`)}
+      </p>
+      <Button onPress={onDetach} className={`mt-1 ${quietButton}`}>
+        Not that Session
+      </Button>
+    </section>
   )
 }
 
@@ -410,7 +473,7 @@ function ConsoleDistance({ entry }: { entry: BucketEntry }) {
       <p className="mt-1 text-[14px] text-muted">
         {nb(`The watch guesses distance indoors. Kept its ${activitySummary(activity, true)}.`)}
       </p>
-      <Link href={logPath(week, session.id)} className={`mt-2.5 inline-block ${linkButton}`}>
+      <Link href={logPath(week, session.id)} className={`mt-2.5 ${linkButton}`}>
         Add console distance
       </Link>
     </section>

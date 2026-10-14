@@ -18,7 +18,7 @@ import type { Activity } from '../../domain/activity'
 import { addDays, daysBetween, type LocalDate } from '../../domain/calendar'
 import { nowMs } from '../../domain/clock'
 import { DISTANCE_METERS, LOGGED_STATUSES, logDays, logFor, NOTES_MAX, type LoggedStatus, type SessionLog } from '../../domain/log'
-import { clock, FIVE_K_SECONDS, parseClock, type Environment } from '../../domain/paces'
+import { clock, clockInput, FIVE_K_SECONDS, parseClock, type Environment } from '../../domain/paces'
 import type { PainArea } from '../../domain/pain'
 import { describeSession } from '../../domain/program/describe'
 import type { Session, Week } from '../../domain/program/types'
@@ -30,7 +30,7 @@ import { activitySummary, km, longDay, nb, shortWeekday, STATUS_LABEL, timeOfDay
 import { navigate, SCREEN_PATH, weekPath } from '../router'
 
 const linkClass =
-  'inline-block py-2 text-[15px] font-bold text-link underline decoration-2 underline-offset-4 hover:decoration-[3px]'
+  'inline-flex min-h-11 items-center text-[15px] font-bold text-link underline decoration-2 underline-offset-4 hover:decoration-[3px]'
 
 /** Toggle (DESIGN.md): paper with a 2px inset edge stroke; selected inverts to ink. */
 const toggleClass =
@@ -231,7 +231,7 @@ export function LogAfter({
           <>
             <TextField
               value={time}
-              onChange={setTime}
+              onChange={(text) => setTime(clockInput(text))}
               isRequired
               validate={validateTime}
               inputMode="numeric"
@@ -250,7 +250,7 @@ export function LogAfter({
                     <FieldError className="text-body-quiet font-bold text-ink" />
                   ) : (
                     <Text slot="description" className="text-body-quiet text-muted">
-                      Minutes and seconds, like 23:00. It sets the Training paces.
+                      Minutes and seconds: 2300 is 23:00. It sets the Training paces.
                     </Text>
                   )}
                 </>

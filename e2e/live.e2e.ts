@@ -46,8 +46,7 @@ test('a full Threshold Session from Start to logged', async ({ page }) => {
   const bucket = page.getByRole('list').filter({ hasText: 'Strength' })
   await bucket.getByRole('button', { name: /^Threshold/ }).click()
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Threshold, 2 × 12′')
-  await page.getByRole('button', { name: 'Start session' }).click()
-  await page.getByRole('button', { name: 'No. Let’s go' }).click()
+  await page.getByRole('button', { name: /^Start / }).click()
 
   await expect(page).toHaveURL('/live')
   await expect(page).toHaveTitle('Live session · Compromised')
@@ -91,17 +90,17 @@ test('a full Threshold Session from Start to logged', async ({ page }) => {
   await scan(page, minutes(start, 12.5))
   await expect(s.timer).toHaveText('11:30')
 
-  // The rep is over: one tap says it was held.
+  // The rep is over: it asks, and saying nothing means it was held.
   await page.clock.runFor('11:30')
   await expect(s.block).toHaveText('Jog · 2 min')
   const check = page.getByRole('region', { name: 'Rep 1 of 2: held the target?' })
   await expect(check).toContainText('Rep 1 of 2: held 12.3 km/h?')
-  await check.getByRole('button', { name: 'Held it' }).click()
-  await expect(check).toBeHidden()
+  await expect(check).toContainText('Say nothing and it logs as held.')
 
-  // Rep 2 drifted: Changed, with the speed actually run.
+  // Rep 2 drifted: Changed, with the speed actually run. Rep 1's question has gone, held.
   await page.clock.runFor('14:00')
   await expect(s.block).toHaveText('Easy and cooldown · 9 min')
+  await expect(check).toBeHidden()
   const second = page.getByRole('region', { name: 'Rep 2 of 2: held the target?' })
   await second.getByRole('button', { name: 'Changed' }).click()
   await second.getByRole('textbox', { name: 'Actual speed, km/h' }).fill('12.1')
@@ -123,9 +122,9 @@ test('a full Threshold Session from Start to logged', async ({ page }) => {
   await expect(page.getByText('Session over')).toBeVisible()
   await expect(s.pause).toHaveCount(0)
   await page.getByRole('textbox', { name: 'Console distance, km' }).fill('9.4')
-  await page.getByRole('button', { name: 'Save log' }).click()
-  await expect(page.getByText('Pick one first. The Coach runs on it.')).toBeVisible()
-  await page.getByRole('radio', { name: '7', exact: true }).check({ force: true })
+  // Overall RPE starts on the Coach's guess for Threshold, said as a guess: Save is the only tap.
+  await expect(page.getByRole('radio', { name: '7', exact: true })).toBeChecked()
+  await expect(page.getByText('The Coach’s guess: 7.')).toBeVisible()
   await scan(page)
   await page.getByRole('button', { name: 'Save log' }).click()
 
@@ -158,8 +157,7 @@ test('a 5K test Live session records the time and updates the Training paces', a
   await page.clock.pauseAt(new Date(thursday.getTime() + 1000))
 
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('5K test, baseline')
-  await page.getByRole('button', { name: 'Start session' }).click()
-  await page.getByRole('button', { name: 'No. Let’s go' }).click()
+  await page.getByRole('button', { name: /^Start / }).click()
   const s = live(page)
   await expect(s.block).toHaveText('Warm-up · 12 min')
   await expect(page.locator('header').getByText('Strides 4 × 15″')).toBeVisible()

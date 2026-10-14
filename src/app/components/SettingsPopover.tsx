@@ -21,7 +21,7 @@ const toggleClass =
   'grid min-h-11 cursor-pointer place-items-center rounded-sm text-[15px] font-bold shadow-[inset_0_0_0_2px_var(--edge)] data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-link data-selected:bg-ink data-selected:text-paper data-selected:shadow-none'
 
 const linkClass =
-  'py-2 text-[15px] font-bold text-link underline decoration-2 underline-offset-4 hover:decoration-[3px] data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-link'
+  'inline-flex min-h-11 items-center text-[15px] font-bold text-link underline decoration-2 underline-offset-4 hover:decoration-[3px] data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-link'
 
 /**
  * Settings, from the athlete's initial on the field band: theme, treadmill
@@ -41,7 +41,7 @@ export function SettingsPopover({
     <DialogTrigger>
       <Button
         aria-label="Settings"
-        className="grid size-10 cursor-pointer place-items-center rounded-full bg-on-cobalt font-extrabold text-cobalt data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-on-cobalt"
+        className="grid size-11 cursor-pointer place-items-center rounded-full bg-on-cobalt font-extrabold text-cobalt data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-on-cobalt"
       >
         V
       </Button>

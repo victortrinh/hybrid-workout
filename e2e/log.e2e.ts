@@ -39,7 +39,7 @@ test('logging Threshold as Done strikes it through on Today and changes Up next'
   await expect(bucket.getByRole('listitem')).toHaveText([/^Speed/, /^Strength/, /^Threshold.*Next$/, /^HYROX/, /^Easy run.*Optional$/])
   await expect(bucket.getByRole('listitem').first()).not.toContainText('Next')
 
-  await page.getByRole('link', { name: 'Log after' }).click()
+  await page.getByRole('link', { name: 'Log it after instead' }).click()
   await expect(page).toHaveURL(`/log/${week}/threshold`)
   await expect(page).toHaveTitle('Log after · Compromised')
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^Threshold, /)

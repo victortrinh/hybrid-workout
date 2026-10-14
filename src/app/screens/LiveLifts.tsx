@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type RefObject } from 'react'
 import { Button, Form, Group, Input, Label, NumberField, Radio, RadioGroup } from 'react-aria-components'
 import { nowMs } from '../../domain/clock'
 import {
@@ -9,6 +9,7 @@ import {
   keepGoing,
   liftsStatus,
   logSet,
+  predictedLiftsRpe,
   restLeft,
   setLoad,
   setReps,
@@ -25,7 +26,7 @@ import { nb } from '../format'
 import { blockChangeCue, keepAwake, letSleep, unlockSound } from '../liveCues'
 import { ALL_SETS_LINE, finishLine, liftsStartLine, loggedLine, REST_OVER_LINE, rpeLine } from '../liveCopy'
 import { navigate, SCREEN_PATH } from '../router'
-import { DiscardButton, inputClass, lineButton, OverallRpe, primaryButton, quietButton, toggleClass } from './liveUi'
+import { DiscardButton, finishBarClass, inputClass, lineButton, OverallRpe, primaryButton, quietButton, toggleClass } from './liveUi'
 
 /** What the finish sheet hands back to be saved as the Session log. */
 export interface LiftsFinish {
@@ -38,6 +39,12 @@ const SET_RPES = [5, 6, 7, 8, 9, 10]
 const stepClass =
   'grid size-11 cursor-pointer place-items-center rounded-sm shadow-[inset_0_0_0_2px_var(--edge)] hover:bg-sunk disabled:cursor-default disabled:opacity-40 data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-link'
 const logClass = 'min-h-11 cursor-pointer rounded-sm px-3.5 text-[15px] font-bold whitespace-nowrap'
+/** The bar at the foot of a Live session, under the thumb: paper, an ink rule, the home-indicator inset. */
+const liveBarClass =
+  'border-t-2 border-ink bg-paper px-pad pt-3 pb-[calc(12px+env(safe-area-inset-bottom))] desktop:px-gutter'
+/** On the cobalt rest bar: white edge at rest, inverted to white when picked, as the side rail does. */
+const fieldToggle =
+  'grid min-h-[54px] cursor-pointer place-items-center rounded-sm text-[17px] font-bold text-on-cobalt shadow-[inset_0_0_0_2px_var(--on-cobalt)] data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-on-cobalt data-selected:bg-on-cobalt data-selected:text-cobalt'
 
 /**
  * A Live Strength session: the cobalt field leads with the current exercise,
@@ -132,6 +139,13 @@ export function Lifting({
     setFocusRpe(null)
   }, [focusRpe])
 
+  /** Log set, from its row or the bar: the rest starts, and focus goes to the set's RPE. */
+  const logCurrent = (x: number, s: number) => {
+    act((l, now) => logSet(l, x, s, now))
+    setSay(loggedLine(s + 1, lifts.sets[x][s].rpe))
+    setFocusRpe(rpeId(x, s))
+  }
+
   const logged = lifts.sets.flat().filter((s) => s.done).length
   const total = lifts.sets.flat().length
   const exercise = current && lifts.exercises[current.exercise]
@@ -192,7 +206,8 @@ export function Lifting({
         )}
       </header>
 
-      <div className="flex-1 px-pad pb-6 desktop:max-w-plan desktop:px-gutter">
+      {/* On the finish sheet its actions sit on the screen's bottom edge, so no padding under them. */}
+      <div className={`flex flex-1 flex-col px-pad desktop:max-w-plan desktop:px-gutter ${lifts.ending ? 'desktop:pb-6' : 'pb-6'}`}>
         {lifts.ending ? (
           <FinishSheet
             lifts={lifts}
@@ -213,11 +228,7 @@ export function Lifting({
                 sets={lifts.sets[x]}
                 current={current?.exercise === x ? current.set : null}
                 onLoad={(s, pounds) => act((l) => setLoad(l, x, s, pounds))}
-                onLog={(s) => {
-                  act((l, now) => logSet(l, x, s, now))
-                  setSay(loggedLine(s + 1, lifts.sets[x][s].rpe))
-                  setFocusRpe(rpeId(x, s))
-                }}
+                onLog={(s) => logCurrent(x, s)}
                 onRpe={(s, rpe) => {
                   act((l) => setRpe(l, x, s, rpe))
                   setSay(rpeLine(rpe))
@@ -226,28 +237,72 @@ export function Lifting({
                 onAddSet={() => act((l) => addSet(l, x))}
               />
             ))}
-            <div className="mt-5 flex">
-              <Button onPress={() => act(finish)} className={`${lineButton} desktop:max-w-72`}>
-                Finish session
-              </Button>
-            </div>
           </>
         )}
       </div>
 
-      {lifts.rest && !lifts.ending && (
-        <div className="sticky bottom-0 flex items-center gap-3.5 bg-cobalt px-pad pt-3 pb-[calc(12px+env(safe-area-inset-bottom))] text-on-cobalt desktop:px-gutter">
-          <span className="text-[17px] font-bold">Rest</span>
-          <span aria-hidden="true" className="relative h-2 flex-1 overflow-hidden bg-cobalt-soft">
-            <i ref={restFillRef} className="lane-fill absolute inset-y-0 left-0 bg-on-cobalt" />
-          </span>
-          <b ref={restTextRef} role="timer" aria-label="Rest left" className="text-[26px] font-black font-stretch-125%" />
-          <Button
-            onPress={() => act(endRest)}
-            className="min-h-11 cursor-pointer px-1 text-[15px] font-bold text-on-cobalt underline decoration-2 underline-offset-4"
-          >
-            Skip
-          </Button>
+      {!lifts.ending && (
+        <div className="sticky bottom-0 z-10">
+          {lifts.rest ? (
+            <RestBar
+              key={`${lifts.rest.exercise}-${lifts.rest.set}`}
+              exercise={lifts.exercises[lifts.rest.exercise]}
+              number={lifts.rest.set}
+              next={
+                current && exercise && set
+                  ? { label: `${logLabel(current.set, set)}, ${exercise.name}`, words: logLabel(current.set, set) }
+                  : null
+              }
+              onLog={() => current && logCurrent(current.exercise, current.set)}
+              rpe={lifts.sets[lifts.rest.exercise][lifts.rest.set].rpe}
+              textRef={restTextRef}
+              fillRef={restFillRef}
+              onRpe={(rpe) => {
+                const { exercise: x, set: s } = lifts.rest!
+                act((l) => setRpe(l, x, s, rpe))
+                setSay(rpeLine(rpe))
+              }}
+              onSkip={() => act(endRest)}
+            />
+          ) : (
+            <div className={`${liveBarClass} flex gap-2.5`}>
+              {current && exercise && set ? (
+                <>
+                  {set.pounds !== null && (
+                    <div role="group" aria-label="Load for the next set" className="flex flex-none items-center gap-1.5">
+                      <Button
+                        aria-label="Lighter, next set"
+                        isDisabled={set.pounds <= 0}
+                        onPress={() => act((l) => setLoad(l, current.exercise, current.set, Math.max(0, set.pounds! - 5)))}
+                        className={`${stepClass} size-[54px]`}
+                      >
+                        <Icon name="minus" />
+                      </Button>
+                      <Button
+                        aria-label="Heavier, next set"
+                        isDisabled={set.pounds >= 1000}
+                        onPress={() => act((l) => setLoad(l, current.exercise, current.set, Math.min(1000, set.pounds! + 5)))}
+                        className={`${stepClass} size-[54px]`}
+                      >
+                        <Icon name="plus" />
+                      </Button>
+                    </div>
+                  )}
+                  <Button
+                    onPress={() => logCurrent(current.exercise, current.set)}
+                    aria-label={`${logLabel(current.set, set)}, ${exercise.name}`}
+                    className={`${primaryButton} desktop:max-w-80`}
+                  >
+                    {nb(logLabel(current.set, set))}
+                  </Button>
+                </>
+              ) : (
+                <Button onPress={() => act(finish)} className={`${primaryButton} desktop:max-w-80`}>
+                  Finish session
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -255,6 +310,93 @@ export function Lifting({
 }
 
 const rpeId = (exercise: number, set: number) => `rpe-${exercise}-${set}`
+
+/** "Log set 2 · 190 lb": the set and the load the tap logs. */
+const logLabel = (number: number, set: LiveSet) => `Log set ${number + 1} · ${set.pounds === null ? 'BW' : `${set.pounds} lb`}`
+
+/**
+ * The rest, under the thumb: the clock and Skip, the RPE the set was logged
+ * at (the target, until changed) with the others one tap away, and the next
+ * set's Log set for lifting before the clock runs out.
+ */
+function RestBar({
+  exercise,
+  number,
+  next,
+  onLog,
+  rpe,
+  textRef,
+  fillRef,
+  onRpe,
+  onSkip,
+}: {
+  exercise: LiveExercise
+  number: number
+  /** The set after the rest: logging it early ends the rest, one tap. */
+  next: { label: string; words: string } | null
+  onLog: () => void
+  rpe: number
+  textRef: RefObject<HTMLElement | null>
+  fillRef: RefObject<HTMLElement | null>
+  onRpe: (rpe: number) => void
+  onSkip: () => void
+}) {
+  const [rating, setRating] = useState(false)
+  return (
+    <div className="bg-cobalt px-pad pt-3 pb-[calc(12px+env(safe-area-inset-bottom))] text-on-cobalt desktop:px-gutter">
+      <div className="flex items-center gap-3.5">
+        <span className="text-[17px] font-bold">Rest</span>
+        <span aria-hidden="true" className="relative h-2 flex-1 overflow-hidden bg-cobalt-soft">
+          <i ref={fillRef} className="lane-fill absolute inset-y-0 left-0 bg-on-cobalt" />
+        </span>
+        <b ref={textRef} role="timer" aria-label="Rest left" className="text-[26px] font-black font-stretch-125%" />
+        <Button
+          onPress={onSkip}
+          className="min-h-11 min-w-11 cursor-pointer px-2 text-[15px] font-bold text-on-cobalt underline decoration-2 underline-offset-4 data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-on-cobalt"
+        >
+          Skip
+        </Button>
+      </div>
+      {rating ? (
+        <RadioGroup
+          aria-label={`RPE for ${exercise.name}, set ${number + 1}, from the rest bar`}
+          orientation="horizontal"
+          value={String(rpe)}
+          onChange={(v) => {
+            onRpe(Number(v))
+            setRating(false)
+          }}
+          className="mt-3 grid grid-cols-6 gap-1.5"
+        >
+          {SET_RPES.map((v) => (
+            <Radio key={v} value={String(v)} autoFocus={v === rpe} className={fieldToggle}>
+              {v}
+            </Radio>
+          ))}
+        </RadioGroup>
+      ) : (
+        <div className="mt-3 flex gap-2.5">
+          <Button
+            onPress={() => setRating(true)}
+            aria-label={`Set ${number + 1} at RPE ${rpe}. Change`}
+            className={`${fieldToggle} flex-none px-4`}
+          >
+            {`RPE ${rpe}`}
+          </Button>
+          {next && (
+            <Button
+              onPress={onLog}
+              aria-label={next.label}
+              className="min-h-[54px] flex-1 cursor-pointer rounded-sm bg-on-cobalt px-5 text-[17px] font-bold text-cobalt data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-on-cobalt"
+            >
+              {nb(next.words)}
+            </Button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 function ExerciseSets({
   exercise,
@@ -391,11 +533,9 @@ function SetRow({
           <Button
             onPress={onLog}
             aria-label={`Log ${name}`}
-            className={
-              current
-                ? `${logClass} min-h-[52px] bg-cobalt px-[18px] text-on-cobalt hover:bg-cobalt-hover data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-link`
-                : `${logClass} text-ink shadow-[inset_0_0_0_2px_var(--edge)] hover:bg-sunk data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-link`
-            }
+            className={`${logClass} text-ink hover:bg-sunk data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-link ${
+              current ? 'shadow-[inset_0_0_0_2px_var(--ink)]' : 'shadow-[inset_0_0_0_2px_var(--edge)]'
+            }`}
           >
             Log set
           </Button>
@@ -489,7 +629,8 @@ function FinishSheet({
   onSave: (finish: LiftsFinish) => void
   onDiscard: () => void
 }) {
-  const [rpe, setRpe] = useState<number | null>(null)
+  const [predicted] = useState(() => predictedLiftsRpe(lifts))
+  const [rpe, setRpe] = useState<number | null>(predicted)
   const [missingRpe, setMissingRpe] = useState(false)
   const logged = lifts.sets.flat().filter((s) => s.done).length
 
@@ -503,7 +644,7 @@ function FinishSheet({
   }
 
   return (
-    <Form onSubmit={submit} className="mt-4 grid gap-6">
+    <Form onSubmit={submit} className="mt-4 flex flex-1 flex-col gap-6">
       <p className="text-body">
         {logged === 0
           ? 'No sets logged. It saves as Partial, with nothing for the Coach to go on.'
@@ -512,12 +653,14 @@ function FinishSheet({
       <OverallRpe
         value={rpe}
         missing={missingRpe}
+        predicted={predicted}
         onChange={(v) => {
           setRpe(v)
           setMissingRpe(false)
         }}
       />
-      <div className="flex flex-wrap gap-2.5">
+      <DiscardButton onDiscard={onDiscard} />
+      <div className={finishBarClass}>
         <Button type="submit" className={`${primaryButton} desktop:flex-none`}>
           Save log
         </Button>
@@ -525,7 +668,6 @@ function FinishSheet({
           Keep going
         </Button>
       </div>
-      <DiscardButton onDiscard={onDiscard} />
     </Form>
   )
 }

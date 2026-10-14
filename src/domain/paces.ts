@@ -139,10 +139,19 @@ export function clock(seconds: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 }
 
-/** "mm:ss" or "m:ss" to seconds; null for anything else. */
+/**
+ * "mm:ss" or "m:ss" to seconds, or the same digits without the colon
+ * ("1945", "452"), which is what the iPhone's number pad can type. Null for anything else.
+ */
 export function parseClock(text: string): number | null {
-  const match = /^\s*(\d{1,2}):([0-5]\d)\s*$/.exec(text)
+  const match = /^\s*(\d{1,2}):?([0-5]\d)\s*$/.exec(text)
   return match ? Number(match[1]) * 60 + Number(match[2]) : null
+}
+
+/** Typed digits shown as a clock while they're typed: "1945" → "19:45", "45" stays "45". */
+export function clockInput(text: string): string {
+  const digits = text.replace(/\D/g, '').slice(0, 4)
+  return digits.length < 3 ? digits : `${digits.slice(0, -2)}:${digits.slice(-2)}`
 }
 
 /**
