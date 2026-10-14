@@ -1,20 +1,32 @@
 import { expect, test } from '@playwright/test'
 import { expectNoAxeViolations } from './axe'
+import { seedLogs, weekDone } from './history'
 
 /**
  * These tests write Session logs to the shared e2e database, so each project
- * gets Weeks no other test reads: the phone logs in Week 5, desktop in Week 6.
+ * gets Weeks no other test reads: the phone logs in Week 5, desktop in Week 7,
+ * each after a Week done in full (4 and 6), so nothing carries over.
  */
-const WEEK = { phone: 5, desktop: 6 } as Record<string, number>
-/** Wednesday noon in Toronto of Week 5 (Mon 16 Nov) or Week 6 (Mon 23 Nov). */
-const WEDNESDAY = { 5: new Date('2026-11-18T12:00:00-05:00'), 6: new Date('2026-11-25T12:00:00-05:00') } as Record<
-  number,
-  Date
->
+const SCENARIO = {
+  phone: {
+    week: 5,
+    before: weekDone(4, ['speed', 'strength', 'easy-deload', 'hyrox'], '2026-11-09'),
+    wednesday: new Date('2026-11-18T12:00:00-05:00'),
+    days: { wed: 'Wed 18 November', thu: 'Thu 19 November' },
+  },
+  desktop: {
+    week: 7,
+    before: weekDone(6, ['speed', 'strength', 'threshold', 'hyrox'], '2026-11-23'),
+    wednesday: new Date('2026-12-02T12:00:00-05:00'),
+    days: { wed: 'Wed 2 December', thu: 'Thu 3 December' },
+  },
+}
 
 test('logging Threshold as Done strikes it through on Today and changes Up next', async ({ page, request }, testInfo) => {
-  const week = WEEK[testInfo.project.name]
-  await page.clock.setFixedTime(WEDNESDAY[week])
+  const s = SCENARIO[testInfo.project.name as keyof typeof SCENARIO]
+  const week = s.week
+  await seedLogs(request, testInfo.project.name, s.before)
+  await page.clock.setFixedTime(s.wednesday)
   await page.goto('/')
 
   const upNext = page.getByRole('heading', { level: 1 })
@@ -33,8 +45,8 @@ test('logging Threshold as Done strikes it through on Today and changes Up next'
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^Threshold, /)
   await expect(page.getByRole('heading', { level: 1 })).toBeFocused()
   await expect(page.getByRole('radio', { name: 'Done' })).toBeChecked()
-  await expect(page.getByRole('radio', { name: /^Wed / })).toBeChecked()
-  await expect(page.getByRole('radio', { name: /^Thu / })).toBeDisabled()
+  await expect(page.getByRole('radio', { name: s.days.wed })).toBeChecked()
+  await expect(page.getByRole('radio', { name: s.days.thu })).toBeDisabled()
   await expectNoAxeViolations(page)
 
   // The radios' inputs sit visually hidden under their labels.
@@ -59,7 +71,7 @@ test('logging Threshold as Done strikes it through on Today and changes Up next'
     expect.objectContaining({
       week,
       sessionId: 'threshold',
-      date: WEDNESDAY[week].toISOString().slice(0, 10),
+      date: s.wednesday.toISOString().slice(0, 10),
       status: 'done',
       minutes: 45,
       rpe: 7,

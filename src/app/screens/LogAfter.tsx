@@ -20,6 +20,7 @@ import type { Session, Week } from '../../domain/program/types'
 import { Icon } from '../components/Icons'
 import { longDay, nb, shortWeekday, STATUS_LABEL } from '../format'
 import { navigate, SCREEN_PATH } from '../router'
+import { editedAt } from '../useSync'
 
 const linkClass =
   'inline-block py-2 text-[15px] font-bold text-link underline decoration-2 underline-offset-4 hover:decoration-[3px]'
@@ -44,18 +45,21 @@ const STATUS_HINT: Record<LoggedStatus, string> = {
 export function LogAfter({
   week,
   session,
+  lastDay: loggableUntil,
   logs,
   today,
   onSave,
 }: {
   week: Week
   session: Session
+  /** The last day the Session can be logged on: Sunday, or later for a carried Key session. */
+  lastDay: LocalDate
   logs: SessionLog[]
   today: LocalDate
   onSave: (log: SessionLog) => Promise<boolean>
 }) {
   const existing = logFor(logs, week.number, session.id)
-  const days = Array.from({ length: 7 }, (_, i) => addDays(week.startDate, i))
+  const days = Array.from({ length: daysBetween(week.startDate, loggableUntil) + 1 }, (_, i) => addDays(week.startDate, i))
   const lastDay = days.find((d) => d === today) ?? (daysBetween(today, days[6]) < 0 ? days[6] : null)
 
   const [status, setStatus] = useState<LoggedStatus>(existing?.status ?? 'done')
@@ -79,7 +83,7 @@ export function LogAfter({
       minutes: trained && Number.isFinite(minutes) ? minutes : null,
       rpe: trained ? rpe : null,
       notes: notes.trim() === '' ? null : notes.trim(),
-      updatedAt: editedAt(existing),
+      updatedAt: editedAt(existing?.updatedAt),
     })
     navigate(SCREEN_PATH.today)
   }
@@ -203,11 +207,4 @@ export function LogAfter({
       )}
     </div>
   )
-}
-
-/** Now, or just after the edit it replaces if this device's clock is behind the one that wrote it. */
-function editedAt(existing: SessionLog | null): string {
-  const now = Date.now()
-  const after = existing ? Date.parse(existing.updatedAt) + 1 : now
-  return new Date(Math.max(now, after)).toISOString()
 }

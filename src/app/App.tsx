@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
+import { addDays } from '../domain/calendar'
 import { Link, RouterProvider } from 'react-aria-components'
-import { coach, findWeek, type CoachDay } from '../domain/coach'
+import { coach, keyDeadline, prescribedWeek, type CoachDay } from '../domain/coach'
 import { program } from '../domain/program/program'
 import { Icon } from './components/Icons'
 import { StripedNumeral } from './components/StripedNumeral'
@@ -13,7 +14,7 @@ import { LogAfter } from './screens/LogAfter'
 import { Today } from './screens/Today'
 import { WeekScreen } from './screens/Week'
 import { usePicked } from './usePicked'
-import { useSessionLogs } from './useSessionLogs'
+import { editedAt, useSync } from './useSync'
 import { useToday } from './useToday'
 
 const NAV = [
@@ -40,11 +41,12 @@ const NAV_SCREEN: Partial<Record<Screen, Screen>> = { week: 'plan', log: 'today'
  */
 export function App() {
   const today = useToday()
-  const { logs, save, error } = useSessionLogs()
+  const { logs, decisions, save, decide, error } = useSync()
   const [picked, pick] = usePicked()
-  const day = useMemo(() => coach({ program, today, logs, picked }), [today, logs, picked])
+  const day = useMemo(() => coach({ program, today, logs, picked, decisions }), [today, logs, picked, decisions])
   const route = useRoute()
-  const week = route.screen === 'week' || route.screen === 'log' ? findWeek(program, route.week ?? 0) : null
+  const week =
+    route.screen === 'week' || route.screen === 'log' ? prescribedWeek(program, route.week ?? 0, logs, decisions) : null
   const logged = route.screen === 'log' ? week?.sessions.find((s) => s.id === route.sessionId) : undefined
   const screen: Screen =
     (route.screen === 'week' && !week) || (route.screen === 'log' && !logged) ? 'not-found' : route.screen
@@ -67,11 +69,22 @@ export function App() {
               day={day}
               weekCount={program.weekCount}
               error={error}
-              onPick={(sessionId) => day.week && pick(day.week.number, sessionId, today)}
+              onPick={(weekNumber, sessionId) => pick(weekNumber, sessionId, today)}
+              onDecide={(suggestion, decision) => {
+                const previous = decisions.find((d) => d.id === suggestion.id)
+                void decide({ id: suggestion.id, decision, date: today, updatedAt: editedAt(previous?.updatedAt) })
+              }}
             />
           )}
           {screen === 'log' && week && logged && (
-            <LogAfter week={week} session={logged} logs={logs} today={today} onSave={save} />
+            <LogAfter
+              week={week}
+              session={logged}
+              lastDay={logged.key ? keyDeadline(program, week) : addDays(week.startDate, 6)}
+              logs={logs}
+              today={today}
+              onSave={save}
+            />
           )}
           {screen === 'plan' && <Plan program={program} day={day} />}
           {screen === 'week' && week && <WeekScreen program={program} week={week} day={day} />}
