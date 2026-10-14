@@ -26,7 +26,7 @@ A coach for exactly one Program and one athlete. It knows the plan, the race dat
 
 - Days are flexible: a Week is a Bucket of Sessions done in any order; the Coach recommends Up next.
 - During a Live session the phone is usually propped on the treadmill console (read at arm's length while running) or lying on the floor or a bench during HYROX circuits (glanced at from a distance). Often the Apple Watch records the Session and the phone stays in a pocket, so logging happens afterwards.
-- Recovery data (sleep, HRV, resting heart rate) arrives on its own each morning from the Ultrahuman ring via an iOS Shortcut; workouts arrive from the Apple Watch via Strava. The athlete is never asked to type daily data.
+- Recovery data (sleep, HRV, resting heart rate) arrives on its own each morning from the Ultrahuman ring via an iOS Shortcut; workouts arrive from the Apple Watch via a second iOS Shortcut when each one ends. The athlete is never asked to type daily data.
 - Reviewing trends and the Program happens on desktop or phone outside training.
 - Domain vocabulary is defined in `CONTEXT.md` and must be used in UI copy.
 
