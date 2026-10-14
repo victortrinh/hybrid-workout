@@ -14,6 +14,7 @@ import {
 } from 'react-aria-components'
 import type { MockControls, NetworkMode, NightFields, SendOutcome, WorkoutFields } from '../../mock/controls'
 import { longDay } from '../format'
+import type { MockInfo } from '../mockInfo'
 import { Segmented } from './Segmented'
 
 const NETWORK: readonly { value: NetworkMode; label: string }[] = [
@@ -46,22 +47,30 @@ const labelClass = 'text-[15px] font-bold'
 
 /**
  * Mock mode's mark on every screen (ADR-0005): the data here is the
- * browser's own, not the athlete's. A status tag (DESIGN.md) in ink, so it
- * reads on the cobalt field and on paper alike. It hangs from the top edge,
- * above the wordmark and clear of every control, and names the network mode
- * when it isn't Online. A tap opens the mock panel: the network, and the
- * Shortcut sends.
+ * browser's own, not the athlete's, from the scenario it names. A status tag
+ * (DESIGN.md) in ink, so it reads on the cobalt field and on paper alike. It
+ * hangs from the top edge, above the wordmark and clear of every control,
+ * and names the network mode when it isn't Online. A tap opens the mock
+ * panel: the network, and the Shortcut sends.
  */
-export function MockBadge({ controls }: { controls: MockControls }) {
+export function MockBadge({ info }: { info: MockInfo }) {
+  const { controls } = info
   const mode = useSyncExternalStore(controls.subscribe, controls.network)
   const modeLabel = NETWORK.find((n) => n.value === mode)!.label
   const title = useId()
 
   return (
-    <aside aria-label="Mock data" className="fixed top-[env(safe-area-inset-top)] left-1/2 z-50 -translate-x-1/2">
+    <aside
+      aria-label="Mock data"
+      className="fixed top-[env(safe-area-inset-top)] left-1/2 z-50 max-w-[calc(100vw-120px)] -translate-x-1/2"
+    >
       <DialogTrigger>
-        <Button className="block cursor-pointer rounded-b-sm bg-ink px-2 py-1 text-label leading-4 tracking-[0.08em] text-paper uppercase data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-link">
-          Mock{mode !== 'online' && ` · ${modeLabel}`}
+        <Button className="block max-w-full cursor-pointer truncate rounded-b-sm bg-ink px-2 py-1 text-label leading-4 tracking-[0.08em] text-paper uppercase data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-link">
+          Mock · <span className="tracking-normal normal-case">{info.scenario}</span>
+          {info.unknown !== null && (
+            <span className="tracking-normal normal-case">, no scenario “{info.unknown}”</span>
+          )}
+          {mode !== 'online' && ` · ${modeLabel}`}
         </Button>
         {/* With no Dialog inside, the Popover is the dialog, its hidden Dismiss buttons included. */}
         <Popover

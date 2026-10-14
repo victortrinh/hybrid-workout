@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
 import { MockBadge } from './components/MockBadge'
+import { mockInfo, setMockInfo } from './mockInfo'
 import './styles.css'
 import { applyTheme, readSettings } from './useSettings'
 
@@ -11,12 +12,12 @@ const mock = import.meta.env.VITE_API === 'mock'
 applyTheme(readSettings().theme)
 
 // Mock mode answers /api/* in the browser (ADR-0005), so it's listening before the app's first request.
-const controls = mock ? await (await import('virtual:compromised-mock')).startMock() : null
+if (mock) setMockInfo(await (await import('virtual:compromised-mock')).startMock())
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />
-    {controls && <MockBadge controls={controls} />}
+    {mock && <MockBadge info={mockInfo()!} />}
   </StrictMode>,
 )
 

@@ -1,14 +1,15 @@
 /**
  * The mock panel's network control: what stands between the app and the
  * Worker in the browser. The mode lasts for the tab, across reloads, until
- * it's changed.
+ * it's changed or the scenario is.
  */
 import type { NetworkMode } from './controls'
 
 /** How long Slow holds each answer back. */
 export const SLOW_MS = 3_000
 
-const STORAGE_KEY = 'compromised:mock-network'
+/** Where the mode lasts for the tab. A scenario switch clears it. */
+export const NETWORK_KEY = 'compromised:mock-network'
 const MODES: readonly NetworkMode[] = ['online', 'offline', 'server-error', 'slow']
 
 /** Answers `request` the way the network in `mode` would. */
@@ -39,7 +40,7 @@ export function network(): Network {
       if (next === mode) return
       mode = next
       try {
-        sessionStorage.setItem(STORAGE_KEY, mode)
+        sessionStorage.setItem(NETWORK_KEY, mode)
       } catch {
         // Storage blocked: the mode lasts until the next reload.
       }
@@ -54,7 +55,7 @@ export function network(): Network {
 
 function restore(): NetworkMode {
   try {
-    const saved = sessionStorage.getItem(STORAGE_KEY) as NetworkMode | null
+    const saved = sessionStorage.getItem(NETWORK_KEY) as NetworkMode | null
     return saved && MODES.includes(saved) ? saved : 'online'
   } catch {
     return 'online'
