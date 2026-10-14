@@ -31,9 +31,19 @@ export function liveLine(block: LiveBlock, run: LiveRun): string {
     case 'run':
       return 'Conversational. If you can’t talk, slow down.'
     case 'distance':
+      if (run.type === 'race-simulation') {
+        return block.round === 1 ? 'Run 1. Conservative. The race is long.' : `Run ${block.round}. RPE 8, not all-out.`
+      }
       return run.environment === 'indoor'
         ? 'All-out, but even. Tap Finished when the console says 5.00.'
         : 'All-out, but even. Tap Finished when the watch says 5 km.'
+    case 'round': {
+      const last = !run.blocks.slice(run.block + 1).some((b) => b.kind === 'round')
+      if (block.round === 1) return 'Run, then the Stations. Technique before speed.'
+      return last ? 'Last round. Same technique, tired legs.' : `Round ${block.round}. Smooth beats fast.`
+    }
+    case 'station':
+      return 'Race load. Smooth beats fast. Tap Finished when it’s done.'
     case 'cooldown':
       return 'Cooldown. You may now look tired.'
   }

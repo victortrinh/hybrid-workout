@@ -5,8 +5,8 @@
  */
 import { Hono } from 'hono'
 import { findWeek } from '../domain/coach'
-import { isLiveRun } from '../domain/live'
-import { parseSessionLog, type SessionLog, type SyncState } from '../domain/log'
+import { isCircuit, isLiveRun } from '../domain/live'
+import { parseSessionLog, type SessionLog, type StationPart, type SyncState } from '../domain/log'
 import { program } from '../domain/program/program'
 import { parseDecision, type SuggestionDecision } from '../domain/suggestion'
 
@@ -61,6 +61,16 @@ app.post('/sync', async (c) => {
        select ?1, ?2, ?3, ?4, ?5, ?6
        where exists (select 1 from session_logs where id = ?1 and updated_at = ?7)`,
     )
+    // Station logs, the same way.
+    const clearStations = c.env.DB.prepare(
+      `delete from station_logs where session_log_id = ?1
+         and exists (select 1 from session_logs where id = ?1 and updated_at = ?2)`,
+    )
+    const addStation = c.env.DB.prepare(
+      `insert into station_logs (session_log_id, round, part, pounds, meters, reps, seconds)
+       select ?1, ?2, ?3, ?4, ?5, ?6, ?7
+       where exists (select 1 from session_logs where id = ?1 and updated_at = ?8)`,
+    )
     await c.env.DB.batch(
       logs.flatMap((l) => [
         upsert.bind(
@@ -71,6 +81,8 @@ app.post('/sync', async (c) => {
         ...l.intervals.map((i) =>
           addRep.bind(l.id, i.block, i.rep, i.targetPace, i.held ? 1 : 0, i.actualPace, l.updatedAt),
         ),
+        clearStations.bind(l.id, l.updatedAt),
+        ...l.stations.map((s) => addStation.bind(l.id, s.round, s.part, s.pounds, s.meters, s.reps, s.seconds, l.updatedAt)),
       ]),
     )
   }
@@ -120,6 +132,9 @@ function parseLogs(raw: unknown): SessionLog[] {
         throw new Error('Only a 5K test has a result time')
       }
       if (log.intervals.length > 0 && !isLiveRun(session)) throw new Error('Only a run Session has reps to log')
+      if (log.stations.length > 0 && !isCircuit(session)) {
+        throw new Error('Only HYROX and a Race simulation have Station logs')
+      }
       return log
     } catch (error) {
       throw new Error(`sessionLogs[${i}]: ${error instanceof Error ? error.message : 'invalid'}`)
@@ -151,6 +166,16 @@ interface IntervalRow {
   actual_pace: number | null
 }
 
+interface StationRow {
+  session_log_id: string
+  round: number
+  part: string
+  pounds: number | null
+  meters: number | null
+  reps: number | null
+  seconds: number | null
+}
+
 interface DecisionRow {
   id: string
   decision: string
@@ -159,13 +184,20 @@ interface DecisionRow {
 }
 
 async function readState(db: D1Database): Promise<SyncState> {
-  const [{ results }, decisions, intervals] = (await db.batch<SessionLogRow | DecisionRow | IntervalRow>([
+  const [{ results }, decisions, intervals, stationRows] = (await db.batch<
+    SessionLogRow | DecisionRow | IntervalRow | StationRow
+  >([
     db.prepare('select * from session_logs order by date, updated_at'),
     db.prepare('select * from suggestion_decisions order by updated_at'),
     db.prepare('select * from interval_logs order by session_log_id, block'),
-  ])) as [D1Result<SessionLogRow>, D1Result<DecisionRow>, D1Result<IntervalRow>]
+    db.prepare('select * from station_logs order by session_log_id, round, rowid'),
+  ])) as [D1Result<SessionLogRow>, D1Result<DecisionRow>, D1Result<IntervalRow>, D1Result<StationRow>]
   const reps = new Map<string, IntervalRow[]>()
   for (const row of intervals.results) reps.set(row.session_log_id, [...(reps.get(row.session_log_id) ?? []), row])
+  const stationLogs = new Map<string, StationRow[]>()
+  for (const row of stationRows.results) {
+    stationLogs.set(row.session_log_id, [...(stationLogs.get(row.session_log_id) ?? []), row])
+  }
   return {
     suggestionDecisions: decisions.results.map((row) =>
       parseDecision({ id: row.id, decision: row.decision, date: row.date, updatedAt: row.updated_at }),
@@ -189,6 +221,14 @@ async function readState(db: D1Database): Promise<SyncState> {
           targetPace: rep.target_pace,
           held: rep.held === 1,
           actualPace: rep.actual_pace,
+        })),
+        stations: (stationLogs.get(row.id) ?? []).map((s) => ({
+          round: s.round,
+          part: s.part as StationPart,
+          pounds: s.pounds,
+          meters: s.meters,
+          reps: s.reps,
+          seconds: s.seconds,
         })),
         updatedAt: row.updated_at,
       }),

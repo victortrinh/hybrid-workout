@@ -14,11 +14,14 @@ const valid = {
   environment: null,
   distanceMeters: null,
   intervals: [],
+  stations: [],
   updatedAt: '2026-11-04T17:00:00.000Z',
 }
 
 const held = { block: 1, rep: 1, targetPace: 292, held: true, actualPace: null }
 const changed = { block: 3, rep: 2, targetPace: 292, held: false, actualPace: 298 }
+const round = { round: 1, part: 'round', pounds: null, meters: null, reps: null, seconds: 600 }
+const sled = { round: 1, part: 'sled-push', pounds: 0, meters: 25, reps: null, seconds: null }
 
 describe('parseSessionLog', () => {
   it('accepts a complete log', () => {
@@ -50,6 +53,13 @@ describe('parseSessionLog', () => {
     expect(parseSessionLog(older)).toMatchObject({ distanceMeters: null, intervals: [] })
   })
 
+  it('accepts a HYROX session’s Station logs, an empty sled included, and treats missing ones as none', () => {
+    const hyrox = { ...valid, sessionId: 'hyrox', stations: [round, sled] }
+    expect(parseSessionLog(hyrox)).toEqual(hyrox)
+    const { stations, ...older } = valid
+    expect(parseSessionLog(older)).toMatchObject({ stations: [] })
+  })
+
   it.each([
     ['a missing id', { id: undefined }],
     ['a short id', { id: 'abc' }],
@@ -72,6 +82,12 @@ describe('parseSessionLog', () => {
     ['a held rep with an actual pace', { intervals: [{ ...held, actualPace: 298 }] }],
     ['a changed rep with no actual pace', { intervals: [{ ...changed, actualPace: null }] }],
     ['a rep at 1:00/km', { intervals: [{ ...changed, actualPace: 60 }] }],
+    ['Station logs that are not a list', { stations: 'sled' }],
+    ['a Station that is no Station', { stations: [{ ...sled, part: 'tyre-flip' }] }],
+    ['a Station logged twice in a round', { stations: [sled, { ...sled, pounds: 90 }] }],
+    ['a Station log with no round', { stations: [{ ...sled, round: null }] }],
+    ['a load that is not whole pounds', { stations: [{ ...sled, pounds: 202.5 }] }],
+    ['a negative split', { stations: [{ ...round, seconds: -1 }] }],
     ['an updatedAt with a local offset', { updatedAt: '2026-11-04T12:00:00-05:00' }],
   ])('rejects %s', (_, change) => {
     expect(() => parseSessionLog({ ...valid, ...change })).toThrow()

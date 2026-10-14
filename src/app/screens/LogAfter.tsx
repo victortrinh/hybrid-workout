@@ -103,6 +103,7 @@ export function LogAfter({
       environment: result ? where : (existing?.environment ?? null),
       distanceMeters: trained ? (existing?.distanceMeters ?? null) : null,
       intervals: trained ? (existing?.intervals ?? []) : [],
+      stations: trained ? (existing?.stations ?? []) : [],
       updatedAt: editedAt(existing),
     })
     navigate(SCREEN_PATH.today)
