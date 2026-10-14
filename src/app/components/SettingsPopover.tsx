@@ -20,10 +20,13 @@ const UNIT_OPTIONS = (['kmh', 'mph'] as const).map((value) => ({ value, label: U
 const toggleClass =
   'grid min-h-11 cursor-pointer place-items-center rounded-sm text-[15px] font-bold shadow-[inset_0_0_0_2px_var(--edge)] data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-link data-selected:bg-ink data-selected:text-paper data-selected:shadow-none'
 
+const linkClass =
+  'py-2 text-[15px] font-bold text-link underline decoration-2 underline-offset-4 hover:decoration-[3px] data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-link'
+
 /**
  * Settings, from the athlete's initial on the field band: theme, treadmill
- * units, which months run on the treadmill, and the Equipment profile. Every
- * change applies at once. Integrations each have a page of their own.
+ * units, which months run on the treadmill, the Equipment profile and the data
+ * export. Every change applies at once. Integrations each have a page of their own.
  */
 export function SettingsPopover({
   settings,
@@ -103,18 +106,32 @@ export function SettingsPopover({
             <span className="text-[18px] font-bold">Integrations</span>
             <Link
               href={SCREEN_PATH.shortcut}
-              className="py-2 text-[15px] font-bold text-link underline decoration-2 underline-offset-4 hover:decoration-[3px] data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-link"
+              className={linkClass}
             >
               Recovery Shortcut setup
             </Link>
             <Text className="text-[12px] text-muted">Sleep, HRV and resting heart rate from the ring, every morning.</Text>
             <Link
               href={SCREEN_PATH.workouts}
-              className="py-2 text-[15px] font-bold text-link underline decoration-2 underline-offset-4 hover:decoration-[3px] data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-link"
+              className={linkClass}
             >
               Workout Shortcut setup
             </Link>
             <Text className="text-[12px] text-muted">Each Apple Watch workout, attached to its Session.</Text>
+          </div>
+          <div className="grid gap-1 border-t border-rule pt-3">
+            <span className="text-[18px] font-bold">Your data</span>
+            <div className="flex gap-4">
+              <Link href="/api/export.json" download className={linkClass}>
+                Export JSON
+              </Link>
+              <Link href="/api/export.zip" download className={linkClass}>
+                Export CSV
+              </Link>
+            </div>
+            <Text className="text-[12px] text-muted">
+              Everything synced, as one JSON file or a zip with a CSV per table.
+            </Text>
           </div>
         </div>
       </Popover>
