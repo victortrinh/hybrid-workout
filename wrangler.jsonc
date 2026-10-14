@@ -25,5 +25,12 @@
       "migrations_dir": "migrations"
     }
   ],
+  // Branch builds (Workers Builds on a PR) get their own D1 database,
+  // `compromised-preview`, so PR code never touches real Session logs. Previews
+  // don't run migrations: `npm run db:migrate:preview` (wrangler.preview-db.jsonc).
+  // Not `preview_database_id`: that rebinds `wrangler deploy` to it as well.
+  "previews": {
+    "d1_databases": [{ "binding": "DB", "database_id": "fe12ecbd-17a7-45bd-a5c2-ffcc4ceadaeb" }]
+  },
   "observability": { "enabled": true }
 }

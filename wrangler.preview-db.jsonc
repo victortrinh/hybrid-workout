@@ -1,0 +1,14 @@
+// Only for migrating the D1 database that branch previews use (see "previews"
+// in wrangler.jsonc): `npm run db:migrate:preview`. Never deployed.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "compromised",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "compromised-preview",
+      "database_id": "fe12ecbd-17a7-45bd-a5c2-ffcc4ceadaeb",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

@@ -10,6 +10,7 @@ Steps 1 to 4 happen once. After that, shipping a change is just [Deploy](#deploy
 | --- | --- |
 | `npm run deploy` | Runs the unit tests, builds the app and the Worker (`dist/`), then `wrangler deploy` uploads the Worker with `dist/client` as its static assets. |
 | `npm run db:migrate:prod` | Applies any unapplied files in `migrations/` to the production D1 database. Wrangler lists them and asks before applying, and captures a backup first. |
+| `npm run db:migrate:preview` | The same against `compromised-preview`, the D1 database branch previews (Workers Builds on a PR) use instead of production. |
 | `npm run db:migrate:local` | The same against the local D1 that `npm run dev` uses. |
 | `npm run check:access -- <url>` | Requests `/`, `/plan` and `/api/health` without signing in and fails unless every one redirects to the Cloudflare Access login. |
 
@@ -105,6 +106,12 @@ When a change adds a file to `migrations/`, apply it to production before deploy
 ```bash
 npm run db:migrate:prod
 npm run deploy
+```
+
+Apply it to the preview database too, so branch previews of the change work:
+
+```bash
+npm run db:migrate:preview
 ```
 
 Migrations should only add things (new tables, new nullable columns) so the running version keeps working between the two commands.
