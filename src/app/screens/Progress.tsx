@@ -4,17 +4,26 @@ import type { LocalDate } from '../../domain/calendar'
 import type { CoachDay } from '../../domain/coach'
 import type { SessionLog } from '../../domain/log'
 import { clock, GOAL_PACE, speedFor, UNIT_LABEL, type SpeedUnit, type TrainingPaces } from '../../domain/paces'
-import { SESSION_TYPES } from '../../domain/program/describe'
-import type { Lane, Program } from '../../domain/program/types'
+import { stations as STATIONS } from '../../domain/program/program'
+import { LIFT_NAME, SESSION_TYPES } from '../../domain/program/describe'
+import type { Lane, Program, Station } from '../../domain/program/types'
 import {
   GOAL_SECONDS,
   plannedAt,
   progress,
+  recoveryTrend,
+  RECOVERY_NIGHTS,
+  stationTimes,
+  workingWeightRows,
   type CompletionState,
   type FiveKProgress,
+  type StationTimes,
   type WeekCompletion,
   type WeekLoad,
+  type WorkingWeightRow,
 } from '../../domain/progress'
+import { isShortSleep, sleepText, SHORT_SLEEP_MINUTES, type RecoveryNight } from '../../domain/recovery'
+import type { WorkingWeightChange } from '../../domain/weights'
 import { EmptyState } from '../components/EmptyState'
 import { LANE_COLOR, LANES, LaneLegend } from '../components/LaneChip'
 import { shortDay } from '../format'
@@ -26,16 +35,19 @@ interface ProgressProps {
   program: Program
   day: CoachDay
   logs: SessionLog[]
+  recoveryNights: RecoveryNight[]
   unit: SpeedUnit
 }
 
 /**
  * Progress: whether the Program is working. 5K tests against the planned line
  * to 20:00, each Week's completion by Session type, Training load per Week,
- * and the current Training paces. Twelve columns on desktop, stacked on a phone.
+ * the current Training paces, recent recovery, the Working weights and HYROX
+ * Station times. Twelve columns on desktop, stacked on a phone.
  */
-export function Progress({ program, day, logs, unit }: ProgressProps) {
+export function Progress({ program, day, logs, recoveryNights, unit }: ProgressProps) {
   const data = useMemo(() => progress(program, logs, day.today), [program, logs, day.today])
+  const stations = useMemo(() => stationTimes(program, logs, day.today), [program, logs, day.today])
   const firstTest = program.phases.flatMap((p) => p.weeks).find((w) => w.fiveKTest)
 
   return (
@@ -44,7 +56,7 @@ export function Progress({ program, day, logs, unit }: ProgressProps) {
         Progress
       </h1>
       <p className="mt-1 text-body-quiet text-muted">5K tests against 20:00, weekly completion, Training load and paces.</p>
-      {logs.length === 0 ? (
+      {logs.length === 0 && recoveryNights.length === 0 ? (
         <EmptyState title="Nothing logged yet, so nothing to chart.">
           {firstTest
             ? `The baseline 5K test is Week ${firstTest.number}. The 20:00 line can wait until then.`
@@ -56,19 +68,31 @@ export function Progress({ program, day, logs, unit }: ProgressProps) {
           <CompletionPanel program={program} day={day} completion={data.completion} />
           <LoadPanel program={program} load={data.load} />
           <PacesPanel paces={day.paces} fiveKTest={day.fiveKTest} unit={unit} firstTestWeek={firstTest?.number ?? null} />
+          <RecoveryPanel nights={recoveryNights} today={day.today} />
+          <WeightsPanel program={program} changes={day.workingWeightChanges} />
+          <StationsPanel times={stations} />
         </div>
       )}
     </div>
   )
 }
 
-function Panel({ title, sub, span, children }: { title: string; sub: ReactNode; span: 4 | 8; children: ReactNode }) {
+const SPAN = { 4: 'desktop:col-span-4', 6: 'desktop:col-span-6', 8: 'desktop:col-span-8', 12: 'desktop:col-span-12' }
+
+function Panel({
+  title,
+  sub,
+  span,
+  children,
+}: {
+  title: string
+  sub: ReactNode
+  span: keyof typeof SPAN
+  children: ReactNode
+}) {
   const id = `panel-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
   return (
-    <section
-      aria-labelledby={id}
-      className={`min-w-0 border-t-2 border-ink pt-3.5 pb-6 ${span === 8 ? 'desktop:col-span-8' : 'desktop:col-span-4'}`}
-    >
+    <section aria-labelledby={id} className={`min-w-0 border-t-2 border-ink pt-3.5 pb-6 ${SPAN[span]}`}>
       <h2 id={id} className="text-title">
         {title}
       </h2>
@@ -484,3 +508,292 @@ function PacesPanel({
 
 const fromTest = (week: number, date: LocalDate, seconds: number) =>
   `From the ${clock(seconds)} test in Week ${week}, ${shortDay(date)}.`
+
+// ---------------------------------------------------------------------------
+// Recovery
+
+function RecoveryPanel({ nights, today }: { nights: RecoveryNight[]; today: LocalDate }) {
+  const trend = useMemo(() => recoveryTrend(nights, today), [nights, today])
+  const sent = trend.filter((t) => t.night !== null)
+  if (sent.length === 0) {
+    const latest = nights.at(-1)
+    return (
+      <Panel title="Recovery" sub={`Last ${RECOVERY_NIGHTS} nights from the ring. Bars are sleep; the line is HRV.`} span={6}>
+        <EmptyState title="No nights from the ring yet.">
+          {latest
+            ? `The last one the Shortcut sent was ${shortDay(latest.date)}.`
+            : 'The morning Shortcut sends each night’s sleep and HRV from Apple Health.'}
+        </EmptyState>
+      </Panel>
+    )
+  }
+  return (
+    <Panel title="Recovery" sub={`Last ${RECOVERY_NIGHTS} nights from the ring. Bars are sleep; the line is HRV.`} span={6}>
+      <ChartSlot render={(width) => <RecoveryChart width={width} trend={trend} />} />
+      <ul aria-label="Chart key" className="mt-3 flex flex-wrap gap-x-3.5 gap-y-1.5 text-label text-muted">
+        <li className="flex items-center gap-1.5">
+          <i aria-hidden="true" className="inline-block size-2.5 bg-easy" />
+          Sleep
+        </li>
+        <li className="flex items-center gap-1.5">
+          <i aria-hidden="true" className="inline-block size-2.5 bg-alert" />
+          Under {SHORT_SLEEP_MINUTES / 60} h
+        </li>
+        <li className="flex items-center gap-1.5">
+          <i aria-hidden="true" className="inline-block h-[3px] w-3.5 bg-link" />
+          HRV, ms
+        </li>
+      </ul>
+    </Panel>
+  )
+}
+
+type Trend = ReturnType<typeof recoveryTrend>
+
+function RecoveryChart({ width: W, trend }: { width: number; trend: Trend }) {
+  const H = 210
+  const [L, R, T, B] = [34, 34, 26, 24]
+  const n = trend.length
+  const hours = trend.flatMap((t) => (t.night ? [t.night.sleepMinutes / 60] : []))
+  const hrvs = trend.flatMap((t) => (t.night?.hrvMs ? [t.night.hrvMs] : []))
+  const top = Math.max(10, Math.ceil(Math.max(...hours)))
+  const hrvLow = hrvs.length ? Math.floor((Math.min(...hrvs) - 5) / 10) * 10 : 30
+  const hrvHigh = Math.max(hrvLow + 30, hrvs.length ? Math.ceil((Math.max(...hrvs) + 5) / 10) * 10 : 70)
+  const x = (i: number) => L + ((i + 0.5) / n) * (W - L - R)
+  const ys = (h: number) => H - B - (h / top) * (H - T - B)
+  const yh = (v: number) => H - B - ((v - hrvLow) / (hrvHigh - hrvLow)) * (H - T - B)
+  const bar = Math.max(4, Math.min(18, (W - L - R) / n - 6))
+  const hrvTicks = Array.from({ length: (hrvHigh - hrvLow) / 10 - 1 }, (_, i) => hrvLow + 10 * (i + 1))
+  // The HRV line breaks where a night is missing or has no HRV.
+  const path = trend
+    .map((t, i) => {
+      if (!t.night?.hrvMs) return ''
+      const joined = i > 0 && trend[i - 1].night?.hrvMs
+      return `${joined ? 'L' : 'M'}${x(i)},${yh(t.night.hrvMs)}`
+    })
+    .join('')
+  const latest = [...trend].reverse().find((t) => t.night !== null)!
+  const lastNight = latest === trend.at(-1)
+
+  return (
+    <svg className="chart" width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={recoverySummary(trend)}>
+      {[0, SHORT_SLEEP_MINUTES / 60, 8].map((h) => (
+        <text key={h} x={L - 6} y={ys(h) + 4} textAnchor="end">
+          {h}h
+        </text>
+      ))}
+      {hrvTicks.map((v) => (
+        <text key={v} x={W - R + 6} y={yh(v) + 4}>
+          {v}
+        </text>
+      ))}
+      <text x={x(0)} y={H - 6} textAnchor="middle">
+        {shortDay(trend[0].date).split(' ').slice(1).join(' ')}
+      </text>
+      <text x={x(n - 1)} y={H - 6} textAnchor="middle">
+        {shortDay(trend[n - 1].date).split(' ').slice(1).join(' ')}
+      </text>
+      <line x1={L} x2={W - R} y1={ys(0)} y2={ys(0)} stroke="var(--rule)" />
+      <line
+        x1={L}
+        x2={W - R}
+        y1={ys(SHORT_SLEEP_MINUTES / 60)}
+        y2={ys(SHORT_SLEEP_MINUTES / 60)}
+        stroke="var(--ink)"
+        strokeDasharray="4 4"
+      />
+      {trend.map(({ date, night }, i) =>
+        night ? (
+          <rect
+            key={date}
+            x={x(i) - bar / 2}
+            y={ys(night.sleepMinutes / 60)}
+            width={bar}
+            height={ys(0) - ys(night.sleepMinutes / 60)}
+            fill={isShortSleep(night) ? 'var(--alert)' : 'var(--easy)'}
+          />
+        ) : (
+          <rect key={date} x={x(i) - bar / 2} y={ys(0) - 2} width={bar} height={2} fill="var(--edge)" />
+        ),
+      )}
+      {/* A paper halo under the line keeps it legible over the bars in either theme. */}
+      <path d={path} fill="none" stroke="var(--paper)" strokeWidth={8} strokeLinejoin="round" strokeLinecap="round" />
+      <path d={path} fill="none" stroke="var(--link)" strokeWidth={3} strokeLinejoin="round" strokeLinecap="round" />
+      {trend.map(({ date, night }, i) =>
+        night?.hrvMs ? (
+          <circle key={date} cx={x(i)} cy={yh(night.hrvMs)} r={4} fill="var(--link)" stroke="var(--paper)" strokeWidth={2} />
+        ) : null,
+      )}
+      <text className="strong" x={W - R} y={12} textAnchor="end">
+        {lastNight ? 'Last night' : shortDay(latest.date)}: {sleepText(latest.night!.sleepMinutes)}
+        {latest.night!.hrvMs !== null && ` · ${latest.night!.hrvMs} ms`}
+      </text>
+    </svg>
+  )
+}
+
+function recoverySummary(trend: Trend): string {
+  const sent = trend.filter((t) => t.night !== null)
+  const short = sent.filter((t) => isShortSleep(t.night!)).length
+  const latest = sent.at(-1)!
+  const when = latest === trend.at(-1) ? 'Last night' : shortDay(latest.date)
+  const hrv = latest.night!.hrvMs === null ? '' : ` and HRV ${latest.night!.hrvMs} ms`
+  return `Sleep and HRV for the last ${trend.length} nights: ${sent.length} from the ring, ${short} under ${SHORT_SLEEP_MINUTES / 60} hours. ${when} ${sleepText(latest.night!.sleepMinutes)}${hrv}.`
+}
+
+// ---------------------------------------------------------------------------
+// Working weights
+
+const REASON: Record<WorkingWeightChange['reason'], string> = {
+  calibration: 'calibrated',
+  'all-reps-easy': 'every rep at RPE 7 or easier',
+  'two-holds': 'held twice in a row',
+}
+
+function WeightsPanel({ program, changes }: { program: Program; changes: WorkingWeightChange[] }) {
+  const rows = useMemo(() => workingWeightRows(changes), [changes])
+  const firstStrength = program.phases
+    .flatMap((p) => p.weeks)
+    .find((w) => w.sessions.some((s) => s.type === 'strength'))?.number
+  if (rows.length === 0) {
+    return (
+      <Panel title="Working weights" sub="Found by calibration, then moved by your RPE." span={6}>
+        <EmptyState title="No Working weights yet.">
+          {firstStrength ? `Week ${firstStrength}’s Strength session finds them.` : 'The first Strength session finds them.'}
+        </EmptyState>
+      </Panel>
+    )
+  }
+  return (
+    <Panel title="Working weights" sub="Found by calibration, then moved by your RPE. In pounds." span={6}>
+      <table className="mt-2.5 w-full border-collapse text-[16px]">
+        <thead>
+          <tr className="border-b border-rule text-left text-label text-muted">
+            <th scope="col" className="py-1.5">
+              Lift
+            </th>
+            <th scope="col" className="py-1.5 pl-3 text-right">
+              First
+            </th>
+            <th scope="col" className="py-1.5 pl-3 text-right">
+              Now
+            </th>
+            <th scope="col" className="py-1.5 pl-3">
+              Last change
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.lift} className="border-b border-rule align-baseline font-semibold">
+              <th scope="row" className="py-2.5 text-left font-semibold">
+                {LIFT_NAME[row.lift]}
+              </th>
+              <td className="py-2.5 pl-3 text-right whitespace-nowrap">{row.first.pounds} lb</td>
+              <td className="py-2.5 pl-3 text-right whitespace-nowrap">{row.current} lb</td>
+              <td className="py-2.5 pl-3 text-label text-muted">{lastChange(row)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </Panel>
+  )
+}
+
+function lastChange({ last, before }: WorkingWeightRow): string {
+  if (before === null) return `Week ${last.week}: ${REASON[last.reason]}`
+  const step = last.pounds - before
+  return `Week ${last.week}: ${step > 0 ? '+' : '−'}${Math.abs(step)} lb, ${REASON[last.reason]}`
+}
+
+// ---------------------------------------------------------------------------
+// HYROX stations
+
+const RACE_ORDER = (Object.values(STATIONS) as Station[]).sort((a, b) => a.order - b.order)
+
+function StationsPanel({ times }: { times: StationTimes }) {
+  const { simulations, rounds, firstSimulation } = times
+  const first = firstSimulation
+    ? `The first is Week ${firstSimulation.week}, the week of ${shortDay(firstSimulation.startDate)}.`
+    : ''
+  const hasRounds = Object.keys(rounds).length > 0
+  const sub =
+    simulations.length > 0
+      ? `Splits from ${simulations.length === 1 ? 'one Race simulation' : `${simulations.length} Race simulations`}${hasRounds ? ', and the latest HYROX round each Station was in, timed with its run' : ''}.`
+      : `No Race simulation yet.${first ? ` ${first}` : ''}${hasRounds ? ' Until then, the latest HYROX round each Station was in, timed with its run.' : ''}`
+
+  if (simulations.length === 0 && !hasRounds) {
+    return (
+      <Panel title="HYROX stations" sub="Times from Race simulations and HYROX Sessions." span={12}>
+        <EmptyState title={`No Race simulation yet.${first ? ` ${first}` : ''}`}>
+          Station times from each HYROX Session show up here too.
+        </EmptyState>
+      </Panel>
+    )
+  }
+  return (
+    <Panel title="HYROX stations" sub={sub} span={12}>
+      <table className="mt-2.5 w-full border-collapse text-[16px]">
+        <thead>
+          <tr className="border-b border-rule text-left text-label text-muted">
+            <th scope="col" className="py-1.5">
+              Station
+            </th>
+            {simulations.map((s) => (
+              <th key={`${s.week}-${s.date}`} scope="col" className="py-1.5 pl-3 text-right">
+                Week {s.week} sim
+              </th>
+            ))}
+            {hasRounds && (
+              <th scope="col" className="py-1.5 pl-3 text-right">
+                HYROX round
+              </th>
+            )}
+          </tr>
+        </thead>
+        <tbody>
+          {RACE_ORDER.map((station) => {
+            const round = rounds[station.id]
+            return (
+              <tr key={station.id} className="border-b border-rule font-semibold">
+                <th scope="row" className="py-2.5 text-left font-semibold">
+                  {station.name}
+                </th>
+                {simulations.map((s) => (
+                  <td key={`${s.week}-${s.date}`} className="py-2.5 pl-3 text-right">
+                    <Time seconds={s.stations[station.id]} />
+                  </td>
+                ))}
+                {hasRounds && (
+                  <td className="py-2.5 pl-3 text-right">
+                    {round ? (
+                      <>
+                        {clock(round.seconds)} <span className="text-label text-muted">W{round.week}</span>
+                      </>
+                    ) : (
+                      <Time seconds={undefined} />
+                    )}
+                  </td>
+                )}
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </Panel>
+  )
+}
+
+function Time({ seconds }: { seconds: number | undefined }) {
+  if (seconds === undefined) {
+    return (
+      <>
+        <span aria-hidden="true" className="text-muted">
+          –
+        </span>
+        <span className="sr-only">Not timed</span>
+      </>
+    )
+  }
+  return <>{clock(seconds)}</>
+}

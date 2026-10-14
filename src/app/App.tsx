@@ -237,7 +237,7 @@ export function App() {
           )}
           {screen === 'plan' && <Plan program={program} day={day} />}
           {screen === 'week' && week && <WeekScreen program={program} week={week} day={day} runContext={runContext} />}
-          {screen === 'progress' && <Progress program={program} day={day} logs={logs} unit={settings.unit} />}
+          {screen === 'progress' && <Progress program={program} day={day} logs={logs} recoveryNights={recoveryNights} unit={settings.unit} />}
           {screen === 'shortcut' && <Shortcut nights={recoveryNights} />}
           {screen === 'workouts' && <Workouts activities={activities} />}
           {screen === 'not-found' && <NotFound />}

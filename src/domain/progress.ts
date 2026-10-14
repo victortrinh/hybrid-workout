@@ -2,15 +2,17 @@
  * Progress: whether the Program is working, read from the Session logs.
  *
  * Pure, like the rest of the Coach (ADR-0002): the 5K tests against a planned
- * line to 20:00, each Week's completion by Session type, and Training load per
- * Week. The screen picks what to show; this decides what the numbers are.
+ * line to 20:00, each Week's completion by Session type, Training load per
+ * Week, the Working weights, recent recovery and HYROX Station times. The screen picks what to show; this decides what the numbers are.
  */
 import { addDays, daysBetween, type LocalDate } from './calendar'
 import { findWeek, programStart, weekOutcome } from './coach'
 import { logFor, trained, type SessionLog } from './log'
 import { GOAL_PACE, type Environment } from './paces'
 import { SESSION_TYPES } from './program/describe'
-import type { Lane, Program, Session } from './program/types'
+import { LIFTS, type Lane, type LiftId, type Program, type Session, type StationId } from './program/types'
+import { nightOf, type RecoveryNight } from './recovery'
+import type { WorkingWeightChange } from './weights'
 
 /** Sub-20: the line every 5K test is measured against. */
 export const GOAL_SECONDS = GOAL_PACE * 5
@@ -169,4 +171,111 @@ export function progress(program: Program, logs: SessionLog[], today: LocalDate)
     completion: weeklyCompletion(program, logs, today),
     load: trainingLoad(program, logs, today),
   }
+}
+
+// ---------------------------------------------------------------------------
+// Working weights
+
+export interface WorkingWeightRow {
+  lift: LiftId
+  /** What the calibration found, and in which Week. */
+  first: { week: number; pounds: number }
+  current: number
+  /** The latest time it was set or moved: the calibration itself until the Coach moves it. */
+  last: WorkingWeightChange
+  /** What it was before that last change; null when the last change was a calibration. */
+  before: number | null
+}
+
+/**
+ * Each lift with a Working weight, in the order the Program names them:
+ * where calibration put it, where it is now, and why it last moved.
+ */
+export function workingWeightRows(changes: WorkingWeightChange[]): WorkingWeightRow[] {
+  return LIFTS.flatMap((lift) => {
+    const mine = changes.filter((c) => c.lift === lift)
+    const first = mine.find((c) => c.reason === 'calibration')
+    const last = mine.at(-1)
+    if (!first || !last) return []
+    const before = last.reason === 'calibration' ? null : (mine.at(-2)?.pounds ?? null)
+    return [{ lift, first: { week: first.week, pounds: first.pounds }, current: last.pounds, last, before }]
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Recovery
+
+/** The nights the Recovery chart shows, ending with last night. */
+export const RECOVERY_NIGHTS = 14
+
+/** The last 14 mornings to today, oldest first, each with its night if the Shortcut sent one. */
+export function recoveryTrend(nights: RecoveryNight[], today: LocalDate): { date: LocalDate; night: RecoveryNight | null }[] {
+  return Array.from({ length: RECOVERY_NIGHTS }, (_, i) => {
+    const date = addDays(today, i - RECOVERY_NIGHTS + 1)
+    return { date, night: nightOf(nights, date) }
+  })
+}
+
+// ---------------------------------------------------------------------------
+// HYROX Stations
+
+export interface RaceSimulationTimes {
+  week: number
+  date: LocalDate
+  /** Each Station's split, where it was timed. */
+  stations: Partial<Record<StationId, number>>
+}
+
+export interface HyroxRoundTime {
+  week: number
+  date: LocalDate
+  round: number
+  /** The round's run and its Stations, timed as one. */
+  seconds: number
+}
+
+export interface StationTimes {
+  /** Every Race simulation trained with a Station timed, oldest first. */
+  simulations: RaceSimulationTimes[]
+  /** Each Station's latest HYROX round, where one included it. */
+  rounds: Partial<Record<StationId, HyroxRoundTime>>
+  /** The first Race simulation Week, and the day it starts; null when the Program has none. */
+  firstSimulation: { week: number; startDate: LocalDate } | null
+}
+
+/**
+ * Station times from what was trained by today: each Race simulation's
+ * splits, and from HYROX sessions, the time of the latest round each Station
+ * was in. A HYROX round is timed as a whole, run included, so it is never
+ * passed off as a Station split.
+ */
+export function stationTimes(program: Program, logs: SessionLog[], today: LocalDate): StationTimes {
+  const simulations: RaceSimulationTimes[] = []
+  const rounds: Partial<Record<StationId, HyroxRoundTime>> = {}
+  const standing = logs
+    .filter((log) => logFor(logs, log.week, log.sessionId) === log)
+    .filter((log) => trained(log) && log.stations.length > 0 && daysBetween(log.date, today) >= 0)
+    .sort((a, b) => a.date.localeCompare(b.date) || a.week - b.week)
+
+  for (const log of standing) {
+    const type = findWeek(program, log.week)?.sessions.find((s) => s.id === log.sessionId)?.type
+    if (type === 'race-simulation') {
+      const times: Partial<Record<StationId, number>> = {}
+      for (const line of log.stations) {
+        if (line.part !== 'run' && line.part !== 'round' && line.seconds !== null) times[line.part] = line.seconds
+      }
+      if (Object.keys(times).length > 0) simulations.push({ week: log.week, date: log.date, stations: times })
+    } else if (type === 'hyrox') {
+      for (const line of log.stations) {
+        if (line.part !== 'round' || line.seconds === null) continue
+        const time = { week: log.week, date: log.date, round: line.round, seconds: line.seconds }
+        for (const other of log.stations) {
+          if (other.round === line.round && other.part !== 'run' && other.part !== 'round') rounds[other.part] = time
+        }
+      }
+    }
+  }
+
+  const first = program.phases.flatMap((p) => p.weeks).find((w) => w.raceSimulation)
+  return { simulations, rounds, firstSimulation: first ? { week: first.number, startDate: first.startDate } : null }
 }
