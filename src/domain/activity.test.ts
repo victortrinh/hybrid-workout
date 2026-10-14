@@ -67,6 +67,29 @@ describe('parseActivity', () => {
     expect(() => parseActivity({ ...body, distanceSamples: 'lots Watch' }, AT)).toThrow(/distanceSamples/)
   })
 
+  it('keeps only the samples within the workout, by each line’s own time: the Shortcut reads a fixed window', () => {
+    const heartRates = [
+      '88 2026-11-04T06:30:00-05:00', // before the start
+      '150 2026-11-04T07:20:00-05:00',
+      '160 count/min 2026-11-04T07:40:00-05:00',
+      '95 2026-11-04T08:30:00-05:00', // after the end
+    ].join('\n')
+    const distanceSamples = [
+      '0.40 km 2026-11-04T06:50:00-05:00 Victor’s iPhone', // the walk to the gym
+      '4.00 km 2026-11-04T07:20:00-05:00 Victor’s Apple Watch',
+      '4.10 km 2026-11-04T07:45:00-05:00 Victor’s Apple Watch',
+    ].join('\n')
+    expect(parseActivity({ ...body, distanceKm: undefined, heartRates, distanceSamples }, AT)).toMatchObject({
+      averageHeartRate: 155,
+      maxHeartRate: 160,
+      distanceMeters: 8100,
+    })
+  })
+
+  it('takes a start sent as the file’s text, trailing line break and all', () => {
+    expect(parseActivity({ ...body, start: '2026-11-04T07:12:00-05:00\n' }, AT).id).toBe('2026-11-04T12:12:00Z')
+  })
+
   it('takes metres, heart rates as a list or an average, and no distance or heart rate at all', () => {
     expect(parseActivity({ ...body, distanceKm: undefined, distanceMeters: 8120.4 }, AT).distanceMeters).toBe(8120)
     expect(parseActivity({ ...body, heartRates: [150, '160'] }, AT)).toMatchObject({ averageHeartRate: 155, maxHeartRate: 160 })
