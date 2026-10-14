@@ -5,16 +5,18 @@ export interface SeedLog {
   sessionId: string
   date: string
   status: 'done' | 'partial' | 'skipped' | 'swapped'
-  /** A 5K test's time, which sets the Training paces. */
+  minutes?: number
+  rpe?: number
+  /** A 5K test's time in seconds, and where it was run. */
   resultSeconds?: number
   environment?: 'indoor' | 'outdoor'
 }
 
 const toLog = (seed: SeedLog, project: string) => ({
-  ...seed,
-  id: `e2e-${project}-w${seed.week}-${seed.sessionId}`,
   minutes: 45,
   rpe: seed.status === 'skipped' ? null : 6,
+  ...seed,
+  id: `e2e-${project}-w${seed.week}-${seed.sessionId}`,
   notes: null,
   updatedAt: `${seed.date}T20:00:00.000Z`,
 })

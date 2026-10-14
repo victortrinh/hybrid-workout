@@ -158,7 +158,7 @@ export function App() {
           )}
           {screen === 'plan' && <Plan program={program} day={day} />}
           {screen === 'week' && week && <WeekScreen program={program} week={week} day={day} runContext={runContext} />}
-          {screen === 'progress' && <Progress program={program} />}
+          {screen === 'progress' && <Progress program={program} day={day} logs={logs} unit={settings.unit} />}
           {screen === 'not-found' && <NotFound />}
         </main>
         <TabBar screen={navScreen} />

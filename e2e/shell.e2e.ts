@@ -28,6 +28,8 @@ test('phones get the bottom tab bar, desktop gets the cobalt side rail', async (
 for (const colorScheme of ['light', 'dark'] as const) {
   test(`Plan shows the Weeks and Progress an honest empty state, ${colorScheme}`, async ({ page }) => {
     await page.emulateMedia({ colorScheme })
+    // Nothing logged at all: Progress has nothing to chart.
+    await serveHistory(page, [])
     await page.goto('/')
 
     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Plan' }).click()
