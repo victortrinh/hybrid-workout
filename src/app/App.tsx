@@ -210,7 +210,8 @@ export function App() {
       </a>
       <div className="grid min-h-dvh desktop:grid-cols-[240px_1fr]">
         <SideRail screen={navScreen} day={day} />
-        <main id="main" className="min-w-0 pb-24 desktop:pb-12">
+        {/* Clear of the fixed tab bar (about 70px plus the home-indicator inset), with room to spare. */}
+        <main id="main" className="min-w-0 pb-[calc(112px+env(safe-area-inset-bottom))] desktop:pb-12">
           {screen === 'today' && (
             <Today
               day={day}
