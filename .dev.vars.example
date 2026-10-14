@@ -1,0 +1,5 @@
+# Copy to .dev.vars for `npm run dev` (never commit .dev.vars).
+# The Access service token the iOS Shortcut sends to /api/recovery; locally,
+# any pair works, as long as requests send the same two values.
+ACCESS_CLIENT_ID=local-client.access
+ACCESS_CLIENT_SECRET=local-secret

@@ -1,7 +1,8 @@
-import { Button, Checkbox, CheckboxGroup, DialogTrigger, Label, Popover, Text } from 'react-aria-components'
+import { Button, Checkbox, CheckboxGroup, DialogTrigger, Label, Link, Popover, Text } from 'react-aria-components'
 import { EQUIPMENT, EQUIPMENT_LABEL, type Equipment } from '../../domain/equipment'
 import { UNIT_LABEL, type SpeedUnit } from '../../domain/paces'
 import { MONTHS, type Settings, type Theme } from '../../domain/settings'
+import { SCREEN_PATH } from '../router'
 import { Segmented } from './Segmented'
 
 const THEME_OPTIONS = [
@@ -22,7 +23,7 @@ const toggleClass =
 /**
  * Settings, from the athlete's initial on the field band: theme, treadmill
  * units, which months run on the treadmill, and the Equipment profile. Every
- * change applies at once.
+ * change applies at once. Integrations each have a page of their own.
  */
 export function SettingsPopover({
   settings,
@@ -98,6 +99,16 @@ export function SettingsPopover({
               for the jumps.
             </Text>
           </CheckboxGroup>
+          <div className="grid gap-1 border-t border-rule pt-3">
+            <span className="text-[18px] font-bold">Integrations</span>
+            <Link
+              href={SCREEN_PATH.shortcut}
+              className="py-2 text-[15px] font-bold text-link underline decoration-2 underline-offset-4 hover:decoration-[3px] data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-link"
+            >
+              Recovery Shortcut setup
+            </Link>
+            <Text className="text-[12px] text-muted">Sleep, HRV and resting heart rate from the ring, every morning.</Text>
+          </div>
         </div>
       </Popover>
     </DialogTrigger>

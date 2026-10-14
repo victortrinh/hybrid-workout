@@ -4,9 +4,15 @@
  */
 import { useSyncExternalStore } from 'react'
 
-export type Screen = 'today' | 'log' | 'live' | 'plan' | 'week' | 'progress' | 'not-found'
+export type Screen = 'today' | 'log' | 'live' | 'plan' | 'week' | 'progress' | 'shortcut' | 'not-found'
 
-const PATHS: Record<string, Screen> = { '/': 'today', '/live': 'live', '/plan': 'plan', '/progress': 'progress' }
+const PATHS: Record<string, Screen> = {
+  '/': 'today',
+  '/live': 'live',
+  '/plan': 'plan',
+  '/progress': 'progress',
+  '/settings/shortcut': 'shortcut',
+}
 
 export const SCREEN_PATH: Record<Exclude<Screen, 'log' | 'week' | 'not-found'>, string> = {
   today: '/',
@@ -14,6 +20,8 @@ export const SCREEN_PATH: Record<Exclude<Screen, 'log' | 'week' | 'not-found'>, 
   live: '/live',
   plan: '/plan',
   progress: '/progress',
+  /** Settings → Recovery Shortcut: how to set up the morning iOS Shortcut. */
+  shortcut: '/settings/shortcut',
 }
 
 export const weekPath = (week: number) => `/plan/week/${week}`

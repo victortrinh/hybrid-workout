@@ -6,6 +6,7 @@ import { isLive } from './lifts'
 import type { LoggedStatus, SessionLog } from './log'
 import type { PainArea, PainReport } from './pain'
 import { program } from './program/program'
+import type { RecoveryNight } from './recovery'
 import type { Program } from './program/types'
 import type { Decision, SuggestionDecision } from './suggestion'
 
@@ -914,5 +915,189 @@ describe('the pain rules', () => {
     expect(prescribedWeek(program, 3, [], decisions, undefined, { reports: [report], today })?.sessions[0].headline).toBe('4 × 3′')
     expect(prescribedWeek(program, 4, [], decisions, undefined, { reports: [report], today })).toEqual(prescribedWeek(program, 4, [], []))
     expect(prescribedWeek(program, 3, [], decisions)).toEqual(prescribedWeek(program, 3, [], []))
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Recovery data (docs/training-plan.md, Rules, 3).
+
+/** A night ending on the morning of `iso`: 7 h 30 and HRV 52 unless said otherwise. */
+const night = (iso: string, sleepMinutes = 450, hrvMs: number | null = 52): RecoveryNight => ({
+  date: localDate(iso),
+  sleepMinutes,
+  hrvMs,
+  restingHeartRate: 48,
+  source: 'Ultrahuman',
+  receivedAt: `${iso}T12:00:00.000Z`,
+})
+
+/** A normal week of nights before Wednesday 4 November: HRV averaging 52. */
+const baseline = ['2026-10-28', '2026-10-29', '2026-10-30', '2026-10-31', '2026-11-01', '2026-11-02', '2026-11-03'].map(
+  (iso, i) => night(iso, 450, [50, 54, 52, 51, 53, 52, 52][i]),
+)
+
+function withNights(
+  iso: string,
+  recoveryNights: RecoveryNight[],
+  decisions: SuggestionDecision[] = [],
+  logs: SessionLog[] = [],
+) {
+  return coach({ program, today: localDate(iso), logs: [...keysDoneBefore(localDate(iso)), ...logs], decisions, recoveryNights })
+}
+
+const recoveryOf = (day: ReturnType<typeof coach>) => day.suggestions.filter((s) => s.kind === 'recovery')
+
+const recoveryDecision = (decision: Decision): SuggestionDecision => ({
+  id: 'recovery-2026-11-04',
+  decision,
+  date: localDate('2026-11-04'),
+  updatedAt: '2026-11-04T13:00:00.000Z',
+})
+
+describe('the recovery rules', () => {
+  const asWritten = findWeek(program, 3)!.sessions[0]
+
+  it('change nothing without a night for today', () => {
+    for (const nights of [[], baseline, [night('2026-11-03', 300, 30)]]) {
+      const day = withNights('2026-11-04', nights)
+      expect(day.upNext).toBe(asWritten)
+      expect(day.recovery).toBeNull()
+      expect(day.recoveryChange).toBeNull()
+      expect(recoveryOf(day)).toEqual([])
+    }
+  })
+
+  it('change nothing after 6 hours of sleep or more, whatever HRV does', () => {
+    for (const sleep of [360, 480]) {
+      const day = withNights('2026-11-04', [...baseline, night('2026-11-04', sleep, 30)])
+      expect(day.upNext).toBe(asWritten)
+      expect(day.recovery).toMatchObject({ shortSleep: false, easyDay: false, hrvMean: 52 })
+      expect(recoveryOf(day)).toEqual([])
+    }
+  })
+
+  it('take one rep off and cap RPE at 7 for a Hard session after under 6 hours', () => {
+    const day = withNights('2026-11-04', [...baseline, night('2026-11-04', 341, 50)])
+    expect(day.recoveryChange).toBe('short-sleep')
+    expect(day.upNext).toMatchObject({ id: 'speed', headline: '4 × 3′', minutes: asWritten.minutes - 4 })
+    expect(day.upNext!.note).toMatch(/^Short sleep \(5 h 41\): one rep fewer, nothing past RPE 7\./)
+    expect(mainIntervals(day.upNext!)).toMatchObject({ kind: 'intervals', reps: 4, workSeconds: 180 })
+    const efforts = day.upNext!.blocks
+      .filter((b) => b.main)
+      .flatMap((b) => b.exercises)
+      .flatMap((e) => ('effort' in e.prescription && e.prescription.effort?.rpe ? [e.prescription.effort.rpe] : []))
+    for (const [, high] of efforts) expect(high).toBeLessThanOrEqual(7)
+    // Up next only: the rest of the Bucket stays as written.
+    expect(day.bucket.find((e) => e.session.id === 'threshold')!.session).toBe(findWeek(program, 3)!.sessions[2])
+    expect(day.bucket.find((e) => e.state === 'next')!.session).toBe(day.upNext)
+    // HRV normal: no Suggestion.
+    expect(recoveryOf(day)).toEqual([])
+  })
+
+  it('take a rep off every main lift and cap its sets at RPE 7 on a Strength day', () => {
+    const speedYesterday: SessionLog = {
+      ...keysDoneBefore(localDate('2026-11-04'))[0],
+      id: 'speed-w3',
+      week: 3,
+      sessionId: 'speed',
+      date: localDate('2026-11-03'),
+    }
+    const day = withNights('2026-11-04', [...baseline, night('2026-11-04', 300)], [], [speedYesterday])
+    expect(day.upNext!.type).toBe('strength')
+    const written = findWeek(program, 3)!.sessions.find((s) => s.id === day.upNext!.id)!
+    const sets = (s: typeof written) =>
+      s.blocks.filter((b) => b.main).flatMap((b) => b.exercises.map((e) => e.prescription)).filter((rx) => rx.kind === 'sets')
+    const before = sets(written)
+    const after = sets(day.upNext!)
+    expect(after.length).toBeGreaterThan(0)
+    after.forEach((rx, i) => {
+      const was = before[i]
+      if (rx.kind !== 'sets' || was.kind !== 'sets') throw new Error('not sets')
+      expect(rx.sets).toBe(was.sets)
+      expect(rx.reps).toEqual(typeof was.reps === 'number' ? Math.max(1, was.reps - 1) : was.reps.map((r) => Math.max(1, r - 1)))
+      expect(rx.rpeCap).toBeLessThanOrEqual(7)
+      if (rx.rpe) expect(rx.rpe[1]).toBeLessThanOrEqual(7)
+    })
+  })
+
+  it('leave an Easy run alone', () => {
+    const easyOnly = findWeek(program, 3)!.sessions
+      .filter((s) => s.type !== 'easy')
+      .map((s, i) => ({ ...keysDoneBefore(localDate('2026-11-04'))[0], id: `w3-${i}`, week: 3, sessionId: s.id, date: localDate('2026-11-02') }))
+    const day = withNights('2026-11-04', [...baseline, night('2026-11-04', 300, 30)], [], easyOnly)
+    expect(day.upNext!.type).toBe('easy')
+    expect(day.upNext).toBe(findWeek(program, 3)!.sessions.find((s) => s.type === 'easy'))
+    expect(day.recoveryChange).toBeNull()
+    expect(recoveryOf(day)).toEqual([])
+  })
+
+  it('suggest an easy day when HRV is at least 15% under its 7-night mean as well', () => {
+    // 44 is 15.4% under 52.
+    const day = withNights('2026-11-04', [...baseline, night('2026-11-04', 341, 44)])
+    expect(recoveryOf(day)).toEqual([
+      {
+        id: 'recovery-2026-11-04',
+        kind: 'recovery',
+        week: 3,
+        sessionId: 'speed',
+        date: '2026-11-04',
+        trigger: { sleepMinutes: 341, hrvMs: 44, hrvMean: 52 },
+        decision: 'open',
+        decidedOn: null,
+      },
+    ])
+    // Until it's Accepted, the short-sleep rule stands.
+    expect(day.recoveryChange).toBe('short-sleep')
+    expect(day.upNext!.headline).toBe('4 × 3′')
+  })
+
+  it('raise no Suggestion for HRV only 14% under, or for low HRV after a full night', () => {
+    expect(recoveryOf(withNights('2026-11-04', [...baseline, night('2026-11-04', 341, 45)]))).toEqual([])
+    expect(recoveryOf(withNights('2026-11-04', [...baseline, night('2026-11-04', 420, 30)]))).toEqual([])
+  })
+
+  it('raise no Suggestion without HRV, or with fewer than 3 nights to average', () => {
+    expect(recoveryOf(withNights('2026-11-04', [...baseline, night('2026-11-04', 300, null)]))).toEqual([])
+    const day = withNights('2026-11-04', [...baseline.slice(-2), night('2026-11-04', 300, 20)])
+    expect(day.recovery).toMatchObject({ hrvMean: null, easyDay: false })
+    expect(recoveryOf(day)).toEqual([])
+    expect(day.recoveryChange).toBe('short-sleep')
+  })
+
+  it('only average the 7 nights before the morning', () => {
+    const old = night('2026-10-27', 450, 200)
+    expect(withNights('2026-11-04', [old, ...baseline, night('2026-11-04', 341, 44)]).recovery?.hrvMean).toBe(52)
+  })
+
+  it('make the Hard session an easy 30′ once the Suggestion is Accepted, and only then', () => {
+    const nights = [...baseline, night('2026-11-04', 341, 44)]
+    const accepted = withNights('2026-11-04', nights, [recoveryDecision('accepted')])
+    expect(accepted.recoveryChange).toBe('easy-day')
+    expect(accepted.upNext).toMatchObject({ id: 'speed', type: 'speed', headline: 'easy 30′ or rest', minutes: 30 })
+    expect(recoveryOf(accepted)[0]).toMatchObject({ decision: 'accepted', decidedOn: '2026-11-04' })
+
+    const kept = withNights('2026-11-04', nights, [recoveryDecision('kept')])
+    expect(kept.recoveryChange).toBe('short-sleep')
+    expect(kept.upNext!.headline).toBe('4 × 3′')
+  })
+
+  it('apply to today only: tomorrow without a night is as written', () => {
+    const day = withNights('2026-11-05', [...baseline, night('2026-11-04', 300, 30)], [recoveryDecision('accepted')])
+    expect(day.recovery).toBeNull()
+    expect(day.recoveryChange).toBeNull()
+    expect(recoveryOf(day)).toEqual([])
+  })
+
+  it('leave Race day as it is', () => {
+    const raceDay = localDate('2027-04-21')
+    const day = withNights(raceDay, [
+      night('2027-04-18', 450, 52),
+      night('2027-04-19', 450, 52),
+      night('2027-04-20', 450, 52),
+      night(raceDay, 240, 30),
+    ])
+    expect(day.upNext?.date).toBe(raceDay)
+    expect(day.recoveryChange).toBeNull()
+    expect(recoveryOf(day)).toEqual([])
   })
 })

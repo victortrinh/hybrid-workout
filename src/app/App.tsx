@@ -18,6 +18,7 @@ import { navigate, SCREEN_PATH, useRoute, type Route, type Screen } from './rout
 import { NotFound } from './screens/NotFound'
 import { Plan } from './screens/Plan'
 import { Progress } from './screens/Progress'
+import { Shortcut } from './screens/Shortcut'
 import { unlockSound } from './liveCues'
 import { Live } from './screens/Live'
 import { LogAfter } from './screens/LogAfter'
@@ -26,6 +27,7 @@ import { WeekScreen } from './screens/Week'
 import { usePicked } from './usePicked'
 import { editedAt, useDecisions } from './useDecisions'
 import { usePainReports } from './usePainReports'
+import { useRecovery } from './useRecovery'
 import { useSessionLogs } from './useSessionLogs'
 import { environmentKey, useSettings } from './useSettings'
 import { useLiveRun } from './useLiveRun'
@@ -44,11 +46,12 @@ const TITLES: Record<Screen, string> = {
   plan: 'Plan',
   week: 'Week',
   progress: 'Progress',
+  shortcut: 'Recovery Shortcut',
   'not-found': 'Not found',
 }
 
-/** A Week is part of Plan in the navigation; Log after is part of Today. */
-const NAV_SCREEN: Partial<Record<Screen, Screen>> = { week: 'plan', log: 'today' }
+/** A Week is part of Plan in the navigation; Log after and Settings pages are part of Today. */
+const NAV_SCREEN: Partial<Record<Screen, Screen>> = { week: 'plan', log: 'today', shortcut: 'today' }
 
 /**
  * The shell: a cobalt side rail from 960px, a bottom tab bar below it. The
@@ -61,11 +64,12 @@ export function App() {
   const { decisions, decide, error: decisionError } = useDecisions()
   const [picked, pick] = usePicked()
   const { reports: painReports, report } = usePainReports()
+  const recoveryNights = useRecovery()
   const { settings, change, overrides, override } = useSettings()
   const { equipment } = settings
   const day = useMemo(
-    () => coach({ program, today, logs, picked, decisions, equipment, painReports }),
-    [today, logs, picked, decisions, equipment, painReports],
+    () => coach({ program, today, logs, picked, decisions, equipment, painReports, recoveryNights }),
+    [today, logs, picked, decisions, equipment, painReports, recoveryNights],
   )
   /** How a Session's runs read: the Training paces, in this Session's Environment and the chosen units. */
   const runContext = (week: number, session: Session): RunContext => {
@@ -109,7 +113,16 @@ export function App() {
       decided = mergeDecisions(decisions, [decision])
     }
     if (!pain.start) return
-    const after = coach({ program, today, logs, picked, decisions: decided, equipment, painReports: [...painReports, given] })
+    const after = coach({
+      program,
+      today,
+      logs,
+      picked,
+      decisions: decided,
+      equipment,
+      painReports: [...painReports, given],
+      recoveryNights,
+    })
     const started = after.bucket.find((e) => e.week === week && e.session.id === session.id)?.session ?? session
     const now = Date.now()
     setLive(
@@ -203,6 +216,7 @@ export function App() {
           {screen === 'plan' && <Plan program={program} day={day} />}
           {screen === 'week' && week && <WeekScreen program={program} week={week} day={day} runContext={runContext} />}
           {screen === 'progress' && <Progress program={program} day={day} logs={logs} unit={settings.unit} />}
+          {screen === 'shortcut' && <Shortcut nights={recoveryNights} />}
           {screen === 'not-found' && <NotFound />}
         </main>
         <TabBar screen={navScreen} />

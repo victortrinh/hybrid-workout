@@ -1,0 +1,101 @@
+import { describe, expect, it } from 'vitest'
+import { localDate } from './calendar'
+import { hrvMean, isLowHrv, mergeNights, parseRecoveryNight, sleepText, type RecoveryNight } from './recovery'
+
+const AT = '2026-11-04T12:00:00.000Z'
+const body = { date: '2026-11-04', sleepMinutes: 341, hrvMs: 38, restingHeartRate: 52, source: 'Ultrahuman' }
+
+describe('parseRecoveryNight', () => {
+  it('takes what the Shortcut sends, stamped with when it arrived', () => {
+    expect(parseRecoveryNight(body, AT)).toEqual({ ...body, receivedAt: AT })
+  })
+
+  it('rounds the decimals Shortcuts sums durations into, and trims the source', () => {
+    expect(parseRecoveryNight({ ...body, sleepMinutes: 340.6, hrvMs: 38.4, source: ' Ultrahuman ' }, AT)).toMatchObject({
+      sleepMinutes: 341,
+      hrvMs: 38,
+      source: 'Ultrahuman',
+    })
+  })
+
+  it('takes a night without HRV or resting heart rate: missing, empty or 0 is no reading', () => {
+    for (const missing of [undefined, null, '', 0]) {
+      expect(
+        parseRecoveryNight({ ...body, sleepMinutes: 400, hrvMs: missing, restingHeartRate: missing }, AT),
+      ).toMatchObject({ hrvMs: null, restingHeartRate: null })
+    }
+  })
+
+  it('takes numbers sent as text', () => {
+    expect(parseRecoveryNight({ ...body, sleepMinutes: '341.2', hrvMs: ' 38 ' }, AT)).toMatchObject({ sleepMinutes: 341, hrvMs: 38 })
+  })
+
+  it('refuses a night with no sleep, rather than read it as 0 hours', () => {
+    for (const none of [0, '', null, undefined]) {
+      expect(() => parseRecoveryNight({ ...body, sleepMinutes: none }, AT)).toThrow(/No sleep in Apple Health/)
+    }
+  })
+
+  it.each([
+    ['no body', null],
+    ['no date', { ...body, date: undefined }],
+    ['a date that isn’t one', { ...body, date: '2026-02-30' }],
+    ['a US date', { ...body, date: '11/04/2026' }],
+    ['sleep as words', { ...body, sleepMinutes: 'lots' }],
+    ['more than a day of sleep', { ...body, sleepMinutes: 1500 }],
+    ['negative sleep', { ...body, sleepMinutes: -1 }],
+    ['HRV of 1000', { ...body, hrvMs: 1000 }],
+    ['an absurd heart rate', { ...body, restingHeartRate: 400 }],
+    ['no source', { ...body, source: undefined }],
+    ['a source too long', { ...body, source: 'x'.repeat(65) }],
+  ])('refuses %s', (_, value) => {
+    expect(() => parseRecoveryNight(value, AT)).toThrow()
+  })
+})
+
+const night = (iso: string, hrvMs: number | null, receivedAt = `${iso}T12:00:00.000Z`): RecoveryNight => ({
+  date: localDate(iso),
+  sleepMinutes: 420,
+  hrvMs,
+  restingHeartRate: 50,
+  source: 'Ultrahuman',
+  receivedAt,
+})
+
+describe('hrvMean', () => {
+  const today = localDate('2026-11-08')
+
+  it('averages the 7 nights before the morning, not the morning itself', () => {
+    const nights = [night('2026-10-31', 100), night('2026-11-01', 50), night('2026-11-05', 52), night('2026-11-07', 54), night('2026-11-08', 10)]
+    expect(hrvMean(nights, today)).toBe(52)
+  })
+
+  it('needs 3 nights with HRV', () => {
+    expect(hrvMean([night('2026-11-06', 50), night('2026-11-07', 54), night('2026-11-05', null)], today)).toBeNull()
+  })
+})
+
+describe('isLowHrv', () => {
+  it('is 15% or more under the mean', () => {
+    expect(isLowHrv(85, 100)).toBe(true)
+    expect(isLowHrv(86, 100)).toBe(false)
+    expect(isLowHrv(null, 100)).toBe(false)
+    expect(isLowHrv(10, null)).toBe(false)
+  })
+})
+
+describe('mergeNights', () => {
+  it('keeps one night per morning, the later arrival, in date order', () => {
+    const first = night('2026-11-04', 40, '2026-11-04T11:00:00.000Z')
+    const resend = night('2026-11-04', 38, '2026-11-04T12:00:00.000Z')
+    const before = night('2026-11-03', 50)
+    expect(mergeNights([resend], [first, before])).toEqual([before, resend])
+    expect(mergeNights([first], [resend])).toEqual([resend])
+  })
+})
+
+describe('sleepText', () => {
+  it('reads hours and minutes', () => {
+    expect([341, 420, 365].map(sleepText)).toEqual(['5 h 41', '7 h 00', '6 h 05'])
+  })
+})

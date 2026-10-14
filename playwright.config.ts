@@ -1,9 +1,12 @@
 import { defineConfig, devices } from '@playwright/test'
+import { E2E_SERVICE_TOKEN } from './e2e/serviceToken'
 
 const PORT = 8790
 const BASE_URL = `http://localhost:${PORT}`
 /** A clean local D1 for every run, apart from the one `npm run dev` uses. */
 const PERSIST_DIR = '.wrangler-e2e'
+/** The Access service token /api/recovery checks, as the e2e Worker knows it. */
+const SERVICE_TOKEN_VARS = `--var ACCESS_CLIENT_ID:${E2E_SERVICE_TOKEN.id} --var ACCESS_CLIENT_SECRET:${E2E_SERVICE_TOKEN.secret}`
 
 export default defineConfig({
   testDir: './e2e',
@@ -28,7 +31,7 @@ export default defineConfig({
       `rm -rf ${PERSIST_DIR}`,
       'npm run build',
       `npx wrangler d1 migrations apply compromised --local --persist-to ${PERSIST_DIR}`,
-      `npx wrangler dev --port ${PORT} --persist-to ${PERSIST_DIR} --show-interactive-dev-session=false`,
+      `npx wrangler dev --port ${PORT} --persist-to ${PERSIST_DIR} --show-interactive-dev-session=false ${SERVICE_TOKEN_VARS}`,
     ].join(' && '),
     url: `${BASE_URL}/api/health`,
     timeout: 120_000,

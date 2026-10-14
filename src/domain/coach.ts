@@ -3,8 +3,7 @@
  *
  * Pure by design (ADR-0002): no I/O, no clock, no storage. Give it the
  * Program and today's date in America/Toronto and it answers the same way
- * every time, which is what makes it testable. Recovery data joins the
- * input as later rules need it.
+ * every time, which is what makes it testable.
  */
 import { lightenWeek, RE_ENTRY_PERCENT } from './adapt'
 import { addDays, daysBetween, mondayOf, type LocalDate } from './calendar'
@@ -12,13 +11,16 @@ import { DEFAULT_EQUIPMENT, equip, equipWeek, type Equipment } from './equipment
 import { logFor, trained, type LoggedStatus, type SessionLog } from './log'
 import { painAdapted, painLevel, standingPain, type PainLevel, type PainReport } from './pain'
 import { latestFiveKTest, trainingPaces, type TrainingPaces } from './paces'
+import { easyDayAdapted, readout, shortSleepAdapted, type Readout, type RecoveryNight } from './recovery'
 import type { Phase, PhaseId, Program, Session, SessionType, Week } from './program/types'
 import {
   decisionFor,
   painId,
   reEntryId,
+  recoveryId,
   type PainSuggestion,
   type ReEntrySuggestion,
+  type RecoverySuggestion,
   type Suggestion,
   type SuggestionDecision,
 } from './suggestion'
@@ -38,6 +40,8 @@ export interface CoachInput {
   equipment?: readonly Equipment[]
   /** Every Pain report, from any day. */
   painReports?: PainReport[]
+  /** Every night of Recovery data the Shortcut has sent. */
+  recoveryNights?: RecoveryNight[]
 }
 
 export interface PickedSession {
@@ -130,6 +134,13 @@ export interface CoachDay {
   workingWeights: WorkingWeights
   /** The Pain report standing today, and what the pain rules make of it; null before the first. */
   pain: StandingPain | null
+  /** Last night's Recovery data and what it means for today; null when the Shortcut sent none. */
+  recovery: Readout | null
+  /**
+   * What last night did to Up next: one rep fewer and an RPE cap, or (after
+   * the recovery Suggestion is accepted) an easy day. Null when it changed nothing.
+   */
+  recoveryChange: 'short-sleep' | 'easy-day' | null
 }
 
 export interface StandingPain {
@@ -147,6 +158,7 @@ export function coach({
   decisions = [],
   equipment = DEFAULT_EQUIPMENT,
   painReports = [],
+  recoveryNights = [],
 }: CoachInput): CoachDay {
   const position = positionOf(program, today)
   const shownWeek =
@@ -182,10 +194,16 @@ export function coach({
     ...(week ? week.sessions.map((session) => ({ session, week: week.number, carriedUntil: null })) : []),
   ].map((entry) => ({ ...entry, log: logFor(logs, entry.week, entry.session.id) }))
 
-  const { upNext, rest } =
+  const chosen =
     position.kind === 'in-week' && week
       ? chooseUpNext({ program, logged, logs, today, picked, daysLeft: position.daysLeft })
       : { upNext: null, rest: null }
+  const { rest } = chosen
+  const recovery = readout(recoveryNights, today)
+  const recovered = recoveryFor(chosen.upNext, recovery, today, decisions)
+  if (recovered.suggestion) suggestions.push(recovered.suggestion)
+  const upNext = recovered.upNext
+  if (upNext !== chosen.upNext) logged[logged.indexOf(chosen.upNext!)] = upNext!
   const fiveKTest = latestFiveKTest(logs, today)
   const standing = standingPain(painReports, today)
 
@@ -207,6 +225,8 @@ export function coach({
     suggestions,
     workingWeights: strength.weights,
     pain: standing && { ...standing, level: painLevel(standing.report.score, standing.previous?.score ?? null) },
+    recovery,
+    recoveryChange: recovered.change,
   }
 }
 
@@ -484,6 +504,49 @@ function painFor(week: Week, { reports, today }: PainInput, decisions: Suggestio
   }
 }
 
+/**
+ * The recovery rules, for today's Up next only, when it is a Hard session:
+ * sleep under 6 hours takes one rep off and caps RPE; with HRV at least 15%
+ * under its mean too, the Coach suggests an easy day, which replaces both
+ * once accepted. A day without a night changes nothing.
+ */
+function recoveryFor(
+  upNext: Logged | null,
+  recovery: Readout | null,
+  today: LocalDate,
+  decisions: SuggestionDecision[],
+): { upNext: Logged | null; suggestion: RecoverySuggestion | null; change: CoachDay['recoveryChange'] } {
+  const unchanged = { upNext, suggestion: null, change: null }
+  if (!upNext || !recovery?.shortSleep || !isHard(upNext.session.type) || upNext.session.date) return unchanged
+
+  let suggestion: RecoverySuggestion | null = null
+  if (recovery.easyDay) {
+    const id = recoveryId(today)
+    const decided = decisionFor(decisions, id)
+    suggestion = {
+      id,
+      kind: 'recovery',
+      week: upNext.week,
+      sessionId: upNext.session.id,
+      date: today,
+      trigger: {
+        sleepMinutes: recovery.night.sleepMinutes,
+        hrvMs: recovery.night.hrvMs!,
+        hrvMean: recovery.hrvMean!,
+      },
+      decision: decided?.decision ?? 'open',
+      decidedOn: decided?.date ?? null,
+    }
+  }
+  if (suggestion?.decision === 'accepted') {
+    return { upNext: { ...upNext, session: easyDayAdapted(upNext.session) }, suggestion, change: 'easy-day' }
+  }
+  const session = shortSleepAdapted(upNext.session, recovery.night)
+  return session === upNext.session
+    ? { ...unchanged, suggestion }
+    : { upNext: { ...upNext, session }, suggestion, change: 'short-sleep' }
+}
+
 const acceptedPain = (suggestions: Suggestion[]): PainLevel | null =>
   suggestions.find((s): s is PainSuggestion => s.kind === 'pain' && s.decision === 'accepted')?.level ?? null
 
@@ -545,6 +608,9 @@ function adapt(week: Week, suggestions: Suggestion[], logs: SessionLog[], equipm
           }
         case 'working-weight':
           // Moves a lift's Working weight, not the Prescription: the load is resolved on Start.
+          return adapted
+        case 'recovery':
+          // Today's Up next only: the Coach applies it once Up next is chosen.
           return adapted
       }
     }, week),
