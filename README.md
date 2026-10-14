@@ -29,6 +29,8 @@ npm run dev:mock
 
 The app with no Worker or database behind it, for QA ([ADR-0005](docs/adr/0005-qa-mocks-msw-over-in-browser-hono.md)). Mock Service Worker answers every `/api/*` request in the browser with the Worker's own Hono app, on SQLite in WebAssembly (sql.js) with every migration applied. Data lives in the tab's session storage: it survives a reload and goes when the tab closes. A **MOCK** badge on every screen says so. The Shortcut routes take the mock service token's headers, `CF-Access-Client-Id: mock-shortcut.access` and `CF-Access-Client-Secret: mock-shortcut-secret` (`src/mock/api.ts`).
 
+Tap the badge for the mock panel. **Network** sets how `/api/*` answers the app until you change it: Online, Offline (a network error), Server error (500) or Slow (3 s before each answer); the badge names any mode but Online. **Send Recovery night** posts a night for today (by default a short one with low HRV, after a normal week) and **Send Apple Watch workout** posts a workout on today, both to the real Shortcut routes with the mock service token, as the Shortcut would. They skip the network control, since the Shortcut runs on the phone, not in the app. The app then reads its state again, so the Suggestion or "Which Session was this?" shows without a reload.
+
 `npm run build:mock` builds the same thing into `dist/`. Mock builds don't register the offline service worker (`/sw.js`), since a page has only one service worker and Mock Service Worker is it. Nothing of mock mode reaches a normal build; CI checks with `npm run check:no-mocks`.
 
 ## Test

@@ -11,12 +11,12 @@ const mock = import.meta.env.VITE_API === 'mock'
 applyTheme(readSettings().theme)
 
 // Mock mode answers /api/* in the browser (ADR-0005), so it's listening before the app's first request.
-if (mock) await (await import('virtual:compromised-mock')).startMock()
+const controls = mock ? await (await import('virtual:compromised-mock')).startMock() : null
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />
-    {mock && <MockBadge />}
+    {controls && <MockBadge controls={controls} />}
   </StrictMode>,
 )
 

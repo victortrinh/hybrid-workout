@@ -3,18 +3,25 @@
  * `VITE_API=mock` only. Mock Service Worker hands every `/api/*` request to
  * the Worker's Hono app running here, on sql.js. The database lives in this
  * tab's session storage, so a reload keeps it and closing the tab ends it.
+ * Returns the mock panel's controls: the network between the app and the
+ * Worker, and the Shortcut sends.
  */
 import { http } from 'msw'
 import { setupWorker } from 'msw/browser'
 import initSqlJs from 'sql.js'
 import wasmUrl from 'sql.js/dist/sql-wasm-browser.wasm?url'
+import { localDateIn } from '../domain/calendar'
+import { nowDate } from '../domain/clock'
 import { mockApi } from './api'
+import type { MockControls } from './controls'
 import { d1 } from './d1'
 import { openDatabase } from './database'
+import { network, throughNetwork } from './network'
+import { DEFAULT_NIGHT, DEFAULT_WORKOUT, sendNight, sendWorkout } from './shortcut'
 
 const STORAGE_KEY = 'compromised:mock-db'
 
-export async function startMock(): Promise<void> {
+export async function startMock(): Promise<MockControls> {
   const SQL = await initSqlJs({ locateFile: () => wasmUrl })
   let db
   try {
@@ -32,11 +39,35 @@ export async function startMock(): Promise<void> {
   }
   save()
   const api = mockApi(d1(db, save))
+  const net = network()
   // MSW's request is the browser's own; the Worker's types call theirs `Request` too, with Cloudflare's extras.
-  await setupWorker(http.all('/api/*', ({ request }) => api(request as unknown as Request))).start({
-    quiet: true,
-    onUnhandledFrame: 'bypass',
-  })
+  await setupWorker(
+    http.all('/api/*', ({ request }) => throughNetwork(net.mode(), request as unknown as Request, api)),
+  ).start({ quiet: true, onUnhandledFrame: 'bypass' })
+
+  const today = () => localDateIn(nowDate())
+  return {
+    network: net.mode,
+    setNetwork(mode) {
+      net.set(mode)
+      // What the phone says when the signal comes and goes: back online, the outbox syncs.
+      window.dispatchEvent(new Event(mode === 'offline' ? 'offline' : 'online'))
+    },
+    subscribe: net.subscribe,
+    today,
+    defaults: { night: DEFAULT_NIGHT, workout: DEFAULT_WORKOUT },
+    sendNight: async (fields) => refreshed(await sendNight(api, today(), fields)),
+    sendWorkout: async (fields) => refreshed(await sendWorkout(api, today(), fields)),
+  }
+}
+
+/**
+ * The app reads Recovery data and workouts again whenever it comes back to
+ * the front, as it does after the real Shortcut ran. So it does here.
+ */
+function refreshed<T>(outcome: T): T {
+  document.dispatchEvent(new Event('visibilitychange'))
+  return outcome
 }
 
 function restore(): Uint8Array | undefined {
