@@ -6,6 +6,7 @@
 import { Hono } from 'hono'
 import { isServiceToken } from './access'
 import { parseActivity, parseActivityAnswer, type Activity, type ActivityAnswer } from '../domain/activity'
+import { localDateIn } from '../domain/calendar'
 import { findWeek } from '../domain/coach'
 import { isCircuit, isLiveRun } from '../domain/live'
 import { parseSessionLog, type SessionLog, type StationPart, type SyncState } from '../domain/log'
@@ -13,6 +14,7 @@ import { parsePainReport, type PainReport } from '../domain/pain'
 import { program } from '../domain/program/program'
 import { parseRecoveryNight, type RecoveryNight } from '../domain/recovery'
 import { parseDecision, type SuggestionDecision } from '../domain/suggestion'
+import { EXPORT_TABLES, readTables, toCsv, zip } from './export'
 
 const app = new Hono<{ Bindings: Env }>().basePath('/api')
 
@@ -27,6 +29,31 @@ app.get('/health', async (c) => {
 
 /** Everything stored, for a fresh device or after a sync. */
 app.get('/state', async (c) => c.json(await readState(c.env.DB)))
+
+/** Data export: every table as stored, in one JSON file. */
+app.get('/export.json', async (c) => {
+  const now = new Date()
+  const tables = await readTables(c.env.DB)
+  const body = {
+    exportedAt: now.toISOString(),
+    tables: Object.fromEntries(EXPORT_TABLES.map((t) => [t, tables[t].rows])),
+  }
+  return c.body(JSON.stringify(body, null, 2), 200, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Content-Disposition': `attachment; filename="${exportName(now)}.json"`,
+  })
+})
+
+/** Data export: one CSV per table, zipped. */
+app.get('/export.zip', async (c) => {
+  const now = new Date()
+  const tables = await readTables(c.env.DB)
+  const files = EXPORT_TABLES.map((t) => ({ name: `${t}.csv`, content: toCsv(tables[t]) }))
+  return c.body(zip(files), 200, {
+    'Content-Type': 'application/zip',
+    'Content-Disposition': `attachment; filename="${exportName(now)}-csv.zip"`,
+  })
+})
 
 /**
  * Upserts a batch of records written on a device, then answers with the
@@ -202,6 +229,8 @@ app.post('/activities', async (c) => {
 })
 
 app.notFound((c) => c.json({ error: 'Not found' }, 404))
+
+const exportName = (now: Date) => `compromised-${localDateIn(now)}`
 
 /** Any list may be left out; whatever is there must all be valid. */
 function parseSyncRequest(body: unknown): {
