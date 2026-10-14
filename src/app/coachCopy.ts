@@ -4,6 +4,7 @@
  */
 import { PAIN_AREA_LABEL, PAIN_REPS_PERCENT, type PainLevel } from '../domain/pain'
 import { LIFT_NAME, SESSION_TYPES } from '../domain/program/describe'
+import { EASY_DAY_MINUTES, SLEEP_RPE_CAP, sleepText } from '../domain/recovery'
 import type { Suggestion } from '../domain/suggestion'
 import { plural } from './format'
 
@@ -48,6 +49,17 @@ export function suggestionCopy(s: Suggestion): SuggestionCopy {
         kept: 'Keeping it as written. Your call. Stop if it gets worse.',
       }
     }
+    case 'recovery': {
+      const { sleepMinutes, hrvMs, hrvMean } = s.trigger
+      const down = Math.round(((hrvMean - hrvMs) / hrvMean) * 100)
+      return {
+        line: `Slept ${sleepText(sleepMinutes)} and HRV is down ${down}%. Your nervous system called in sick. Easy ${EASY_DAY_MINUTES}′ or rest today.`,
+        why: recoveryWhy(sleepMinutes, hrvMs, hrvMean),
+        keep: 'Keep it, one rep fewer',
+        accepted: `Done. Easy ${EASY_DAY_MINUTES}′ or nothing. The hard one waits for a better night.`,
+        kept: `Keeping it. One rep fewer, nothing past RPE ${SLEEP_RPE_CAP}. Your call.`,
+      }
+    }
     case 'working-weight': {
       const lift = LIFT_NAME[s.lift]
       const from = `${s.from.pounds} lb`
@@ -72,6 +84,17 @@ export function suggestionCopy(s: Suggestion): SuggestionCopy {
       }
     }
   }
+}
+
+/** The numbers behind a recovery change: "Sleep 5 h 41 · HRV 38 ms against a 52 ms average". */
+export function recoveryWhy(sleepMinutes: number, hrvMs: number | null, hrvMean: number | null): string {
+  const hrv = hrvMs === null ? '' : ` · HRV ${hrvMs} ms${hrvMean === null ? '' : ` against a ${hrvMean} ms average`}`
+  return `Sleep ${sleepText(sleepMinutes)}${hrv}`
+}
+
+/** Today's line when short sleep alone changed Up next. */
+export function shortSleepLine(sleepMinutes: number): string {
+  return `Slept ${sleepText(sleepMinutes)}. Bold of you. One fewer rep, nothing past RPE ${SLEEP_RPE_CAP}.`
 }
 
 /** The pain step's line and a pain Suggestion's: what the score does to training. */

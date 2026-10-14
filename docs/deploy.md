@@ -79,7 +79,7 @@ In the Cloudflare dashboard, open **Zero Trust**. The first time, it asks for a 
 
 Shortcut: Workers & Pages → `compromised` → Settings → Domains & Routes → on the `workers.dev` row, **Enable Cloudflare Access** creates the same application for you. If you use it, open the application it made in Zero Trust and check it against the list above, especially that the policy allows only your email and that One-time PIN is the login method.
 
-Later issues add the narrow exceptions ADR-0001 describes (a service token for the iOS Shortcut, a bypass for the Strava webhook path). Don't add any now.
+Later steps add the narrow exceptions ADR-0001 describes: a service token for the iOS Shortcut ([step 7](#7-recovery-shortcut-victor)), and later a bypass for the Strava webhook path.
 
 ### 5. Check it (Victor)
 
@@ -104,6 +104,84 @@ Then check a preview the build posts on its PR:
 ```bash
 npm run check:access -- https://<preview>-compromised.<your-subdomain>.workers.dev
 ```
+
+### 7. Recovery Shortcut (Victor)
+
+The morning iOS Shortcut posts last night's Recovery data to `/api/recovery` (ADR-0003). It can't sign in with an email code, so it carries an Access service token, which the Worker checks too. Do the steps in this order: **merging to `main` deploys production** (Workers Builds), and the deployed code reads the `recovery_nights` table, so the migration goes first.
+
+#### 7a. Before merging: migrate (terminal, on the PR's branch)
+
+```bash
+npm run db:migrate:prod
+npm run db:migrate:preview
+```
+
+Each lists `0008_recovery_nights.sql` and asks to confirm: answer yes. The migration only adds a table, so the code running now keeps working. Then merge the PR; Workers Builds deploys it. Until 7c is done, `/api/recovery` answers 401 to everything, which is harmless.
+
+#### 7b. Create the service token (Cloudflare Zero Trust)
+
+1. Open [one.dash.cloudflare.com](https://one.dash.cloudflare.com) and pick your team.
+2. **Access → Service Auth** (in the newer menu: **Access controls → Service credentials**) → **Service Tokens** → **Create Service Token**.
+3. Name `Recovery Shortcut`. Duration **Non-expiring** (or 1 year, with a calendar reminder to rotate it).
+4. **Generate token.** Copy the **Client ID** and the **Client Secret** into your password manager now: the secret is never shown again.
+
+#### 7c. Let it through on the recovery path only
+
+1. **Access → Applications → Add an application → Self-hosted.**
+2. Application name `Compromised recovery`.
+3. Public hostname: the same host as the `Compromised` application (`compromised.<your-subdomain>.workers.dev`), with **Path** `api/recovery`.
+4. Skip the login methods; nothing signs in here.
+5. Add a policy: name `Recovery Shortcut`, **Action: Service Auth**, Include → selector **Service Token** → value `Recovery Shortcut`. Save the policy, then the application.
+
+Access uses the most specific path, so the token reaches `/api/recovery` and nothing else, and the rest of the site still asks for your email code.
+
+#### 7d. Give the Worker its copy of the token (terminal)
+
+```bash
+npx wrangler secret put ACCESS_CLIENT_ID
+```
+
+Paste the Client ID when asked. Then:
+
+```bash
+npx wrangler secret put ACCESS_CLIENT_SECRET
+```
+
+Paste the Client Secret. `npx wrangler secret list` should list both. Secrets survive later deploys.
+
+#### 7e. Check it (terminal)
+
+```bash
+curl -i -X POST https://compromised.<your-subdomain>.workers.dev/api/recovery -H 'content-type: application/json' -H 'CF-Access-Client-Id: <client id>' -H 'CF-Access-Client-Secret: <client secret>' -d '{"date":"2026-01-01","sleepMinutes":450,"hrvMs":52,"restingHeartRate":48,"source":"Ultrahuman"}'
+```
+
+- `200` with `{"ok":true,...}`: done. The test night is dated 1 January, long before the Program, so the Coach never reads it.
+- `302` or `403` from Access: the 7c policy doesn't match (path, or the token chosen).
+- `401` from the Worker (a JSON `error`): the secrets from 7d don't match the headers, or Access strips the headers before the Worker (tell Claude: the check then moves to Access's JWT).
+
+#### 7f. Build the Shortcut (iPhone)
+
+The app has the same steps with your address filled in: Today → your initial (Settings) → **Recovery Shortcut setup**.
+
+1. **Shortcuts** app → **Shortcuts** tab → **+**. Tap the name at the top → **Rename** → `Compromised recovery`.
+2. Sleep. Add **Find Health Samples**. Tap the filter: **Type is Sleep Analysis**. **Add Filter** → **Source is** → your Ultrahuman ring. **Add Filter** → **Start Date is in the last** 18 hours. **Add Filter** → **Value is not In Bed**, and again **Value is not Awake** (if Value isn't offered, leave it out and check the total in step 9).
+3. Add **Get Details of Health Sample** → **Duration**. Add **Calculate Statistics** → **Sum**. Add **Calculate** → ÷ 60 if the sum is in seconds (step 9 tells you). Add **Set Variable** → `Sleep`.
+4. HRV. **Find Health Samples**: **Type is Heart Rate Variability**, **Source is** the ring, **Start Date is in the last** 18 hours. **Get Details of Health Sample** → **Value**. **Calculate Statistics** → **Average**. **Set Variable** → `HRV`.
+5. Resting heart rate. **Find Health Samples**: **Type is Resting Heart Rate**, **Source is** the ring; **Sort by** Start Date, **Order** Latest First, **Limit** on, 1. **Get Details of Health Sample** → **Value**. **Set Variable** → `RHR`.
+6. Date. **Format Date**: **Current Date**, Date Format **Custom**, format string `yyyy-MM-dd`. **Set Variable** → `Morning`.
+7. Send. **Get Contents of URL**, URL `https://compromised.<your-subdomain>.workers.dev/api/recovery`. Tap **Show More**:
+   - **Method** POST.
+   - **Headers** → Add new header: `CF-Access-Client-Id` = the Client ID; again: `CF-Access-Client-Secret` = the Client Secret.
+   - **Request Body** JSON → Add new field: **Text** `date` = Morning; **Number** `sleepMinutes` = Sleep; **Number** `hrvMs` = HRV; **Number** `restingHeartRate` = RHR; **Text** `source` = `Ultrahuman`.
+8. For the first run only, add **Show Result** at the end.
+9. Tap ▶. Allow the Health data it asks for and **Always Allow** the connection. The result should be `{"ok":true,"night":{...}}`, with `sleepMinutes` around 400–500 for a 7–8 hour night (about 7 for a 7 hour night means drop the ÷ 60; about 25,000 means add it). `No sleep in Apple Health from the ring yet` means the ring hasn't synced: open the Ultrahuman app, wait for its sync, run again. Then check Settings → Recovery Shortcut setup → **Last night received** against the Ultrahuman app, and remove **Show Result**.
+10. **Automation** tab → **+** (New Automation) → **Time of Day** → a time a little after you usually wake and open the Ultrahuman app (the ring syncs to Health through it), **Daily** → **Run Immediately** (turn **Notify When Run** off if you like) → **Next** → `Compromised recovery` → **Done**.
+
+#### 7g. The next morning
+
+Open the app → Settings → Recovery Shortcut setup: **Last night received** shows this morning's date with the same sleep, HRV and resting heart rate as the Ultrahuman app. If it's yesterday's, the automation ran before the ring synced: run the Shortcut by hand and move the automation later.
+
+For `npm run dev`, copy `.dev.vars.example` to `.dev.vars`: any pair of values works locally.
 
 ## Deploy
 

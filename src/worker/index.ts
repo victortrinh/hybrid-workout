@@ -9,6 +9,7 @@ import { isCircuit, isLiveRun } from '../domain/live'
 import { parseSessionLog, type SessionLog, type StationPart, type SyncState } from '../domain/log'
 import { parsePainReport, type PainReport } from '../domain/pain'
 import { program } from '../domain/program/program'
+import { parseRecoveryNight, type RecoveryNight } from '../domain/recovery'
 import { parseDecision, type SuggestionDecision } from '../domain/suggestion'
 
 const app = new Hono<{ Bindings: Env }>().basePath('/api')
@@ -122,6 +123,53 @@ app.post('/sync', async (c) => {
   }
   return c.json(await readState(c.env.DB))
 })
+
+/**
+ * One night of Recovery data from the morning iOS Shortcut (ADR-0003). Only
+ * the Access service token gets in: Cloudflare Access checks it at the edge
+ * (ADR-0001), and the Worker checks it again against its own copy, so a
+ * signed-in browser can't post nights and a missing Access policy fails closed.
+ * Idempotent per morning: the latest send for a date replaces the last.
+ */
+app.post('/recovery', async (c) => {
+  if (!(await hasServiceToken(c.req.raw.headers, c.env))) {
+    return c.json({ error: 'Send the Access service token: CF-Access-Client-Id and CF-Access-Client-Secret' }, 401)
+  }
+  let night: RecoveryNight
+  try {
+    night = parseRecoveryNight(await c.req.json(), new Date().toISOString())
+  } catch (error) {
+    return c.json({ error: error instanceof Error ? error.message : 'Invalid request' }, 400)
+  }
+  await c.env.DB.prepare(
+    `insert into recovery_nights (date, sleep_minutes, hrv_ms, resting_heart_rate, source, received_at)
+     values (?, ?, ?, ?, ?, ?)
+     on conflict (date) do update set
+       sleep_minutes = excluded.sleep_minutes, hrv_ms = excluded.hrv_ms,
+       resting_heart_rate = excluded.resting_heart_rate, source = excluded.source,
+       received_at = excluded.received_at`,
+  )
+    .bind(night.date, night.sleepMinutes, night.hrvMs, night.restingHeartRate, night.source, night.receivedAt)
+    .run()
+  return c.json({ ok: true, night })
+})
+
+/** Both service-token headers, matching the Worker's secrets. With no secrets set, nothing matches. */
+async function hasServiceToken(headers: Headers, env: Env): Promise<boolean> {
+  const id = headers.get('cf-access-client-id')
+  const secret = headers.get('cf-access-client-secret')
+  if (!env.ACCESS_CLIENT_ID || !env.ACCESS_CLIENT_SECRET || !id || !secret) return false
+  const [a, b] = await Promise.all([sameText(id, env.ACCESS_CLIENT_ID), sameText(secret, env.ACCESS_CLIENT_SECRET)])
+  return a && b
+}
+
+/** Compares digests, so the time taken says nothing about how much matched. */
+async function sameText(given: string, expected: string): Promise<boolean> {
+  const digest = async (text: string) =>
+    new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))
+  const [x, y] = await Promise.all([digest(given), digest(expected)])
+  return x.every((byte, i) => byte === y[i])
+}
 
 app.notFound((c) => c.json({ error: 'Not found' }, 404))
 
@@ -237,6 +285,15 @@ interface SetRow {
   rpe: number
 }
 
+interface RecoveryRow {
+  date: string
+  sleep_minutes: number
+  hrv_ms: number | null
+  resting_heart_rate: number | null
+  source: string
+  received_at: string
+}
+
 interface DecisionRow {
   id: string
   decision: string
@@ -245,8 +302,8 @@ interface DecisionRow {
 }
 
 async function readState(db: D1Database): Promise<SyncState> {
-  const [{ results }, decisions, intervals, stationRows, setRows, pain] = (await db.batch<
-    SessionLogRow | DecisionRow | IntervalRow | StationRow | SetRow | PainRow
+  const [{ results }, decisions, intervals, stationRows, setRows, pain, nights] = (await db.batch<
+    SessionLogRow | DecisionRow | IntervalRow | StationRow | SetRow | PainRow | RecoveryRow
   >([
     db.prepare('select * from session_logs order by date, updated_at'),
     db.prepare('select * from suggestion_decisions order by updated_at'),
@@ -254,6 +311,7 @@ async function readState(db: D1Database): Promise<SyncState> {
     db.prepare('select * from station_logs order by session_log_id, round, rowid'),
     db.prepare('select * from set_logs order by session_log_id, exercise, "set"'),
     db.prepare('select * from pain_reports order by date, updated_at'),
+    db.prepare('select * from recovery_nights order by date'),
   ])) as [
     D1Result<SessionLogRow>,
     D1Result<DecisionRow>,
@@ -261,6 +319,7 @@ async function readState(db: D1Database): Promise<SyncState> {
     D1Result<StationRow>,
     D1Result<SetRow>,
     D1Result<PainRow>,
+    D1Result<RecoveryRow>,
   ]
   const reps = new Map<string, IntervalRow[]>()
   for (const row of intervals.results) reps.set(row.session_log_id, [...(reps.get(row.session_log_id) ?? []), row])
@@ -271,6 +330,18 @@ async function readState(db: D1Database): Promise<SyncState> {
   const sets = new Map<string, SetRow[]>()
   for (const row of setRows.results) sets.set(row.session_log_id, [...(sets.get(row.session_log_id) ?? []), row])
   return {
+    recoveryNights: nights.results.map((row) =>
+      parseRecoveryNight(
+        {
+          date: row.date,
+          sleepMinutes: row.sleep_minutes,
+          hrvMs: row.hrv_ms,
+          restingHeartRate: row.resting_heart_rate,
+          source: row.source,
+        },
+        row.received_at,
+      ),
+    ),
     painReports: pain.results.map((row) =>
       parsePainReport({
         id: row.id,

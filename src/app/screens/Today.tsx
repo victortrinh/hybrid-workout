@@ -9,7 +9,7 @@ import { describeSession, SESSION_TYPES } from '../../domain/program/describe'
 import type { Session } from '../../domain/program/types'
 import type { Settings } from '../../domain/settings'
 import type { Decision, Suggestion } from '../../domain/suggestion'
-import { painLine, suggestionCopy } from '../coachCopy'
+import { painLine, recoveryWhy, shortSleepLine, suggestionCopy } from '../coachCopy'
 import { FieldLane } from '../components/FieldLane'
 import { LaneChip } from '../components/LaneChip'
 import { answered, PainFields, type PainAnswer } from '../components/PainFields'
@@ -241,6 +241,18 @@ function UpNext({
       </h1>
       <p className="mt-2 text-prescription">{nb(target)}</p>
       {meta && <p className="mt-1 text-body-quiet text-muted">{meta}</p>}
+      {day.recovery && day.recoveryChange === 'short-sleep' && (
+        <p className="mt-3 text-body">
+          {shortSleepLine(day.recovery.night.sleepMinutes)}
+          {/* With low HRV too, the Suggestion below carries the numbers. */}
+          {!day.recovery.easyDay && (
+            <span className="text-muted">
+              {' '}
+              {recoveryWhy(day.recovery.night.sleepMinutes, day.recovery.night.hrvMs, day.recovery.hrvMean)}
+            </span>
+          )}
+        </p>
+      )}
       {upNext && upNextWeek && run && dependsOnEnvironment(upNext, run) && (
         <Segmented
           label="Where"

@@ -70,6 +70,26 @@ export interface PainSuggestion {
   decidedOn: LocalDate | null
 }
 
+/** A short night with low HRV: today's Hard session as an easy 30′, or rest. */
+export interface RecoverySuggestion {
+  id: string
+  kind: 'recovery'
+  /** The Week of the Session it changes. */
+  week: number
+  /** The Hard session Up next on the morning. */
+  sessionId: string
+  /** The morning: the change is for this day only. */
+  date: LocalDate
+  trigger: {
+    sleepMinutes: number
+    hrvMs: number
+    /** The 7-night mean the HRV is compared with. */
+    hrvMean: number
+  }
+  decision: Decision
+  decidedOn: LocalDate | null
+}
+
 /** Why the Coach wants a Working weight moved. */
 export type WorkingWeightReason =
   /** Every target rep at RPE 7 or easier: up. */
@@ -103,12 +123,15 @@ export interface WorkingWeightSuggestion {
   decidedOn: LocalDate | null
 }
 
-export type Suggestion = ReEntrySuggestion | WorkingWeightSuggestion | PainSuggestion
+export type Suggestion = ReEntrySuggestion | WorkingWeightSuggestion | PainSuggestion | RecoverySuggestion
 
 export const reEntryId = (week: number) => `re-entry-w${week}`
 export const workingWeightId = (lift: LiftId, week: number) => `ww-${lift}-w${week}`
 /** One per Pain report: a decision on it stands as long as the report does. */
 export const painId = (reportId: string) => `pain-${reportId}`
+
+/** One per morning: whichever Hard session is Up next that day. */
+export const recoveryId = (date: LocalDate) => `recovery-${date}`
 
 const ID = /^[a-z0-9-]{1,64}$/
 const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/
