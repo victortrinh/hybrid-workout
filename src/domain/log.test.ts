@@ -10,6 +10,8 @@ const valid = {
   minutes: 45,
   rpe: 7,
   notes: 'Held it.',
+  resultSeconds: null,
+  environment: null,
   updatedAt: '2026-11-04T17:00:00.000Z',
 }
 
@@ -27,6 +29,15 @@ describe('parseSessionLog', () => {
     })
   })
 
+  it('accepts a 5K test result with its Environment, and treats missing ones as none', () => {
+    expect(parseSessionLog({ ...valid, sessionId: '5k-test', resultSeconds: 1380, environment: 'indoor' })).toMatchObject({
+      resultSeconds: 1380,
+      environment: 'indoor',
+    })
+    const { resultSeconds, environment, ...older } = valid
+    expect(parseSessionLog(older)).toMatchObject({ resultSeconds: null, environment: null })
+  })
+
   it.each([
     ['a missing id', { id: undefined }],
     ['a short id', { id: 'abc' }],
@@ -40,6 +51,9 @@ describe('parseSessionLog', () => {
     ['zero minutes', { minutes: 0 }],
     ['notes that are not text', { notes: 42 }],
     ['notes that are too long', { notes: 'x'.repeat(2001) }],
+    ['a 5K time under 12 minutes', { resultSeconds: 600 }],
+    ['a 5K time that is not whole seconds', { resultSeconds: 1380.5 }],
+    ['an Environment that is neither', { environment: 'pool' }],
     ['an updatedAt with a local offset', { updatedAt: '2026-11-04T12:00:00-05:00' }],
   ])('rejects %s', (_, change) => {
     expect(() => parseSessionLog({ ...valid, ...change })).toThrow()

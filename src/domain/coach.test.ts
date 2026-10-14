@@ -26,6 +26,8 @@ function keysDoneBefore(today: LocalDate, p: Program = program): SessionLog[] {
           minutes: s.minutes,
           rpe: 7,
           notes: null,
+          resultSeconds: null,
+          environment: null,
           updatedAt: '2026-10-01T12:00:00.000Z',
         })),
     )
@@ -235,6 +237,8 @@ function log(week: number, sessionId: string, date: string, status: LoggedStatus
     minutes: 45,
     rpe: 7,
     notes: null,
+    resultSeconds: null,
+    environment: null,
     updatedAt,
   }
 }

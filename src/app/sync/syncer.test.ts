@@ -13,6 +13,8 @@ const log = (id: string, change: Partial<SessionLog> = {}): SessionLog => ({
   minutes: 40,
   rpe: 7,
   notes: null,
+  resultSeconds: null,
+  environment: null,
   updatedAt: '2026-11-04T20:00:00.000Z',
   ...change,
 })

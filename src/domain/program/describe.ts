@@ -1,10 +1,11 @@
 /**
  * Plain-language lines for a Session, read from its relative Prescription.
  *
- * There are no Training paces or Working weights yet, so runs read as effort
- * and RPE and lifts as sets and reps. Exact speeds and pounds replace these
- * lines once the Coach can resolve them.
+ * Given a RunContext with Training paces, runs read as exact treadmill speeds
+ * or paces per km; without one (before the baseline 5K test) they read as
+ * effort and RPE. Lifts read as sets and reps until there are Working weights.
  */
+import { runTarget, type RunContext } from '../paces'
 import type {
   Block,
   Exercise,
@@ -41,12 +42,12 @@ export interface SessionDescription {
   meta: string
 }
 
-export function describeSession(session: Session): SessionDescription {
+export function describeSession(session: Session, run?: RunContext): SessionDescription {
   const main = session.blocks.filter((b) => b.main)
   return {
     heading: `${SESSION_TYPES[session.type].name}, ${session.headline}`,
     summary: summary(session, main),
-    target: target(session, main),
+    target: target(session, main, run),
     meta: [
       `${session.minutes} min`,
       session.key && 'Key session this Week',
@@ -78,13 +79,13 @@ function summary(session: Session, main: Block[]): string {
   }
 }
 
-function target(session: Session, main: Block[]): string {
+function target(session: Session, main: Block[], run?: RunContext): string {
   const rx = firstPrescription(main)
   switch (rx?.kind) {
     case 'intervals': {
       const accelerations = findPrescription(session, 'accelerations')
       return [
-        effortTarget(rx.effort),
+        effortTarget(rx.effort, run),
         `${duration(rx.recoverySeconds)} ${rx.recovery}`,
         accelerations && `${accelerations.reps} accelerations first`,
       ]
@@ -103,11 +104,11 @@ function target(session: Session, main: Block[]): string {
       }
       if (rx.meters) {
         const strides = findPrescription(session, 'strides')
-        return [`${km(rx.meters)} ${effortTarget(rx.effort)}`, strides && `${strides.reps} strides first`]
+        return [`${km(rx.meters)} ${effortTarget(rx.effort, run)}`, strides && `${strides.reps} strides first`]
           .filter(Boolean)
           .join(' · ')
       }
-      return rx.effort ? effortTarget(rx.effort) : `${rx.minutes} min`
+      return rx.effort ? effortTarget(rx.effort, run) : `${rx.minutes} min`
     }
     case 'sets': {
       const calibration = calibrationRpe(session)
@@ -176,10 +177,12 @@ function effortWord(effort: RunEffort): string {
   return effort.secondsPerKmFaster ? `${pace} −${effort.secondsPerKmFaster} s/km` : pace
 }
 
-/** Without Training paces, a pace reference reads as its effort and RPE. */
-function effortTarget(effort: RunEffort | undefined): string {
+/** With Training paces, the exact speed or pace and the RPE; without, the effort and RPE. */
+function effortTarget(effort: RunEffort | undefined, run?: RunContext): string {
   if (!effort) return ''
   const rpe = effort.rpe ? `RPE ${range(effort.rpe)}` : ''
+  const exact = run && runTarget(effort, run)
+  if (exact) return [exact, rpe].filter(Boolean).join(' · ')
   if ('feel' in effort) {
     const feel = {
       easy: 'Easy',
@@ -250,10 +253,14 @@ export interface ExerciseLine {
 }
 
 /** One Exercise as it reads in a Week's Session list, with Race loads in pounds. */
-export function describeExercise(exercise: Exercise, stations: Record<StationId, Station>): ExerciseLine {
+export function describeExercise(
+  exercise: Exercise,
+  stations: Record<StationId, Station>,
+  run?: RunContext,
+): ExerciseLine {
   return {
     name: exercise.name,
-    detail: prescriptionWords(exercise.prescription, stations),
+    detail: prescriptionWords(exercise.prescription, stations, run),
     note: exercise.note,
     substitutions: (exercise.substitutions ?? []).map((s) => substitutionWords(s, stations)),
   }
@@ -267,16 +274,16 @@ function substitutionWords(substitution: Substitution, stations: Record<StationI
   return `${when[0].toUpperCase()}${when.slice(1)}: ${options}`
 }
 
-function prescriptionWords(rx: Prescription, stations: Record<StationId, Station>): string {
+function prescriptionWords(rx: Prescription, stations: Record<StationId, Station>, run?: RunContext): string {
   switch (rx.kind) {
     case 'run': {
       const amount = rx.meters ? km(rx.meters) : rx.minutes ? `${rx.minutes} min` : ''
-      return [amount, rx.effort && effortTarget(rx.effort)].filter(Boolean).join(' · ')
+      return [amount, rx.effort && effortTarget(rx.effort, run)].filter(Boolean).join(' · ')
     }
     case 'intervals':
       return [
         `${rx.reps} × ${duration(rx.workSeconds)} / ${duration(rx.recoverySeconds)} ${rx.recovery}`,
-        effortTarget(rx.effort),
+        effortTarget(rx.effort, run),
       ].join(' · ')
     case 'strides':
       return `${rx.reps} × ${duration(rx.seconds)}`

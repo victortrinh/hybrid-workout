@@ -1,10 +1,11 @@
 import { Link } from 'react-aria-components'
 import { addDays } from '../../domain/calendar'
 import type { CoachDay } from '../../domain/coach'
+import { clock, type RunContext } from '../../domain/paces'
 import { describeExercise, describeSession, SESSION_TYPES } from '../../domain/program/describe'
 import type { Program, Session, Week } from '../../domain/program/types'
 import { LaneChip } from '../components/LaneChip'
-import { longDay, nb, weekRange } from '../format'
+import { longDay, nb, shortDay, weekRange } from '../format'
 import { SCREEN_PATH, weekPath } from '../router'
 import { weekMark } from './Plan'
 
@@ -12,7 +13,18 @@ const linkClass =
   'inline-block py-2 text-[15px] font-bold text-link underline decoration-2 underline-offset-4 hover:decoration-[3px]'
 
 /** One Week: its dates, Phase and marks, then every Session of the Bucket with its Prescriptions. */
-export function WeekScreen({ program, week, day }: { program: Program; week: Week; day: CoachDay }) {
+export function WeekScreen({
+  program,
+  week,
+  day,
+  runContext,
+}: {
+  program: Program
+  week: Week
+  day: CoachDay
+  /** How each Session's runs read: exact speeds or paces once there is a 5K test. */
+  runContext: (week: number, session: Session) => RunContext
+}) {
   const phase = program.phases.find((p) => week.number >= p.firstWeek && week.number <= p.lastWeek)
   const current = day.position.kind === 'in-week' && day.position.week === week.number
   const mark = weekMark(week)
@@ -33,6 +45,12 @@ export function WeekScreen({ program, week, day }: { program: Program; week: Wee
           .join(' · ')}
       </p>
 
+      <p className="mt-1 text-body-quiet text-muted">
+        {day.fiveKTest?.resultSeconds
+          ? `Paces from the ${clock(day.fiveKTest.resultSeconds)} 5K test on ${shortDay(day.fiveKTest.date)}`
+          : 'Runs go by RPE until the baseline 5K test sets the Training paces'}
+      </p>
+
       {week.notes && (
         <ul className="mt-3 rounded-sm bg-sunk p-[18px] text-body">
           {week.notes.map((note) => (
@@ -42,7 +60,7 @@ export function WeekScreen({ program, week, day }: { program: Program; week: Wee
       )}
 
       {week.sessions.map((session) => (
-        <SessionDetail key={session.id} session={session} program={program} />
+        <SessionDetail key={session.id} session={session} program={program} run={runContext(week.number, session)} />
       ))}
 
       <nav aria-label="Other Weeks" className="mt-8 flex justify-between gap-3 border-t-2 border-ink pt-2">
@@ -63,8 +81,8 @@ export function WeekScreen({ program, week, day }: { program: Program; week: Wee
   )
 }
 
-function SessionDetail({ session, program }: { session: Session; program: Program }) {
-  const description = describeSession(session)
+function SessionDetail({ session, program, run }: { session: Session; program: Program; run: RunContext }) {
+  const description = describeSession(session, run)
   const headingId = `session-${session.id}`
   return (
     <section aria-labelledby={headingId} className="mt-7 border-t-2 border-ink pt-3">
@@ -91,7 +109,7 @@ function SessionDetail({ session, program }: { session: Session; program: Progra
           </h3>
           <ul className="mt-1">
             {block.exercises.map((exercise, j) => {
-              const line = describeExercise(exercise, program.stations)
+              const line = describeExercise(exercise, program.stations, run)
               return (
                 <li key={`${exercise.name}-${j}`} className="border-b border-rule py-2">
                   <span className="block text-[16px] font-bold">

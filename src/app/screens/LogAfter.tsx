@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import {
   Button,
+  FieldError,
   Form,
   Group,
   Input,
@@ -15,9 +16,11 @@ import {
 } from 'react-aria-components'
 import { addDays, daysBetween, type LocalDate } from '../../domain/calendar'
 import { LOGGED_STATUSES, logFor, NOTES_MAX, type LoggedStatus, type SessionLog } from '../../domain/log'
+import { clock, FIVE_K_SECONDS, parseClock, type Environment } from '../../domain/paces'
 import { describeSession } from '../../domain/program/describe'
 import type { Session, Week } from '../../domain/program/types'
 import { Icon } from '../components/Icons'
+import { Segmented } from '../components/Segmented'
 import { longDay, nb, shortWeekday, STATUS_LABEL } from '../format'
 import { navigate, SCREEN_PATH } from '../router'
 
@@ -48,6 +51,7 @@ export function LogAfter({
   lastDay: loggableUntil,
   logs,
   today,
+  defaultEnvironment,
   onSave,
 }: {
   week: Week
@@ -56,6 +60,8 @@ export function LogAfter({
   lastDay: LocalDate
   logs: SessionLog[]
   today: LocalDate
+  /** Where runs happen on a day unless the log says otherwise: the month's setting. */
+  defaultEnvironment: (date: LocalDate) => Environment
   onSave: (log: SessionLog) => void
 }) {
   const existing = logFor(logs, week.number, session.id)
@@ -68,13 +74,21 @@ export function LogAfter({
   const [minutes, setMinutes] = useState(existing?.minutes ?? session.minutes)
   const [rpe, setRpe] = useState<number | null>(existing?.rpe ?? null)
   const [notes, setNotes] = useState(existing?.notes ?? '')
+  const [time, setTime] = useState(existing?.resultSeconds ? clock(existing.resultSeconds) : '')
+  /** Null follows the month's default for the chosen day. */
+  const [environment, setEnvironment] = useState<Environment | null>(existing?.environment ?? null)
 
   const description = describeSession(session)
   const trained = status !== 'skipped'
+  /** Only a Done 5K test has a time: it resets the Training paces. */
+  const result = session.type === '5k-test' && status === 'done'
+  const where = environment ?? (date ? defaultEnvironment(date) : 'outdoor')
 
   function submit(event: FormEvent) {
     event.preventDefault()
     if (!date) return
+    const resultSeconds = result ? parseClock(time) : null
+    if (result && resultSeconds === null) return
     onSave({
       id: existing?.id ?? crypto.randomUUID(),
       week: week.number,
@@ -84,6 +98,8 @@ export function LogAfter({
       minutes: trained && Number.isFinite(minutes) ? minutes : null,
       rpe: trained ? rpe : null,
       notes: notes.trim() === '' ? null : notes.trim(),
+      resultSeconds,
+      environment: result ? where : null,
       updatedAt: editedAt(existing),
     })
     navigate(SCREEN_PATH.today)
@@ -140,6 +156,50 @@ export function LogAfter({
               ))}
             </div>
           </RadioGroup>
+
+          {result && (
+            <>
+              <TextField
+                value={time}
+                onChange={setTime}
+                isRequired
+                validate={validateTime}
+                inputMode="numeric"
+                className="grid gap-2"
+              >
+                {({ isInvalid }) => (
+                  <>
+                    <Label className={groupLabel}>5 km time</Label>
+                    <Input
+                      placeholder="mm:ss"
+                      autoComplete="off"
+                      className="h-11 w-32 rounded-sm bg-paper px-3 text-center text-[17px] font-bold shadow-[inset_0_0_0_2px_var(--edge)] outline-none placeholder:font-semibold placeholder:text-muted focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-link data-invalid:shadow-[inset_0_0_0_2px_var(--ink)]"
+                    />
+                    {/* The error takes the hint's place, so nothing below moves when it clears. */}
+                    {isInvalid ? (
+                      <FieldError className="text-body-quiet font-bold text-ink" />
+                    ) : (
+                      <Text slot="description" className="text-body-quiet text-muted">
+                        Minutes and seconds, like 23:00. It sets the Training paces.
+                      </Text>
+                    )}
+                  </>
+                )}
+              </TextField>
+
+              <Segmented
+                label="Where"
+                labelClassName={groupLabel}
+                className="max-w-72"
+                value={where}
+                options={[
+                  { value: 'indoor', label: 'Indoor' },
+                  { value: 'outdoor', label: 'Outdoor' },
+                ]}
+                onChange={setEnvironment}
+              />
+            </>
+          )}
 
           {trained && (
             <>
@@ -208,6 +268,14 @@ export function LogAfter({
       )}
     </div>
   )
+}
+
+function validateTime(text: string): string | null {
+  const seconds = parseClock(text)
+  if (seconds === null) return 'Minutes and seconds, like 23:00. That isn’t a time.'
+  const [low, high] = FIVE_K_SECONDS
+  if (seconds < low || seconds > high) return `A 5 km time between ${clock(low)} and ${clock(high)}.`
+  return null
 }
 
 /** Now, or just after the edit it replaces if this device's clock is behind the one that wrote it. */

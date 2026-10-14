@@ -1,11 +1,16 @@
 import { Button, Link } from 'react-aria-components'
 import { addDays } from '../../domain/calendar'
 import type { BucketEntry, CoachDay, PhaseProgress, RestReason } from '../../domain/coach'
+import type { Environment, RunContext } from '../../domain/paces'
 import { describeSession, SESSION_TYPES } from '../../domain/program/describe'
+import type { Session } from '../../domain/program/types'
+import type { Settings } from '../../domain/settings'
 import type { Decision, Suggestion } from '../../domain/suggestion'
 import { suggestionCopy } from '../coachCopy'
 import { FieldLane } from '../components/FieldLane'
 import { LaneChip } from '../components/LaneChip'
+import { Segmented } from '../components/Segmented'
+import { SettingsPopover } from '../components/SettingsPopover'
 import { StripedNumeral } from '../components/StripedNumeral'
 import { longDay, nb, plural, shortDay, shortWeekday, STATUS_LABEL, weekday, weekRange } from '../format'
 import { logPath } from '../router'
@@ -21,6 +26,10 @@ export function Today({
   pending,
   error,
   onPick,
+  runContext,
+  onEnvironment,
+  settings,
+  onSettings,
   onDecide,
 }: {
   day: CoachDay
@@ -33,32 +42,51 @@ export function Today({
   onPick: (week: number, sessionId: string) => void
   /** Accepts, Keeps or (with 'open') undoes a Suggestion. */
   onDecide: (suggestion: Suggestion, decision: Decision) => void
+  /** How a Session's runs read today: exact speeds or paces once there is a 5K test. */
+  runContext: (week: number, session: Session) => RunContext
+  /** Overrides the month's Environment for one Session. */
+  onEnvironment: (week: number, session: Session, environment: Environment) => void
+  settings: Settings
+  onSettings: (patch: Partial<Settings>) => void
 }) {
   return (
     <section
       aria-labelledby="today-heading"
       className="desktop:grid desktop:grid-cols-2 desktop:gap-x-12 desktop:px-gutter"
     >
-      <FieldBand day={day} weekCount={weekCount} />
-      <UpNext day={day} weekCount={weekCount} pending={pending} error={error} onDecide={onDecide} />
+      <FieldBand day={day} weekCount={weekCount} settings={settings} onSettings={onSettings} />
+      <UpNext
+        day={day}
+        weekCount={weekCount}
+        pending={pending}
+        error={error}
+        onDecide={onDecide}
+        runContext={runContext}
+        onEnvironment={onEnvironment}
+      />
       <ThisWeek day={day} onPick={onPick} />
     </section>
   )
 }
 
-function FieldBand({ day, weekCount }: { day: CoachDay; weekCount: number }) {
+function FieldBand({
+  day,
+  weekCount,
+  settings,
+  onSettings,
+}: {
+  day: CoachDay
+  weekCount: number
+  settings: Settings
+  onSettings: (patch: Partial<Settings>) => void
+}) {
   const { position } = day
   return (
     <header className="on-field bg-cobalt px-pad pt-4 pb-5 text-on-cobalt desktop:col-span-full desktop:-mx-gutter desktop:grid desktop:grid-cols-[auto_minmax(0,1fr)] desktop:items-end desktop:gap-x-14 desktop:gap-y-2 desktop:px-gutter desktop:py-7">
       <div className="flex items-center justify-between gap-3 desktop:col-span-full desktop:justify-end">
         <span className="text-brand uppercase font-stretch-125% desktop:hidden">Compromised</span>
-        {/* The athlete's initial. Settings will open from here. */}
-        <span
-          aria-hidden="true"
-          className="grid size-10 place-items-center rounded-full bg-on-cobalt font-extrabold text-cobalt"
-        >
-          V
-        </span>
+        {/* The athlete's initial opens Settings. */}
+        <SettingsPopover settings={settings} onChange={onSettings} />
       </div>
 
       <p className="mt-3 desktop:mt-0">
@@ -129,21 +157,26 @@ function UpNext({
   pending,
   error,
   onDecide,
+  runContext,
+  onEnvironment,
 }: {
   day: CoachDay
   weekCount: number
   pending: number
   error: string | null
   onDecide: (suggestion: Suggestion, decision: Decision) => void
+  runContext: (week: number, session: Session) => RunContext
+  onEnvironment: (week: number, session: Session, environment: Environment) => void
 }) {
   const { position, upNext } = day
   const upNextWeek = day.bucket.find((e) => e.state === 'next')?.week
+  const run = upNext && upNextWeek ? runContext(upNextWeek, upNext) : undefined
   let heading: string
   let target: string
   let meta = ''
 
   if (upNext) {
-    const description = describeSession(upNext)
+    const description = describeSession(upNext, run)
     heading = description.heading
     target = description.target
     meta = description.meta
@@ -174,6 +207,19 @@ function UpNext({
       </h1>
       <p className="mt-2 text-prescription">{nb(target)}</p>
       {meta && <p className="mt-1 text-body-quiet text-muted">{meta}</p>}
+      {upNext && upNextWeek && run && dependsOnEnvironment(upNext, run) && (
+        <Segmented
+          label="Where"
+          labelClassName="sr-only"
+          className="mt-3 max-w-72"
+          value={run.environment}
+          options={[
+            { value: 'indoor', label: 'Indoor' },
+            { value: 'outdoor', label: 'Outdoor' },
+          ]}
+          onChange={(environment) => onEnvironment(upNextWeek, upNext, environment)}
+        />
+      )}
       {upNext && upNextWeek && position.kind === 'in-week' && (
         <div className="mt-4 flex gap-2.5">
           <Link
@@ -198,6 +244,12 @@ function UpNext({
         ))}
     </div>
   )
+}
+
+/** Whether the Session's target reads differently indoors and out: it has a run at a Training pace. */
+function dependsOnEnvironment(session: Session, run: RunContext): boolean {
+  const indoor = describeSession(session, { ...run, environment: 'indoor' }).target
+  return indoor !== describeSession(session, { ...run, environment: 'outdoor' }).target
 }
 
 const buttonBase =

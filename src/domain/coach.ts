@@ -9,6 +9,7 @@
 import { lightenWeek, RE_ENTRY_PERCENT } from './adapt'
 import { addDays, daysBetween, mondayOf, type LocalDate } from './calendar'
 import { logFor, trained, type LoggedStatus, type SessionLog } from './log'
+import { latestFiveKTest, trainingPaces, type TrainingPaces } from './paces'
 import type { Phase, PhaseId, Program, Session, SessionType, Week } from './program/types'
 import { decisionFor, reEntryId, type ReEntrySuggestion, type Suggestion, type SuggestionDecision } from './suggestion'
 
@@ -101,6 +102,10 @@ export interface CoachDay {
   upNext: Session | null
   /** Why `upNext` is null while in a Week. */
   rest: RestReason | null
+  /** The latest 5K test on or before today, which the Training paces come from. */
+  fiveKTest: SessionLog | null
+  /** Null before the baseline 5K test: until then every run is RPE only. */
+  paces: TrainingPaces | null
   /** The Suggestions for this Week, whatever their decision. */
   suggestions: Suggestion[]
 }
@@ -126,6 +131,7 @@ export function coach({ program, today, logs = [], picked = null, decisions = []
     position.kind === 'in-week' && week
       ? chooseUpNext({ program, logged, logs, today, picked, daysLeft: position.daysLeft })
       : { upNext: null, rest: null }
+  const fiveKTest = latestFiveKTest(logs, today)
 
   return {
     today,
@@ -140,6 +146,8 @@ export function coach({ program, today, logs = [], picked = null, decisions = []
     })),
     upNext: upNext?.session ?? null,
     rest,
+    fiveKTest,
+    paces: fiveKTest?.resultSeconds ? trainingPaces(fiveKTest.resultSeconds) : null,
     suggestions,
   }
 }

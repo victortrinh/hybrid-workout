@@ -43,7 +43,13 @@ test('a Session logged with no signal syncs once back online, and another browse
   const upNext = page.getByRole('heading', { level: 1 })
   const session = (await upNext.textContent())!.split(',')[0]
   const waiting = page.getByText('1 log on this phone, waiting to sync.')
-  const row = (p: Page) => p.getByRole('list').filter({ hasText: 'Strength' }).getByRole('listitem').filter({ hasText: session })
+  // This Week's row only: until a fresh browser has loaded the logs, last Week's Key session shows as carried over.
+  const row = (p: Page) =>
+    p
+      .getByRole('list')
+      .filter({ hasText: 'Strength' })
+      .getByRole('listitem')
+      .filter({ hasText: session, hasNotText: /’s Key session/ })
 
   // In the gym: no signal. The log saves on the phone and Today moves on.
   await context.setOffline(true)
