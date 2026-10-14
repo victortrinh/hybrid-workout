@@ -92,7 +92,10 @@ describe('parseActivity', () => {
   })
 
   it('refuses what isn’t a workout', () => {
-    expect(() => parseActivity({ ...body, start: 'yesterday' }, AT)).toThrow(/start/)
+    expect(() => parseActivity({ ...body, start: 'Oct 14, 2026 at 2:28 PM' }, AT)).toThrow(
+      'start must be an ISO 8601 date and time, like 2026-11-04T07:12:00-05:00 (got "Oct 14, 2026 at 2:28 PM")',
+    )
+    expect(() => parseActivity({ ...body, start: undefined }, AT)).toThrow(/\(got nothing\)/)
     expect(() => parseActivity({ ...body, end: '2026-11-04T07:00:00-05:00' }, AT)).toThrow(/end/)
     expect(() => parseActivity({ ...body, end: '2026-11-04T19:00:00-05:00' }, AT)).toThrow(/10 hours/)
     expect(() => parseActivity({ ...body, type: '' }, AT)).toThrow(/type/)

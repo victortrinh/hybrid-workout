@@ -102,7 +102,10 @@ export function parseActivity(value: unknown, receivedAt: string): Activity {
 
 function instant(value: unknown, name: string): number {
   const time = typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value.trim()) ? Date.parse(value.trim()) : NaN
-  if (Number.isNaN(time)) throw new Error(`${name} must be an ISO 8601 date and time`)
+  if (Number.isNaN(time)) {
+    const got = typeof value === 'string' ? `"${value.trim().slice(0, 40)}"` : value === undefined ? 'nothing' : typeof value
+    throw new Error(`${name} must be an ISO 8601 date and time, like 2026-11-04T07:12:00-05:00 (got ${got})`)
+  }
   return time
 }
 
