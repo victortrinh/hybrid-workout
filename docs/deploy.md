@@ -164,18 +164,17 @@ curl -i -X POST https://compromised.<your-subdomain>.workers.dev/api/recovery -H
 The app has the same steps with your address filled in: Today → your initial (Settings) → **Recovery Shortcut setup**.
 
 1. **Shortcuts** app → **Shortcuts** tab → **+**. Tap the name at the top → **Rename** → `Compromised recovery`.
-2. Sleep. Add **Find Health Samples**. Tap the filter: **Type is Sleep Analysis**. **Add Filter** → **Source is** → your Ultrahuman ring. **Add Filter** → **Start Date is in the last** 18 hours. **Add Filter** → **Value is not In Bed**, and again **Value is not Awake** (if Value isn't offered, leave it out and check the total in step 9).
-3. Add **Get Details of Health Sample** → **Duration**. Add **Calculate Statistics** → **Sum**. Add **Calculate** → ÷ 60 if the sum is in seconds (step 9 tells you). Add **Set Variable** → `Sleep`.
+2. Sleep. Add **Find Health Samples**. Tap the filter: **Type is Sleep Analysis**. **Add Filter** → **Source is** → your Ultrahuman ring. **Add Filter** → **Start Date is in the last** 18 hours. **Add Filter** → **Value is not In Bed**, and again **Value is not Awake** (if Value isn't offered, leave it out and check the total in step 8).
+3. Add **Get Details of Health Sample** → **Duration**. Add **Calculate Statistics** → **Sum**. Add **Calculate** → ÷ 60 if the sum is in seconds (step 8 tells you). Add **Set Variable** → `Sleep`.
 4. HRV. **Find Health Samples**: **Type is Heart Rate Variability**, **Source is** the ring, **Start Date is in the last** 18 hours. **Get Details of Health Sample** → **Value**. **Calculate Statistics** → **Average**. **Set Variable** → `HRV`.
 5. Resting heart rate. **Find Health Samples**: **Type is Resting Heart Rate**, **Source is** the ring; **Sort by** Start Date, **Order** Latest First, **Limit** on, 1. **Get Details of Health Sample** → **Value**. **Set Variable** → `RHR`.
-6. Date. **Format Date**: **Current Date**, Date Format **Custom**, format string `yyyy-MM-dd`. **Set Variable** → `Morning`.
-7. Send. **Get Contents of URL**, URL `https://compromised.<your-subdomain>.workers.dev/api/recovery`. Tap **Show More**:
+6. Send. **Get Contents of URL**, URL `https://compromised.<your-subdomain>.workers.dev/api/recovery`. Tap **Show More**:
    - **Method** POST.
    - **Headers** → Add new header: `CF-Access-Client-Id` = the Client ID; again: `CF-Access-Client-Secret` = the Client Secret.
-   - **Request Body** JSON → Add new field: **Text** `date` = Morning; **Number** `sleepMinutes` = Sleep; **Number** `hrvMs` = HRV; **Number** `restingHeartRate` = RHR; **Text** `source` = `Ultrahuman`.
-8. For the first run only, add **Show Result** at the end.
-9. Tap ▶. Allow the Health data it asks for and **Always Allow** the connection. The result should be `{"ok":true,"night":{...}}`, with `sleepMinutes` around 400–500 for a 7–8 hour night (about 7 for a 7 hour night means drop the ÷ 60; about 25,000 means add it). `No sleep in Apple Health from the ring yet` means the ring hasn't synced: open the Ultrahuman app, wait for its sync, run again. Then check Settings → Recovery Shortcut setup → **Last night received** against the Ultrahuman app, and remove **Show Result**.
-10. **Automation** tab → **+** (New Automation) → **Time of Day** → a time a little after you usually wake and open the Ultrahuman app (the ring syncs to Health through it), **Daily** → **Run Immediately** (turn **Notify When Run** off if you like) → **Next** → `Compromised recovery` → **Done**.
+   - **Request Body** JSON → Add new field: **Number** `sleepMinutes` = Sleep; **Number** `hrvMs` = HRV; **Number** `restingHeartRate` = RHR; **Text** `source` = `Ultrahuman`. No date: the night counts for the day it arrives, in Toronto.
+7. For the first run only, add **Show Result** at the end.
+8. Tap ▶. Allow the Health data it asks for and **Always Allow** the connection. The result should be `{"ok":true,"night":{...}}`, with `sleepMinutes` around 400–500 for a 7–8 hour night (about 7 for a 7 hour night means drop the ÷ 60; about 25,000 means add it). `No sleep in Apple Health from the ring yet` means the ring hasn't synced: open the Ultrahuman app, wait for its sync, run again. Then check Settings → Recovery Shortcut setup → **Last night received** against the Ultrahuman app, and remove **Show Result**.
+9. **Automation** tab → **+** (New Automation) → **Time of Day** → a time a little after you usually wake and open the Ultrahuman app (the ring syncs to Health through it), **Daily** → **Run Immediately** (turn **Notify When Run** off if you like) → **Next** → `Compromised recovery` → **Done**.
 
 #### 7g. The next morning
 

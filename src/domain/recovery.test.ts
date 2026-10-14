@@ -26,6 +26,19 @@ describe('parseRecoveryNight', () => {
     }
   })
 
+  it('takes the day it arrived, in Toronto, when the date is left out or empty', () => {
+    // 03:30 UTC is still the evening before in Toronto.
+    for (const date of [undefined, null, '', '  ']) {
+      expect(parseRecoveryNight({ ...body, date }, '2026-11-04T12:00:00.000Z').date).toBe('2026-11-04')
+      expect(parseRecoveryNight({ ...body, date }, '2026-11-05T03:30:00.000Z').date).toBe('2026-11-04')
+    }
+  })
+
+  it('takes a full timestamp as its day in Toronto', () => {
+    expect(parseRecoveryNight({ ...body, date: '2026-11-04T09:31:00-05:00' }, AT).date).toBe('2026-11-04')
+    expect(parseRecoveryNight({ ...body, date: '2026-11-05T02:00:00Z' }, AT).date).toBe('2026-11-04')
+  })
+
   it('takes numbers sent as text', () => {
     expect(parseRecoveryNight({ ...body, sleepMinutes: '341.2', hrvMs: ' 38 ' }, AT)).toMatchObject({ sleepMinutes: 341, hrvMs: 38 })
   })
@@ -38,7 +51,7 @@ describe('parseRecoveryNight', () => {
 
   it.each([
     ['no body', null],
-    ['no date', { ...body, date: undefined }],
+    ['a date as words', { ...body, date: 'Oct 14, 2026' }],
     ['a date that isn’t one', { ...body, date: '2026-02-30' }],
     ['a US date', { ...body, date: '11/04/2026' }],
     ['sleep as words', { ...body, sleepMinutes: 'lots' }],
