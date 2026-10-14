@@ -1,52 +1,18 @@
 import { expect, test } from '@playwright/test'
 import { expectNoAxeViolations, WEEK_3 } from './axe'
+import { BASELINE_DECISIONS, BASELINE_HISTORY } from '../src/mock/scenarios/seed'
 import { serveHistory, type SeedLog } from './history'
 
-type Sets = NonNullable<SeedLog['sets']>
-const sets = (exercise: number, lift: string, specs: [pounds: number, reps: number, rpe: number][]): Sets =>
-  specs.map(([pounds, reps, rpe], i) => ({ exercise, set: i + 1, lift, pounds, reps, rpe }))
-const station = (part: string, seconds: number | null) => ({ round: 1, part, pounds: null, meters: null, reps: null, seconds })
-
 /**
- * Week 1 mostly done, a 23:00 treadmill baseline in Week 2: the prototype's
- * Wednesday of Week 3. Week 1 calibrated the squat at 185 lb and the RDL at
- * 135 lb; Week 2's easy squats moved it to 190 lb, accepted.
+ * Week 1 mostly done, a 23:00 treadmill baseline in Week 2 (the scenario
+ * `after-baseline` starts from the same history), then Week 2's Threshold
+ * Skipped and Week 3's Speed done: the prototype's Wednesday of Week 3.
  */
 const HISTORY: SeedLog[] = [
-  { week: 1, sessionId: 'speed', date: '2026-10-19', status: 'done', rpe: 7 },
-  {
-    week: 1,
-    sessionId: 'strength',
-    date: '2026-10-20',
-    status: 'done',
-    sets: [...sets(0, 'back-squat', [[165, 5, 6], [185, 5, 7]]), ...sets(1, 'romanian-deadlift', [[135, 6, 7]])],
-  },
-  { week: 1, sessionId: 'threshold', date: '2026-10-22', status: 'partial' },
-  {
-    week: 1,
-    sessionId: 'hyrox',
-    date: '2026-10-24',
-    status: 'done',
-    minutes: 60,
-    rpe: 7,
-    stations: [station('round', 600), station('run', null), station('sled-push', null), station('sled-pull', null)],
-  },
-  { week: 2, sessionId: '5k-test', date: '2026-10-28', status: 'done', rpe: 9, resultSeconds: 1380, environment: 'indoor' },
-  {
-    week: 2,
-    sessionId: 'strength',
-    date: '2026-10-29',
-    status: 'done',
-    sets: [
-      ...sets(0, 'back-squat', [[185, 5, 7], [185, 5, 7], [185, 5, 7]]),
-      ...sets(1, 'romanian-deadlift', [[135, 6, 8], [135, 6, 8], [135, 6, 8]]),
-    ],
-  },
+  ...BASELINE_HISTORY,
   { week: 2, sessionId: 'threshold', date: '2026-10-31', status: 'skipped' },
   { week: 3, sessionId: 'speed', date: '2026-11-02', status: 'done', rpe: 7 },
 ]
-
-const ACCEPTED = [{ id: 'ww-back-squat-w2', decision: 'accepted', date: '2026-10-29', updatedAt: '2026-10-29T21:00:00.000Z' }]
 
 /** 14 mornings to Wednesday of Week 3: one missing, two short, last night 5 h 41 with HRV 38. */
 const NIGHTS = [
@@ -74,7 +40,7 @@ const NIGHTS = [
 
 test.beforeEach(async ({ page }, testInfo) => {
   if (testInfo.title.startsWith('before any data')) return
-  await serveHistory(page, HISTORY, [], { suggestionDecisions: ACCEPTED, recoveryNights: NIGHTS })
+  await serveHistory(page, HISTORY, [], { suggestionDecisions: BASELINE_DECISIONS, recoveryNights: NIGHTS })
   await page.clock.setFixedTime(WEEK_3)
 })
 

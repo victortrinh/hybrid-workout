@@ -2,7 +2,7 @@
 /**
  * Mock mode never ships (ADR-0005). Fails when the build in dist/ holds any
  * of it: Mock Service Worker's script or library, sql.js or its WebAssembly,
- * or the D1 adapter over it.
+ * the D1 adapter over it, or the scenarios.
  *
  *   node scripts/check-no-mocks.mjs           after `npm run build`: none of it may be there
  *   node scripts/check-no-mocks.mjs --expect  after `npm run build:mock`: all of it must be,
@@ -21,6 +21,7 @@ const MARKERS = [
   { what: "sql.js's WebAssembly", file: (name) => name.endsWith('.wasm') },
   { what: 'sql.js', text: 'sqlite3_prepare_v2' },
   { what: 'the D1 adapter', text: 'The mock D1 has no' },
+  { what: 'the scenarios', text: 'compromised:mock-scenario' },
 ]
 
 const files = walk(DIST)
