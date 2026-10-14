@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Button, Link } from 'react-aria-components'
 import { addDays } from '../../domain/calendar'
 import type { BucketEntry, CoachDay, PhaseProgress, RestReason } from '../../domain/coach'
-import { isLiveRun, type LiveRun } from '../../domain/live'
+import { isLive, type LiveRun } from '../../domain/live'
 import type { Environment, RunContext } from '../../domain/paces'
 import { isRising, painLevel, type PainArea } from '../../domain/pain'
 import { describeSession, SESSION_TYPES } from '../../domain/program/describe'
@@ -260,7 +260,7 @@ function UpNext({
             Resume {nb(live.heading)}
           </Link>
         </div>
-      ) : upNext && upNextWeek && position.kind === 'in-week' && asking && isLiveRun(upNext) ? (
+      ) : upNext && upNextWeek && position.kind === 'in-week' && asking && isLive(upNext) ? (
         <PainStep
           previous={previousPain}
           onAnswer={(pain) => {
@@ -271,7 +271,7 @@ function UpNext({
         />
       ) : upNext && upNextWeek && position.kind === 'in-week' && (
         <div className="mt-4 flex gap-2.5">
-          {isLiveRun(upNext) && (
+          {isLive(upNext) && (
             <Button onPress={() => setAsking(true)} className={primaryAction}>
               Start session
             </Button>

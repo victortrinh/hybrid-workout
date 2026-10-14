@@ -102,6 +102,7 @@ test.describe('the sync endpoint', () => {
     environment: null,
     distanceMeters: null,
     intervals: [],
+    stations: [],
     updatedAt: '2027-03-08T20:00:00.000Z',
     ...change,
   })
@@ -152,6 +153,30 @@ test.describe('the sync endpoint', () => {
     expect(await stored(run)).toEqual([edited])
   })
 
+  test('keeps a HYROX session’s Station logs with its log, replaced whole by a later edit', async ({ request }, testInfo) => {
+    const id = `e2e-hyrox-${testInfo.project.name}`
+    const circuit = entry(testInfo.project.name, {
+      id,
+      sessionId: 'hyrox',
+      stations: [
+        { round: 1, part: 'run', pounds: null, meters: 1000, reps: null, seconds: 290 },
+        { round: 1, part: 'row', pounds: null, meters: 1000, reps: null, seconds: 245 },
+        { round: 2, part: 'run', pounds: null, meters: 1000, reps: null, seconds: 301 },
+        { round: 2, part: 'farmers-carry', pounds: 55, meters: 200, reps: null, seconds: 120 },
+      ],
+    })
+    const stored = async (log: Record<string, unknown>) => {
+      const response = await request.post('/api/sync', { data: { sessionLogs: [log] } })
+      expect(response.ok()).toBe(true)
+      return (await response.json()).sessionLogs.filter((l: { id: string }) => l.id === id)
+    }
+
+    expect(await stored(circuit)).toEqual([circuit])
+    const edited = { ...circuit, stations: circuit.stations.slice(0, 2), updatedAt: '2027-03-09T08:00:00.000Z' }
+    expect(await stored(edited)).toEqual([edited])
+    expect(await stored(circuit)).toEqual([edited])
+  })
+
   test('refuses logs that are malformed or name no Session', async ({ request }, testInfo) => {
     const project = testInfo.project.name
     for (const sessionLogs of [
@@ -164,6 +189,8 @@ test.describe('the sync endpoint', () => {
       [entry(project, { resultSeconds: 1380 })],
       // Only a run Session has reps.
       [entry(project, { sessionId: 'strength', intervals: [{ block: 1, rep: 1, targetPace: null, held: true, actualPace: null }] })],
+      // Only HYROX and a Race simulation have Station logs.
+      [entry(project, { stations: [{ round: 1, part: 'round', pounds: null, meters: null, reps: null, seconds: 600 }] })],
     ]) {
       const response = await request.post('/api/sync', { data: { sessionLogs } })
       expect(response.status()).toBe(400)

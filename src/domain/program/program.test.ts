@@ -177,12 +177,12 @@ describe('Race loads and Substitutions', () => {
     expect(stations['wall-balls'].raceLoad).toEqual({ reps: 100, pounds: 13, fixedLoad: true })
   })
 
-  it('rounds a share of Race load to the nearest 5 lb, and never scales the wall ball', () => {
+  it('rounds every Station load to the nearest 5 lb, Race load included, and never scales the wall ball', () => {
     const { stations } = program
-    expect(stationLoad(stations['sled-push'], 60)).toBe('200 lb')
-    expect(stationLoad(stations['sled-pull'], 60)).toBe('135 lb')
+    expect(stationLoad(stations['sled-push'], 60)).toBe('200 lb plates')
+    expect(stationLoad(stations['sled-pull'], 60)).toBe('135 lb plates')
     expect(stationLoad(stations['farmers-carry'], 60)).toBe('2 × 30 lb')
-    expect(stationLoad(stations['farmers-carry'])).toBe('2 × 53 lb')
+    expect(stationLoad(stations['farmers-carry'])).toBe('2 × 55 lb')
     expect(stationLoad(stations['wall-balls'], 60)).toBe('13 lb ball')
     expect(stationLoad(stations.skierg)).toBe('')
   })
@@ -201,8 +201,8 @@ describe('describeExercise', () => {
     describeExercise(exercises(session(n, id)).filter((e) => e.name === name)[nth], program.stations)
 
   it('reads Stations with distance and pounds', () => {
-    expect(line(1, 'hyrox', 'Sled push').detail).toBe('25 m · 200 lb · 60% of Race load')
-    expect(line(21, 'race-simulation', 'Farmers carry').detail).toBe('200 m · 2 × 53 lb')
+    expect(line(1, 'hyrox', 'Sled push').detail).toBe('25 m · 200 lb plates · 60% of Race load')
+    expect(line(21, 'race-simulation', 'Farmers carry').detail).toBe('200 m · 2 × 55 lb')
     expect(line(2, 'hyrox', 'Wall balls').detail).toBe('20 reps · 13 lb ball')
   })
 

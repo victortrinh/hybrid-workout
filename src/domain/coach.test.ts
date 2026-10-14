@@ -31,6 +31,7 @@ function keysDoneBefore(today: LocalDate, p: Program = program): SessionLog[] {
           environment: null,
           distanceMeters: null,
           intervals: [],
+          stations: [],
           updatedAt: '2026-10-01T12:00:00.000Z',
         })),
     )
@@ -244,6 +245,7 @@ function log(week: number, sessionId: string, date: string, status: LoggedStatus
     environment: null,
     distanceMeters: null,
     intervals: [],
+    stations: [],
     updatedAt,
   }
 }
