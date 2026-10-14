@@ -1,63 +1,86 @@
-import { useCallback, useEffect, useState } from 'react'
-import { mergeLogs, type SessionLog, type SyncState } from '../domain/log'
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
+import type { SessionLog } from '../domain/log'
+import { openIndexedDbStore } from './sync/store'
+import { createSyncer, type Send, type Syncer } from './sync/syncer'
 
 export interface SessionLogs {
   logs: SessionLog[]
-  /** Shows the log at once, then sends it to the server. Resolves false if the server didn't take it. */
-  save: (log: SessionLog) => Promise<boolean>
-  /** What went wrong with the last load or save, for the athlete to read. */
+  /** Saves on this device at once; the server hears of it when it can be reached. */
+  save: (log: SessionLog) => void
+  /** Edits saved here that the server hasn't taken yet. */
+  pending: number
+  /** Something went wrong that the athlete should read. */
   error: string | null
 }
 
+/** How long a sync may take before the gym's one bar of signal counts as none. */
+const TIMEOUT_MS = 10_000
+/** While edits wait, how often to try again even without an `online` event. */
+const RETRY_MS = 30_000
+
 /**
- * Session logs, from the server and from this device. A saved log shows
- * straight away; if the server refuses it or can't be reached, it comes back
- * out and `error` says so. Offline logging arrives with the local store.
+ * Session logs, local-first: read from the device's IndexedDB, written there
+ * before anything else, and synced with the server whenever it's reachable
+ * (on start, after a save, when the phone comes back online or to the
+ * foreground, and every 30 seconds while edits wait).
  */
 export function useSessionLogs(): SessionLogs {
-  const [logs, setLogs] = useState<SessionLog[]>([])
-  const [error, setError] = useState<string | null>(null)
+  const [syncer] = useState(() =>
+    createSyncer(
+      {
+        load: async () => (await device()).load(),
+        write: async (log) => (await device()).write(log),
+        settle: async (logs, taken) => (await device()).settle(logs, taken),
+        drop: async (refused) => (await device()).drop(refused),
+      },
+      send,
+    ),
+  )
+  const snapshot = useSyncExternalStore(syncer.subscribe, syncer.snapshot)
+  useSync(syncer, snapshot.pending > 0)
 
-  useEffect(() => {
-    let cancelled = false
-    request('/api/state')
-      .then((state) => {
-        if (!cancelled) setLogs((ours) => mergeLogs(ours, state.sessionLogs))
-      })
-      .catch(() => {
-        if (!cancelled) setError('Couldn’t load your logs. The Bucket may be out of date.')
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  const save = useCallback(async (log: SessionLog) => {
-    let previous: SessionLog | undefined
-    setLogs((ours) => {
-      previous = ours.find((l) => l.id === log.id)
-      return mergeLogs(ours, [log])
-    })
-    setError(null)
-    try {
-      const state = await request('/api/sync', { method: 'POST', body: JSON.stringify({ sessionLogs: [log] }) })
-      setLogs((ours) => mergeLogs(ours, state.sessionLogs))
-      return true
-    } catch {
-      setLogs((ours) => {
-        const rest = ours.filter((l) => l.id !== log.id)
-        return previous ? [...rest, previous] : rest
-      })
-      setError('Couldn’t save that log. Check the connection and log it again.')
-      return false
-    }
-  }, [])
-
-  return { logs, save, error }
+  const save = useCallback((log: SessionLog) => void syncer.save(log), [syncer])
+  return { logs: snapshot.logs, save, pending: snapshot.pending, error: snapshot.error }
 }
 
-async function request(path: string, init?: RequestInit): Promise<SyncState> {
-  const response = await fetch(path, { ...init, headers: { 'content-type': 'application/json' } })
-  if (!response.ok) throw new Error(`${path} answered ${response.status}`)
-  return response.json()
+function useSync(syncer: Syncer, waiting: boolean) {
+  useEffect(() => {
+    void syncer.start()
+    const flush = () => void syncer.flush()
+    const visible = () => document.visibilityState === 'visible' && flush()
+    window.addEventListener('online', flush)
+    document.addEventListener('visibilitychange', visible)
+    return () => {
+      window.removeEventListener('online', flush)
+      document.removeEventListener('visibilitychange', visible)
+    }
+  }, [syncer])
+
+  useEffect(() => {
+    if (!waiting) return
+    const timer = window.setInterval(() => void syncer.flush(), RETRY_MS)
+    return () => window.clearInterval(timer)
+  }, [syncer, waiting])
+}
+
+/** One IndexedDB connection per page. Where the browser blocks it, every call fails and the syncer says so. */
+let opened: ReturnType<typeof openIndexedDbStore> | null = null
+const device = () => (opened ??= openIndexedDbStore())
+
+const send: Send = async (sessionLogs) => {
+  try {
+    const response = await fetch('/api/sync', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sessionLogs }),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    })
+    // Only a 400 means the logs themselves are wrong. Anything else, an expired
+    // Cloudflare Access session included, is worth trying again later.
+    if (response.status === 400) return { kind: 'refused' }
+    if (!response.ok) return { kind: 'unreachable' }
+    return { kind: 'taken', state: await response.json() }
+  } catch {
+    return { kind: 'unreachable' }
+  }
 }
