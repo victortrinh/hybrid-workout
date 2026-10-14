@@ -5,6 +5,9 @@ export interface SeedLog {
   sessionId: string
   date: string
   status: 'done' | 'partial' | 'skipped' | 'swapped'
+  /** A 5K test's time, which sets the Training paces. */
+  resultSeconds?: number
+  environment?: 'indoor' | 'outdoor'
 }
 
 const toLog = (seed: SeedLog, project: string) => ({
@@ -22,10 +25,19 @@ export async function seedLogs(request: APIRequestContext, project: string, logs
   if (!response.ok()) throw new Error(`Seeding failed: ${response.status()} ${await response.text()}`)
 }
 
-/** Answers /api/state and /api/sync with this history alone, for screens that don't write anything. */
-export async function serveHistory(page: Page, logs: SeedLog[]) {
-  const state = { sessionLogs: logs.map((l) => toLog(l, 'served')), suggestionDecisions: [] }
-  await page.route(/\/api\/(state|sync)$/, (route) => route.fulfill({ json: state }))
+/**
+ * Answers /api/state and /api/sync with this history, plus whatever the page
+ * syncs, without touching the shared database. Returns the logs the page
+ * sends, latest last, for tests that check what was saved.
+ */
+export async function serveHistory(page: Page, logs: SeedLog[]): Promise<Record<string, unknown>[]> {
+  const sent: Record<string, unknown>[] = []
+  const history = logs.map((l) => toLog(l, 'served'))
+  await page.route(/\/api\/(state|sync)$/, (route) => {
+    if (route.request().method() === 'POST') sent.push(...(route.request().postDataJSON().sessionLogs ?? []))
+    return route.fulfill({ json: { sessionLogs: [...history, ...sent], suggestionDecisions: [] } })
+  })
+  return sent
 }
 
 /** Every Session of a Week but the Optional one, Done on `date`: nothing carried, nothing Skipped. */

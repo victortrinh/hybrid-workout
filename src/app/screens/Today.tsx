@@ -1,6 +1,7 @@
 import { Button, Link } from 'react-aria-components'
 import { addDays } from '../../domain/calendar'
 import type { BucketEntry, CoachDay, PhaseProgress, RestReason } from '../../domain/coach'
+import { isLiveRun, type LiveRun } from '../../domain/live'
 import type { Environment, RunContext } from '../../domain/paces'
 import { describeSession, SESSION_TYPES } from '../../domain/program/describe'
 import type { Session } from '../../domain/program/types'
@@ -13,7 +14,7 @@ import { Segmented } from '../components/Segmented'
 import { SettingsPopover } from '../components/SettingsPopover'
 import { StripedNumeral } from '../components/StripedNumeral'
 import { longDay, nb, plural, shortDay, shortWeekday, STATUS_LABEL, weekday, weekRange } from '../format'
-import { logPath } from '../router'
+import { logPath, SCREEN_PATH } from '../router'
 
 /**
  * Today: one number (days to the race), one instruction (Up next), then the
@@ -31,6 +32,8 @@ export function Today({
   settings,
   onSettings,
   onDecide,
+  live,
+  onStart,
 }: {
   day: CoachDay
   weekCount: number
@@ -48,6 +51,10 @@ export function Today({
   onEnvironment: (week: number, session: Session, environment: Environment) => void
   settings: Settings
   onSettings: (patch: Partial<Settings>) => void
+  /** The Live session running on this device, if any. */
+  live: LiveRun | null
+  /** Start session: opens a Live session of Up next. */
+  onStart: (week: number, session: Session) => void
 }) {
   return (
     <section
@@ -63,6 +70,8 @@ export function Today({
         onDecide={onDecide}
         runContext={runContext}
         onEnvironment={onEnvironment}
+        live={live}
+        onStart={onStart}
       />
       <ThisWeek day={day} onPick={onPick} />
     </section>
@@ -159,6 +168,8 @@ function UpNext({
   onDecide,
   runContext,
   onEnvironment,
+  live,
+  onStart,
 }: {
   day: CoachDay
   weekCount: number
@@ -167,6 +178,8 @@ function UpNext({
   onDecide: (suggestion: Suggestion, decision: Decision) => void
   runContext: (week: number, session: Session) => RunContext
   onEnvironment: (week: number, session: Session, environment: Environment) => void
+  live: LiveRun | null
+  onStart: (week: number, session: Session) => void
 }) {
   const { position, upNext } = day
   const upNextWeek = day.bucket.find((e) => e.state === 'next')?.week
@@ -220,8 +233,19 @@ function UpNext({
           onChange={(environment) => onEnvironment(upNextWeek, upNext, environment)}
         />
       )}
-      {upNext && upNextWeek && position.kind === 'in-week' && (
+      {live ? (
         <div className="mt-4 flex gap-2.5">
+          <Link href={SCREEN_PATH.live} className={`${primaryAction} no-underline`}>
+            Resume {nb(live.heading)}
+          </Link>
+        </div>
+      ) : upNext && upNextWeek && position.kind === 'in-week' && (
+        <div className="mt-4 flex gap-2.5">
+          {isLiveRun(upNext) && (
+            <Button onPress={() => onStart(upNextWeek, upNext)} className={primaryAction}>
+              Start session
+            </Button>
+          )}
           <Link
             href={logPath(upNextWeek, upNext.id)}
             className="inline-grid min-h-[54px] flex-1 place-items-center rounded-sm px-5 text-[17px] font-bold text-ink no-underline shadow-[inset_0_0_0_2px_var(--ink)] hover:bg-sunk desktop:flex-none"
@@ -245,6 +269,9 @@ function UpNext({
     </div>
   )
 }
+
+const primaryAction =
+  'inline-grid min-h-[54px] flex-1 cursor-pointer place-items-center rounded-sm bg-cobalt px-5 text-center text-[17px] font-bold text-on-cobalt hover:bg-cobalt-hover data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-link desktop:flex-none'
 
 /** Whether the Session's target reads differently indoors and out: it has a run at a Training pace. */
 function dependsOnEnvironment(session: Session, run: RunContext): boolean {

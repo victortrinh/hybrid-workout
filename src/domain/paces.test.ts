@@ -138,6 +138,8 @@ function log(week: number, sessionId: string, date: string, change: Partial<Sess
     notes: null,
     resultSeconds: null,
     environment: null,
+    distanceMeters: null,
+    intervals: [],
     updatedAt: '2026-11-01T12:00:00.000Z',
     ...change,
   }

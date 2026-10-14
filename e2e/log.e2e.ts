@@ -100,6 +100,8 @@ test.describe('the sync endpoint', () => {
     notes: null,
     resultSeconds: null,
     environment: null,
+    distanceMeters: null,
+    intervals: [],
     updatedAt: '2027-03-08T20:00:00.000Z',
     ...change,
   })
@@ -123,6 +125,33 @@ test.describe('the sync endpoint', () => {
     expect(await mine(await sync(later))).toEqual([later])
   })
 
+  test('keeps a Live session’s console distance and reps with its log, replaced whole by a later edit', async ({
+    request,
+  }, testInfo) => {
+    const id = `e2e-live-${testInfo.project.name}`
+    const run = entry(testInfo.project.name, {
+      id,
+      sessionId: 'threshold',
+      environment: 'indoor',
+      distanceMeters: 9400,
+      intervals: [
+        { block: 1, rep: 1, targetPace: 292, held: true, actualPace: null },
+        { block: 3, rep: 2, targetPace: 292, held: false, actualPace: 298 },
+      ],
+    })
+    const stored = async (log: Record<string, unknown>) => {
+      const response = await request.post('/api/sync', { data: { sessionLogs: [log] } })
+      expect(response.ok()).toBe(true)
+      return (await response.json()).sessionLogs.filter((l: { id: string }) => l.id === id)
+    }
+
+    expect(await stored(run)).toEqual([run])
+    const edited = { ...run, intervals: [run.intervals[1]], updatedAt: '2027-03-09T08:00:00.000Z' }
+    expect(await stored(edited)).toEqual([edited])
+    // An older copy arriving late doesn't bring its reps back.
+    expect(await stored(run)).toEqual([edited])
+  })
+
   test('refuses logs that are malformed or name no Session', async ({ request }, testInfo) => {
     const project = testInfo.project.name
     for (const sessionLogs of [
@@ -133,6 +162,8 @@ test.describe('the sync endpoint', () => {
       [entry(project, { week: 28 })],
       // Only a 5K test has a result time.
       [entry(project, { resultSeconds: 1380 })],
+      // Only a run Session has reps.
+      [entry(project, { sessionId: 'strength', intervals: [{ block: 1, rep: 1, targetPace: null, held: true, actualPace: null }] })],
     ]) {
       const response = await request.post('/api/sync', { data: { sessionLogs } })
       expect(response.status()).toBe(400)

@@ -99,7 +99,10 @@ export function LogAfter({
       rpe: trained ? rpe : null,
       notes: notes.trim() === '' ? null : notes.trim(),
       resultSeconds,
-      environment: result ? where : null,
+      // A Live session's Environment, console distance and reps stay with the log through an edit.
+      environment: result ? where : (existing?.environment ?? null),
+      distanceMeters: trained ? (existing?.distanceMeters ?? null) : null,
+      intervals: trained ? (existing?.intervals ?? []) : [],
       updatedAt: editedAt(existing),
     })
     navigate(SCREEN_PATH.today)
@@ -270,7 +273,8 @@ export function LogAfter({
   )
 }
 
-function validateTime(text: string): string | null {
+/** A 5 km time as typed: mm:ss, within what a 5K test can believably take. */
+export function validateTime(text: string): string | null {
   const seconds = parseClock(text)
   if (seconds === null) return 'Minutes and seconds, like 23:00. That isn’t a time.'
   const [low, high] = FIVE_K_SECONDS
