@@ -280,7 +280,7 @@ function ExerciseSets({
   const headingId = `exercise-${index}`
   const tag = [`${exercise.sets} × ${exercise.repsWords}`, exercise.rpeWords].filter((t): t is string => Boolean(t))
   return (
-    <section aria-labelledby={headingId} className="border-b border-rule py-3.5">
+    <section aria-labelledby={headingId} className="border-b border-rule py-5">
       <div className="flex items-baseline justify-between gap-2.5">
         <h2 id={headingId} className="text-[24px]">
           {exercise.name}

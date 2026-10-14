@@ -306,7 +306,7 @@ Vertical rhythm is tight within a group and generous between groups: 4–6px ins
 ### Named Rules
 **The One Answer Rule.** Each screen opens with one hero number or one instruction in the first viewport; everything else follows as rows. A screen has at most one cobalt primary: on the Week screen it is the Session Today offers as Next (tagged Next, with Today's Start / Log after pair); every other Session gets a line Start and a Log after link.
 
-**The Exercise Row Rule.** In an exercise row the name is 700 and the prescription after it is 400: the numbers stand out by tabular figures, not by weight. Notes follow in Body Quiet; a substitution ("Instead, if…") sits apart behind a 2px `edge` left rule.
+**The Exercise Row Rule.** In an exercise row the name is 700 and the prescription after it is 400: the numbers stand out by tabular figures, not by weight. Notes follow in Body Quiet; a substitution ("Instead, if…") sits apart behind a 2px `edge` left rule. Setup steps (the Shortcut pages) follow the same contrast: the step text is 400, the action names in it bold. In a strength Live session each exercise is its own block, 20px above and below its hairline.
 
 ## Elevation & Depth
 

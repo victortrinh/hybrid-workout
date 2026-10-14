@@ -378,7 +378,7 @@ function WhichSession({
   return (
     <section
       aria-label="Which Session was this?"
-      className="mt-[18px] border-t-2 border-b border-t-ink border-b-rule py-3.5"
+      className="mt-[18px] border-t-2 border-t-ink py-3.5 desktop:border-b desktop:border-b-rule"
     >
       <p className="text-[17px] leading-[1.3] font-semibold">Which Session was this?</p>
       <p className="mt-1 text-[14px] text-muted">
@@ -403,7 +403,7 @@ function ConsoleDistance({ entry }: { entry: BucketEntry }) {
   const { activity, session, week } = entry
   if (!activity) return null
   return (
-    <section aria-label="Console distance" className="mt-[18px] border-t-2 border-b border-t-ink border-b-rule py-3.5">
+    <section aria-label="Console distance" className="mt-[18px] border-t-2 border-t-ink py-3.5 desktop:border-b desktop:border-b-rule">
       <p className="text-[17px] leading-[1.3] font-semibold">
         {nb(`${SESSION_TYPES[session.type].name} on the treadmill, ${shortWeekday(activity.date)}. What did the console say?`)}
       </p>
@@ -434,7 +434,7 @@ function SuggestionNote({ suggestion, onDecide }: { suggestion: Suggestion; onDe
     <section
       aria-label="Coach’s Suggestion"
       aria-live="polite"
-      className="mt-[18px] border-t-2 border-b border-t-ink border-b-rule py-3.5"
+      className="mt-[18px] border-t-2 border-t-ink py-3.5 desktop:border-b desktop:border-b-rule"
     >
       <p className="text-[17px] leading-[1.3] font-semibold">
         {decision === 'open' ? copy.line : decision === 'accepted' ? copy.accepted : copy.kept}
