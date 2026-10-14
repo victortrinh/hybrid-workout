@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { daysBetween, isoWeekday, localDate, localDateIn, type LocalDate } from './calendar'
+import { DEFAULT_EQUIPMENT, equipWeek } from './equipment'
 import { coach, findWeek, keyDeadline, prescribedWeek, programStart, weekOutcome, type CoachInput } from './coach'
+import { isLive } from './lifts'
 import type { LoggedStatus, SessionLog } from './log'
 import type { PainArea, PainReport } from './pain'
 import { program } from './program/program'
@@ -31,6 +33,7 @@ function keysDoneBefore(today: LocalDate, p: Program = program): SessionLog[] {
           environment: null,
           distanceMeters: null,
           intervals: [],
+          sets: [],
           stations: [],
           updatedAt: '2026-10-01T12:00:00.000Z',
         })),
@@ -245,6 +248,7 @@ function log(week: number, sessionId: string, date: string, status: LoggedStatus
     environment: null,
     distanceMeters: null,
     intervals: [],
+    sets: [],
     stations: [],
     updatedAt,
   }
@@ -669,7 +673,7 @@ describe('the re-entry Suggestion', () => {
   it('changes nothing until it is Accepted', () => {
     const day = inWeek11(week10(TWO_SKIPPED))
     expect(day.upNext).toMatchObject({ id: 'speed', headline: '4 × 4′', minutes: 45 })
-    expect(day.week).toBe(findWeek(program, 11))
+    expect(day.week).toEqual(equipWeek(findWeek(program, 11)!, DEFAULT_EQUIPMENT))
   })
 
   it('lightens every Prescription of the Week by a third once Accepted', () => {
@@ -693,7 +697,7 @@ describe('the re-entry Suggestion', () => {
     const logs = [...keysDoneBefore(localDate('2026-12-21')), ...week10(TWO_SKIPPED)]
     expect(prescribedWeek(program, 11, logs, [decided('accepted')])?.sessions[0].headline).toBe('3 × 4′')
     expect(prescribedWeek(program, 11, logs, [decided('kept')])?.sessions[0].headline).toBe('4 × 4′')
-    expect(prescribedWeek(program, 10, logs, [decided('accepted')])).toBe(findWeek(program, 10))
+    expect(prescribedWeek(program, 10, logs, [decided('accepted')])).toEqual(equipWeek(findWeek(program, 10)!, DEFAULT_EQUIPMENT))
   })
 })
 
@@ -794,7 +798,7 @@ describe('the pain rules', () => {
     // Threshold's two reps go to one; Strength, with nothing to swap or cut, stays as written.
     const threshold = day.bucket.find((e) => e.session.id === 'threshold')!.session
     expect(threshold.headline).toBe('1 × 12′')
-    expect(day.bucket.find((e) => e.session.id === 'strength')!.session).toEqual(findWeek(program, 3)!.sessions[1])
+    expect(day.bucket.find((e) => e.session.id === 'strength')!.session).toEqual(prescribedWeek(program, 3, [], [])!.sessions[1])
   })
 
   it('make every Session easy low-impact work or rest at pain 5 or more', () => {
@@ -812,6 +816,8 @@ describe('the pain rules', () => {
       expect(day.bucket.map((e) => e.session.type)).toEqual(['speed', 'strength', 'threshold', 'hyrox', 'easy'])
       expect(day.upNext!.blocks).toHaveLength(1)
       expect(mainIntervals(day.upNext!)).toEqual({ kind: 'note', minutes: 30 })
+      // Nothing left to run, lift or push: Log after, not Start session.
+      expect(day.bucket.map((e) => isLive(e.session))).toEqual([false, false, false, false, false])
     }
   })
 
@@ -905,8 +911,8 @@ describe('the pain rules', () => {
     const report = pain('2026-11-04', 4)
     const decisions = [painDecision(report, 'accepted')]
     const today = localDate('2026-11-04')
-    expect(prescribedWeek(program, 3, [], decisions, { reports: [report], today })?.sessions[0].headline).toBe('4 × 3′')
-    expect(prescribedWeek(program, 4, [], decisions, { reports: [report], today })).toBe(findWeek(program, 4))
-    expect(prescribedWeek(program, 3, [], decisions)).toBe(findWeek(program, 3))
+    expect(prescribedWeek(program, 3, [], decisions, undefined, { reports: [report], today })?.sessions[0].headline).toBe('4 × 3′')
+    expect(prescribedWeek(program, 4, [], decisions, undefined, { reports: [report], today })).toEqual(prescribedWeek(program, 4, [], []))
+    expect(prescribedWeek(program, 3, [], decisions)).toEqual(prescribedWeek(program, 3, [], []))
   })
 })

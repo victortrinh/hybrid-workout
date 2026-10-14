@@ -566,6 +566,7 @@ export function liveLog(run: LiveRun, now: number, input: LiveLogInput): Session
     distanceMeters: run.environment === 'indoor' && !circuit ? input.distanceMeters : null,
     intervals: run.intervals,
     stations: stationLogs(run),
+    sets: [],
     updatedAt: input.updatedAt,
   }
 }

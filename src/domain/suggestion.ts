@@ -8,7 +8,7 @@
  */
 import { localDate, type LocalDate } from './calendar'
 import type { PainArea, PainLevel } from './pain'
-import type { SessionType } from './program/types'
+import type { LiftId, SessionType } from './program/types'
 
 export const DECISIONS = ['open', 'accepted', 'kept'] as const
 
@@ -70,9 +70,43 @@ export interface PainSuggestion {
   decidedOn: LocalDate | null
 }
 
-export type Suggestion = ReEntrySuggestion | PainSuggestion
+/** Why the Coach wants a Working weight moved. */
+export type WorkingWeightReason =
+  /** Every target rep at RPE 7 or easier: up. */
+  | 'all-reps-easy'
+  /** RPE 9 or more, or missed reps, two Strength sessions in a row: down. */
+  | 'two-holds'
+
+/** A Working weight up or down, from a Strength session's logged sets. */
+export interface WorkingWeightSuggestion {
+  id: string
+  kind: 'working-weight'
+  /** The Strength session it comes from. */
+  week: number
+  sessionId: string
+  lift: LiftId
+  /** The day that Strength session was done. */
+  date: LocalDate
+  from: { pounds: number }
+  to: { pounds: number }
+  trigger: {
+    reason: WorkingWeightReason
+    /** The Weeks of the Strength sessions behind it: one for an increase, the holds in a row for a reduction. */
+    weeks: number[]
+    /** The latest of those Sessions: sets logged, the fewest reps and the lightest load of any set, and the hardest RPE. */
+    sets: number
+    reps: number
+    pounds: number
+    topRpe: number
+  }
+  decision: Decision
+  decidedOn: LocalDate | null
+}
+
+export type Suggestion = ReEntrySuggestion | WorkingWeightSuggestion | PainSuggestion
 
 export const reEntryId = (week: number) => `re-entry-w${week}`
+export const workingWeightId = (lift: LiftId, week: number) => `ww-${lift}-w${week}`
 /** One per Pain report: a decision on it stands as long as the report does. */
 export const painId = (reportId: string) => `pain-${reportId}`
 

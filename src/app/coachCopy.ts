@@ -3,7 +3,7 @@
  * and always with the number and the reason (PRODUCT.md, Coach voice).
  */
 import { PAIN_AREA_LABEL, PAIN_REPS_PERCENT, type PainLevel } from '../domain/pain'
-import { SESSION_TYPES } from '../domain/program/describe'
+import { LIFT_NAME, SESSION_TYPES } from '../domain/program/describe'
 import type { Suggestion } from '../domain/suggestion'
 import { plural } from './format'
 
@@ -46,6 +46,29 @@ export function suggestionCopy(s: Suggestion): SuggestionCopy {
             ? 'Done. Easy bike or rest until it settles. Tell me when it does.'
             : 'Done. Bike for the jumps, fewer reps. Tell me when it settles.',
         kept: 'Keeping it as written. Your call. Stop if it gets worse.',
+      }
+    }
+    case 'working-weight': {
+      const lift = LIFT_NAME[s.lift]
+      const from = `${s.from.pounds} lb`
+      const to = `${s.to.pounds} lb`
+      const step = `${s.to.pounds > s.from.pounds ? '+' : '−'}${Math.abs(s.to.pounds - s.from.pounds)} lb`
+      const { trigger } = s
+      if (trigger.reason === 'all-reps-easy') {
+        return {
+          line: `${lift}: every rep, nothing harder than RPE ${trigger.topRpe}. ${from} was a warm-up. ${to} next time.`,
+          why: `Week ${s.week}: ${trigger.sets} × ${trigger.reps} at ${from}, top RPE ${trigger.topRpe} · ${step}`,
+          keep: `Keep ${from}`,
+          accepted: `${lift} is ${to} now. Same face, more plates.`,
+          kept: `${lift} stays ${from}. Your call. It’ll still be light.`,
+        }
+      }
+      return {
+        line: `${lift} held twice in a row. Grinding isn’t progress. Back to ${to}, then build again.`,
+        why: `Weeks ${list(trigger.weeks.map(String))}: RPE 9 or more, or reps missed · −5%, ${step}`,
+        keep: `Keep ${from}`,
+        accepted: `${lift} is ${to} now. Clean reps first.`,
+        kept: `${lift} stays ${from}. Make the reps count.`,
       }
     }
   }

@@ -88,8 +88,8 @@ export interface Exercise {
   substitutions?: Substitution[]
 }
 
-/** Why a Substitution applies. */
-export type SubstitutionReason = 'no-floor-space' | 'readiness'
+/** Why a Substitution applies: a piece of the Equipment profile missing, or Readiness. */
+export type SubstitutionReason = 'no-floor-space' | 'no-calf-machine' | 'no-seated-calf-machine' | 'readiness'
 
 export interface Substitution {
   when: SubstitutionReason[]
@@ -142,12 +142,18 @@ export type RunEffort =
   /** By feel, with no pace to resolve. */
   | { feel: 'easy' | 'hard' | 'controlled' | 'relaxed' | 'all-out'; rpe?: Range }
 
-export type LiftId =
-  | 'back-squat'
-  | 'romanian-deadlift'
-  | 'bulgarian-split-squat'
-  | 'single-leg-calf-raise'
-  | 'seated-calf-raise'
+export const LIFTS = [
+  'back-squat',
+  'romanian-deadlift',
+  'bulgarian-split-squat',
+  'single-leg-calf-raise',
+  'seated-calf-raise',
+  'standing-calf-raise-machine',
+  'seated-calf-raise-machine',
+] as const
+
+/** A lift with a Working weight of its own. A Substitution's lift has its own, since its loads differ. */
+export type LiftId = (typeof LIFTS)[number]
 
 export type StrengthLoad =
   | { kind: 'working-weight'; lift: LiftId }

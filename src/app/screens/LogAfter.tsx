@@ -114,10 +114,11 @@ export function LogAfter({
       rpe: trained ? rpe : null,
       notes: notes.trim() === '' ? null : notes.trim(),
       resultSeconds,
-      // A Live session's Environment, console distance and reps stay with the log through an edit.
+      // A Live session's Environment, console distance, reps and sets stay with the log through an edit.
       environment: result ? where : (existing?.environment ?? null),
       distanceMeters: trained ? (existing?.distanceMeters ?? null) : null,
       intervals: trained ? (existing?.intervals ?? []) : [],
+      sets: trained ? (existing?.sets ?? []) : [],
       stations: trained ? (existing?.stations ?? []) : [],
       updatedAt: editedAt(existing),
     })

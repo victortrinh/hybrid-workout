@@ -14,6 +14,7 @@ const valid = {
   environment: null,
   distanceMeters: null,
   intervals: [],
+  sets: [],
   stations: [],
   updatedAt: '2026-11-04T17:00:00.000Z',
 }
@@ -22,6 +23,9 @@ const held = { block: 1, rep: 1, targetPace: 292, held: true, actualPace: null }
 const changed = { block: 3, rep: 2, targetPace: 292, held: false, actualPace: 298 }
 const round = { round: 1, part: 'round', pounds: null, meters: null, reps: null, seconds: 600 }
 const sled = { round: 1, part: 'sled-push', pounds: 0, meters: 25, reps: null, seconds: null }
+
+const squat = { exercise: 0, set: 1, lift: 'back-squat', pounds: 185, reps: 5, rpe: 7 }
+const pullUps = { exercise: 5, set: 1, lift: null, pounds: null, reps: 8, rpe: 7 }
 
 describe('parseSessionLog', () => {
   it('accepts a complete log', () => {
@@ -53,6 +57,13 @@ describe('parseSessionLog', () => {
     expect(parseSessionLog(older)).toMatchObject({ distanceMeters: null, intervals: [] })
   })
 
+  it('accepts a Strength session’s sets, bodyweight ones included, and treats missing ones as none', () => {
+    const strength = { ...valid, sessionId: 'strength', sets: [squat, { ...squat, set: 2 }, pullUps] }
+    expect(parseSessionLog(strength)).toEqual(strength)
+    const { sets, ...older } = valid
+    expect(parseSessionLog(older)).toMatchObject({ sets: [] })
+  })
+
   it('accepts a HYROX session’s Station logs, an empty sled included, and treats missing ones as none', () => {
     const hyrox = { ...valid, sessionId: 'hyrox', stations: [round, sled] }
     expect(parseSessionLog(hyrox)).toEqual(hyrox)
@@ -82,6 +93,12 @@ describe('parseSessionLog', () => {
     ['a held rep with an actual pace', { intervals: [{ ...held, actualPace: 298 }] }],
     ['a changed rep with no actual pace', { intervals: [{ ...changed, actualPace: null }] }],
     ['a rep at 1:00/km', { intervals: [{ ...changed, actualPace: 60 }] }],
+    ['sets that are not a list', { sets: 'heavy' }],
+    ['a set logged twice', { sets: [squat, squat] }],
+    ['a set on a lift that doesn’t exist', { sets: [{ ...squat, lift: 'bench-press' }] }],
+    ['a lift with no load', { sets: [{ ...squat, pounds: null }] }],
+    ['a load off the 5 lb step', { sets: [{ ...squat, pounds: 187 }] }],
+    ['a set with no RPE', { sets: [{ ...squat, rpe: null }] }],
     ['Station logs that are not a list', { stations: 'sled' }],
     ['a Station that is no Station', { stations: [{ ...sled, part: 'tyre-flip' }] }],
     ['a Station logged twice in a round', { stations: [sled, { ...sled, pounds: 90 }] }],
