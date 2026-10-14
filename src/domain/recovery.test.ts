@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { localDate } from './calendar'
-import { hrvMean, isLowHrv, mergeNights, parseRecoveryNight, sleepText, type RecoveryNight } from './recovery'
+import { hrvMean, isLowHrv, lastNight, mergeNights, parseRecoveryNight, sleepText, type RecoveryNight } from './recovery'
 
 const AT = '2026-11-04T12:00:00.000Z'
 const body = { date: '2026-11-04', sleepMinutes: 341, hrvMs: 38, restingHeartRate: 52, source: 'Ultrahuman' }
@@ -110,5 +110,60 @@ describe('mergeNights', () => {
 describe('sleepText', () => {
   it('reads hours and minutes', () => {
     expect([341, 420, 365].map(sleepText)).toEqual(['5 h 41', '7 h 00', '6 h 05'])
+  })
+})
+
+describe('lastNight', () => {
+  const NOW = '2026-10-14T15:00:00.000Z' // 11:00 in Toronto
+  const at = (time: string) => `2026-10-14T${time}-04:00`
+  const yesterday = (time: string) => `2026-10-13T${time}-04:00`
+  const lines = (pairs: [string, string][]) => pairs.map(([a, b]) => `${a} ${b}`).join('\n')
+
+  it('adds up a night of stages', () => {
+    // 23:30 to 07:30 with a 20-minute wake (left out by the Value filter) at 03:00.
+    const night = lines([
+      [yesterday('23:30:00'), at('03:00:00')],
+      [at('03:20:00'), at('07:30:00')],
+    ])
+    expect(lastNight(night, NOW)).toBe(460)
+  })
+
+  it('counts each minute once when the Watch and the ring both tracked the night', () => {
+    const watch: [string, string][] = [
+      [yesterday('23:30:00'), at('02:00:00')],
+      [at('02:00:00'), at('07:30:00')],
+    ]
+    const ring: [string, string][] = [
+      [yesterday('23:40:00'), at('04:00:00')],
+      [at('04:00:00'), at('07:20:00')],
+    ]
+    expect(lastNight(lines([...watch, ...ring]), NOW)).toBe(480)
+  })
+
+  it('leaves out the night before, more than 3 hours earlier', () => {
+    const night = lines([
+      [yesterday('00:40:00'), yesterday('07:00:00')],
+      [yesterday('23:30:00'), at('07:30:00')],
+    ])
+    expect(lastNight(night, NOW)).toBe(480)
+  })
+
+  it('reads entries in any order, with commas or tabs', () => {
+    expect(lastNight(`${at('03:00:00')}\t${at('07:30:00')}\n${yesterday('23:30:00')},${at('03:00:00')}`, NOW)).toBe(480)
+  })
+
+  it('is null with no entries, and refuses lines that aren’t two timestamps', () => {
+    expect(lastNight('   ', NOW)).toBeNull()
+    expect(() => lastNight('Health sample', NOW)).toThrow(/start end/)
+    expect(() => lastNight(`${at('07:30:00')} ${at('03:00:00')}`, NOW)).toThrow(/start end/)
+  })
+
+  it('feeds parseRecoveryNight in place of sleepMinutes', () => {
+    const sleep = lines([[yesterday('23:30:00'), at('07:30:00')]])
+    expect(parseRecoveryNight({ sleep, hrvMs: 52, source: 'Ultrahuman' }, NOW)).toMatchObject({
+      date: '2026-10-14',
+      sleepMinutes: 480,
+    })
+    expect(() => parseRecoveryNight({ sleep: '', source: 'Ultrahuman' }, NOW)).toThrow(/No sleep/)
   })
 })

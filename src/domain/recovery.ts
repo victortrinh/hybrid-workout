@@ -191,8 +191,13 @@ export function parseRecoveryNight(value: unknown, receivedAt: string): Recovery
   if (typeof value !== 'object' || value === null) throw new Error('The body must be an object')
   const v = value as Record<string, unknown>
   const date = morning(v.date, receivedAt)
-  const sleepMinutes = reading(v.sleepMinutes, 'sleepMinutes', [1, 24 * 60])
-  if (sleepMinutes === null) throw new Error('No sleep in Apple Health from the ring yet: open the Ultrahuman app, then run the Shortcut again')
+  const sleepMinutes =
+    typeof v.sleep === 'string' && v.sleep.trim() !== ''
+      ? lastNight(v.sleep, receivedAt)
+      : reading(v.sleepMinutes, 'sleepMinutes', [1, 24 * 60])
+  if (sleepMinutes === null) {
+    throw new Error('No sleep in Apple Health from the ring yet: open the Ultrahuman app, then run the Shortcut again')
+  }
   const hrvMs = reading(v.hrvMs, 'hrvMs', [1, 300])
   const restingHeartRate = reading(v.restingHeartRate, 'restingHeartRate', [20, 150])
   if (typeof v.source !== 'string' || !SOURCE.test(v.source.trim())) {
@@ -216,6 +221,53 @@ function morning(value: unknown, receivedAt: string): LocalDate {
   const instant = new Date(text)
   if (/^\d{4}-\d{2}-\d{2}T/.test(text) && !Number.isNaN(instant.getTime())) return localDateIn(instant)
   throw new Error(`date must be yyyy-MM-dd, or left out for today (got "${text.slice(0, 40)}")`)
+}
+
+/** Entries this far apart belong to different nights. */
+export const NIGHT_GAP_MINUTES = 3 * 60
+/** Entries are read back this far from arrival: a night and the day before it. */
+const LOOKBACK_HOURS = 36
+
+/**
+ * Last night's sleep from Apple Health's raw entries, one `start end` pair
+ * per line (ISO timestamps). Health holds an entry per stage from every
+ * device that tracked the night, so overlapping entries are merged and each
+ * minute counts once, as Health's own total does. Of what's left, only the
+ * latest night counts: entries more than 3 hours before the next belong to
+ * the night before. Null when there is no entry at all.
+ */
+export function lastNight(text: string, receivedAt: string): number | null {
+  const now = Date.parse(receivedAt)
+  const lines = text.split(/[\n\r;]+/).map((l) => l.trim()).filter(Boolean)
+  if (lines.length > 2000) throw new Error('sleep has too many entries')
+  const spans = lines.map((line) => {
+    const [start, end] = line.split(/\s*[ ,|\t]\s*/).filter(Boolean)
+    const from = Date.parse(start ?? '')
+    const to = Date.parse(end ?? '')
+    if (Number.isNaN(from) || Number.isNaN(to) || to < from) {
+      throw new Error(`sleep must be one "start end" pair of ISO timestamps per line (got "${line.slice(0, 60)}")`)
+    }
+    return [from, to] as const
+  })
+  const recent = spans
+    .filter(([, to]) => to > now - LOOKBACK_HOURS * 3_600_000 && to <= now + 600_000)
+    .sort((a, b) => a[0] - b[0])
+  // Union of the entries: overlapping ones merge into one block.
+  const blocks: [number, number][] = []
+  for (const [from, to] of recent) {
+    const last = blocks.at(-1)
+    if (last && from <= last[1]) last[1] = Math.max(last[1], to)
+    else blocks.push([from, to])
+  }
+  if (blocks.length === 0) return null
+  // The latest night: walk back from the last block while the gaps stay short.
+  let total = 0
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    total += blocks[i][1] - blocks[i][0]
+    if (i > 0 && blocks[i][0] - blocks[i - 1][1] > NIGHT_GAP_MINUTES * 60_000) break
+  }
+  const minutes = Math.round(total / 60_000)
+  return minutes > 0 ? Math.min(minutes, 24 * 60) : null
 }
 
 /** A number, or numeric text; missing, empty or 0 is no reading. */
