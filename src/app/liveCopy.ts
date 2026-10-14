@@ -1,7 +1,8 @@
 /**
- * The Coach's line for each Block of a Live run session. Blunt, short enough
- * to read mid-stride (PRODUCT.md, Coach voice).
+ * The Coach's lines in a Live session: each Block of a run, each set at the
+ * rack. Blunt, short enough to read mid-stride (PRODUCT.md, Coach voice).
  */
+import type { LiveLifts } from '../domain/lifts'
 import type { LiveBlock, LiveRun } from '../domain/live'
 
 export function liveLine(block: LiveBlock, run: LiveRun): string {
@@ -52,3 +53,25 @@ export function liveLine(block: LiveBlock, run: LiveRun): string {
 /** The finish sheet's line: what the log will say. */
 export const finishLine = (status: 'done' | 'partial') =>
   status === 'done' ? 'All of it. Now say how it felt.' : 'Cut short. It logs as Partial, which still counts.'
+
+/** The Coach's opening line for a Live Strength session. */
+export function liftsStartLine(lifts: LiveLifts): string {
+  const first = lifts.exercises[0]
+  if (!first) return 'Nothing to lift. Suspicious.'
+  if (first.calibrate) return 'Calibration. Ramp up. Stop when a set feels like RPE 7: three left in the tank.'
+  if (first.rpeWords?.startsWith('RPE ≤')) return 'Deload. Lighter on purpose. Leave the ego in the car.'
+  return `${first.name} first. RPE 7 means three left in the tank.`
+}
+
+/** After a set is logged at its default RPE. */
+export const loggedLine = (set: number, rpe: number) => `Set ${set} logged at RPE ${rpe}. Change it below if that was a lie.`
+
+/** After the athlete changes a set's RPE. */
+export function rpeLine(rpe: number): string {
+  if (rpe <= 7) return 'Three in the tank. Exactly as ordered.'
+  if (rpe === 8) return 'Two left. Fine. Do not get greedy.'
+  return `RPE ${rpe}. Same weight next time, hero.`
+}
+
+export const REST_OVER_LINE = 'Rest over. Under the bar.'
+export const ALL_SETS_LINE = 'Every set in. Finish when you’re ready.'

@@ -1,8 +1,10 @@
 /**
- * The athlete's settings: treadmill units, where runs happen each month, and
- * the theme. They live on the device; nothing in them changes the Program.
+ * The athlete's settings: treadmill units, where runs happen each month, the
+ * Equipment profile and the theme. They live on the device; nothing in them
+ * changes the Program, only how it's done.
  */
 import type { LocalDate } from './calendar'
+import { DEFAULT_EQUIPMENT, parseEquipment, type Equipment } from './equipment'
 import { ENVIRONMENTS, SPEED_UNITS, type Environment, type SpeedUnit } from './paces'
 
 export const THEMES = ['system', 'light', 'dark'] as const
@@ -13,6 +15,8 @@ export interface Settings {
   unit: SpeedUnit
   /** January first: where runs happen unless a Session says otherwise. */
   environmentByMonth: Environment[]
+  /** What the gym has; Substitutions stand in for the rest. */
+  equipment: Equipment[]
 }
 
 const indoor = 'indoor' as const
@@ -23,6 +27,7 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: 'system',
   unit: 'kmh',
   environmentByMonth: [indoor, indoor, indoor, outdoor, outdoor, outdoor, outdoor, outdoor, outdoor, outdoor, indoor, indoor],
+  equipment: [...DEFAULT_EQUIPMENT],
 }
 
 export const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const
@@ -37,6 +42,7 @@ export function parseSettings(value: unknown): Settings {
     environmentByMonth: DEFAULT_SETTINGS.environmentByMonth.map((fallback, i) =>
       ENVIRONMENTS.includes(byMonth[i]) ? (byMonth[i] as Environment) : fallback,
     ),
+    equipment: parseEquipment(v.equipment),
   }
 }
 

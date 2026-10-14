@@ -10,11 +10,20 @@ export interface SeedLog {
   /** A 5K test's time in seconds, and where it was run. */
   resultSeconds?: number
   environment?: 'indoor' | 'outdoor'
+  /** A Strength session's sets: what the Coach reads for the Working weights. */
+  sets?: { exercise: number; set: number; lift: string | null; pounds: number | null; reps: number; rpe: number }[]
 }
 
+/** A log as the server answers it: every field there, none missing. */
 const toLog = (seed: SeedLog, project: string) => ({
   minutes: 45,
   rpe: seed.status === 'skipped' ? null : 6,
+  resultSeconds: null,
+  environment: null,
+  distanceMeters: null,
+  intervals: [],
+  stations: [],
+  sets: [],
   ...seed,
   id: `e2e-${project}-w${seed.week}-${seed.sessionId}`,
   notes: null,

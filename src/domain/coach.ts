@@ -8,10 +8,12 @@
  */
 import { lightenWeek, RE_ENTRY_PERCENT } from './adapt'
 import { addDays, daysBetween, mondayOf, type LocalDate } from './calendar'
+import { DEFAULT_EQUIPMENT, equip, equipWeek, type Equipment } from './equipment'
 import { logFor, trained, type LoggedStatus, type SessionLog } from './log'
 import { latestFiveKTest, trainingPaces, type TrainingPaces } from './paces'
 import type { Phase, PhaseId, Program, Session, SessionType, Week } from './program/types'
 import { decisionFor, reEntryId, type ReEntrySuggestion, type Suggestion, type SuggestionDecision } from './suggestion'
+import { strengthState, type WorkingWeights } from './weights'
 
 export interface CoachInput {
   program: Program
@@ -23,6 +25,8 @@ export interface CoachInput {
   picked?: PickedSession | null
   /** The athlete's decisions on Suggestions. */
   decisions?: SuggestionDecision[]
+  /** What the gym has: whatever it lacks, Substitutions stand in for. */
+  equipment?: readonly Equipment[]
 }
 
 export interface PickedSession {
@@ -106,23 +110,39 @@ export interface CoachDay {
   fiveKTest: SessionLog | null
   /** Null before the baseline 5K test: until then every run is RPE only. */
   paces: TrainingPaces | null
-  /** The Suggestions for this Week, whatever their decision. */
+  /**
+   * The Suggestions for this Week, whatever their decision, then each lift's
+   * latest Working weight Suggestion.
+   */
   suggestions: Suggestion[]
+  /** Each lift's Working weight; a lift without one is found in its next Strength session. */
+  workingWeights: WorkingWeights
 }
 
-export function coach({ program, today, logs = [], picked = null, decisions = [] }: CoachInput): CoachDay {
+export function coach({
+  program,
+  today,
+  logs = [],
+  picked = null,
+  decisions = [],
+  equipment = DEFAULT_EQUIPMENT,
+}: CoachInput): CoachDay {
   const position = positionOf(program, today)
   const shownWeek =
     position.kind === 'in-week' ? position.week : position.kind === 'before-start' ? 1 : null
   const planned = shownWeek === null ? null : findWeek(program, shownWeek)
-  const suggestions = position.kind === 'in-week' && planned ? suggestionsFor(program, planned, logs, decisions) : []
-  const week = planned && adapt(planned, suggestions)
+  const strength = strengthState(program, logs, decisions, today)
+  const suggestions = [
+    ...(position.kind === 'in-week' && planned ? suggestionsFor(program, planned, logs, decisions) : []),
+    ...(position.kind === 'in-week' ? strength.suggestions : []),
+  ]
+  const week = planned && adapt(planned, suggestions, equipment)
 
   const previous = position.kind === 'in-week' && week ? findWeek(program, week.number - 1) : null
   const carried = previous ? weekOutcome(program, previous, logs, today).carried : null
   const logged: Logged[] = [
     ...(carried && previous
-      ? [{ session: carried.session, week: previous.number, carriedUntil: carried.until }]
+      ? [{ session: equip(carried.session, equipment), week: previous.number, carriedUntil: carried.until }]
       : []),
     ...(week ? week.sessions.map((session) => ({ session, week: week.number, carriedUntil: null })) : []),
   ].map((entry) => ({ ...entry, log: logFor(logs, entry.week, entry.session.id) }))
@@ -149,6 +169,7 @@ export function coach({ program, today, logs = [], picked = null, decisions = []
     fiveKTest,
     paces: fiveKTest?.resultSeconds ? trainingPaces(fiveKTest.resultSeconds) : null,
     suggestions,
+    workingWeights: strength.weights,
   }
 }
 
@@ -370,6 +391,7 @@ export function weekOutcome(program: Program, week: Week, logs: SessionLog[], to
 
 // ---------------------------------------------------------------------------
 // Suggestions. Each is derived from the logs; only the decision is stored.
+// Working weight Suggestions are replayed in weights.ts.
 
 /** Skipped Sessions in a Week that make the next one a lighter re-entry. */
 export const RE_ENTRY_SKIPS = 2
@@ -421,14 +443,17 @@ function reEntryFor(
   }
 }
 
-/** The Week with every accepted Suggestion applied. */
-function adapt(week: Week, suggestions: Suggestion[]): Week {
-  return suggestions.reduce(
-    (adapted, s) =>
-      s.decision === 'accepted' && s.kind === 're-entry' && s.week === adapted.number
-        ? lightenWeek(adapted, s.to.volumePercent)
-        : adapted,
-    week,
+/** The Week with every accepted Suggestion applied, as it's done in this gym. */
+function adapt(week: Week, suggestions: Suggestion[], equipment: readonly Equipment[]): Week {
+  return equipWeek(
+    suggestions.reduce(
+      (adapted, s) =>
+        s.decision === 'accepted' && s.kind === 're-entry' && s.week === adapted.number
+          ? lightenWeek(adapted, s.to.volumePercent)
+          : adapted,
+      week,
+    ),
+    equipment,
   )
 }
 
@@ -441,7 +466,8 @@ export function prescribedWeek(
   number: number,
   logs: SessionLog[],
   decisions: SuggestionDecision[],
+  equipment: readonly Equipment[] = DEFAULT_EQUIPMENT,
 ): Week | null {
   const week = findWeek(program, number)
-  return week && adapt(week, suggestionsFor(program, week, logs, decisions))
+  return week && adapt(week, suggestionsFor(program, week, logs, decisions), equipment)
 }

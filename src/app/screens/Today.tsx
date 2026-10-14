@@ -1,7 +1,7 @@
 import { Button, Link } from 'react-aria-components'
 import { addDays } from '../../domain/calendar'
 import type { BucketEntry, CoachDay, PhaseProgress, RestReason } from '../../domain/coach'
-import { isLive, type LiveRun } from '../../domain/live'
+import { isLive, type LiveSession } from '../../domain/lifts'
 import type { Environment, RunContext } from '../../domain/paces'
 import { describeSession, SESSION_TYPES } from '../../domain/program/describe'
 import type { Session } from '../../domain/program/types'
@@ -52,7 +52,7 @@ export function Today({
   settings: Settings
   onSettings: (patch: Partial<Settings>) => void
   /** The Live session running on this device, if any. */
-  live: LiveRun | null
+  live: LiveSession | null
   /** Start session: opens a Live session of Up next. */
   onStart: (week: number, session: Session) => void
 }) {
@@ -178,7 +178,7 @@ function UpNext({
   onDecide: (suggestion: Suggestion, decision: Decision) => void
   runContext: (week: number, session: Session) => RunContext
   onEnvironment: (week: number, session: Session, environment: Environment) => void
-  live: LiveRun | null
+  live: LiveSession | null
   onStart: (week: number, session: Session) => void
 }) {
   const { position, upNext } = day
@@ -189,7 +189,7 @@ function UpNext({
   let meta = ''
 
   if (upNext) {
-    const description = describeSession(upNext, run)
+    const description = describeSession(upNext, run, day.workingWeights)
     heading = description.heading
     target = description.target
     meta = description.meta

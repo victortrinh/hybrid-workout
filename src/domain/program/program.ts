@@ -10,6 +10,7 @@ import type {
   Block,
   Exercise,
   LiftId,
+  Prescription,
   Program,
   Range,
   RunEffort,
@@ -327,6 +328,46 @@ const easyInsteadOfThreshold = easyRun(40, {
 })
 
 type StrengthPhase = 'build' | 'maintenance'
+type Sets = Extract<Prescription, { kind: 'sets' }>
+
+/** The same sets on the other lift: a machine's loads aren't a dumbbell's, so each has its own Working weight. */
+function onLift(rx: Sets, lift: LiftId): Sets {
+  return 'lift' in rx.load ? { ...rx, load: { ...rx.load, lift } } : rx
+}
+
+/**
+ * Calf raises as the Program writes them, on the machines. The athlete's gym
+ * has none (training-plan.md, "Resolved during approval"), so the Equipment
+ * profile swaps in the dumbbell single-leg raise and the loaded seated raise.
+ * `rx` is written for the dumbbell lift.
+ */
+function standingCalfRaise(rx: Sets): Exercise {
+  return {
+    name: 'Standing calf raise',
+    prescription: onLift(rx, 'standing-calf-raise-machine'),
+    note: 'Machine, one leg at a time, 2–3 s lowering',
+    substitutions: [
+      {
+        when: ['no-calf-machine'],
+        options: [{ name: 'Single-leg calf raise', prescription: rx, note: 'Off a step, dumbbell in hand, 2–3 s lowering' }],
+      },
+    ],
+  }
+}
+
+function seatedCalfRaise(rx: Sets): Exercise {
+  return {
+    name: 'Seated calf raise',
+    prescription: onLift(rx, 'seated-calf-raise-machine'),
+    note: 'Machine',
+    substitutions: [
+      {
+        when: ['no-seated-calf-machine'],
+        options: [{ name: 'Loaded seated calf raise', prescription: rx, note: 'Dumbbell or barbell on the knees' }],
+      },
+    ],
+  }
+}
 
 function strength(phase: StrengthPhase, { calibration = false, deload = false } = {}): Session {
   const load = (lift: LiftId): StrengthLoad =>
@@ -396,16 +437,8 @@ function strength(phase: StrengthPhase, { calibration = false, deload = false } 
       {
         name: 'Tendon',
         exercises: [
-          {
-            name: 'Single-leg calf raise',
-            prescription: { kind: 'sets', sets: sets(3), reps: 8, perLeg: true, load: load('single-leg-calf-raise') },
-            note: 'Off a step, dumbbell in hand, 2–3 s lowering',
-          },
-          {
-            name: 'Seated calf raise',
-            prescription: { kind: 'sets', sets: sets(2), reps: 10, load: load('seated-calf-raise') },
-            note: 'Dumbbell or barbell on the knees',
-          },
+          standingCalfRaise({ kind: 'sets', sets: sets(3), reps: 8, perLeg: true, load: load('single-leg-calf-raise') }),
+          seatedCalfRaise({ kind: 'sets', sets: sets(2), reps: 10, load: load('seated-calf-raise') }),
         ],
       },
       {
@@ -451,10 +484,7 @@ const strengthTaper: Session = {
     {
       name: 'Tendon',
       exercises: [
-        {
-          name: 'Single-leg calf raise',
-          prescription: { kind: 'sets', sets: 2, reps: 8, perLeg: true, load: { kind: 'light', lift: 'single-leg-calf-raise' } },
-        },
+        standingCalfRaise({ kind: 'sets', sets: 2, reps: 8, perLeg: true, load: { kind: 'light', lift: 'single-leg-calf-raise' } }),
       ],
     },
   ],

@@ -2,8 +2,9 @@ import { useEffect, useMemo, useRef } from 'react'
 import { addDays } from '../domain/calendar'
 import { Link, RouterProvider } from 'react-aria-components'
 import { coach, findWeek, keyDeadline, prescribedWeek, type CoachDay } from '../domain/coach'
+import { liftsLog, startLifts } from '../domain/lifts'
 import { liveLog, startRun } from '../domain/live'
-import { logFor } from '../domain/log'
+import { logFor, type SessionLog } from '../domain/log'
 import type { Environment, RunContext } from '../domain/paces'
 import type { Session } from '../domain/program/types'
 import { environmentOn } from '../domain/settings'
@@ -56,8 +57,12 @@ export function App() {
   const { logs, save, pending, error } = useSessionLogs()
   const { decisions, decide, error: decisionError } = useDecisions()
   const [picked, pick] = usePicked()
-  const day = useMemo(() => coach({ program, today, logs, picked, decisions }), [today, logs, picked, decisions])
   const { settings, change, overrides, override } = useSettings()
+  const { equipment } = settings
+  const day = useMemo(
+    () => coach({ program, today, logs, picked, decisions, equipment }),
+    [today, logs, picked, decisions, equipment],
+  )
   /** How a Session's runs read: the Training paces, in this Session's Environment and the chosen units. */
   const runContext = (week: number, session: Session): RunContext => {
     const inWeek = day.position.kind === 'in-week' && day.position.week === week
@@ -72,15 +77,33 @@ export function App() {
   const setEnvironment = (week: number, session: Session, environment: Environment) =>
     override(week, session.id, environment)
   const [live, setLive] = useLiveRun()
-  /** Start session: the clock starts at the tap, in the Environment Today shows for it. */
+  /**
+   * Start session: Strength prefilled with today's Working weights; a run's
+   * clock starts at the tap, in the Environment Today shows for it.
+   */
   const startLive = (week: number, session: Session) => {
     unlockSound()
-    setLive(startRun({ week, session, date: today, environment: runContext(week, session).environment }, Date.now()))
+    const now = Date.now()
+    setLive(
+      session.type === 'strength'
+        ? startLifts({ week, session, date: today, weights: day.workingWeights }, now)
+        : startRun({ week, session, date: today, environment: runContext(week, session).environment }, now),
+    )
     navigate(SCREEN_PATH.live)
+  }
+  /** The finished Live session's log, replacing any log the Session already has. */
+  const saveLive = (make: (id: string, updatedAt: string) => SessionLog) => {
+    if (!live) return
+    const existing = logFor(logs, live.week, live.sessionId)
+    save({ ...make(existing?.id ?? crypto.randomUUID(), editedAt(existing?.updatedAt)), notes: existing?.notes ?? null })
+    setLive(null)
+    navigate(SCREEN_PATH.today)
   }
   const route = useRoute()
   const week =
-    route.screen === 'week' || route.screen === 'log' ? prescribedWeek(program, route.week ?? 0, logs, decisions) : null
+    route.screen === 'week' || route.screen === 'log'
+      ? prescribedWeek(program, route.week ?? 0, logs, decisions, equipment)
+      : null
   const logged = route.screen === 'log' ? week?.sessions.find((s) => s.id === route.sessionId) : undefined
   const screen: Screen =
     (route.screen === 'week' && !week) || (route.screen === 'log' && !logged) ? 'not-found' : route.screen
@@ -93,22 +116,13 @@ export function App() {
       <RouterProvider navigate={navigate}>
         <main id="main">
           <Live
-            run={live}
-            runContext={{ paces: day.paces, unit: settings.unit, environment: live?.environment ?? 'indoor' }}
+            live={live}
+            runContext={{ paces: day.paces, unit: settings.unit, environment: 'indoor' }}
             onChange={setLive}
-            onSave={(run, finish) => {
-              const existing = logFor(logs, run.week, run.sessionId)
-              save({
-                ...liveLog(run, Date.now(), {
-                  ...finish,
-                  id: existing?.id ?? crypto.randomUUID(),
-                  updatedAt: editedAt(existing?.updatedAt),
-                }),
-                notes: existing?.notes ?? null,
-              })
-              setLive(null)
-              navigate(SCREEN_PATH.today)
-            }}
+            onSave={(run, finish) => saveLive((id, updatedAt) => liveLog(run, Date.now(), { ...finish, id, updatedAt }))}
+            onSaveLifts={(lifts, finish) =>
+              saveLive((id, updatedAt) => liftsLog(lifts, Date.now(), { ...finish, id, updatedAt }))
+            }
           />
         </main>
       </RouterProvider>

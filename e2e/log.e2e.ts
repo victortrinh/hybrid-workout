@@ -102,6 +102,7 @@ test.describe('the sync endpoint', () => {
     environment: null,
     distanceMeters: null,
     intervals: [],
+    sets: [],
     stations: [],
     updatedAt: '2027-03-08T20:00:00.000Z',
     ...change,
@@ -153,6 +154,30 @@ test.describe('the sync endpoint', () => {
     expect(await stored(run)).toEqual([edited])
   })
 
+  test('keeps a Strength session’s sets with its log, replaced whole by a later edit', async ({ request }, testInfo) => {
+    const id = `e2e-lift-${testInfo.project.name}`
+    const lifted = entry(testInfo.project.name, {
+      id,
+      sessionId: 'strength',
+      sets: [
+        { exercise: 0, set: 1, lift: 'back-squat', pounds: 185, reps: 5, rpe: 7 },
+        { exercise: 0, set: 2, lift: 'back-squat', pounds: 190, reps: 4, rpe: 9 },
+        { exercise: 5, set: 1, lift: null, pounds: null, reps: 8, rpe: 7 },
+      ],
+    })
+    const stored = async (log: Record<string, unknown>) => {
+      const response = await request.post('/api/sync', { data: { sessionLogs: [log] } })
+      expect(response.ok()).toBe(true)
+      return (await response.json()).sessionLogs.filter((l: { id: string }) => l.id === id)
+    }
+
+    expect(await stored(lifted)).toEqual([lifted])
+    const edited = { ...lifted, sets: lifted.sets.slice(0, 1), updatedAt: '2027-03-09T08:00:00.000Z' }
+    expect(await stored(edited)).toEqual([edited])
+    // An older copy arriving late doesn't bring its sets back.
+    expect(await stored(lifted)).toEqual([edited])
+  })
+
   test('keeps a HYROX session’s Station logs with its log, replaced whole by a later edit', async ({ request }, testInfo) => {
     const id = `e2e-hyrox-${testInfo.project.name}`
     const circuit = entry(testInfo.project.name, {
@@ -189,6 +214,9 @@ test.describe('the sync endpoint', () => {
       [entry(project, { resultSeconds: 1380 })],
       // Only a run Session has reps.
       [entry(project, { sessionId: 'strength', intervals: [{ block: 1, rep: 1, targetPace: null, held: true, actualPace: null }] })],
+      // Only a Strength session has sets, and only on the 5 lb step.
+      [entry(project, { sessionId: 'speed', sets: [{ exercise: 0, set: 1, lift: 'back-squat', pounds: 185, reps: 5, rpe: 7 }] })],
+      [entry(project, { sessionId: 'strength', sets: [{ exercise: 0, set: 1, lift: 'back-squat', pounds: 187, reps: 5, rpe: 7 }] })],
       // Only HYROX and a Race simulation have Station logs.
       [entry(project, { stations: [{ round: 1, part: 'round', pounds: null, meters: null, reps: null, seconds: 600 }] })],
     ]) {

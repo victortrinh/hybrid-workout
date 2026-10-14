@@ -4,6 +4,7 @@ import type { CoachDay } from '../../domain/coach'
 import { clock, type RunContext } from '../../domain/paces'
 import { describeExercise, describeSession, SESSION_TYPES } from '../../domain/program/describe'
 import type { Program, Session, Week } from '../../domain/program/types'
+import type { WorkingWeights } from '../../domain/weights'
 import { LaneChip } from '../components/LaneChip'
 import { longDay, nb, shortDay, weekRange } from '../format'
 import { SCREEN_PATH, weekPath } from '../router'
@@ -30,6 +31,9 @@ export function WeekScreen({
   const mark = weekMark(week)
   const previous = week.number > 1 ? week.number - 1 : null
   const next = week.number < program.weekCount ? week.number + 1 : null
+  // Loads from today's Working weights, for this Week and later ones: a past Week's are in its logs.
+  const past = day.position.kind === 'finished' || (day.position.kind === 'in-week' && week.number < day.position.week)
+  const weights = past ? undefined : day.workingWeights
 
   return (
     <div className="px-pad pt-4 desktop:max-w-plan desktop:px-gutter desktop:pt-7">
@@ -60,7 +64,13 @@ export function WeekScreen({
       )}
 
       {week.sessions.map((session) => (
-        <SessionDetail key={session.id} session={session} program={program} run={runContext(week.number, session)} />
+        <SessionDetail
+          key={session.id}
+          session={session}
+          program={program}
+          run={runContext(week.number, session)}
+          weights={weights}
+        />
       ))}
 
       <nav aria-label="Other Weeks" className="mt-8 flex justify-between gap-3 border-t-2 border-ink pt-2">
@@ -81,8 +91,18 @@ export function WeekScreen({
   )
 }
 
-function SessionDetail({ session, program, run }: { session: Session; program: Program; run: RunContext }) {
-  const description = describeSession(session, run)
+function SessionDetail({
+  session,
+  program,
+  run,
+  weights,
+}: {
+  session: Session
+  program: Program
+  run: RunContext
+  weights?: WorkingWeights
+}) {
+  const description = describeSession(session, run, weights)
   const headingId = `session-${session.id}`
   return (
     <section aria-labelledby={headingId} className="mt-7 border-t-2 border-ink pt-3">
@@ -109,7 +129,7 @@ function SessionDetail({ session, program, run }: { session: Session; program: P
           </h3>
           <ul className="mt-1">
             {block.exercises.map((exercise, j) => {
-              const line = describeExercise(exercise, program.stations, run)
+              const line = describeExercise(exercise, program.stations, run, weights)
               return (
                 <li key={`${exercise.name}-${j}`} className="border-b border-rule py-2">
                   <span className="block text-[16px] font-bold">
