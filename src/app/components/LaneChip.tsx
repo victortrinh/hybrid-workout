@@ -1,6 +1,6 @@
 import type { Lane } from '../../domain/program/types'
 
-const LANE_COLOR: Record<Lane, string> = {
+export const LANE_COLOR: Record<Lane, string> = {
   speed: 'text-speed',
   strength: 'text-strength',
   threshold: 'text-threshold',

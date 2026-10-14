@@ -5,7 +5,20 @@
  * and RPE and lifts as sets and reps. Exact speeds and pounds replace these
  * lines once the Coach can resolve them.
  */
-import type { Block, Exercise, Lane, Prescription, RunEffort, Session, SessionType } from './types'
+import type {
+  Block,
+  Exercise,
+  Lane,
+  Prescription,
+  RunEffort,
+  Session,
+  SessionType,
+  Station,
+  StationId,
+  StrengthLoad,
+  Substitution,
+  SubstitutionReason,
+} from './types'
 
 export const SESSION_TYPES: Record<SessionType, { name: string; lane: Lane }> = {
   speed: { name: 'Speed', lane: 'speed' },
@@ -50,7 +63,9 @@ function summary(session: Session, main: Block[]): string {
     case 'intervals':
       return `${rx.reps} × ${duration(rx.workSeconds)} ${effortWord(rx.effort)} / ${duration(rx.recoverySeconds)} ${rx.recovery}`
     case 'run': {
-      if (isCircuit(main)) return `${main.length} × (${runLength(main)} + ${stationsPerRound(main)} Stations)`
+      if (isCircuit(main)) return `${main.length} × (${runLength(main)} + ${stationsPerRound(main)})`
+      const runs = main[0].exercises.filter((e) => e.prescription.kind === 'run').length
+      if (runs > 1) return `${runs} × (${km(rx.meters ?? 0)} + Station)`
       const effort = rx.effort ? ` ${effortWord(rx.effort)}` : ''
       return rx.meters ? `${km(rx.meters)}${effort}` : `${rx.minutes} min${effort}`
     }
@@ -80,7 +95,7 @@ function target(session: Session, main: Block[]): string {
       if (isCircuit(main)) {
         const percent = main.flatMap((b) => b.exercises).map(raceLoadPercent).find((p) => p !== undefined)
         return [
-          `${runLength(main)} run + ${stationsPerRound(main)} Stations a round`,
+          `${runLength(main)} run + ${stationsPerRound(main)} a round`,
           percent && `about ${percent}% of Race load`,
         ]
           .filter(Boolean)
@@ -97,7 +112,9 @@ function target(session: Session, main: Block[]): string {
     case 'sets': {
       const calibration = calibrationRpe(session)
       if (calibration) return `Ramp each lift to RPE ${calibration} to find its Working weight`
-      return [mainLifts(main), rx.rpe && `RPE ${range(rx.rpe)}`].filter(Boolean).join(' · ')
+      return [mainLifts(main), rx.rpe && `RPE ${range(rx.rpe)}`, rx.rpeCap && `RPE ≤ ${rx.rpeCap}`, loadWords(rx.load)]
+        .filter(Boolean)
+        .join(' · ')
     }
     default:
       return ''
@@ -142,15 +159,21 @@ function runLength(rounds: Block[]): string {
   return run.kind === 'run' && run.meters ? km(run.meters) : 'run'
 }
 
-const stationsPerRound = (rounds: Block[]) =>
-  rounds[0].exercises.filter((e) => e.prescription.kind === 'station').length
+/** "2 Stations", "1 Station", or "2–3 Stations" when rounds differ. */
+function stationsPerRound(rounds: Block[]): string {
+  const counts = rounds.map((r) => r.exercises.filter((e) => e.prescription.kind === 'station').length)
+  const low = Math.min(...counts)
+  const high = Math.max(...counts)
+  return `${range([low, high])} ${high === 1 ? 'Station' : 'Stations'}`
+}
 
 const raceLoadPercent = (e: Exercise) =>
   e.prescription.kind === 'station' ? e.prescription.raceLoadPercent : undefined
 
 function effortWord(effort: RunEffort): string {
   if ('feel' in effort) return effort.feel
-  return effort.pace === '5k' ? 'at 5K pace' : effort.pace === 'threshold' ? 'at Threshold' : effort.pace
+  const pace = effort.pace === '5k' ? 'at 5K pace' : effort.pace === 'threshold' ? 'at Threshold' : effort.pace
+  return effort.secondsPerKmFaster ? `${pace} −${effort.secondsPerKmFaster} s/km` : pace
 }
 
 /** Without Training paces, a pace reference reads as its effort and RPE. */
@@ -158,11 +181,18 @@ function effortTarget(effort: RunEffort | undefined): string {
   if (!effort) return ''
   const rpe = effort.rpe ? `RPE ${range(effort.rpe)}` : ''
   if ('feel' in effort) {
-    const feel = { easy: 'Easy', hard: 'Hard, by feel', relaxed: 'Relaxed', 'all-out': 'all-out' }[effort.feel]
+    const feel = {
+      easy: 'Easy',
+      hard: 'Hard, by feel',
+      controlled: 'Controlled',
+      relaxed: 'Relaxed',
+      'all-out': 'all-out',
+    }[effort.feel]
     return [feel, rpe].filter(Boolean).join(', ')
   }
   const pace = { easy: 'Easy', threshold: 'Threshold effort', '5k': '5K effort', goal: 'Goal effort' }[effort.pace]
-  return [pace, rpe].filter(Boolean).join(', ')
+  const faster = effort.secondsPerKmFaster ? ` −${effort.secondsPerKmFaster} s/km` : ''
+  return [`${pace}${faster}`, rpe].filter(Boolean).join(', ')
 }
 
 const range = ([low, high]: readonly [number, number]) => (low === high ? `${low}` : `${low}–${high}`)
@@ -173,3 +203,110 @@ function duration(seconds: number): string {
 }
 
 const km = (meters: number) => (meters % 1000 === 0 ? `${meters / 1000} km` : `${meters} m`)
+
+/** How a lift's load reads before there is a Working weight to resolve it against. */
+function loadWords(load: StrengthLoad): string {
+  switch (load.kind) {
+    case 'working-weight':
+      return ''
+    case 'percent-of-working-weight':
+      return `${range(load.percent)}% of Working weight`
+    case 'light':
+      return 'light'
+    case 'find-working-weight':
+      return `ramp to RPE ${load.rpe}`
+    case 'bodyweight':
+      return 'bodyweight'
+  }
+}
+
+/** Pounds rounded to the nearest 5 lb, the smallest step in the gym. */
+export const roundToFive = (pounds: number) => Math.round(pounds / 5) * 5
+
+/**
+ * "200 lb", "2 × 30 lb", "13 lb ball", or nothing for a Station without a load.
+ * A share of Race load rounds to the nearest 5 lb; Race load itself is exact.
+ */
+export function stationLoad(station: Station, percent = 100): string {
+  const { pounds, implements: count, fixedLoad } = station.raceLoad
+  if (pounds === undefined) return ''
+  if (fixedLoad) return `${pounds} lb ball`
+  const each = percent === 100 ? pounds : roundToFive((pounds * percent) / 100)
+  return count && count > 1 ? `${count} × ${each} lb` : `${each} lb`
+}
+
+const SUBSTITUTION_REASON: Record<SubstitutionReason, string> = {
+  'no-floor-space': 'no floor space',
+  readiness: 'Readiness says no jumps',
+}
+
+export interface ExerciseLine {
+  name: string
+  /** "3 × 5 · RPE 7 · 90–120″ rest" */
+  detail: string
+  note?: string
+  /** "No floor space or Readiness says no jumps: Sled push sprints 10–15 m, light, or Bike sprints 8–10″" */
+  substitutions: string[]
+}
+
+/** One Exercise as it reads in a Week's Session list, with Race loads in pounds. */
+export function describeExercise(exercise: Exercise, stations: Record<StationId, Station>): ExerciseLine {
+  return {
+    name: exercise.name,
+    detail: prescriptionWords(exercise.prescription, stations),
+    note: exercise.note,
+    substitutions: (exercise.substitutions ?? []).map((s) => substitutionWords(s, stations)),
+  }
+}
+
+function substitutionWords(substitution: Substitution, stations: Record<StationId, Station>): string {
+  const when = substitution.when.map((w) => SUBSTITUTION_REASON[w]).join(' or ')
+  const options = substitution.options
+    .map((o) => [o.name, prescriptionWords(o.prescription, stations)].filter(Boolean).join(' '))
+    .join(', or ')
+  return `${when[0].toUpperCase()}${when.slice(1)}: ${options}`
+}
+
+function prescriptionWords(rx: Prescription, stations: Record<StationId, Station>): string {
+  switch (rx.kind) {
+    case 'run': {
+      const amount = rx.meters ? km(rx.meters) : rx.minutes ? `${rx.minutes} min` : ''
+      return [amount, rx.effort && effortTarget(rx.effort)].filter(Boolean).join(' · ')
+    }
+    case 'intervals':
+      return [
+        `${rx.reps} × ${duration(rx.workSeconds)} / ${duration(rx.recoverySeconds)} ${rx.recovery}`,
+        effortTarget(rx.effort),
+      ].join(' · ')
+    case 'strides':
+      return `${rx.reps} × ${duration(rx.seconds)}`
+    case 'accelerations':
+      return `${rx.reps} × ${rx.meters} m · ${range(rx.percentOfMax)}% of max`
+    case 'sets': {
+      const reps = typeof rx.reps === 'number' ? `${rx.reps}` : range(rx.reps)
+      return [
+        `${rx.sets} × ${reps}${rx.perLeg ? ' / leg' : ''}`,
+        loadWords(rx.load),
+        rx.rpe && `RPE ${range(rx.rpe)}`,
+        rx.rpeCap && `RPE ≤ ${rx.rpeCap}`,
+        rx.restSeconds && `${range(rx.restSeconds)}″ rest`,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    }
+    case 'station': {
+      const station = stations[rx.station]
+      const volume = rx.meters ? km(rx.meters) : rx.reps ? `${rx.reps} reps` : ''
+      const percent = rx.raceLoadPercent ?? 100
+      const load = stationLoad(station, percent)
+      const share = rx.raceLoadPercent !== undefined && rx.raceLoadPercent < 100 ? `${rx.raceLoadPercent}% of Race load` : ''
+      return [volume, load, share].filter(Boolean).join(' · ')
+    }
+    case 'sprints':
+      return [rx.meters && `${range(rx.meters)} m`, rx.seconds && `${range(rx.seconds)}″`, rx.light && 'light']
+        .filter(Boolean)
+        .join(', ')
+    case 'note':
+      return rx.minutes ? `${rx.minutes} min` : ''
+  }
+}
