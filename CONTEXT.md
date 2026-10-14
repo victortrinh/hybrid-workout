@@ -135,5 +135,5 @@ Sleep duration, heart-rate variability and resting heart rate measured by the ri
 A 0–10 pain score with a body area, given at the start of a Session, in Log after, or at any time; "No" is a score of 0. The latest one stands until the next.
 
 **Activity**:
-A workout recorded by the watch and imported from Strava, which is matched to a Session.
+A workout recorded by the watch and sent from Apple Health by the Workout Shortcut, which the Coach matches to a Session.
 _Avoid_: using Session for imported data

@@ -108,6 +108,13 @@ export function SettingsPopover({
               Recovery Shortcut setup
             </Link>
             <Text className="text-[12px] text-muted">Sleep, HRV and resting heart rate from the ring, every morning.</Text>
+            <Link
+              href={SCREEN_PATH.workouts}
+              className="py-2 text-[15px] font-bold text-link underline decoration-2 underline-offset-4 hover:decoration-[3px] data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-link"
+            >
+              Workout Shortcut setup
+            </Link>
+            <Text className="text-[12px] text-muted">Each Apple Watch workout, attached to its Session.</Text>
           </div>
         </div>
       </Popover>

@@ -51,6 +51,14 @@ describe('parseActivity', () => {
     )
   })
 
+  it('takes distance as Shortcuts writes it, with its unit', () => {
+    expect(parseActivity({ ...body, distanceKm: undefined, distance: '8.12 km' }, AT).distanceMeters).toBe(8120)
+    expect(parseActivity({ ...body, distanceKm: undefined, distance: '8120 m' }, AT).distanceMeters).toBe(8120)
+    expect(parseActivity({ ...body, distanceKm: undefined, distance: '5 mi' }, AT).distanceMeters).toBe(8047)
+    expect(parseActivity({ ...body, distanceKm: undefined, distance: '8,12' }, AT).distanceMeters).toBe(8120)
+    expect(() => parseActivity({ ...body, distance: 'far' }, AT)).toThrow(/distance/)
+  })
+
   it('takes metres, heart rates as a list or an average, and no distance or heart rate at all', () => {
     expect(parseActivity({ ...body, distanceKm: undefined, distanceMeters: 8120.4 }, AT).distanceMeters).toBe(8120)
     expect(parseActivity({ ...body, heartRates: [150, '160'] }, AT)).toMatchObject({ averageHeartRate: 155, maxHeartRate: 160 })
@@ -72,6 +80,7 @@ describe('parseActivity', () => {
     expect(parseActivity({ ...body, indoor: 'No' }, AT).indoor).toBe(false)
     expect(parseActivity({ ...body, indoor: 'Yes' }, AT).indoor).toBe(true)
     expect(parseActivity({ ...body, type: 'Indoor Run' }, AT)).toMatchObject({ indoor: true, kind: 'run' })
+    expect(parseActivity({ ...body, type: 'Outdoor Run' }, AT)).toMatchObject({ indoor: false, kind: 'run' })
   })
 
   it('refuses what isn’t a workout', () => {
@@ -81,9 +90,6 @@ describe('parseActivity', () => {
     expect(() => parseActivity({ ...body, type: '' }, AT)).toThrow(/type/)
     expect(() => parseActivity({ ...body, distanceKm: 900 }, AT)).toThrow(/distance/)
     expect(() => parseActivity({ ...body, heartRates: '150\nfast' }, AT)).toThrow(/heartRates/)
-    expect(() => parseActivity({ ...body, start: '2026-11-06T07:12:00-05:00', end: '2026-11-06T07:54:00-05:00' }, AT)).toThrow(
-      /future/,
-    )
   })
 })
 

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
+import { isTreadmill, matchActivities, type Activity } from '../domain/activity'
 import { addDays } from '../domain/calendar'
 import { Link, RouterProvider } from 'react-aria-components'
 import { coach, findWeek, keyDeadline, prescribedWeek, type CoachDay } from '../domain/coach'
@@ -19,11 +20,13 @@ import { NotFound } from './screens/NotFound'
 import { Plan } from './screens/Plan'
 import { Progress } from './screens/Progress'
 import { Shortcut } from './screens/Shortcut'
+import { Workouts } from './screens/Workouts'
 import { unlockSound } from './liveCues'
 import { Live } from './screens/Live'
 import { LogAfter } from './screens/LogAfter'
 import { Today, type PainAtStart } from './screens/Today'
 import { WeekScreen } from './screens/Week'
+import { useActivities } from './useActivities'
 import { usePicked } from './usePicked'
 import { editedAt, useDecisions } from './useDecisions'
 import { usePainReports } from './usePainReports'
@@ -47,11 +50,12 @@ const TITLES: Record<Screen, string> = {
   week: 'Week',
   progress: 'Progress',
   shortcut: 'Recovery Shortcut',
+  workouts: 'Workout Shortcut',
   'not-found': 'Not found',
 }
 
 /** A Week is part of Plan in the navigation; Log after and Settings pages are part of Today. */
-const NAV_SCREEN: Partial<Record<Screen, Screen>> = { week: 'plan', log: 'today', shortcut: 'today' }
+const NAV_SCREEN: Partial<Record<Screen, Screen>> = { week: 'plan', log: 'today', shortcut: 'today', workouts: 'today' }
 
 /**
  * The shell: a cobalt side rail from 960px, a bottom tab bar below it. The
@@ -65,12 +69,16 @@ export function App() {
   const [picked, pick] = usePicked()
   const { reports: painReports, report } = usePainReports()
   const recoveryNights = useRecovery()
+  const { activities, answers: activityAnswers, answer, error: answerError } = useActivities()
   const { settings, change, overrides, override } = useSettings()
   const { equipment } = settings
   const day = useMemo(
-    () => coach({ program, today, logs, picked, decisions, equipment, painReports, recoveryNights }),
-    [today, logs, picked, decisions, equipment, painReports, recoveryNights],
+    () =>
+      coach({ program, today, logs, picked, decisions, equipment, painReports, recoveryNights, activities, activityAnswers }),
+    [today, logs, picked, decisions, equipment, painReports, recoveryNights, activities, activityAnswers],
   )
+  /** Whether a run of the watch's was on a treadmill: its own flag, else the month's Environment. */
+  const treadmill = (activity: Activity) => isTreadmill(activity, (date) => environmentOn(date, settings))
   /** How a Session's runs read: the Training paces, in this Session's Environment and the chosen units. */
   const runContext = (week: number, session: Session): RunContext => {
     const inWeek = day.position.kind === 'in-week' && day.position.week === week
@@ -122,6 +130,8 @@ export function App() {
       equipment,
       painReports: [...painReports, given],
       recoveryNights,
+      activities,
+      activityAnswers,
     })
     const started = after.bucket.find((e) => e.week === week && e.session.id === session.id)?.session ?? session
     const now = Date.now()
@@ -141,6 +151,11 @@ export function App() {
     navigate(SCREEN_PATH.today)
   }
   const route = useRoute()
+  /** The watch's workout attached to a Session, from the same matching Today shows. */
+  const attachedTo = (week: number, sessionId: string) =>
+    matchActivities(program, activities, logs, activityAnswers).find(
+      (o) => o.state === 'attached' && o.week === week && o.sessionId === sessionId,
+    )?.activity ?? null
   const week =
     route.screen === 'week' || route.screen === 'log'
       ? prescribedWeek(program, route.week ?? 0, logs, decisions, equipment, { reports: painReports, today })
@@ -186,7 +201,7 @@ export function App() {
               day={day}
               weekCount={program.weekCount}
               pending={pending}
-              error={error ?? decisionError}
+              error={error ?? decisionError ?? answerError}
               onPick={(weekNumber, sessionId) => pick(weekNumber, sessionId, today)}
               onDecide={(suggestion, decision) => {
                 const previous = decisions.find((d) => d.id === suggestion.id)
@@ -199,6 +214,11 @@ export function App() {
               live={live}
               onStart={startLive}
               onSomethingHurts={(score, area) => report(painReport(score, area, null, null))}
+              treadmill={treadmill}
+              onAnswer={(activity, week, sessionId) => {
+                const previous = activityAnswers.find((a) => a.activityId === activity.id)
+                answer({ activityId: activity.id, week, sessionId, updatedAt: editedAt(previous?.updatedAt) })
+              }}
             />
           )}
           {screen === 'log' && week && logged && (
@@ -211,12 +231,15 @@ export function App() {
               defaultEnvironment={(date) => environmentOn(date, settings)}
               onSave={save}
               onPain={(score, area) => report(painReport(score, area, week.number, logged.id))}
+              activity={attachedTo(week.number, logged.id)}
+              treadmill={treadmill}
             />
           )}
           {screen === 'plan' && <Plan program={program} day={day} />}
           {screen === 'week' && week && <WeekScreen program={program} week={week} day={day} runContext={runContext} />}
           {screen === 'progress' && <Progress program={program} day={day} logs={logs} unit={settings.unit} />}
           {screen === 'shortcut' && <Shortcut nights={recoveryNights} />}
+          {screen === 'workouts' && <Workouts activities={activities} />}
           {screen === 'not-found' && <NotFound />}
         </main>
         <TabBar screen={navScreen} />

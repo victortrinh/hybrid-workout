@@ -57,8 +57,6 @@ export function activityKind(workoutType: string): ActivityKind {
 }
 
 const MAX_HOURS = 10
-/** A clock a little ahead is fine; a workout tomorrow isn't. */
-const FUTURE_SLACK_MS = 12 * 3_600_000
 const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/
 const EDITED = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/
 
@@ -71,12 +69,14 @@ export function parseActivity(value: unknown, receivedAt: string): Activity {
   const start = instant(v.start ?? v.startedAt, 'start')
   const end = v.end === undefined && typeof v.minutes === 'number' ? start + v.minutes * 60_000 : instant(v.end, 'end')
   if (end <= start) throw new Error('end must be after start')
+  if (end - start < 30_000) throw new Error('A workout lasts at least a minute')
   if (end - start > MAX_HOURS * 3_600_000) throw new Error(`A workout lasts at most ${MAX_HOURS} hours`)
-  if (end > Date.parse(receivedAt) + FUTURE_SLACK_MS) throw new Error('A workout can’t end in the future')
 
   const km = number(v.distanceKm, 'distanceKm')
   const meters = number(v.distanceMeters, 'distanceMeters')
-  const distanceMeters = km !== null ? Math.round(km * 1000) : meters !== null ? Math.round(meters) : null
+  const withUnit = distance(v.distance)
+  const distanceMeters =
+    withUnit !== null ? withUnit : km !== null ? Math.round(km * 1000) : meters !== null ? Math.round(meters) : null
   if (distanceMeters !== null && (distanceMeters < 1 || distanceMeters > 100_000)) {
     throw new Error('distance must be at most 100 km')
   }
@@ -113,6 +113,18 @@ function number(value: unknown, name: string): number | null {
   return n
 }
 
+const METERS_PER: Record<string, number> = { km: 1000, m: 1, mi: 1609.344 }
+
+/** Distance as Shortcuts writes it, with its unit: "8.12 km", "8120 m", "5.04 mi". A bare number is km. */
+function distance(value: unknown): number | null {
+  if (value === undefined || value === null || value === '' || value === 0) return null
+  if (typeof value === 'number') return number(value, 'distance') === null ? null : Math.round(value * 1000)
+  const match = typeof value === 'string' ? /^\s*([\d.,]+)\s*(km|m|mi)?\s*$/i.exec(value) : null
+  const n = match ? Number(match[1].replace(',', '.')) : NaN
+  if (!match || !Number.isFinite(n)) throw new Error('distance must be a number with km, m or mi')
+  return n === 0 ? null : Math.round(n * METERS_PER[(match[2] ?? 'km').toLowerCase()])
+}
+
 /** Health's heart-rate samples over the workout: a list, or text with one per line. */
 function heartRates(value: unknown): number[] {
   if (value === undefined || value === null || value === '' || value === 0) return []
@@ -134,7 +146,7 @@ function indoor(value: unknown, workoutType: string): boolean | null {
   if (value === true || value === false) return value
   if (typeof value === 'string' && /^(yes|true|1)$/i.test(value.trim())) return true
   if (typeof value === 'string' && /^(no|false|0)$/i.test(value.trim())) return false
-  return /indoor/i.test(workoutType) ? true : null
+  return /indoor/i.test(workoutType) ? true : /outdoor/i.test(workoutType) ? false : null
 }
 
 /** A treadmill run: distance comes from the console, not the watch. */
