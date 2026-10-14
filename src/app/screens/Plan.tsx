@@ -1,19 +1,10 @@
 import { Link } from 'react-aria-components'
 import type { CoachDay } from '../../domain/coach'
 import { SESSION_TYPES } from '../../domain/program/describe'
-import type { Lane, Program, Week } from '../../domain/program/types'
-import { LANE_COLOR } from '../components/LaneChip'
+import type { Program, Week } from '../../domain/program/types'
+import { LANE_COLOR, LaneLegend } from '../components/LaneChip'
 import { longDay, shortDay } from '../format'
 import { weekPath } from '../router'
-
-const LANES: Lane[] = ['speed', 'strength', 'threshold', 'hyrox', 'easy']
-const LANE_NAME: Record<Lane, string> = {
-  speed: 'Speed',
-  strength: 'Strength',
-  threshold: 'Threshold',
-  hyrox: 'HYROX',
-  easy: 'Easy run',
-}
 
 /**
  * Plan: all 27 Weeks as five-lane rows, grouped by Phase. Each cell is one
@@ -30,14 +21,7 @@ export function Plan({ program, day }: { program: Program; day: CoachDay }) {
       <p className="mt-1 text-body-quiet text-muted">
         {program.weekCount} Weeks to {longDay(program.raceDay)}. Tall lanes are Key sessions.
       </p>
-      <ul aria-label="Session types" className="mt-3 flex flex-wrap gap-x-3.5 gap-y-1.5 text-label text-muted">
-        {LANES.map((lane) => (
-          <li key={lane} className="flex items-center gap-1.5">
-            <i aria-hidden="true" className={`inline-block h-1.5 w-3.5 bg-current ${LANE_COLOR[lane]}`} />
-            {LANE_NAME[lane]}
-          </li>
-        ))}
-      </ul>
+      <LaneLegend />
 
       {program.phases.map((phase) => (
         <section key={phase.id} aria-labelledby={`phase-${phase.id}`}>

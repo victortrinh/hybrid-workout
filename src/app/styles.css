@@ -249,6 +249,24 @@
     vertical-align: baseline;
   }
 
+  /* Charts: SVG drawn at the container's width, labelled in Archivo like the prototype. */
+  .chart {
+    display: block;
+    overflow: visible;
+  }
+  .chart text {
+    font: 600 12px var(--font-sans);
+    fill: var(--muted);
+  }
+  .chart .strong {
+    fill: var(--ink);
+    font-weight: 800;
+  }
+  .chart .goal {
+    fill: var(--speed);
+    font-weight: 800;
+  }
+
   /* Field lane: a flat bar with hard ends that fills left to right. */
   .lane-fill {
     transition: width 0.9s var(--ease-lane);
