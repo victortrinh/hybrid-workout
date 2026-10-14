@@ -1,4 +1,5 @@
-import { toDisplayDate, type LocalDate } from '../domain/calendar'
+import type { Activity } from '../domain/activity'
+import { TIME_ZONE, toDisplayDate, type LocalDate } from '../domain/calendar'
 import type { LoggedStatus } from '../domain/log'
 
 const formatter = (options: Intl.DateTimeFormatOptions) =>
@@ -44,4 +45,26 @@ export const STATUS_LABEL: Record<LoggedStatus, string> = {
   partial: 'Partial',
   skipped: 'Skipped',
   swapped: 'Swapped',
+}
+
+const clockTime = new Intl.DateTimeFormat('en-CA', { timeZone: TIME_ZONE, hour: 'numeric', minute: '2-digit', hour12: false })
+
+/** "7:12", in Toronto. */
+export const timeOfDay = (instant: string) => clockTime.format(new Date(instant)).replace(/^0(?=\d)/, '')
+
+/** "8.12 km" */
+export const km = (meters: number) => `${(meters / 1000).toFixed(2)} km`
+
+/**
+ * What the watch recorded: "45 min · 8.12 km · avg 152 bpm". No distance
+ * from a treadmill: the watch guesses it indoors.
+ */
+export function activitySummary(activity: Activity, treadmill: boolean): string {
+  return [
+    `${activity.minutes} min`,
+    activity.distanceMeters !== null && !treadmill ? km(activity.distanceMeters) : null,
+    activity.averageHeartRate !== null ? `avg ${activity.averageHeartRate} bpm` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
 }

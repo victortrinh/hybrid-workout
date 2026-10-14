@@ -79,7 +79,7 @@ In the Cloudflare dashboard, open **Zero Trust**. The first time, it asks for a 
 
 Shortcut: Workers & Pages → `compromised` → Settings → Domains & Routes → on the `workers.dev` row, **Enable Cloudflare Access** creates the same application for you. If you use it, open the application it made in Zero Trust and check it against the list above, especially that the policy allows only your email and that One-time PIN is the login method.
 
-Later steps add the narrow exceptions ADR-0001 describes: a service token for the iOS Shortcut ([step 7](#7-recovery-shortcut-victor)), and later a bypass for the Strava webhook path.
+Later steps add the narrow exceptions ADR-0001 describes: a service token for the iOS Shortcuts, on the recovery path ([step 7](#7-recovery-shortcut-victor)) and the workout path ([step 8](#8-workout-shortcut-victor)).
 
 ### 5. Check it (Victor)
 
@@ -181,6 +181,64 @@ The server merges overlapping entries (each minute counts once, as Health's own 
 #### 7g. The next morning
 
 Open the app → Settings → Recovery Shortcut setup: **Last night received** shows this morning's date with the same sleep, HRV and resting heart rate as the Ultrahuman app. If it's yesterday's, the automation ran before the ring synced: run the Shortcut by hand and move the automation later.
+
+### 8. Workout Shortcut (Victor)
+
+Apple Watch workouts reach the app through a second iOS Shortcut, which posts each one from Apple Health to `/api/activities` (ADR-0004; Strava's API needs a paid subscription). It uses the **same service token** as the Recovery Shortcut, so step 7 must be done first. Same order as before: migrate, merge, then open the path in Access.
+
+#### 8a. Before merging: migrate (terminal, on the PR's branch)
+
+```bash
+npm run db:migrate:prod
+npm run db:migrate:preview
+```
+
+Each lists `0009_activities.sql` and asks to confirm: answer yes. It only adds two tables. Then merge the PR; Workers Builds deploys it. Until 8b is done, Access stops the Shortcut at the edge, which is harmless.
+
+#### 8b. Let the token through on the workout path too (Cloudflare Zero Trust)
+
+1. [one.dash.cloudflare.com](https://one.dash.cloudflare.com) → **Access → Applications** → `Compromised recovery` → **Configure** (or Edit).
+2. Under the public hostnames, **+ Add public hostname**: the same host (`compromised.<your-subdomain>.workers.dev`), **Path** `api/activities`. Save.
+
+If your dashboard won't take a second hostname on one application, make a new one instead, exactly like 7c: Self-hosted, name `Compromised workouts`, the same host with **Path** `api/activities`, and a policy **Action: Service Auth**, Include → **Service Token** → `Recovery Shortcut`.
+
+No new Worker secret: the Worker already has the token's copy from 7d.
+
+#### 8c. Check it (terminal)
+
+```bash
+curl -i -X POST https://compromised.<your-subdomain>.workers.dev/api/activities -H 'content-type: application/json' -H 'CF-Access-Client-Id: <client id>' -H 'CF-Access-Client-Secret: <client secret>' -d '{"type":"Walking","start":"2026-01-01T12:00:00-05:00","end":"2026-01-01T12:10:00-05:00"}'
+```
+
+- `200` with `{"ok":true,...}`: done. A walk on 1 January, before the Program, matches no Session, so the Coach ignores it.
+- `302` or `403` from Access: 8b's path doesn't match. Check for a typo in `api/activities`, and that the token chosen is `Recovery Shortcut`.
+- `401` from the Worker: the same causes as in 7e.
+
+#### 8d. Build the Shortcut (iPhone)
+
+The app has the same steps with your address filled in: Today → your initial (Settings) → **Workout Shortcut setup**.
+
+1. **Shortcuts** app → **Shortcuts** tab → **+** → rename it `Compromised workouts`.
+2. **Find Health Samples**: **Type is Workouts**, **Start Date is in the last 1 day**.
+3. **Repeat with Each** (input: Health Samples). Inside it:
+   1. **Find Health Samples**: **Type is Heart Rate**, **Start Date is after** Repeat Item → Start Date, **End Date is before** Repeat Item → End Date.
+   2. **Combine Text**: those samples' **Value**, with **New Lines**.
+   3. **Get Contents of URL**, URL `https://compromised.<your-subdomain>.workers.dev/api/activities`, **Method** POST, the same two headers as the Recovery Shortcut, **Request Body** JSON:
+      - **Text** `type` = Repeat Item → **Type** (Health's name, like `Running` or `Functional Strength Training`).
+      - **Text** `start` = Repeat Item → **Start Date**, Date Format **ISO 8601** with the time; **Text** `end` = Repeat Item → **End Date**, the same.
+      - **Text** `distance` = Repeat Item → **Distance**, if Shortcuts offers it (`8.12 km` is fine: the server reads the unit). Leave it out otherwise.
+      - **Text** `heartRates` = Combined Text.
+      - Optional, if your Shortcut can tell: **Boolean** `indoor`. Without it, the app goes by the treadmill months in Settings, and a type named `Indoor Run` or `Outdoor Run` counts too.
+4. Finish a short workout on the watch, then tap ▶. Allow Health access and **Always Allow** the connection. Settings → Workout Shortcut setup → **Last workout received** should show it.
+5. **Automation** tab → **+** → **Apple Watch Workout** → **When any workout ends** → **Run Immediately** → `Compromised workouts`. If your iPhone doesn't offer that trigger, use **Time of Day**, daily, in the evening. Resending a workout replaces it, so sending the whole last day every time is fine.
+
+#### 8e. The first real workout
+
+Do a Session with the watch, then open Today:
+
+- The Session's row in This Week shows `Watch, <day>: <minutes> min · <km> · avg <bpm> bpm`.
+- If more than one Session of that type could be it (say Speed and Threshold both still Planned), Today asks **Which Session was this?**. Tap the right one, or **None of these**.
+- A treadmill run asks **What did the console say?**. **Add console distance** opens Log after with the watch's minutes filled in.
 
 For `npm run dev`, copy `.dev.vars.example` to `.dev.vars`: any pair of values works locally.
 

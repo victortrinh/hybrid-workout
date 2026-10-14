@@ -14,8 +14,9 @@ import {
   TextArea,
   TextField,
 } from 'react-aria-components'
+import type { Activity } from '../../domain/activity'
 import { addDays, daysBetween, type LocalDate } from '../../domain/calendar'
-import { LOGGED_STATUSES, logFor, NOTES_MAX, type LoggedStatus, type SessionLog } from '../../domain/log'
+import { DISTANCE_METERS, LOGGED_STATUSES, logFor, NOTES_MAX, type LoggedStatus, type SessionLog } from '../../domain/log'
 import { clock, FIVE_K_SECONDS, parseClock, type Environment } from '../../domain/paces'
 import type { PainArea } from '../../domain/pain'
 import { describeSession } from '../../domain/program/describe'
@@ -23,7 +24,7 @@ import type { Session, Week } from '../../domain/program/types'
 import { Icon } from '../components/Icons'
 import { answered, PainFields, type PainAnswer } from '../components/PainFields'
 import { Segmented } from '../components/Segmented'
-import { longDay, nb, shortWeekday, STATUS_LABEL } from '../format'
+import { activitySummary, km, longDay, nb, shortWeekday, STATUS_LABEL, timeOfDay } from '../format'
 import { navigate, SCREEN_PATH } from '../router'
 
 const linkClass =
@@ -56,6 +57,8 @@ export function LogAfter({
   defaultEnvironment,
   onSave,
   onPain,
+  activity,
+  treadmill,
 }: {
   week: Week
   session: Session
@@ -68,15 +71,24 @@ export function LogAfter({
   onSave: (log: SessionLog) => void
   /** The pain step's answer, if given: a Pain report for this Session, from today. */
   onPain: (score: number, area: PainArea | null) => void
+  /** The watch's workout the Coach attached to this Session, if any. */
+  activity: Activity | null
+  /** Whether a run of the watch's was on a treadmill. */
+  treadmill: (activity: Activity) => boolean
 }) {
   const existing = logFor(logs, week.number, session.id)
   const days = Array.from({ length: daysBetween(week.startDate, loggableUntil) + 1 }, (_, i) => addDays(week.startDate, i))
   const last = days.at(-1)!
   const lastDay = days.find((d) => d === today) ?? (daysBetween(today, last) < 0 ? last : null)
 
+  const onTreadmill = activity !== null && treadmill(activity)
   const [status, setStatus] = useState<LoggedStatus>(existing?.status ?? 'done')
-  const [date, setDate] = useState<LocalDate | null>(existing?.date ?? lastDay)
-  const [minutes, setMinutes] = useState(existing?.minutes ?? session.minutes)
+  // The watch knows the day and how long it took better than a guess does.
+  const watchDay = activity && days.includes(activity.date) && daysBetween(activity.date, lastDay ?? activity.date) >= 0
+  const [date, setDate] = useState<LocalDate | null>(existing?.date ?? (watchDay ? activity.date : lastDay))
+  const [minutes, setMinutes] = useState(existing?.minutes ?? activity?.minutes ?? session.minutes)
+  /** The treadmill console's distance in km; NaN while empty. */
+  const [consoleKm, setConsoleKm] = useState(existing?.distanceMeters ? existing.distanceMeters / 1000 : NaN)
   const [rpe, setRpe] = useState<number | null>(existing?.rpe ?? null)
   const [notes, setNotes] = useState(existing?.notes ?? '')
   const [time, setTime] = useState(existing?.resultSeconds ? clock(existing.resultSeconds) : '')
@@ -116,7 +128,13 @@ export function LogAfter({
       resultSeconds,
       // A Live session's Environment, console distance, reps and sets stay with the log through an edit.
       environment: result ? where : (existing?.environment ?? null),
-      distanceMeters: trained ? (existing?.distanceMeters ?? null) : null,
+      distanceMeters: !trained
+        ? null
+        : onTreadmill
+          ? Number.isFinite(consoleKm)
+            ? Math.round(consoleKm * 1000)
+            : null
+          : (existing?.distanceMeters ?? null),
       intervals: trained ? (existing?.intervals ?? []) : [],
       sets: trained ? (existing?.sets ?? []) : [],
       stations: trained ? (existing?.stations ?? []) : [],
@@ -137,6 +155,25 @@ export function LogAfter({
         {nb(description.heading)}
       </h1>
       <p className="mt-1 text-body-quiet text-muted">{nb(description.summary)}</p>
+      {activity && (
+        <section aria-labelledby="from-the-watch" className="mt-5 border-t-2 border-ink pt-3.5">
+          <h2 id="from-the-watch" className="text-title-sm">
+            From the watch
+          </h2>
+          <p className="mt-1 text-body">
+            {nb(`${activity.workoutType}, ${longDay(activity.date)} at ${timeOfDay(activity.startedAt)}`)}
+            <span className="block">{nb(activitySummary(activity, onTreadmill))}</span>
+            {activity.maxHeartRate !== null && (
+              <span className="block text-body-quiet text-muted">Max {activity.maxHeartRate} bpm</span>
+            )}
+            {onTreadmill && activity.distanceMeters !== null && (
+              <span className="block text-body-quiet text-muted">
+                {nb(`It guessed ${km(activity.distanceMeters)}. Treadmill: the console’s distance counts.`)}
+              </span>
+            )}
+          </p>
+        </section>
+      )}
 
       {!lastDay ? (
         <p className="mt-6 text-body">Week {week.number} hasn’t started. Nothing to log yet.</p>
@@ -241,6 +278,27 @@ export function LogAfter({
                   </Button>
                 </Group>
               </NumberField>
+
+              {onTreadmill && (
+                <NumberField
+                  value={consoleKm}
+                  onChange={setConsoleKm}
+                  minValue={DISTANCE_METERS[0] / 1000}
+                  maxValue={DISTANCE_METERS[1] / 1000}
+                  step={0.01}
+                  formatOptions={{ maximumFractionDigits: 2 }}
+                  className="grid gap-2"
+                >
+                  <Label className={groupLabel}>Console distance, km</Label>
+                  <Input
+                    inputMode="decimal"
+                    className="h-11 w-32 rounded-sm bg-paper px-3 text-center text-[17px] font-bold shadow-[inset_0_0_0_2px_var(--edge)] outline-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-link"
+                  />
+                  <Text slot="description" className="text-body-quiet text-muted">
+                    What the treadmill says. The watch guesses indoors.
+                  </Text>
+                </NumberField>
+              )}
 
               <RadioGroup
                 value={rpe === null ? null : String(rpe)}

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { daysBetween, isoWeekday, localDate, localDateIn, type LocalDate } from './calendar'
 import { DEFAULT_EQUIPMENT, equipWeek } from './equipment'
 import { coach, findWeek, keyDeadline, prescribedWeek, programStart, weekOutcome, type CoachInput } from './coach'
+import { parseActivity } from './activity'
 import { isLive } from './lifts'
 import type { LoggedStatus, SessionLog } from './log'
 import type { PainArea, PainReport } from './pain'
@@ -1099,5 +1100,39 @@ describe('the recovery rules', () => {
     expect(day.upNext?.date).toBe(raceDay)
     expect(day.recoveryChange).toBeNull()
     expect(recoveryOf(day)).toEqual([])
+  })
+})
+
+describe('Activities', () => {
+  const run = (start: string, end: string) =>
+    parseActivity({ type: 'Running', start, end, distanceKm: 8, heartRates: '150\n160' }, '2026-11-05T12:00:00.000Z')
+  const today = localDate('2026-11-04')
+  const base = { program, today, logs: keysDoneBefore(today) }
+
+  it('attaches the watch’s workout to the Session logged that day, on its Bucket row', () => {
+    const activity = run('2026-11-04T07:00:00-05:00', '2026-11-04T07:45:00-05:00')
+    const day = coach({ ...base, logs: [...base.logs, log(3, 'speed', '2026-11-04')], activities: [activity] })
+    expect(day.bucket.find((e) => e.session.id === 'speed')?.activity).toEqual(activity)
+    expect(day.bucket.filter((e) => e.activity)).toHaveLength(1)
+    expect(day.activityQuestions).toEqual([])
+  })
+
+  it('asks which Session a run was while three run Sessions are Planned, until the athlete answers', () => {
+    const activity = run('2026-11-04T07:00:00-05:00', '2026-11-04T07:45:00-05:00')
+    const day = coach({ ...base, activities: [activity] })
+    expect(day.activityQuestions.map((q) => q.candidates.map((c) => c.session.id))).toEqual([['speed', 'threshold', 'easy']])
+    const answered = coach({
+      ...base,
+      activities: [activity],
+      activityAnswers: [{ activityId: activity.id, week: 3, sessionId: 'threshold', updatedAt: '2026-11-04T13:00:00.000Z' }],
+    })
+    expect(answered.activityQuestions).toEqual([])
+    expect(answered.bucket.find((e) => e.session.id === 'threshold')?.activity?.id).toBe(activity.id)
+  })
+
+  it('stops asking about a workout a week old', () => {
+    const activity = run('2026-11-02T07:00:00-05:00', '2026-11-02T07:45:00-05:00')
+    expect(coach({ ...base, today: localDate('2026-11-08'), activities: [activity] }).activityQuestions).toHaveLength(1)
+    expect(coach({ ...base, today: localDate('2026-11-09'), activities: [activity] }).activityQuestions).toEqual([])
   })
 })

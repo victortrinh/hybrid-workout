@@ -129,10 +129,10 @@ export function Shortcut({ nights }: { nights: RecoveryNight[] }) {
   )
 }
 
-const backLink =
+export const backLink =
   'py-2 text-[15px] font-bold text-link underline decoration-2 underline-offset-4 hover:decoration-[3px] data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-link'
 
-function Field({ term, children }: { term: string; children: ReactNode }) {
+export function Field({ term, children }: { term: string; children: ReactNode }) {
   return (
     <div>
       <dt className="text-label text-muted uppercase">{term}</dt>
@@ -141,6 +141,6 @@ function Field({ term, children }: { term: string; children: ReactNode }) {
   )
 }
 
-const Code = ({ children }: { children: ReactNode }) => (
+export const Code = ({ children }: { children: ReactNode }) => (
   <code className="rounded-sm bg-sunk px-1 font-mono text-[0.9em]">{children}</code>
 )

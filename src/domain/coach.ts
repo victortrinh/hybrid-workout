@@ -5,6 +5,7 @@
  * Program and today's date in America/Toronto and it answers the same way
  * every time, which is what makes it testable.
  */
+import { matchActivities, type Activity, type ActivityAnswer, type ActivityOutcome } from './activity'
 import { lightenWeek, RE_ENTRY_PERCENT } from './adapt'
 import { addDays, daysBetween, mondayOf, type LocalDate } from './calendar'
 import { DEFAULT_EQUIPMENT, equip, equipWeek, type Equipment } from './equipment'
@@ -42,6 +43,10 @@ export interface CoachInput {
   painReports?: PainReport[]
   /** Every night of Recovery data the Shortcut has sent. */
   recoveryNights?: RecoveryNight[]
+  /** Every workout the Workout Shortcut has sent. */
+  activities?: Activity[]
+  /** The athlete's answers to "Which Session was this?". */
+  activityAnswers?: ActivityAnswer[]
 }
 
 export interface PickedSession {
@@ -62,7 +67,15 @@ export interface BucketEntry {
   log: SessionLog | null
   /** For last Week's Key session carried into this one: the last day it can be done. */
   carriedUntil: LocalDate | null
+  /** The watch's workout attached to this Session, if any. */
+  activity: Activity | null
 }
+
+/** A workout more than one Session fits: Today asks which. */
+export type ActivityQuestion = Extract<ActivityOutcome, { state: 'ambiguous' }>
+
+/** How far back Today still asks about a workout. */
+export const ACTIVITY_QUESTION_DAYS = 7
 
 /** Why there is no Up next today. */
 export type RestReason =
@@ -141,6 +154,8 @@ export interface CoachDay {
    * the recovery Suggestion is accepted) an easy day. Null when it changed nothing.
    */
   recoveryChange: 'short-sleep' | 'easy-day' | null
+  /** Workouts from the last week that fit more than one Session, oldest first. */
+  activityQuestions: ActivityQuestion[]
 }
 
 export interface StandingPain {
@@ -159,6 +174,8 @@ export function coach({
   equipment = DEFAULT_EQUIPMENT,
   painReports = [],
   recoveryNights = [],
+  activities = [],
+  activityAnswers = [],
 }: CoachInput): CoachDay {
   const position = positionOf(program, today)
   const shownWeek =
@@ -206,6 +223,10 @@ export function coach({
   if (upNext !== chosen.upNext) logged[logged.indexOf(chosen.upNext!)] = upNext!
   const fiveKTest = latestFiveKTest(logs, today)
   const standing = standingPain(painReports, today)
+  const matched = matchActivities(program, activities, logs, activityAnswers)
+  const attached = new Map(
+    matched.flatMap((o) => (o.state === 'attached' ? [[`${o.week}/${o.sessionId}`, o.activity] as const] : [])),
+  )
 
   return {
     today,
@@ -217,6 +238,7 @@ export function coach({
     bucket: logged.map((entry) => ({
       ...entry,
       state: entry.log ? entry.log.status : entry === upNext ? 'next' : 'planned',
+      activity: attached.get(`${entry.week}/${entry.session.id}`) ?? null,
     })),
     upNext: upNext?.session ?? null,
     rest,
@@ -227,6 +249,10 @@ export function coach({
     pain: standing && { ...standing, level: painLevel(standing.report.score, standing.previous?.score ?? null) },
     recovery,
     recoveryChange: recovered.change,
+    activityQuestions: matched
+      .filter((o): o is ActivityQuestion => o.state === 'ambiguous')
+      .filter((o) => o.activity.date <= today && daysBetween(o.activity.date, today) < ACTIVITY_QUESTION_DAYS)
+      .sort((a, b) => a.activity.startedAt.localeCompare(b.activity.startedAt)),
   }
 }
 

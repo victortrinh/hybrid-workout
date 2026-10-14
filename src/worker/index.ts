@@ -5,6 +5,7 @@
  */
 import { Hono } from 'hono'
 import { isServiceToken } from './access'
+import { parseActivity, parseActivityAnswer, type Activity, type ActivityAnswer } from '../domain/activity'
 import { findWeek } from '../domain/coach'
 import { isCircuit, isLiveRun } from '../domain/live'
 import { parseSessionLog, type SessionLog, type StationPart, type SyncState } from '../domain/log'
@@ -36,8 +37,9 @@ app.post('/sync', async (c) => {
   let logs: SessionLog[]
   let decisions: SuggestionDecision[]
   let reports: PainReport[]
+  let answers: ActivityAnswer[]
   try {
-    ;({ logs, decisions, reports } = parseSyncRequest(await c.req.json()))
+    ;({ logs, decisions, reports, answers } = parseSyncRequest(await c.req.json()))
   } catch (error) {
     return c.json({ error: error instanceof Error ? error.message : 'Invalid request' }, 400)
   }
@@ -122,6 +124,16 @@ app.post('/sync', async (c) => {
     )
     await c.env.DB.batch(reports.map((r) => upsert.bind(r.id, r.date, r.score, r.area, r.week, r.sessionId, r.updatedAt)))
   }
+  if (answers.length > 0) {
+    const upsert = c.env.DB.prepare(
+      `insert into activity_answers (activity_id, week, session_id, updated_at)
+       values (?, ?, ?, ?)
+       on conflict (activity_id) do update set
+         week = excluded.week, session_id = excluded.session_id, updated_at = excluded.updated_at
+       where excluded.updated_at > activity_answers.updated_at`,
+    )
+    await c.env.DB.batch(answers.map((a) => upsert.bind(a.activityId, a.week, a.sessionId, a.updatedAt)))
+  }
   return c.json(await readState(c.env.DB))
 })
 
@@ -155,13 +167,76 @@ app.post('/recovery', async (c) => {
   return c.json({ ok: true, night })
 })
 
+/**
+ * One workout from the Workout Shortcut, read from Apple Health when an Apple
+ * Watch workout ends (ADR-0004). The same service token as /api/recovery, the
+ * same checks. Idempotent per workout: it is keyed on its start, so a resend
+ * replaces it.
+ */
+app.post('/activities', async (c) => {
+  if (!(await isServiceToken(c.req.raw.headers, c.env))) {
+    return c.json({ error: 'Send the Access service token: CF-Access-Client-Id and CF-Access-Client-Secret' }, 401)
+  }
+  let activity: Activity
+  try {
+    activity = parseActivity(await c.req.json(), new Date().toISOString())
+  } catch (error) {
+    return c.json({ error: error instanceof Error ? error.message : 'Invalid request' }, 400)
+  }
+  await c.env.DB.prepare(
+    `insert into activities
+       (id, date, workout_type, minutes, distance_meters, average_heart_rate, max_heart_rate, indoor, received_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+     on conflict (id) do update set
+       date = excluded.date, workout_type = excluded.workout_type, minutes = excluded.minutes,
+       distance_meters = excluded.distance_meters, average_heart_rate = excluded.average_heart_rate,
+       max_heart_rate = excluded.max_heart_rate, indoor = excluded.indoor, received_at = excluded.received_at`,
+  )
+    .bind(
+      activity.id, activity.date, activity.workoutType, activity.minutes, activity.distanceMeters,
+      activity.averageHeartRate, activity.maxHeartRate, activity.indoor === null ? null : activity.indoor ? 1 : 0,
+      activity.receivedAt,
+    )
+    .run()
+  return c.json({ ok: true, activity })
+})
+
 app.notFound((c) => c.json({ error: 'Not found' }, 404))
 
 /** Any list may be left out; whatever is there must all be valid. */
-function parseSyncRequest(body: unknown): { logs: SessionLog[]; decisions: SuggestionDecision[]; reports: PainReport[] } {
+function parseSyncRequest(body: unknown): {
+  logs: SessionLog[]
+  decisions: SuggestionDecision[]
+  reports: PainReport[]
+  answers: ActivityAnswer[]
+} {
   if (typeof body !== 'object' || body === null) throw new Error('The body must be an object')
-  const { sessionLogs = [], suggestionDecisions = [], painReports = [] } = body as Record<string, unknown>
-  return { logs: parseLogs(sessionLogs), decisions: parseDecisions(suggestionDecisions), reports: parseReports(painReports) }
+  const { sessionLogs = [], suggestionDecisions = [], painReports = [], activityAnswers = [] } = body as Record<
+    string,
+    unknown
+  >
+  return {
+    logs: parseLogs(sessionLogs),
+    decisions: parseDecisions(suggestionDecisions),
+    reports: parseReports(painReports),
+    answers: parseAnswers(activityAnswers),
+  }
+}
+
+function parseAnswers(raw: unknown): ActivityAnswer[] {
+  if (!Array.isArray(raw)) throw new Error('activityAnswers must be an array')
+  if (raw.length > MAX_BATCH) throw new Error(`At most ${MAX_BATCH} answers per sync`)
+  return raw.map((value, i) => {
+    try {
+      const answer = parseActivityAnswer(value)
+      if (answer.week !== null && !findWeek(program, answer.week)?.sessions.some((s) => s.id === answer.sessionId)) {
+        throw new Error(`Week ${answer.week} has no Session "${answer.sessionId}"`)
+      }
+      return answer
+    } catch (error) {
+      throw new Error(`activityAnswers[${i}]: ${error instanceof Error ? error.message : 'invalid'}`)
+    }
+  })
 }
 
 function parseReports(raw: unknown): PainReport[] {
@@ -278,6 +353,24 @@ interface RecoveryRow {
   received_at: string
 }
 
+interface ActivityRow {
+  id: string
+  workout_type: string
+  minutes: number
+  distance_meters: number | null
+  average_heart_rate: number | null
+  max_heart_rate: number | null
+  indoor: number | null
+  received_at: string
+}
+
+interface AnswerRow {
+  activity_id: string
+  week: number | null
+  session_id: string | null
+  updated_at: string
+}
+
 interface DecisionRow {
   id: string
   decision: string
@@ -286,8 +379,8 @@ interface DecisionRow {
 }
 
 async function readState(db: D1Database): Promise<SyncState> {
-  const [{ results }, decisions, intervals, stationRows, setRows, pain, nights] = (await db.batch<
-    SessionLogRow | DecisionRow | IntervalRow | StationRow | SetRow | PainRow | RecoveryRow
+  const [{ results }, decisions, intervals, stationRows, setRows, pain, nights, activityRows, answerRows] = (await db.batch<
+    SessionLogRow | DecisionRow | IntervalRow | StationRow | SetRow | PainRow | RecoveryRow | ActivityRow | AnswerRow
   >([
     db.prepare('select * from session_logs order by date, updated_at'),
     db.prepare('select * from suggestion_decisions order by updated_at'),
@@ -296,6 +389,8 @@ async function readState(db: D1Database): Promise<SyncState> {
     db.prepare('select * from set_logs order by session_log_id, exercise, "set"'),
     db.prepare('select * from pain_reports order by date, updated_at'),
     db.prepare('select * from recovery_nights order by date'),
+    db.prepare('select * from activities order by id'),
+    db.prepare('select * from activity_answers order by updated_at'),
   ])) as [
     D1Result<SessionLogRow>,
     D1Result<DecisionRow>,
@@ -304,6 +399,8 @@ async function readState(db: D1Database): Promise<SyncState> {
     D1Result<SetRow>,
     D1Result<PainRow>,
     D1Result<RecoveryRow>,
+    D1Result<ActivityRow>,
+    D1Result<AnswerRow>,
   ]
   const reps = new Map<string, IntervalRow[]>()
   for (const row of intervals.results) reps.set(row.session_log_id, [...(reps.get(row.session_log_id) ?? []), row])
@@ -314,6 +411,28 @@ async function readState(db: D1Database): Promise<SyncState> {
   const sets = new Map<string, SetRow[]>()
   for (const row of setRows.results) sets.set(row.session_log_id, [...(sets.get(row.session_log_id) ?? []), row])
   return {
+    activities: activityRows.results.map((row) =>
+      parseActivity(
+        {
+          type: row.workout_type,
+          start: row.id,
+          minutes: row.minutes,
+          distanceMeters: row.distance_meters,
+          averageHeartRate: row.average_heart_rate,
+          maxHeartRate: row.max_heart_rate,
+          indoor: row.indoor === null ? null : row.indoor === 1,
+        },
+        row.received_at,
+      ),
+    ),
+    activityAnswers: answerRows.results.map((row) =>
+      parseActivityAnswer({
+        activityId: row.activity_id,
+        week: row.week,
+        sessionId: row.session_id,
+        updatedAt: row.updated_at,
+      }),
+    ),
     recoveryNights: nights.results.map((row) =>
       parseRecoveryNight(
         {

@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Button, Link } from 'react-aria-components'
 import { addDays } from '../../domain/calendar'
-import type { BucketEntry, CoachDay, PhaseProgress, RestReason } from '../../domain/coach'
+import type { Activity } from '../../domain/activity'
+import type { ActivityQuestion, BucketEntry, CoachDay, PhaseProgress, RestReason } from '../../domain/coach'
 import { isLive, type LiveSession } from '../../domain/lifts'
 import type { Environment, RunContext } from '../../domain/paces'
 import { isRising, painLevel, type PainArea } from '../../domain/pain'
@@ -16,7 +17,18 @@ import { answered, PainFields, type PainAnswer } from '../components/PainFields'
 import { Segmented } from '../components/Segmented'
 import { SettingsPopover } from '../components/SettingsPopover'
 import { StripedNumeral } from '../components/StripedNumeral'
-import { longDay, nb, plural, shortDay, shortWeekday, STATUS_LABEL, weekday, weekRange } from '../format'
+import {
+  activitySummary,
+  longDay,
+  nb,
+  plural,
+  shortDay,
+  shortWeekday,
+  STATUS_LABEL,
+  timeOfDay,
+  weekday,
+  weekRange,
+} from '../format'
 import { logPath, SCREEN_PATH } from '../router'
 
 /** The pain step's answer at Start: "No" is a score of 0. */
@@ -48,6 +60,8 @@ export function Today({
   live,
   onStart,
   onSomethingHurts,
+  treadmill,
+  onAnswer,
 }: {
   day: CoachDay
   weekCount: number
@@ -71,6 +85,10 @@ export function Today({
   onStart: (week: number, session: Session, pain: PainAtStart) => void
   /** A Pain report given from Today, outside any Session. */
   onSomethingHurts: (score: number, area: PainArea) => void
+  /** Whether a run of the watch's was on a treadmill. */
+  treadmill: (activity: Activity) => boolean
+  /** "Which Session was this?": a Session of its Week, or (both null) none of them. */
+  onAnswer: (activity: Activity, week: number | null, sessionId: string | null) => void
 }) {
   return (
     <section
@@ -89,8 +107,10 @@ export function Today({
         live={live}
         onStart={onStart}
         onSomethingHurts={onSomethingHurts}
+        treadmill={treadmill}
+        onAnswer={onAnswer}
       />
-      <ThisWeek day={day} onPick={onPick} />
+      <ThisWeek day={day} onPick={onPick} treadmill={treadmill} />
     </section>
   )
 }
@@ -188,6 +208,8 @@ function UpNext({
   live,
   onStart,
   onSomethingHurts,
+  treadmill,
+  onAnswer,
 }: {
   day: CoachDay
   weekCount: number
@@ -199,6 +221,8 @@ function UpNext({
   live: LiveSession | null
   onStart: (week: number, session: Session, pain: PainAtStart) => void
   onSomethingHurts: (score: number, area: PainArea) => void
+  treadmill: (activity: Activity) => boolean
+  onAnswer: (activity: Activity, week: number | null, sessionId: string | null) => void
 }) {
   const [asking, setAsking] = useState(false)
   const { position, upNext } = day
@@ -306,7 +330,73 @@ function UpNext({
         .map((s) => (
           <SuggestionNote key={s.id} suggestion={s} onDecide={(d) => onDecide(s, d)} />
         ))}
+      {day.activityQuestions.map((q) => (
+        <WhichSession
+          key={q.activity.id}
+          question={q}
+          treadmill={treadmill(q.activity)}
+          onAnswer={(week, sessionId) => onAnswer(q.activity, week, sessionId)}
+        />
+      ))}
+      {day.bucket
+        .filter((e) => e.activity && treadmill(e.activity) && e.log?.status !== 'skipped' && e.log?.distanceMeters == null)
+        .map((e) => (
+          <ConsoleDistance key={e.activity!.id} entry={e} />
+        ))}
     </div>
+  )
+}
+
+/** A workout more than one Session fits: one tap says which, or that it was none of them. */
+function WhichSession({
+  question,
+  treadmill,
+  onAnswer,
+}: {
+  question: ActivityQuestion
+  treadmill: boolean
+  onAnswer: (week: number | null, sessionId: string | null) => void
+}) {
+  const { activity, candidates } = question
+  return (
+    <section
+      aria-label="Which Session was this?"
+      className="mt-[18px] border-t-2 border-b border-t-ink border-b-rule py-3.5"
+    >
+      <p className="text-[17px] leading-[1.3] font-semibold">Which Session was this?</p>
+      <p className="mt-1 text-[14px] text-muted">
+        {nb(`${activity.workoutType} from the watch, ${shortWeekday(activity.date)} ${timeOfDay(activity.startedAt)} · ${activitySummary(activity, treadmill)}`)}
+      </p>
+      <div className="mt-2.5 flex flex-wrap gap-x-5">
+        {candidates.map((c) => (
+          <Button key={`${c.week}/${c.session.id}`} onPress={() => onAnswer(c.week, c.session.id)} className={linkButton}>
+            {SESSION_TYPES[c.session.type].name}
+          </Button>
+        ))}
+        <Button onPress={() => onAnswer(null, null)} className={quietButton}>
+          None of these
+        </Button>
+      </div>
+    </section>
+  )
+}
+
+/** A treadmill run attached to a Session: the watch's distance is a guess, so ask for the console's. */
+function ConsoleDistance({ entry }: { entry: BucketEntry }) {
+  const { activity, session, week } = entry
+  if (!activity) return null
+  return (
+    <section aria-label="Console distance" className="mt-[18px] border-t-2 border-b border-t-ink border-b-rule py-3.5">
+      <p className="text-[17px] leading-[1.3] font-semibold">
+        {nb(`${SESSION_TYPES[session.type].name} on the treadmill, ${shortWeekday(activity.date)}. What did the console say?`)}
+      </p>
+      <p className="mt-1 text-[14px] text-muted">
+        {nb(`The watch guesses distance indoors. Kept its ${activitySummary(activity, true)}.`)}
+      </p>
+      <Link href={logPath(week, session.id)} className={`mt-2.5 inline-block ${linkButton}`}>
+        Add console distance
+      </Link>
+    </section>
   )
 }
 
@@ -542,7 +632,15 @@ function restCopy(
   }
 }
 
-function ThisWeek({ day, onPick }: { day: CoachDay; onPick: (week: number, sessionId: string) => void }) {
+function ThisWeek({
+  day,
+  onPick,
+  treadmill,
+}: {
+  day: CoachDay
+  onPick: (week: number, sessionId: string) => void
+  treadmill: (activity: Activity) => boolean
+}) {
   const { week, position, bucket } = day
   if (!week) return null
 
@@ -565,6 +663,7 @@ function ThisWeek({ day, onPick }: { day: CoachDay; onPick: (week: number, sessi
             entry={entry}
             interactive={inWeek}
             onPick={() => onPick(entry.week, entry.session.id)}
+            treadmill={treadmill}
           />
         ))}
       </ul>
@@ -583,12 +682,14 @@ function BucketRow({
   entry,
   interactive,
   onPick,
+  treadmill,
 }: {
   entry: BucketEntry
   interactive: boolean
   onPick: () => void
+  treadmill: (activity: Activity) => boolean
 }) {
-  const { session, state, log, week, carriedUntil } = entry
+  const { session, state, log, week, carriedUntil, activity } = entry
   const type = SESSION_TYPES[session.type]
   const content = (
     <>
@@ -606,6 +707,11 @@ function BucketRow({
               : describeSession(session).summary,
           )}
         </span>
+        {activity && (
+          <span className="block text-[14px] text-muted">
+            {nb(`Watch, ${shortWeekday(activity.date)}: ${activitySummary(activity, treadmill(activity))}`)}
+          </span>
+        )}
       </span>
       <span className="text-[14px] font-bold">
         {state === 'next' ? (
