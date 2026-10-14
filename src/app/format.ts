@@ -1,4 +1,5 @@
 import { toDisplayDate, type LocalDate } from '../domain/calendar'
+import type { LoggedStatus } from '../domain/log'
 
 const formatter = (options: Intl.DateTimeFormatOptions) =>
   new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', ...options })
@@ -32,3 +33,15 @@ export const nb = (text: string) =>
     .replace(/(\d) (?=\p{L})/gu, '$1\u00a0')
 
 export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
+
+const weekdayShort = formatter({ weekday: 'short' })
+
+/** "Mon" */
+export const shortWeekday = (date: LocalDate) => weekdayShort.format(toDisplayDate(date))
+
+export const STATUS_LABEL: Record<LoggedStatus, string> = {
+  done: 'Done',
+  partial: 'Partial',
+  skipped: 'Skipped',
+  swapped: 'Swapped',
+}

@@ -1,14 +1,14 @@
 /**
- * A three-screen router on the History API. react-aria-components' Link uses
+ * A small router on the History API. react-aria-components' Link uses
  * `navigate` through RouterProvider, so links stay real <a href> elements.
  */
 import { useSyncExternalStore } from 'react'
 
-export type Screen = 'today' | 'plan' | 'week' | 'progress' | 'not-found'
+export type Screen = 'today' | 'log' | 'plan' | 'week' | 'progress' | 'not-found'
 
 const PATHS: Record<string, Screen> = { '/': 'today', '/plan': 'plan', '/progress': 'progress' }
 
-export const SCREEN_PATH: Record<Exclude<Screen, 'week' | 'not-found'>, string> = {
+export const SCREEN_PATH: Record<Exclude<Screen, 'log' | 'week' | 'not-found'>, string> = {
   today: '/',
   plan: '/plan',
   progress: '/progress',
@@ -18,10 +18,17 @@ export const weekPath = (week: number) => `/plan/week/${week}`
 
 const WEEK_PATH = /^\/plan\/week\/([1-9]\d?)$/
 
+/** Log after for one Session of a Week. */
+export const logPath = (week: number, sessionId: string) => `/log/${week}/${sessionId}`
+
+const LOG_PATH = /^\/log\/([1-9]\d?)\/([a-z0-9-]+)$/
+
 export interface Route {
   screen: Screen
-  /** The Week number in /plan/week/N; the screen checks it against the Program. */
+  /** The Week number in /plan/week/N or /log/N/…; the screen checks it against the Program. */
   week?: number
+  /** The Session id in /log/N/id. */
+  sessionId?: string
 }
 
 const NAVIGATE_EVENT = 'compromised:navigate'
@@ -46,5 +53,7 @@ export function useRoute(): Route {
   const path = raw.replace(/\/+$/, '') || '/'
   const week = WEEK_PATH.exec(path)
   if (week) return { screen: 'week', week: Number(week[1]) }
+  const log = LOG_PATH.exec(path)
+  if (log) return { screen: 'log', week: Number(log[1]), sessionId: log[2] }
   return { screen: PATHS[path] ?? 'not-found' }
 }
