@@ -14,7 +14,8 @@ import { LogAfter } from './screens/LogAfter'
 import { Today } from './screens/Today'
 import { WeekScreen } from './screens/Week'
 import { usePicked } from './usePicked'
-import { editedAt, useSync } from './useSync'
+import { editedAt, useDecisions } from './useDecisions'
+import { useSessionLogs } from './useSessionLogs'
 import { useToday } from './useToday'
 
 const NAV = [
@@ -37,11 +38,13 @@ const NAV_SCREEN: Partial<Record<Screen, Screen>> = { week: 'plan', log: 'today'
 
 /**
  * The shell: a cobalt side rail from 960px, a bottom tab bar below it. The
- * Coach runs here, on the device, against today's date in Toronto.
+ * Coach runs here, on the device, against today's date in Toronto and the
+ * Session logs stored on the device, so Today works without signal.
  */
 export function App() {
   const today = useToday()
-  const { logs, decisions, save, decide, error } = useSync()
+  const { logs, save, pending, error } = useSessionLogs()
+  const { decisions, decide, error: decisionError } = useDecisions()
   const [picked, pick] = usePicked()
   const day = useMemo(() => coach({ program, today, logs, picked, decisions }), [today, logs, picked, decisions])
   const route = useRoute()
@@ -68,11 +71,12 @@ export function App() {
             <Today
               day={day}
               weekCount={program.weekCount}
-              error={error}
+              pending={pending}
+              error={error ?? decisionError}
               onPick={(weekNumber, sessionId) => pick(weekNumber, sessionId, today)}
               onDecide={(suggestion, decision) => {
                 const previous = decisions.find((d) => d.id === suggestion.id)
-                void decide({ id: suggestion.id, decision, date: today, updatedAt: editedAt(previous?.updatedAt) })
+                decide({ id: suggestion.id, decision, date: today, updatedAt: editedAt(previous?.updatedAt) })
               }}
             />
           )}

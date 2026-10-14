@@ -18,13 +18,16 @@ import { logPath } from '../router'
 export function Today({
   day,
   weekCount,
+  pending,
   error,
   onPick,
   onDecide,
 }: {
   day: CoachDay
   weekCount: number
-  /** A failed load or save, said once under Up next. */
+  /** Logs saved on this device that the server hasn't taken yet. */
+  pending: number
+  /** A log the server refused or the device couldn't store, said once under Up next. */
   error: string | null
   /** Makes a Session of the Bucket today's Session instead of Up next. */
   onPick: (week: number, sessionId: string) => void
@@ -37,7 +40,7 @@ export function Today({
       className="desktop:grid desktop:grid-cols-2 desktop:gap-x-12 desktop:px-gutter"
     >
       <FieldBand day={day} weekCount={weekCount} />
-      <UpNext day={day} weekCount={weekCount} error={error} onDecide={onDecide} />
+      <UpNext day={day} weekCount={weekCount} pending={pending} error={error} onDecide={onDecide} />
       <ThisWeek day={day} onPick={onPick} />
     </section>
   )
@@ -123,11 +126,13 @@ function PhaseLanes({ phases }: { phases: PhaseProgress[] }) {
 function UpNext({
   day,
   weekCount,
+  pending,
   error,
   onDecide,
 }: {
   day: CoachDay
   weekCount: number
+  pending: number
   error: string | null
   onDecide: (suggestion: Suggestion, decision: Decision) => void
 }) {
@@ -179,7 +184,12 @@ function UpNext({
           </Link>
         </div>
       )}
-      <div aria-live="polite">{error && <p className="mt-3 text-body">{error}</p>}</div>
+      <div aria-live="polite">
+        {error && <p className="mt-3 text-body">{error}</p>}
+        {pending > 0 && (
+          <p className="mt-3 text-body-quiet text-muted">{plural(pending, 'log')} on this phone, waiting to sync.</p>
+        )}
+      </div>
       {day.suggestions
         // Decided ones stay for the rest of the day, so Undo is one tap away.
         .filter((s) => s.decision === 'open' || s.decidedOn === day.today)

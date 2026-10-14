@@ -20,7 +20,6 @@ import type { Session, Week } from '../../domain/program/types'
 import { Icon } from '../components/Icons'
 import { longDay, nb, shortWeekday, STATUS_LABEL } from '../format'
 import { navigate, SCREEN_PATH } from '../router'
-import { editedAt } from '../useSync'
 
 const linkClass =
   'inline-block py-2 text-[15px] font-bold text-link underline decoration-2 underline-offset-4 hover:decoration-[3px]'
@@ -40,7 +39,8 @@ const STATUS_HINT: Record<LoggedStatus, string> = {
 
 /**
  * Log after: what happened in one Session, written after the fact. Saving
- * goes straight back to Today, which shows the log at once.
+ * stores it on the phone and goes straight back to Today, which shows the log
+ * at once, signal or not.
  */
 export function LogAfter({
   week,
@@ -56,11 +56,12 @@ export function LogAfter({
   lastDay: LocalDate
   logs: SessionLog[]
   today: LocalDate
-  onSave: (log: SessionLog) => Promise<boolean>
+  onSave: (log: SessionLog) => void
 }) {
   const existing = logFor(logs, week.number, session.id)
   const days = Array.from({ length: daysBetween(week.startDate, loggableUntil) + 1 }, (_, i) => addDays(week.startDate, i))
-  const lastDay = days.find((d) => d === today) ?? (daysBetween(today, days[6]) < 0 ? days[6] : null)
+  const last = days.at(-1)!
+  const lastDay = days.find((d) => d === today) ?? (daysBetween(today, last) < 0 ? last : null)
 
   const [status, setStatus] = useState<LoggedStatus>(existing?.status ?? 'done')
   const [date, setDate] = useState<LocalDate | null>(existing?.date ?? lastDay)
@@ -74,7 +75,7 @@ export function LogAfter({
   function submit(event: FormEvent) {
     event.preventDefault()
     if (!date) return
-    void onSave({
+    onSave({
       id: existing?.id ?? crypto.randomUUID(),
       week: week.number,
       sessionId: session.id,
@@ -83,7 +84,7 @@ export function LogAfter({
       minutes: trained && Number.isFinite(minutes) ? minutes : null,
       rpe: trained ? rpe : null,
       notes: notes.trim() === '' ? null : notes.trim(),
-      updatedAt: editedAt(existing?.updatedAt),
+      updatedAt: editedAt(existing),
     })
     navigate(SCREEN_PATH.today)
   }
@@ -207,4 +208,11 @@ export function LogAfter({
       )}
     </div>
   )
+}
+
+/** Now, or just after the edit it replaces if this device's clock is behind the one that wrote it. */
+function editedAt(existing: SessionLog | null): string {
+  const now = Date.now()
+  const after = existing ? Date.parse(existing.updatedAt) + 1 : now
+  return new Date(Math.max(now, after)).toISOString()
 }

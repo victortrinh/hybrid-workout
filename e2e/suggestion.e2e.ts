@@ -4,22 +4,47 @@ import { seedLogs } from './history'
 
 /**
  * Each project gets a pair of Weeks no other test reads: the phone skips two
- * Sessions in Week 10 and comes back in Week 11; desktop in Weeks 13 and 14.
+ * Sessions in Week 12 (a Deload) and comes back in Week 13; desktop skips in
+ * Week 18 and comes back in Week 19.
  */
 const SCENARIO = {
-  phone: { skipped: 10, back: 11, monday: '2026-12-21', tuesday: '2026-12-29', speed: '4 × 4′', lighter: '3 × 4′' },
-  desktop: { skipped: 13, back: 14, monday: '2027-01-11', tuesday: '2027-01-19', speed: '6 × 2′', lighter: '4 × 2′' },
+  phone: {
+    skipped: 12,
+    back: 13,
+    logs: [
+      { sessionId: 'speed', date: '2027-01-04', status: 'done' },
+      { sessionId: 'strength', date: '2027-01-05', status: 'done' },
+      { sessionId: 'easy-deload', date: '2027-01-06', status: 'skipped' },
+      { sessionId: 'hyrox', date: '2027-01-07', status: 'skipped' },
+    ],
+    names: 'Easy run and HYROX',
+    tuesday: '2027-01-12',
+    speed: '3 × 5′',
+    lighter: '2 × 5′',
+  },
+  desktop: {
+    skipped: 18,
+    back: 19,
+    logs: [
+      { sessionId: 'speed', date: '2027-02-15', status: 'done' },
+      { sessionId: 'strength', date: '2027-02-16', status: 'skipped' },
+      { sessionId: 'threshold', date: '2027-02-17', status: 'skipped' },
+      { sessionId: 'race-simulation', date: '2027-02-18', status: 'done' },
+    ],
+    names: 'Strength and Threshold',
+    tuesday: '2027-02-23',
+    speed: '5 × 3′',
+    lighter: '3 × 3′',
+  },
 } as const
 
 test('two Skipped Sessions bring a lighter Week: Accept lightens it, Undo restores it', async ({ page, request }, testInfo) => {
   const s = SCENARIO[testInfo.project.name as keyof typeof SCENARIO]
-  const day = (offset: number) => s.monday.slice(0, 8) + String(Number(s.monday.slice(8)) + offset).padStart(2, '0')
-  await seedLogs(request, testInfo.project.name, [
-    { week: s.skipped, sessionId: 'speed', date: day(0), status: 'done' },
-    { week: s.skipped, sessionId: 'strength', date: day(1), status: 'done' },
-    { week: s.skipped, sessionId: 'threshold', date: day(2), status: 'skipped' },
-    { week: s.skipped, sessionId: 'hyrox', date: day(3), status: 'skipped' },
-  ])
+  await seedLogs(
+    request,
+    testInfo.project.name,
+    s.logs.map((l) => ({ ...l, week: s.skipped })),
+  )
   await page.clock.setFixedTime(new Date(`${s.tuesday}T12:00:00-05:00`))
   await page.goto('/')
 
@@ -32,7 +57,7 @@ test('two Skipped Sessions bring a lighter Week: Accept lightens it, Undo restor
   await expect(suggestion).toContainText(
     `2 Sessions skipped last Week. Full volume now is how calves file complaints. Week ${s.back} goes 33% lighter.`,
   )
-  await expect(suggestion).toContainText(`Week ${s.skipped}: Threshold and HYROX skipped`)
+  await expect(suggestion).toContainText(`Week ${s.skipped}: ${s.names} skipped`)
   await expectNoAxeViolations(page)
 
   await suggestion.getByRole('button', { name: 'Accept' }).click()
