@@ -25,16 +25,16 @@
       "migrations_dir": "migrations"
     }
   ],
-  // Branch builds (Workers Builds on a PR) get their own D1 database,
-  // `compromised-preview`, so PR code never touches real Session logs. Previews
-  // don't run migrations: `npm run db:migrate:preview` (wrangler.preview-db.jsonc).
-  // Not `preview_database_id`: that rebinds `wrangler deploy` to it as well.
-  "previews": {
-    "d1_databases": [{ "binding": "DB", "database_id": "fe12ecbd-17a7-45bd-a5c2-ffcc4ceadaeb" }]
-  },
   // Cloudflare Access's team domain: the Worker checks Access's signed
   // assertion for the recovery Shortcut's service token against its keys
   // (src/worker/access.ts). Not a secret: it's the login page's address.
   "vars": { "ACCESS_TEAM_DOMAIN": "https://quiet-shape-374b.cloudflareaccess.com" },
+  // Branch builds (Workers Builds on a PR) are mock builds (VITE_API=mock,
+  // docs/deploy.md): /api/* is answered in the browser, so previews get no D1
+  // at all and PR code never touches real Session logs. Previews inherit no
+  // bindings or vars, and Wrangler refuses to upload one without this block.
+  "previews": {
+    "vars": { "ACCESS_TEAM_DOMAIN": "https://quiet-shape-374b.cloudflareaccess.com" }
+  },
   "observability": { "enabled": true }
 }

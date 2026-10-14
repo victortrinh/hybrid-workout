@@ -10,7 +10,6 @@ Steps 1 to 6 happen once. After that, shipping a change is just [Deploy](#deploy
 | --- | --- |
 | `npm run deploy` | Runs the unit tests, builds the app and the Worker (`dist/`), then `wrangler deploy` uploads the Worker with `dist/client` as its static assets. |
 | `npm run db:migrate:prod` | Applies any unapplied files in `migrations/` to the production D1 database. Wrangler lists them and asks before applying, and captures a backup first. |
-| `npm run db:migrate:preview` | The same against `compromised-preview`, the D1 database branch previews (Workers Builds on a PR) use instead of production. |
 | `npm run db:migrate:local` | The same against the local D1 that `npm run dev` uses. |
 | `npm run check:access -- <url>` | Requests `/`, `/plan` and `/api/health` without signing in and fails unless every one redirects to the Cloudflare Access login. |
 
@@ -95,7 +94,7 @@ Then on your phone, in a private tab: open the address, confirm the Cloudflare A
 
 ### 6. Preview URLs (Victor)
 
-Workers Builds uploads every PR branch as a preview with its own address, `<version or branch>-compromised.<your-subdomain>.workers.dev`, bound to the `compromised-preview` database. Those hostnames aren't covered by the application from step 4, so cover them before the first PR builds:
+Workers Builds uploads every PR branch as a preview with its own address, `<version or branch>-compromised.<your-subdomain>.workers.dev`. Previews run in mock mode ([below](#branch-previews)), so they need no database of their own. Those hostnames aren't covered by the application from step 4, so cover them before the first PR builds:
 
 Workers & Pages → `compromised` → Settings → Domains & Routes → on the **Preview URLs** row, **Enable Cloudflare Access**. Open the application it made in Zero Trust and check it the same way as in step 4: only your email, One-time PIN. (Or add `*-compromised.<your-subdomain>.workers.dev` as a second public hostname of the `Compromised` application.)
 
@@ -105,6 +104,8 @@ Then check a preview the build posts on its PR:
 npm run check:access -- https://<preview>-compromised.<your-subdomain>.workers.dev
 ```
 
+Finally, make previews mock builds: Workers & Pages → `compromised` → Settings → Build → **Non-production branch build command** → `VITE_API=mock npm run build`. Leave the production build command as it is.
+
 ### 7. Recovery Shortcut (Victor)
 
 The morning iOS Shortcut posts last night's Recovery data to `/api/recovery` (ADR-0003). It can't sign in with an email code, so it carries an Access service token, which the Worker checks too. Do the steps in this order: **merging to `main` deploys production** (Workers Builds), and the deployed code reads the `recovery_nights` table, so the migration goes first.
@@ -113,10 +114,9 @@ The morning iOS Shortcut posts last night's Recovery data to `/api/recovery` (AD
 
 ```bash
 npm run db:migrate:prod
-npm run db:migrate:preview
 ```
 
-Each lists `0008_recovery_nights.sql` and asks to confirm: answer yes. The migration only adds a table, so the code running now keeps working. Then merge the PR; Workers Builds deploys it. Until 7c is done, `/api/recovery` answers 401 to everything, which is harmless.
+It lists `0008_recovery_nights.sql` and asks to confirm: answer yes. The migration only adds a table, so the code running now keeps working. Then merge the PR; Workers Builds deploys it. Until 7c is done, `/api/recovery` answers 401 to everything, which is harmless.
 
 #### 7b. Create the service token (Cloudflare Zero Trust)
 
@@ -190,10 +190,9 @@ Apple Watch workouts reach the app through a second iOS Shortcut, which posts ea
 
 ```bash
 npm run db:migrate:prod
-npm run db:migrate:preview
 ```
 
-Each lists `0009_activities.sql` and asks to confirm: answer yes. It only adds two tables. Then merge the PR; Workers Builds deploys it. Until 8b is done, Access stops the Shortcut at the edge, which is harmless.
+It lists `0009_activities.sql` and asks to confirm: answer yes. It only adds two tables. Then merge the PR; Workers Builds deploys it. Until 8b is done, Access stops the Shortcut at the edge, which is harmless.
 
 #### 8b. Let the token through on the workout path too (Cloudflare Zero Trust)
 
@@ -264,13 +263,17 @@ npm run db:migrate:prod
 npm run deploy
 ```
 
-Apply it to the preview database too, so branch previews of the change work:
-
-```bash
-npm run db:migrate:preview
-```
+Branch previews need nothing: mock mode applies every file in `migrations/` on start.
 
 Migrations should only add things (new tables, new nullable columns) so the running version keeps working between the two commands.
+
+## Branch previews
+
+Every PR branch gets a preview from Workers Builds, built with `VITE_API=mock npm run build` (the non-production build command from [step 6](#6-preview-urls-victor)). That is the same build as `npm run build:mock`: mock mode, as in `npm run dev:mock` (README, "Mock mode"; ADR-0005). Mock Service Worker answers every `/api/*` request in the browser from SQLite in the tab, so a preview never reads or writes a real Session log, and a **MOCK** badge shows on every screen. Production's build command stays `npm run build`, which holds none of it (`npm run check:no-mocks`).
+
+A preview opens on the default scenario, `midweek-mixed` (Thursday of Week 5). To see another state of the Program, add `?scenario=<name>` to the preview's address, for example `https://<preview>-compromised.<your-subdomain>.workers.dev/?scenario=race-week`, or pick one under **Mock scenario** at the top of the settings popover (tap your initial on Today). Switching wipes the tab's data and loads the scenario fresh. Tap the badge for the mock panel: network modes, and Recovery night and Apple Watch workout sends.
+
+The preview's Worker has no `DB` at all: previews take their bindings only from the `previews` block in `wrangler.jsonc`, which holds just `ACCESS_TEAM_DOMAIN`. Wrangler warns that `DB` is missing on each upload; that's expected. A request made outside the app, such as `/api/health` behind Access, fails instead of reaching any database.
 
 ## Rolling back
 
