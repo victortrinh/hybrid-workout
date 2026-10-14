@@ -193,6 +193,21 @@ describe('matchActivities', () => {
     expect(matchActivities(program, [activity], logs, [])[0]).toMatchObject({ state: 'attached', sessionId: 'threshold' })
   })
 
+  it('attaches to a Session of another Week logged that day, done early or late', () => {
+    const activity = run('2026-11-04T07:00:00-05:00')
+    const early = { ...log('threshold', '2026-11-04'), week: 5 }
+    expect(matchActivities(program, [activity], [early], [])[0]).toMatchObject({ state: 'attached', week: 5, sessionId: 'threshold' })
+    const late = { ...log('speed', '2026-11-04'), week: 1 }
+    expect(matchActivities(program, [activity], [late], [])[0]).toMatchObject({ state: 'attached', week: 1, sessionId: 'speed' })
+  })
+
+  it('attaches a workout from before the Program to the Week 1 Session logged early that day', () => {
+    const activity = run('2026-10-14T07:00:00-04:00')
+    const early = { ...log('speed', '2026-10-14'), week: 1 }
+    expect(matchActivities(program, [activity], [early], [])[0]).toMatchObject({ state: 'attached', week: 1, sessionId: 'speed' })
+    expect(matchActivities(program, [activity], [], [])[0].state).toBe('unmatched')
+  })
+
   it('asks when more than one Session fits', () => {
     const activity = run('2026-11-04T07:00:00-05:00')
     const [outcome] = matchActivities(program, [activity], [], [])

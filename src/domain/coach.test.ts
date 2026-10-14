@@ -654,6 +654,19 @@ describe('the re-entry Suggestion', () => {
     expect(inWeek11(week10({ threshold: 'done', hyrox: 'done' }), [], '2026-12-31').suggestions).toEqual([])
   })
 
+  it('stays when Skipped Sessions are made up late, from Monday on', () => {
+    const madeUp = [log(10, 'threshold', '2026-12-28'), log(10, 'hyrox', '2026-12-29')]
+    const day = inWeek11([...week10({ speed: 'done', strength: 'done' }), ...madeUp], [], '2026-12-29')
+    expect(day.suggestions.map((s) => s.id)).toEqual(['re-entry-w11'])
+    // A Skipped log edited to Done after the Week closed still counts as Skipped.
+    const edited = week10(TWO_SKIPPED).map((l) =>
+      l.status === 'skipped' ? { ...l, status: 'done' as const, date: localDate('2026-12-29') } : l,
+    )
+    expect(inWeek11(edited).suggestions.map((s) => s.id)).toEqual(['re-entry-w11'])
+    // Done by Sunday, it was never a miss.
+    expect(inWeek11(week10({ ...TWO_SKIPPED, threshold: 'done', hyrox: 'done' })).suggestions).toEqual([])
+  })
+
   it('is about this Week only: gone the Week after', () => {
     const logs = [...week10(TWO_SKIPPED), ...['speed', 'strength', 'easy-deload', 'hyrox'].map((id) => log(12, id, '2027-01-04'))]
     expect(inWeek11(logs, [], '2027-01-04').suggestions.map((s) => s.id)).not.toContain('re-entry-w11')
@@ -820,6 +833,21 @@ describe('the pain rules', () => {
       expect(mainIntervals(day.upNext!)).toEqual({ kind: 'note', minutes: 30 })
       // Nothing left to run, lift or push: Log after, not Start session.
       expect(day.bucket.map((e) => isLive(e.session))).toEqual([false, false, false, false, false])
+    }
+  })
+
+  it('apply to a Session of another Week done today, early or late, and only then', () => {
+    const report = pain('2026-11-04', 4)
+    const decisions = [painDecision(report, 'accepted')]
+    const reports = { reports: [report], today: localDate('2026-11-04') }
+    const asWritten = (week: number) => prescribedWeek(program, week, [], decisions)!
+    const withPainToday = (week: number, doneToday: boolean) =>
+      prescribedWeek(program, week, [], decisions, undefined, { ...reports, doneToday })!
+    expect(withPainToday(5, false)).toEqual(asWritten(5))
+    for (const week of [1, 5]) {
+      const names = (w: ReturnType<typeof asWritten>) => w.sessions[0].blocks.flatMap((b) => b.exercises.map((e) => e.name))
+      expect(names(asWritten(week))).toContain('Accelerations')
+      expect(names(withPainToday(week, true))).not.toContain('Accelerations')
     }
   })
 

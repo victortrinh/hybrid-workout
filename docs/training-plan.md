@@ -44,7 +44,7 @@ Every Station is preceded by a 1 km run: 8 km of running in total.
 
 - Each Week is a **Bucket**: Speed, Strength, Threshold, HYROX, plus an Optional Easy run. Do them on any day, in any order, inside Monday–Sunday.
 - The Coach picks **Up next** each day: no two Hard sessions on consecutive days when avoidable; never Speed the day after HYROX or Strength; Strength + Easy run on the same day is fine.
-- The **Key session** can carry over up to 3 days into the next Week. Anything else not done by Sunday is Skipped. Two or more Skipped → the Coach suggests a lighter restart week.
+- The **Key session** can carry over up to 3 days into the next Week. Anything else not done by Sunday is Skipped. Two or more Skipped → the Coach suggests a lighter restart week. A Session can still be done late, from its Week; it counts for that Week but doesn't cancel the lighter restart.
 - Holidays (Fri Dec 25, Fri Jan 1) need no special handling: the Bucket just gets done on other days.
 
 ## Session templates

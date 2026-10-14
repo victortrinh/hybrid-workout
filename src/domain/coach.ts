@@ -486,6 +486,8 @@ export const RE_ENTRY_SKIPS = 2
 interface PainInput {
   reports: PainReport[]
   today: LocalDate
+  /** A Session of this Week done today, early or late: today's pain counts for it too. */
+  doneToday?: boolean
 }
 
 function suggestionsFor(
@@ -503,11 +505,16 @@ function suggestionsFor(
 /**
  * The pain rules, while a Pain report of 3 or more, or a rising one, stands:
  * bike for jumps and accelerations and about 30% fewer reps, or from 5 easy
- * low-impact work or rest. Only for the Week holding today.
+ * low-impact work or rest. Only for the Week holding today, or a Session of
+ * another Week done today.
  */
-function painFor(week: Week, { reports, today }: PainInput, decisions: SuggestionDecision[]): PainSuggestion | null {
+function painFor(
+  week: Week,
+  { reports, today, doneToday = false }: PainInput,
+  decisions: SuggestionDecision[],
+): PainSuggestion | null {
   const offset = daysBetween(week.startDate, today)
-  if (offset < 0 || offset > 6) return null
+  if (!doneToday && (offset < 0 || offset > 6)) return null
   const standing = standingPain(reports, today)
   if (!standing) return null
   const { report, previous } = standing
@@ -582,7 +589,8 @@ const acceptedPain = (suggestions: Suggestion[]): PainLevel | null =>
 /**
  * Two or more Sessions Skipped last Week: suggest this Week a third lighter.
  * Counted as the Week closed on Sunday, so a Key session still carried over
- * isn't a miss yet. Deload weeks are lighter already, and the Taper follows
+ * isn't a miss yet, and a Session made up late, from this Monday on, doesn't
+ * undo one: a late make-up never cancels the lighter Week. Deload weeks are lighter already, and the Taper follows
  * the race-week rules, so neither gets one.
  */
 function reEntryFor(
@@ -594,7 +602,8 @@ function reEntryFor(
   const previous = findWeek(program, week.number - 1)
   if (!previous || week.deload || phaseOfWeek(program, week.number).id === 'taper') return null
 
-  const { skipped } = weekOutcome(program, previous, logs, week.startDate)
+  const closed = logs.filter((log) => !trained(log) || daysBetween(log.date, week.startDate) > 0)
+  const { skipped } = weekOutcome(program, previous, closed, week.startDate)
   if (skipped.length < RE_ENTRY_SKIPS) return null
 
   const id = reEntryId(week.number)
