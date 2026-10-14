@@ -23,8 +23,13 @@ export default defineConfig({
     contextOptions: { reducedMotion: 'reduce' },
   },
   webServer: {
-    // The real thing: the production build served by the Worker, with D1 bound.
-    command: `rm -rf ${PERSIST_DIR} && npm run build && npx wrangler dev --port ${PORT} --persist-to ${PERSIST_DIR} --show-interactive-dev-session=false`,
+    // The real thing: the production build served by the Worker, with D1 bound and migrated.
+    command: [
+      `rm -rf ${PERSIST_DIR}`,
+      'npm run build',
+      `npx wrangler d1 migrations apply compromised --local --persist-to ${PERSIST_DIR}`,
+      `npx wrangler dev --port ${PORT} --persist-to ${PERSIST_DIR} --show-interactive-dev-session=false`,
+    ].join(' && '),
     url: `${BASE_URL}/api/health`,
     timeout: 120_000,
     reuseExistingServer: !process.env.CI,
