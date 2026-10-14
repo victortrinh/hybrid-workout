@@ -10,7 +10,7 @@ import { describeSession, SESSION_TYPES } from '../../domain/program/describe'
 import type { Session } from '../../domain/program/types'
 import type { Settings } from '../../domain/settings'
 import type { Decision, Suggestion } from '../../domain/suggestion'
-import { painLine, recoveryWhy, shortSleepLine, suggestionCopy } from '../coachCopy'
+import { outsideWeekLine, painLine, recoveryWhy, shortSleepLine, suggestionCopy } from '../coachCopy'
 import { FieldLane } from '../components/FieldLane'
 import { LaneChip } from '../components/LaneChip'
 import { buttonBase, lineAction, primaryAction, quietButton } from '../components/actions'
@@ -224,8 +224,9 @@ function UpNext({
   const run = upNext && upNextWeek ? runContext(upNextWeek, upNext) : undefined
   /** Where to start a Session early: Week 1 before the Program, the next Week once this one is all logged. */
   const weekDone = day.bucket.length > 0 && day.bucket.every((e) => e.log !== null)
-  const ahead =
-    position.kind === 'before-start'
+  const ahead = upNext
+    ? null
+    : position.kind === 'before-start'
       ? weekDone && weekCount > 1
         ? 2
         : 1
@@ -268,6 +269,11 @@ function UpNext({
       </h1>
       <p className="mt-2 text-prescription">{nb(target)}</p>
       {meta && <p className="mt-1 text-body-quiet text-muted">{meta}</p>}
+      {upNext && position.kind === 'before-start' && (
+        <p className="mt-2 text-body">
+          {nb(outsideWeekLine('early', 1, position.startsOn, addDays(position.startsOn, 6)))}
+        </p>
+      )}
       {ahead && (
         <Link
           href={weekPath(ahead)}
@@ -307,7 +313,7 @@ function UpNext({
             Resume {nb(live.heading)}
           </Link>
         </div>
-      ) : upNext && upNextWeek && position.kind === 'in-week' && asking && isLive(upNext) ? (
+      ) : upNext && upNextWeek && asking && isLive(upNext) ? (
         <PainStep
           previous={previousPain}
           onAnswer={(pain) => {
@@ -316,7 +322,7 @@ function UpNext({
           }}
           onCancel={() => setAsking(false)}
         />
-      ) : upNext && upNextWeek && position.kind === 'in-week' && (
+      ) : upNext && upNextWeek && (
         <div className="mt-4 flex gap-2.5">
           {isLive(upNext) && (
             <Button onPress={() => setAsking(true)} className={primaryAction}>
@@ -572,6 +578,8 @@ function ThisWeek({
   if (!week) return null
 
   const inWeek = position.kind === 'in-week'
+  // Before the Program, Week 1's Sessions can be picked to do early.
+  const interactive = inWeek || position.kind === 'before-start'
   const left = bucket.filter((e) => !e.session.optional && !e.log).length
   const aside = inWeek
     ? `${plural(left, 'Session')} left · ${plural(position.daysLeft, 'day')}`
@@ -588,13 +596,17 @@ function ThisWeek({
           <BucketRow
             key={`${entry.week}/${entry.session.id}`}
             entry={entry}
-            interactive={inWeek}
+            interactive={interactive}
             onPick={() => onPick(entry.week, entry.session.id)}
             treadmill={treadmill}
           />
         ))}
       </ul>
-      {inWeek && left > 0 && <p className="mt-2.5 text-[14px] text-muted">Tap any Session to do it today instead.</p>}
+      {interactive && left > 0 && (
+        <p className="mt-2.5 text-[14px] text-muted">
+          {inWeek ? 'Tap any Session to do it today instead.' : 'Tap any Session to do it today, early.'}
+        </p>
+      )}
     </div>
   )
 }

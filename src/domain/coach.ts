@@ -216,7 +216,8 @@ export function coach({
   const chosen =
     position.kind === 'in-week' && week
       ? chooseUpNext({ program, logged, logs, today, picked, daysLeft: position.daysLeft })
-      : { upNext: null, rest: null }
+      : // Before the Program nothing is Up next until the athlete picks a Week 1 Session to do early.
+        { upNext: position.kind === 'before-start' ? pickedToday(logged, picked, today) : null, rest: null }
   const { rest } = chosen
   const recovery = readout(recoveryNights, today)
   const recovered = recoveryFor(chosen.upNext, recovery, today, decisions)
@@ -361,10 +362,8 @@ function chooseUpNext({ program, logged, logs, today, picked, daysLeft }: UpNext
   const open = logged.filter((entry) => !entry.log)
   if (open.length === 0) return { upNext: null, rest: { kind: 'week-done' } }
 
-  if (picked && picked.date === today) {
-    const choice = open.find((e) => e.week === picked.week && e.session.id === picked.sessionId)
-    if (choice) return { upNext: choice, rest: null }
-  }
+  const choice = pickedToday(open, picked, today)
+  if (choice) return { upNext: choice, rest: null }
 
   const pinnedToday = open.find((e) => e.session.date === today)
   if (pinnedToday) return { upNext: pinnedToday, rest: null }
@@ -398,6 +397,12 @@ function chooseUpNext({ program, logged, logs, today, picked, daysLeft }: UpNext
   }
 
   return { upNext: oldestWaiting(allowed), rest: null }
+}
+
+/** The Session picked today, while it is still open. */
+function pickedToday(logged: Logged[], picked: PickedSession | null, today: LocalDate): Logged | null {
+  if (!picked || picked.date !== today) return null
+  return logged.find((e) => !e.log && e.week === picked.week && e.session.id === picked.sessionId) ?? null
 }
 
 /** Session types logged as Done or Partial on `date`, from any Week. */

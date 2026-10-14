@@ -135,8 +135,11 @@ export function App() {
       activityAnswers,
     })
     // Early or late, the Session isn't in the Bucket: its own Week, with the same pain rules.
+    // Before the Program the Bucket is Week 1 without them, so it goes the same way.
     const started =
-      after.bucket.find((e) => e.week === week && e.session.id === session.id)?.session ??
+      (after.position.kind === 'in-week'
+        ? after.bucket.find((e) => e.week === week && e.session.id === session.id)?.session
+        : undefined) ??
       prescribedWeek(program, week, logs, decided, equipment, {
         reports: [...painReports, given],
         today,
