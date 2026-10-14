@@ -4,14 +4,24 @@
  */
 import { useSyncExternalStore } from 'react'
 
-export type Screen = 'today' | 'plan' | 'progress' | 'not-found'
+export type Screen = 'today' | 'plan' | 'week' | 'progress' | 'not-found'
 
 const PATHS: Record<string, Screen> = { '/': 'today', '/plan': 'plan', '/progress': 'progress' }
 
-export const SCREEN_PATH: Record<Exclude<Screen, 'not-found'>, string> = {
+export const SCREEN_PATH: Record<Exclude<Screen, 'week' | 'not-found'>, string> = {
   today: '/',
   plan: '/plan',
   progress: '/progress',
+}
+
+export const weekPath = (week: number) => `/plan/week/${week}`
+
+const WEEK_PATH = /^\/plan\/week\/([1-9]\d?)$/
+
+export interface Route {
+  screen: Screen
+  /** The Week number in /plan/week/N; the screen checks it against the Program. */
+  week?: number
 }
 
 const NAVIGATE_EVENT = 'compromised:navigate'
@@ -31,7 +41,10 @@ function subscribe(onChange: () => void) {
   }
 }
 
-export function useScreen(): Screen {
-  const path = useSyncExternalStore(subscribe, () => location.pathname)
-  return PATHS[path.replace(/\/+$/, '') || '/'] ?? 'not-found'
+export function useRoute(): Route {
+  const raw = useSyncExternalStore(subscribe, () => location.pathname)
+  const path = raw.replace(/\/+$/, '') || '/'
+  const week = WEEK_PATH.exec(path)
+  if (week) return { screen: 'week', week: Number(week[1]) }
+  return { screen: PATHS[path] ?? 'not-found' }
 }

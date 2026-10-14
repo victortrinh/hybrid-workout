@@ -183,11 +183,8 @@ describe('Up next', () => {
     expect(day.week?.number).toBe(1)
   })
 
-  it('is empty for a Week that is not encoded yet, and after the Program', () => {
-    const week5 = on('2026-11-18')
-    expect(week5.position).toMatchObject({ kind: 'in-week', week: 5 })
-    expect(week5.week).toBeNull()
-    expect(week5.upNext).toBeNull()
+  it('is the race in Race week, and empty after the Program', () => {
+    expect(on('2027-04-21').upNext).toMatchObject({ id: 'race', date: '2027-04-21', key: true })
 
     expect(on('2027-05-01').week).toBeNull()
     expect(on('2027-05-01').upNext).toBeNull()

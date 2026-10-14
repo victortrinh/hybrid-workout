@@ -23,7 +23,7 @@ test('phones get the bottom tab bar, desktop gets the cobalt side rail', async (
 })
 
 for (const colorScheme of ['light', 'dark'] as const) {
-  test(`Plan and Progress show honest empty states, ${colorScheme}`, async ({ page }) => {
+  test(`Plan shows the Weeks and Progress an honest empty state, ${colorScheme}`, async ({ page }) => {
     await page.emulateMedia({ colorScheme })
     await page.goto('/')
 
@@ -31,7 +31,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
     await expect(page).toHaveURL('/plan')
     await expect(page).toHaveTitle('Plan · Compromised')
     await expect(page.getByRole('heading', { level: 1, name: 'Plan' })).toBeFocused()
-    await expect(page.getByText('Only Weeks 1–3 are in the app so far.')).toBeVisible()
+    await expect(page.getByRole('heading', { level: 2, name: /^Foundation/ })).toBeVisible()
     await expectNoAxeViolations(page)
 
     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Progress' }).click()

@@ -36,6 +36,10 @@ export interface Week {
   deload: boolean
   fiveKTest: boolean
   raceSimulation: boolean
+  /** Race week: the Week holding Race day. */
+  race: boolean
+  /** Things the Week asks for that aren't Sessions: rest days, kit, recovery. */
+  notes?: string[]
   /** The Bucket, in display order: Speed, Strength, Threshold, HYROX, then the Optional session. */
   sessions: Session[]
 }
@@ -61,6 +65,10 @@ export interface Session {
   minutes: number
   key: boolean
   optional: boolean
+  /** Pinned to one day, unlike the rest of the Bucket. Only Race day so far. */
+  date?: LocalDate
+  /** Instruction for the whole Session: "Not all-out", "Only if fresh". */
+  note?: string
   blocks: Block[]
 }
 
@@ -109,6 +117,8 @@ export type Prescription =
       load: StrengthLoad
       rpe?: Range
       restSeconds?: Range
+      /** A ceiling rather than a target: Deload sets stay at or under it. */
+      rpeCap?: number
     }
   /** `raceLoadPercent` only where the Station carries a load that scales (not SkiErg, row, burpees or wall balls). */
   | { kind: 'station'; station: StationId; meters?: number; reps?: number; raceLoadPercent?: number }
@@ -123,9 +133,14 @@ export type PaceRef = 'easy' | 'threshold' | '5k' | 'goal'
 
 export type RunEffort =
   /** At a Training pace. Until the first 5K test sets the paces, `rpe` is the whole target. */
-  | { pace: PaceRef; rpe?: Range }
+  | {
+      pace: PaceRef
+      rpe?: Range
+      /** Faster than the pace by this much: "5K −5 s/km". */
+      secondsPerKmFaster?: number
+    }
   /** By feel, with no pace to resolve. */
-  | { feel: 'easy' | 'hard' | 'relaxed' | 'all-out'; rpe?: Range }
+  | { feel: 'easy' | 'hard' | 'controlled' | 'relaxed' | 'all-out'; rpe?: Range }
 
 export type LiftId =
   | 'back-squat'
@@ -136,6 +151,10 @@ export type LiftId =
 
 export type StrengthLoad =
   | { kind: 'working-weight'; lift: LiftId }
+  /** A share of the Working weight: Deload sets at 85–90%. */
+  | { kind: 'percent-of-working-weight'; lift: LiftId; percent: Range }
+  /** Technique weight, well under the Working weight: the Taper. */
+  | { kind: 'light'; lift: LiftId }
   /** Calibration: ramp up until a set feels like `rpe`; that load becomes the Working weight. */
   | { kind: 'find-working-weight'; lift: LiftId; rpe: number }
   | { kind: 'bodyweight' }
