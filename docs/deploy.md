@@ -273,7 +273,7 @@ Every PR branch gets a preview from Workers Builds, built with `VITE_API=mock np
 
 A preview opens on the default scenario, `midweek-mixed` (Thursday of Week 5). To see another state of the Program, add `?scenario=<name>` to the preview's address, for example `https://<preview>-compromised.<your-subdomain>.workers.dev/?scenario=race-week`, or pick one under **Mock scenario** at the top of the settings popover (tap your initial on Today). Switching wipes the tab's data and loads the scenario fresh. Tap the badge for the mock panel: network modes, and Recovery night and Apple Watch workout sends.
 
-The preview's Worker itself still binds `DB` to production, since `wrangler.jsonc` gives previews no database of their own. The app never reaches it (every `/api/*` request stops in the browser), so only a request made outside the app, behind Access, would.
+The preview's Worker has no `DB` at all: previews take their bindings only from the `previews` block in `wrangler.jsonc`, which holds just `ACCESS_TEAM_DOMAIN`. Wrangler warns that `DB` is missing on each upload; that's expected. A request made outside the app, such as `/api/health` behind Access, fails instead of reaching any database.
 
 ## Rolling back
 

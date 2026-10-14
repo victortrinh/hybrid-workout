@@ -29,5 +29,12 @@
   // assertion for the recovery Shortcut's service token against its keys
   // (src/worker/access.ts). Not a secret: it's the login page's address.
   "vars": { "ACCESS_TEAM_DOMAIN": "https://quiet-shape-374b.cloudflareaccess.com" },
+  // Branch builds (Workers Builds on a PR) are mock builds (VITE_API=mock,
+  // docs/deploy.md): /api/* is answered in the browser, so previews get no D1
+  // at all and PR code never touches real Session logs. Previews inherit no
+  // bindings or vars, and Wrangler refuses to upload one without this block.
+  "previews": {
+    "vars": { "ACCESS_TEAM_DOMAIN": "https://quiet-shape-374b.cloudflareaccess.com" }
+  },
   "observability": { "enabled": true }
 }
