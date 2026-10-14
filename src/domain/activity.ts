@@ -52,7 +52,7 @@ export function activityKind(workoutType: string): ActivityKind {
   const type = workoutType.toLowerCase()
   if (/\brun/.test(type)) return 'run'
   if (type.includes('traditional strength')) return 'lifting'
-  if (/functional strength|high intensity|cross training|mixed cardio|hyrox|core training/.test(type)) return 'circuit'
+  if (/functional strength|high intensity|cross training|mixed (metabolic )?cardio|hyrox|core training/.test(type)) return 'circuit'
   return 'other'
 }
 
@@ -75,8 +75,9 @@ export function parseActivity(value: unknown, receivedAt: string): Activity {
   const km = number(v.distanceKm, 'distanceKm')
   const meters = number(v.distanceMeters, 'distanceMeters')
   const withUnit = distance(v.distance)
+  const sampled = distanceSamples(v.distanceSamples)
   const distanceMeters =
-    withUnit !== null ? withUnit : km !== null ? Math.round(km * 1000) : meters !== null ? Math.round(meters) : null
+    sampled ?? withUnit ?? (km !== null ? Math.round(km * 1000) : meters !== null ? Math.round(meters) : null)
   if (distanceMeters !== null && (distanceMeters < 1 || distanceMeters > 100_000)) {
     throw new Error('distance must be at most 100 km')
   }
@@ -123,6 +124,32 @@ function distance(value: unknown): number | null {
   const n = match ? Number(match[1].replace(',', '.')) : NaN
   if (!match || !Number.isFinite(n)) throw new Error('distance must be a number with km, m or mi')
   return n === 0 ? null : Math.round(n * METERS_PER[(match[2] ?? 'km').toLowerCase()])
+}
+
+/**
+ * Health's Walking + Running Distance samples over the workout, one per line:
+ * the value, its unit if any (km when none), then the device that measured
+ * it. The iPhone and the watch both write distance for the same stretch, so
+ * each device's samples are added up and the device with the most counts:
+ * nothing is counted twice.
+ */
+function distanceSamples(value: unknown): number | null {
+  if (value === undefined || value === null || value === '') return null
+  if (typeof value !== 'string') throw new Error('distanceSamples must be text, one sample per line')
+  const lines = value.split(/[\n\r]+/).map((l) => l.trim()).filter(Boolean)
+  if (lines.length > 20_000) throw new Error('distanceSamples has too many samples')
+  const bySource = new Map<string, number>()
+  for (const line of lines) {
+    const match = /^([\d.,]+)\s*(km|mi|m)?\b\s*(.*)$/i.exec(line)
+    const n = match ? Number(match[1].replace(',', '.')) : NaN
+    if (!match || !Number.isFinite(n)) {
+      throw new Error(`distanceSamples must be "value unit source" per line (got "${line.slice(0, 40)}")`)
+    }
+    const source = match[3].trim() || 'unknown'
+    bySource.set(source, (bySource.get(source) ?? 0) + n * METERS_PER[(match[2] ?? 'km').toLowerCase()])
+  }
+  const most = Math.round(Math.max(0, ...bySource.values()))
+  return most > 0 ? most : null
 }
 
 /** Health's heart-rate samples over the workout: a list, or text with one per line. */

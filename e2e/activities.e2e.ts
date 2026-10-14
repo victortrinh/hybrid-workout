@@ -17,7 +17,8 @@ const OUTDOOR_RUN = {
   type: 'Running',
   start: '2027-02-02T07:00:00-05:00',
   end: '2027-02-02T07:45:00-05:00',
-  distance: '8.00 km',
+  // The watch and the phone both measured it: only the watch's 8 km counts.
+  distanceSamples: '4.00 km Victor’s Apple Watch\n4.00 km Victor’s Apple Watch\n7.20 km Victor’s iPhone',
   heartRates: '150\n155\n160',
   // February is a treadmill month in the default Settings: the Shortcut says this one wasn't.
   indoor: false,
@@ -174,6 +175,6 @@ test('Settings has the Workout Shortcut setup page, with the address and the ste
   await expect(page).toHaveURL('/settings/workouts')
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Workout Shortcut')
   await expect(page.getByText(new URL('/api/activities', page.url()).href)).toBeVisible()
-  await expect(page.getByRole('list').filter({ hasText: 'Find Health Samples' }).getByRole('listitem')).toHaveCount(6)
+  await expect(page.getByRole('list').filter({ hasText: 'Find Health Samples' }).getByRole('listitem')).toHaveCount(8)
   await expectNoAxeViolations(page)
 })

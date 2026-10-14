@@ -59,6 +59,14 @@ describe('parseActivity', () => {
     expect(() => parseActivity({ ...body, distance: 'far' }, AT)).toThrow(/distance/)
   })
 
+  it('adds up distance samples per device and keeps the device with the most: phone and watch never count twice', () => {
+    const samples = ['0.52 km Victor’s Apple Watch', '0.48 Victor’s Apple Watch', '0.95 km Victor’s iPhone', '', '7.1 Victor’s Apple Watch'].join('\n')
+    expect(parseActivity({ ...body, distanceKm: undefined, distanceSamples: samples }, AT).distanceMeters).toBe(8100)
+    expect(parseActivity({ ...body, distanceKm: undefined, distanceSamples: '500 m Watch\n0.2 mi Watch' }, AT).distanceMeters).toBe(822)
+    expect(parseActivity({ ...body, distanceKm: undefined, distanceSamples: '' }, AT).distanceMeters).toBeNull()
+    expect(() => parseActivity({ ...body, distanceSamples: 'lots Watch' }, AT)).toThrow(/distanceSamples/)
+  })
+
   it('takes metres, heart rates as a list or an average, and no distance or heart rate at all', () => {
     expect(parseActivity({ ...body, distanceKm: undefined, distanceMeters: 8120.4 }, AT).distanceMeters).toBe(8120)
     expect(parseActivity({ ...body, heartRates: [150, '160'] }, AT)).toMatchObject({ averageHeartRate: 155, maxHeartRate: 160 })
@@ -102,6 +110,7 @@ describe('activityKind', () => {
     expect(activityKind('High Intensity Interval Training')).toBe('circuit')
     expect(activityKind('Cross Training')).toBe('circuit')
     expect(activityKind('Mixed Cardio')).toBe('circuit')
+    expect(activityKind('Mixed Metabolic Cardio Training')).toBe('circuit')
     expect(activityKind('Walking')).toBe('other')
     expect(activityKind('Rowing')).toBe('other')
   })
