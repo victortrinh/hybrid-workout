@@ -9,8 +9,11 @@ import { navigate, SCREEN_PATH, useRoute, type Route, type Screen } from './rout
 import { NotFound } from './screens/NotFound'
 import { Plan } from './screens/Plan'
 import { Progress } from './screens/Progress'
+import { LogAfter } from './screens/LogAfter'
 import { Today } from './screens/Today'
 import { WeekScreen } from './screens/Week'
+import { usePicked } from './usePicked'
+import { useSessionLogs } from './useSessionLogs'
 import { useToday } from './useToday'
 
 const NAV = [
@@ -21,14 +24,15 @@ const NAV = [
 
 const TITLES: Record<Screen, string> = {
   today: 'Today',
+  log: 'Log after',
   plan: 'Plan',
   week: 'Week',
   progress: 'Progress',
   'not-found': 'Not found',
 }
 
-/** A Week is part of Plan in the navigation. */
-const NAV_SCREEN: Partial<Record<Screen, Screen>> = { week: 'plan' }
+/** A Week is part of Plan in the navigation; Log after is part of Today. */
+const NAV_SCREEN: Partial<Record<Screen, Screen>> = { week: 'plan', log: 'today' }
 
 /**
  * The shell: a cobalt side rail from 960px, a bottom tab bar below it. The
@@ -36,11 +40,15 @@ const NAV_SCREEN: Partial<Record<Screen, Screen>> = { week: 'plan' }
  */
 export function App() {
   const today = useToday()
-  const day = useMemo(() => coach({ program, today }), [today])
+  const { logs, save, error } = useSessionLogs()
+  const [picked, pick] = usePicked()
+  const day = useMemo(() => coach({ program, today, logs, picked }), [today, logs, picked])
   const route = useRoute()
-  const week = route.screen === 'week' ? findWeek(program, route.week ?? 0) : null
-  const screen: Screen = route.screen === 'week' && !week ? 'not-found' : route.screen
-  useScreenChange(screen, week ? `Week ${week.number}` : TITLES[screen], route)
+  const week = route.screen === 'week' || route.screen === 'log' ? findWeek(program, route.week ?? 0) : null
+  const logged = route.screen === 'log' ? week?.sessions.find((s) => s.id === route.sessionId) : undefined
+  const screen: Screen =
+    (route.screen === 'week' && !week) || (route.screen === 'log' && !logged) ? 'not-found' : route.screen
+  useScreenChange(screen, screen === 'week' && week ? `Week ${week.number}` : TITLES[screen], route)
   const navScreen = NAV_SCREEN[screen] ?? screen
 
   return (
@@ -54,7 +62,17 @@ export function App() {
       <div className="grid min-h-dvh desktop:grid-cols-[240px_1fr]">
         <SideRail screen={navScreen} day={day} />
         <main id="main" className="min-w-0 pb-24 desktop:pb-12">
-          {screen === 'today' && <Today day={day} weekCount={program.weekCount} />}
+          {screen === 'today' && (
+            <Today
+              day={day}
+              weekCount={program.weekCount}
+              error={error}
+              onPick={(sessionId) => day.week && pick(day.week.number, sessionId, today)}
+            />
+          )}
+          {screen === 'log' && week && logged && (
+            <LogAfter week={week} session={logged} logs={logs} today={today} onSave={save} />
+          )}
           {screen === 'plan' && <Plan program={program} day={day} />}
           {screen === 'week' && week && <WeekScreen program={program} week={week} day={day} />}
           {screen === 'progress' && <Progress program={program} />}
@@ -68,7 +86,7 @@ export function App() {
 
 /** New title on every screen; on a change of screen, back to the top with focus on the heading. */
 function useScreenChange(screen: Screen, title: string, route: Route) {
-  const key = `${screen}/${route.week ?? ''}`
+  const key = `${screen}/${route.week ?? ''}/${route.sessionId ?? ''}`
   const previous = useRef(key)
   useEffect(() => {
     document.title = `${title} · Compromised`

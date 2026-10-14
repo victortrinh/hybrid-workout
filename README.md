@@ -15,10 +15,11 @@ No Cloudflare account is needed to run anything locally. Wrangler runs the Worke
 
 ```bash
 npm install
+npm run db:migrate:local
 npm run dev
 ```
 
-This opens the app at http://localhost:5173 with hot reload. The Worker runs alongside it in workerd, so `/api/*` and the D1 binding work in development too (try http://localhost:5173/api/health). Local D1 data is kept in `.wrangler/state`.
+This opens the app at http://localhost:5173 with hot reload. The Worker runs alongside it in workerd, so `/api/*` and the D1 binding work in development too (try http://localhost:5173/api/health). Local D1 data is kept in `.wrangler/state`; run `npm run db:migrate:local` again whenever `migrations/` gains a file.
 
 ## Test
 

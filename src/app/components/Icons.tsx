@@ -1,4 +1,4 @@
-/** The three navigation icons from the prototype: 24px, 2px stroke, round joins. */
+/** The navigation icons and stepper signs from the prototype: 24px, 2px stroke, round joins. */
 const ICON_PATHS = {
   today: <path d="M3 8h18M3 12h18M3 16h18" />,
   plan: (
@@ -8,6 +8,8 @@ const ICON_PATHS = {
     </>
   ),
   progress: <path d="M4 19V5M4 19h16M8 15l4-4 3 3 5-6" />,
+  minus: <path d="M6 12h12" />,
+  plus: <path d="M6 12h12M12 6v12" />,
 }
 
 export function Icon({ name }: { name: keyof typeof ICON_PATHS }) {

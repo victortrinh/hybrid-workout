@@ -2,7 +2,7 @@
 
 Production is one Cloudflare Worker, `compromised`, on the free `compromised.<your-subdomain>.workers.dev` address. It serves the built app and the API, with the D1 database `compromised` bound as `DB`. Cloudflare Access sits in front of the whole address, so the only way in is an email one-time code sent to Victor (ADR-0001). Everything here fits in Cloudflare's free plans.
 
-Steps 1 to 4 happen once. After that, shipping a change is just [Deploy](#deploy) (and [Migrate](#migrate) when a change adds a migration).
+Steps 1 to 6 happen once. After that, shipping a change is just [Deploy](#deploy) (and [Migrate](#migrate) when a change adds a migration).
 
 ## Commands
 
@@ -10,6 +10,7 @@ Steps 1 to 4 happen once. After that, shipping a change is just [Deploy](#deploy
 | --- | --- |
 | `npm run deploy` | Runs the unit tests, builds the app and the Worker (`dist/`), then `wrangler deploy` uploads the Worker with `dist/client` as its static assets. |
 | `npm run db:migrate:prod` | Applies any unapplied files in `migrations/` to the production D1 database. Wrangler lists them and asks before applying, and captures a backup first. |
+| `npm run db:migrate:preview` | The same against `compromised-preview`, the D1 database branch previews (Workers Builds on a PR) use instead of production. |
 | `npm run db:migrate:local` | The same against the local D1 that `npm run dev` uses. |
 | `npm run check:access -- <url>` | Requests `/`, `/plan` and `/api/health` without signing in and fails unless every one redirects to the Cloudflare Access login. |
 
@@ -92,6 +93,18 @@ Every line should say `ok` and point at `<team>.cloudflareaccess.com`.
 
 Then on your phone, in a private tab: open the address, confirm the Cloudflare Access page asks for your email, enter the code it sends, and check that Today loads with the countdown and Up next. Finally, open `/api/health` in the same tab: it should show `{"ok":true,"db":true}`, which proves the Worker reaches the production database.
 
+### 6. Preview URLs (Victor)
+
+Workers Builds uploads every PR branch as a preview with its own address, `<version or branch>-compromised.<your-subdomain>.workers.dev`, bound to the `compromised-preview` database. Those hostnames aren't covered by the application from step 4, so cover them before the first PR builds:
+
+Workers & Pages → `compromised` → Settings → Domains & Routes → on the **Preview URLs** row, **Enable Cloudflare Access**. Open the application it made in Zero Trust and check it the same way as in step 4: only your email, One-time PIN. (Or add `*-compromised.<your-subdomain>.workers.dev` as a second public hostname of the `Compromised` application.)
+
+Then check a preview the build posts on its PR:
+
+```bash
+npm run check:access -- https://<preview>-compromised.<your-subdomain>.workers.dev
+```
+
 ## Deploy
 
 ```bash
@@ -105,6 +118,12 @@ When a change adds a file to `migrations/`, apply it to production before deploy
 ```bash
 npm run db:migrate:prod
 npm run deploy
+```
+
+Apply it to the preview database too, so branch previews of the change work:
+
+```bash
+npm run db:migrate:preview
 ```
 
 Migrations should only add things (new tables, new nullable columns) so the running version keeps working between the two commands.
