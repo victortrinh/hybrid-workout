@@ -4,11 +4,11 @@
   "main": "src/worker/index.ts",
   "compatibility_date": "2026-10-01",
   // Production lives on the free compromised.<subdomain>.workers.dev address,
-  // behind Cloudflare Access (ADR-0001, docs/deploy.md). Per-version preview
-  // URLs are off: they are separate hostnames the Access application would not
-  // cover.
+  // behind Cloudflare Access (ADR-0001, docs/deploy.md). Branch previews get
+  // their own *-compromised.<subdomain>.workers.dev hostnames, which need Access
+  // too (docs/deploy.md, "Preview URLs").
   "workers_dev": true,
-  "preview_urls": false,
+  "preview_urls": true,
   // The Worker serves the built SPA. Anything that isn't a file falls back to
   // index.html so /plan and /progress load on refresh; /api/* always reaches Hono.
   "assets": {
