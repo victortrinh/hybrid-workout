@@ -42,11 +42,13 @@ const STATUS_HINT: Record<LoggedStatus, string> = {
 
 /**
  * Log after: what happened in one Session, written after the fact. Saving
- * goes straight back to Today, which shows the log at once.
+ * stores it on the phone and goes straight back to Today, which shows the log
+ * at once, signal or not.
  */
 export function LogAfter({
   week,
   session,
+  lastDay: loggableUntil,
   logs,
   today,
   defaultEnvironment,
@@ -54,15 +56,18 @@ export function LogAfter({
 }: {
   week: Week
   session: Session
+  /** The last day the Session can be logged on: Sunday, or later for a carried Key session. */
+  lastDay: LocalDate
   logs: SessionLog[]
   today: LocalDate
   /** Where runs happen on a day unless the log says otherwise: the month's setting. */
   defaultEnvironment: (date: LocalDate) => Environment
-  onSave: (log: SessionLog) => Promise<boolean>
+  onSave: (log: SessionLog) => void
 }) {
   const existing = logFor(logs, week.number, session.id)
-  const days = Array.from({ length: 7 }, (_, i) => addDays(week.startDate, i))
-  const lastDay = days.find((d) => d === today) ?? (daysBetween(today, days[6]) < 0 ? days[6] : null)
+  const days = Array.from({ length: daysBetween(week.startDate, loggableUntil) + 1 }, (_, i) => addDays(week.startDate, i))
+  const last = days.at(-1)!
+  const lastDay = days.find((d) => d === today) ?? (daysBetween(today, last) < 0 ? last : null)
 
   const [status, setStatus] = useState<LoggedStatus>(existing?.status ?? 'done')
   const [date, setDate] = useState<LocalDate | null>(existing?.date ?? lastDay)
@@ -84,7 +89,7 @@ export function LogAfter({
     if (!date) return
     const resultSeconds = result ? parseClock(time) : null
     if (result && resultSeconds === null) return
-    void onSave({
+    onSave({
       id: existing?.id ?? crypto.randomUUID(),
       week: week.number,
       sessionId: session.id,

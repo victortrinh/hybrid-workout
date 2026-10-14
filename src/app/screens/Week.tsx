@@ -23,7 +23,7 @@ export function WeekScreen({
   week: Week
   day: CoachDay
   /** How each Session's runs read: exact speeds or paces once there is a 5K test. */
-  runContext: (week: Week, session: Session) => RunContext
+  runContext: (week: number, session: Session) => RunContext
 }) {
   const phase = program.phases.find((p) => week.number >= p.firstWeek && week.number <= p.lastWeek)
   const current = day.position.kind === 'in-week' && day.position.week === week.number
@@ -60,7 +60,7 @@ export function WeekScreen({
       )}
 
       {week.sessions.map((session) => (
-        <SessionDetail key={session.id} session={session} program={program} run={runContext(week, session)} />
+        <SessionDetail key={session.id} session={session} program={program} run={runContext(week.number, session)} />
       ))}
 
       <nav aria-label="Other Weeks" className="mt-8 flex justify-between gap-3 border-t-2 border-ink pt-2">

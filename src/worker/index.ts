@@ -7,6 +7,7 @@ import { Hono } from 'hono'
 import { findWeek } from '../domain/coach'
 import { parseSessionLog, type SessionLog, type SyncState } from '../domain/log'
 import { program } from '../domain/program/program'
+import { parseDecision, type SuggestionDecision } from '../domain/suggestion'
 
 const app = new Hono<{ Bindings: Env }>().basePath('/api')
 
@@ -24,13 +25,14 @@ app.get('/state', async (c) => c.json(await readState(c.env.DB)))
 
 /**
  * Upserts a batch of records written on a device, then answers with the
- * server's current state. A log the server already holds is replaced only by
- * a later edit, so replaying a batch is harmless.
+ * server's current state. A record the server already holds is replaced only
+ * by a later edit, so replaying a batch is harmless.
  */
 app.post('/sync', async (c) => {
   let logs: SessionLog[]
+  let decisions: SuggestionDecision[]
   try {
-    logs = parseSyncRequest(await c.req.json())
+    ;({ logs, decisions } = parseSyncRequest(await c.req.json()))
   } catch (error) {
     return c.json({ error: error instanceof Error ? error.message : 'Invalid request' }, 400)
   }
@@ -55,13 +57,41 @@ app.post('/sync', async (c) => {
       ),
     )
   }
+  if (decisions.length > 0) {
+    const upsert = c.env.DB.prepare(
+      `insert into suggestion_decisions (id, decision, date, updated_at)
+       values (?, ?, ?, ?)
+       on conflict (id) do update set
+         decision = excluded.decision, date = excluded.date, updated_at = excluded.updated_at
+       where excluded.updated_at > suggestion_decisions.updated_at`,
+    )
+    await c.env.DB.batch(decisions.map((d) => upsert.bind(d.id, d.decision, d.date, d.updatedAt)))
+  }
   return c.json(await readState(c.env.DB))
 })
 
 app.notFound((c) => c.json({ error: 'Not found' }, 404))
 
-function parseSyncRequest(body: unknown): SessionLog[] {
-  const raw = (body as { sessionLogs?: unknown } | null)?.sessionLogs
+/** Either list may be left out; whatever is there must all be valid. */
+function parseSyncRequest(body: unknown): { logs: SessionLog[]; decisions: SuggestionDecision[] } {
+  if (typeof body !== 'object' || body === null) throw new Error('The body must be an object')
+  const { sessionLogs = [], suggestionDecisions = [] } = body as Record<string, unknown>
+  return { logs: parseLogs(sessionLogs), decisions: parseDecisions(suggestionDecisions) }
+}
+
+function parseDecisions(raw: unknown): SuggestionDecision[] {
+  if (!Array.isArray(raw)) throw new Error('suggestionDecisions must be an array')
+  if (raw.length > MAX_BATCH) throw new Error(`At most ${MAX_BATCH} decisions per sync`)
+  return raw.map((value, i) => {
+    try {
+      return parseDecision(value)
+    } catch (error) {
+      throw new Error(`suggestionDecisions[${i}]: ${error instanceof Error ? error.message : 'invalid'}`)
+    }
+  })
+}
+
+function parseLogs(raw: unknown): SessionLog[] {
   if (!Array.isArray(raw)) throw new Error('sessionLogs must be an array')
   if (raw.length > MAX_BATCH) throw new Error(`At most ${MAX_BATCH} logs per sync`)
   return raw.map((value, i) => {
@@ -93,11 +123,22 @@ interface SessionLogRow {
   updated_at: string
 }
 
+interface DecisionRow {
+  id: string
+  decision: string
+  date: string
+  updated_at: string
+}
+
 async function readState(db: D1Database): Promise<SyncState> {
-  const { results } = await db
-    .prepare('select * from session_logs order by date, updated_at')
-    .all<SessionLogRow>()
+  const [{ results }, decisions] = await db.batch<SessionLogRow | DecisionRow>([
+    db.prepare('select * from session_logs order by date, updated_at'),
+    db.prepare('select * from suggestion_decisions order by updated_at'),
+  ]) as [D1Result<SessionLogRow>, D1Result<DecisionRow>]
   return {
+    suggestionDecisions: decisions.results.map((row) =>
+      parseDecision({ id: row.id, decision: row.decision, date: row.date, updatedAt: row.updated_at }),
+    ),
     sessionLogs: results.map((row) =>
       parseSessionLog({
         id: row.id,

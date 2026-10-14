@@ -3,8 +3,10 @@ import { addDays } from '../../domain/calendar'
 import type { BucketEntry, CoachDay, PhaseProgress, RestReason } from '../../domain/coach'
 import type { Environment, RunContext } from '../../domain/paces'
 import { describeSession, SESSION_TYPES } from '../../domain/program/describe'
-import type { Session, Week } from '../../domain/program/types'
+import type { Session } from '../../domain/program/types'
 import type { Settings } from '../../domain/settings'
+import type { Decision, Suggestion } from '../../domain/suggestion'
+import { suggestionCopy } from '../coachCopy'
 import { FieldLane } from '../components/FieldLane'
 import { LaneChip } from '../components/LaneChip'
 import { Segmented } from '../components/Segmented'
@@ -21,23 +23,29 @@ import { logPath } from '../router'
 export function Today({
   day,
   weekCount,
+  pending,
   error,
   onPick,
   runContext,
   onEnvironment,
   settings,
   onSettings,
+  onDecide,
 }: {
   day: CoachDay
   weekCount: number
-  /** A failed load or save, said once under Up next. */
+  /** Logs saved on this device that the server hasn't taken yet. */
+  pending: number
+  /** A log the server refused or the device couldn't store, said once under Up next. */
   error: string | null
   /** Makes a Session of the Bucket today's Session instead of Up next. */
-  onPick: (sessionId: string) => void
+  onPick: (week: number, sessionId: string) => void
+  /** Accepts, Keeps or (with 'open') undoes a Suggestion. */
+  onDecide: (suggestion: Suggestion, decision: Decision) => void
   /** How a Session's runs read today: exact speeds or paces once there is a 5K test. */
-  runContext: (week: Week, session: Session) => RunContext
+  runContext: (week: number, session: Session) => RunContext
   /** Overrides the month's Environment for one Session. */
-  onEnvironment: (week: Week, session: Session, environment: Environment) => void
+  onEnvironment: (week: number, session: Session, environment: Environment) => void
   settings: Settings
   onSettings: (patch: Partial<Settings>) => void
 }) {
@@ -50,7 +58,9 @@ export function Today({
       <UpNext
         day={day}
         weekCount={weekCount}
+        pending={pending}
         error={error}
+        onDecide={onDecide}
         runContext={runContext}
         onEnvironment={onEnvironment}
       />
@@ -144,18 +154,23 @@ function PhaseLanes({ phases }: { phases: PhaseProgress[] }) {
 function UpNext({
   day,
   weekCount,
+  pending,
   error,
+  onDecide,
   runContext,
   onEnvironment,
 }: {
   day: CoachDay
   weekCount: number
+  pending: number
   error: string | null
-  runContext: (week: Week, session: Session) => RunContext
-  onEnvironment: (week: Week, session: Session, environment: Environment) => void
+  onDecide: (suggestion: Suggestion, decision: Decision) => void
+  runContext: (week: number, session: Session) => RunContext
+  onEnvironment: (week: number, session: Session, environment: Environment) => void
 }) {
-  const { position, upNext, week } = day
-  const run = upNext && week ? runContext(week, upNext) : undefined
+  const { position, upNext } = day
+  const upNextWeek = day.bucket.find((e) => e.state === 'next')?.week
+  const run = upNext && upNextWeek ? runContext(upNextWeek, upNext) : undefined
   let heading: string
   let target: string
   let meta = ''
@@ -192,7 +207,7 @@ function UpNext({
       </h1>
       <p className="mt-2 text-prescription">{nb(target)}</p>
       {meta && <p className="mt-1 text-body-quiet text-muted">{meta}</p>}
-      {upNext && week && run && dependsOnEnvironment(upNext, run) && (
+      {upNext && upNextWeek && run && dependsOnEnvironment(upNext, run) && (
         <Segmented
           label="Where"
           labelClassName="sr-only"
@@ -202,20 +217,31 @@ function UpNext({
             { value: 'indoor', label: 'Indoor' },
             { value: 'outdoor', label: 'Outdoor' },
           ]}
-          onChange={(environment) => onEnvironment(week, upNext, environment)}
+          onChange={(environment) => onEnvironment(upNextWeek, upNext, environment)}
         />
       )}
-      {upNext && week && position.kind === 'in-week' && (
+      {upNext && upNextWeek && position.kind === 'in-week' && (
         <div className="mt-4 flex gap-2.5">
           <Link
-            href={logPath(week.number, upNext.id)}
+            href={logPath(upNextWeek, upNext.id)}
             className="inline-grid min-h-[54px] flex-1 place-items-center rounded-sm px-5 text-[17px] font-bold text-ink no-underline shadow-[inset_0_0_0_2px_var(--ink)] hover:bg-sunk desktop:flex-none"
           >
             Log after
           </Link>
         </div>
       )}
-      <div aria-live="polite">{error && <p className="mt-3 text-body">{error}</p>}</div>
+      <div aria-live="polite">
+        {error && <p className="mt-3 text-body">{error}</p>}
+        {pending > 0 && (
+          <p className="mt-3 text-body-quiet text-muted">{plural(pending, 'log')} on this phone, waiting to sync.</p>
+        )}
+      </div>
+      {day.suggestions
+        // Decided ones stay for the rest of the day, so Undo is one tap away.
+        .filter((s) => s.decision === 'open' || s.decidedOn === day.today)
+        .map((s) => (
+          <SuggestionNote key={s.id} suggestion={s} onDecide={(d) => onDecide(s, d)} />
+        ))}
     </div>
   )
 }
@@ -224,6 +250,46 @@ function UpNext({
 function dependsOnEnvironment(session: Session, run: RunContext): boolean {
   const indoor = describeSession(session, { ...run, environment: 'indoor' }).target
   return indoor !== describeSession(session, { ...run, environment: 'outdoor' }).target
+}
+
+const buttonBase =
+  'cursor-pointer py-2 text-[15px] font-bold data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-link'
+/** The prototype's link buttons: Accept in link blue, underlined; Keep and Undo quiet, in ink. */
+const linkButton = `${buttonBase} text-link underline decoration-2 underline-offset-4 hover:decoration-[3px]`
+const quietButton = `${buttonBase} text-ink hover:underline hover:decoration-2 hover:underline-offset-4`
+
+/** The Coach's Suggestion between ink rules: the line, the facts, then Accept and Keep (or Undo). */
+function SuggestionNote({ suggestion, onDecide }: { suggestion: Suggestion; onDecide: (d: Decision) => void }) {
+  const copy = suggestionCopy(suggestion)
+  const { decision } = suggestion
+  return (
+    <section
+      aria-label="Coach’s Suggestion"
+      aria-live="polite"
+      className="mt-[18px] border-t-2 border-b border-t-ink border-b-rule py-3.5"
+    >
+      <p className="text-[17px] leading-[1.3] font-semibold">
+        {decision === 'open' ? copy.line : decision === 'accepted' ? copy.accepted : copy.kept}
+      </p>
+      {decision === 'open' && <p className="mt-1 text-[14px] text-muted">{nb(copy.why)}</p>}
+      <div className="mt-2.5 flex gap-5">
+        {decision === 'open' ? (
+          <>
+            <Button onPress={() => onDecide('accepted')} className={linkButton}>
+              Accept
+            </Button>
+            <Button onPress={() => onDecide('kept')} className={quietButton}>
+              {copy.keep}
+            </Button>
+          </>
+        ) : (
+          <Button onPress={() => onDecide('open')} className={quietButton}>
+            Undo
+          </Button>
+        )}
+      </div>
+    </section>
+  )
 }
 
 /** Blunt, with the reason first (PRODUCT.md, Coach voice). */
@@ -267,7 +333,7 @@ function restCopy(
   }
 }
 
-function ThisWeek({ day, onPick }: { day: CoachDay; onPick: (sessionId: string) => void }) {
+function ThisWeek({ day, onPick }: { day: CoachDay; onPick: (week: number, sessionId: string) => void }) {
   const { week, position, bucket } = day
   if (!week) return null
 
@@ -286,11 +352,10 @@ function ThisWeek({ day, onPick }: { day: CoachDay; onPick: (sessionId: string) 
       <ul className="mt-1.5">
         {bucket.map((entry) => (
           <BucketRow
-            key={entry.session.id}
+            key={`${entry.week}/${entry.session.id}`}
             entry={entry}
-            week={week.number}
             interactive={inWeek}
-            onPick={() => onPick(entry.session.id)}
+            onPick={() => onPick(entry.week, entry.session.id)}
           />
         ))}
       </ul>
@@ -307,16 +372,14 @@ const rowClass = 'grid w-full grid-cols-[36px_1fr_auto] items-center gap-3 py-[1
  */
 function BucketRow({
   entry,
-  week,
   interactive,
   onPick,
 }: {
   entry: BucketEntry
-  week: number
   interactive: boolean
   onPick: () => void
 }) {
-  const { session, state, log } = entry
+  const { session, state, log, week, carriedUntil } = entry
   const type = SESSION_TYPES[session.type]
   const content = (
     <>
@@ -327,7 +390,13 @@ function BucketRow({
         >
           {type.name}
         </span>
-        <span className="text-[14px] text-muted">{nb(describeSession(session).summary)}</span>
+        <span className="text-[14px] text-muted">
+          {nb(
+            carriedUntil
+              ? `Week ${week}’s Key session, until ${shortWeekday(carriedUntil)} · ${describeSession(session).summary}`
+              : describeSession(session).summary,
+          )}
+        </span>
       </span>
       <span className="text-[14px] font-bold">
         {state === 'next' ? (

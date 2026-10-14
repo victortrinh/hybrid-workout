@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { BEFORE_WEEK_1, expectNoAxeViolations, WEEK_3 } from './axe'
+import { serveHistory, weekDone } from './history'
 
 for (const colorScheme of ['light', 'dark'] as const) {
   test.describe(`Today, ${colorScheme}`, () => {
@@ -8,6 +9,8 @@ for (const colorScheme of ['light', 'dark'] as const) {
     test('shows the countdown, the Phases, the Week and Up next, with no accessibility violations', async ({
       page,
     }) => {
+      // Week 2 done in full: no Key session carried over, no Suggestion.
+      await serveHistory(page, weekDone(2, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-10-26'))
       await page.clock.setFixedTime(WEEK_3)
       await page.goto('/')
 
@@ -31,6 +34,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
         /^HYROX/,
         /^Easy run.*Optional$/,
       ])
+      await expect(page.getByRole('region', { name: 'Coach’s Suggestion' })).toHaveCount(0)
 
       await expectNoAxeViolations(page)
     })

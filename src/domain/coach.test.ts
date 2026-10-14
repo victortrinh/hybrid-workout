@@ -1,11 +1,40 @@
 import { describe, expect, it } from 'vitest'
-import { isoWeekday, localDate, localDateIn } from './calendar'
-import { coach, programStart, type CoachInput } from './coach'
+import { daysBetween, isoWeekday, localDate, localDateIn, type LocalDate } from './calendar'
+import { coach, findWeek, keyDeadline, prescribedWeek, programStart, weekOutcome, type CoachInput } from './coach'
 import type { LoggedStatus, SessionLog } from './log'
 import { program } from './program/program'
 import type { Program } from './program/types'
+import type { Decision, SuggestionDecision } from './suggestion'
 
-const on = (iso: string, p: Program = program) => coach({ program: p, today: localDate(iso) })
+/**
+ * Every Key session of the Weeks before `today` done on its Week's Monday: a
+ * history with nothing carried over, too long ago to touch the spacing rules.
+ */
+function keysDoneBefore(today: LocalDate, p: Program = program): SessionLog[] {
+  return p.phases
+    .flatMap((phase) => phase.weeks)
+    .filter((week) => daysBetween(week.startDate, today) >= 7)
+    .flatMap((week) =>
+      week.sessions
+        .filter((s) => s.key)
+        .map((s) => ({
+          id: `key-${week.number}-${s.id}`,
+          week: week.number,
+          sessionId: s.id,
+          date: week.startDate,
+          status: 'done' as const,
+          minutes: s.minutes,
+          rpe: 7,
+          notes: null,
+          resultSeconds: null,
+          environment: null,
+          updatedAt: '2026-10-01T12:00:00.000Z',
+        })),
+    )
+}
+
+const on = (iso: string, p: Program = program) =>
+  coach({ program: p, today: localDate(iso), logs: keysDoneBefore(localDate(iso), p) })
 /** What the Coach says at an exact instant, read on a clock in Toronto. */
 const at = (instant: string) => coach({ program, today: localDateIn(new Date(instant)) })
 
@@ -215,7 +244,7 @@ function log(week: number, sessionId: string, date: string, status: LoggedStatus
 }
 
 const withLogs = (iso: string, logs: SessionLog[], picked: CoachInput['picked'] = null) =>
-  coach({ program, today: localDate(iso), logs, picked })
+  coach({ program, today: localDate(iso), logs: [...keysDoneBefore(localDate(iso)), ...logs], picked })
 const states = (day: ReturnType<typeof coach>) => Object.fromEntries(day.bucket.map((e) => [e.session.id, e.state]))
 
 describe('the Bucket', () => {
@@ -443,5 +472,219 @@ describe('Up next with Session logs', () => {
       const day = withLogs('2027-04-21', [log(27, 'shakeout', '2027-04-20')])
       expect(day.upNext?.id).toBe('race')
     })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Week rollover. Week 3's Key session is Threshold; Week 4 (Mon 9 – Sun 15 Nov)
+// is a Deload week with no Key session.
+
+const week = (n: number) => findWeek(program, n)!
+const outcome = (n: number, iso: string, logs: SessionLog[] = []) =>
+  weekOutcome(program, week(n), logs, localDate(iso))
+const missed = (o: ReturnType<typeof outcome>) => o.skipped.map(({ session, by }) => `${session.id} by ${by}`)
+/** Everything before Week 3 settled; Week 3's own logs as given. */
+const inWeek4 = (iso: string, logs: SessionLog[] = []) =>
+  coach({ program, today: localDate(iso), logs: [...keysDoneBefore(localDate('2026-11-02')), ...logs] })
+
+describe('the Key session carries over', () => {
+  it('into the next Week until Wednesday, first in the Bucket and Up next', () => {
+    for (const iso of ['2026-11-09', '2026-11-10', '2026-11-11']) {
+      const day = inWeek4(iso)
+      expect(day.bucket[0]).toMatchObject({ week: 3, session: { id: 'threshold', key: true }, carriedUntil: '2026-11-11' })
+      expect(day.bucket.slice(1).map((e) => [e.week, e.carriedUntil])).toEqual(Array(5).fill([4, null]))
+      expect(day.upNext).toMatchObject({ id: 'threshold', headline: '2 × 12′' })
+      expect(day.bucket[0].state).toBe('next')
+    }
+  })
+
+  it('is gone on Thursday, Skipped by the Coach', () => {
+    const day = inWeek4('2026-11-12')
+    expect(day.bucket.map((e) => e.week)).toEqual([4, 4, 4, 4, 4])
+    expect(missed(outcome(3, '2026-11-12'))).toContain('threshold by coach')
+    expect(outcome(3, '2026-11-12').carried).toBeNull()
+  })
+
+  it('shows as Done once logged in the carry-over, and is no miss', () => {
+    const done = log(3, 'threshold', '2026-11-10')
+    const day = inWeek4('2026-11-11', [done])
+    expect(day.bucket[0]).toMatchObject({ week: 3, state: 'done', log: done })
+    expect(day.upNext?.id).not.toBe('threshold')
+    expect(missed(outcome(3, '2026-11-12', [done]))).not.toContain('threshold by coach')
+  })
+
+  it('counts toward the spacing rules on the day it is done', () => {
+    // Threshold carried and done Monday of Week 4: Tuesday is the Deload's Easy run.
+    const day = inWeek4('2026-11-10', [log(3, 'threshold', '2026-11-09')])
+    expect(day.upNext?.id).toBe('easy-deload')
+  })
+
+  it('can be picked from the Bucket like any other Session', () => {
+    const day = coach({
+      program,
+      today: localDate('2026-11-09'),
+      logs: keysDoneBefore(localDate('2026-11-02')),
+      picked: { date: localDate('2026-11-09'), week: 4, sessionId: 'hyrox' },
+    })
+    expect(day.upNext?.id).toBe('hyrox')
+    expect(day.bucket[0]).toMatchObject({ week: 3, state: 'planned' })
+  })
+
+  it('is the only Session that carries: nothing else does, the Optional session least of all', () => {
+    const day = inWeek4('2026-11-09')
+    expect(day.bucket.filter((e) => e.carriedUntil)).toHaveLength(1)
+    expect(outcome(3, '2026-11-09').carried?.session.id).toBe('threshold')
+  })
+
+  it('stops at Wednesday whichever Week it is', () => {
+    expect(keyDeadline(program, week(1))).toBe('2026-10-28')
+    expect(keyDeadline(program, week(14))).toBe('2027-01-27')
+  })
+
+  it('never spills from the Taper into Race week', () => {
+    expect(keyDeadline(program, week(26))).toBe('2027-04-18')
+    const day = coach({ program, today: localDate('2027-04-19'), logs: keysDoneBefore(localDate('2027-04-12')) })
+    expect(day.bucket.map((e) => e.week)).toEqual([27, 27])
+    expect(missed(outcome(26, '2027-04-19'))).toContain('speed by coach')
+  })
+})
+
+describe('Sessions not done by Sunday', () => {
+  it('stay open through Sunday, in America/Toronto', () => {
+    expect(outcome(3, '2026-11-08')).toEqual({ skipped: [], carried: null })
+    // 23:59 Sunday in Toronto is already Monday in UTC; the Week is still open.
+    expect(outcome(3, localDateIn(new Date('2026-11-09T04:59:59Z')))).toEqual({ skipped: [], carried: null })
+  })
+
+  it('become Skipped at the end of Sunday, apart from the Key session', () => {
+    const o = outcome(3, localDateIn(new Date('2026-11-09T05:00:00Z')))
+    expect(missed(o)).toEqual(['speed by coach', 'strength by coach', 'hyrox by coach'])
+    expect(o.carried).toEqual({ session: expect.objectContaining({ id: 'threshold' }), until: '2026-11-11' })
+  })
+
+  it('leave the Optional session alone: missing it is not a miss', () => {
+    expect(missed(outcome(3, '2026-11-20'))).not.toContain('easy by coach')
+    expect(missed(outcome(3, '2026-11-20', [log(3, 'easy', '2026-11-03', 'skipped')]))).not.toContain('easy by athlete')
+  })
+
+  it('count a Skipped log at once, and never Done, Partial or Swapped', () => {
+    const logs = [
+      log(3, 'speed', '2026-11-02', 'skipped'),
+      log(3, 'strength', '2026-11-03', 'partial'),
+      log(3, 'threshold', '2026-11-04', 'swapped'),
+      log(3, 'hyrox', '2026-11-05', 'done'),
+    ]
+    expect(missed(outcome(3, '2026-11-04', logs))).toEqual(['speed by athlete'])
+    expect(missed(outcome(3, '2026-11-20', logs))).toEqual(['speed by athlete'])
+  })
+
+  it('leave a Deload week, with no Key session, nothing to carry', () => {
+    const o = outcome(4, '2026-11-16')
+    expect(o.carried).toBeNull()
+    expect(missed(o)).toEqual(['speed by coach', 'strength by coach', 'easy-deload by coach', 'hyrox by coach'])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The lighter re-entry Week. Week 10 (Mon 21 – Sun 27 Dec): Speed is Key.
+// Week 11 (Mon 28 Dec – Sun 3 Jan): Speed 4 × 4′, Key.
+
+const week10 = (statuses: Partial<Record<string, LoggedStatus>>) =>
+  Object.entries(statuses).map(([id, status], i) => log(10, id, `2026-12-2${1 + i}`, status))
+const TWO_SKIPPED = { speed: 'done', strength: 'done', threshold: 'skipped', hyrox: 'skipped' } as const
+
+function decided(decision: Decision, date = '2026-12-29', updatedAt = '2026-12-29T12:00:00.000Z'): SuggestionDecision {
+  return { id: 're-entry-w11', decision, date: localDate(date), updatedAt }
+}
+
+const inWeek11 = (logs: SessionLog[], decisions: SuggestionDecision[] = [], iso = '2026-12-29') =>
+  coach({ program, today: localDate(iso), logs: [...keysDoneBefore(localDate('2026-12-21')), ...logs], decisions })
+
+describe('the re-entry Suggestion', () => {
+  it('comes with two Skipped Sessions last Week, as structured facts', () => {
+    expect(inWeek11(week10(TWO_SKIPPED)).suggestions).toEqual([
+      {
+        id: 're-entry-w11',
+        kind: 're-entry',
+        week: 11,
+        sessionId: null,
+        date: '2026-12-28',
+        from: { volumePercent: 100 },
+        to: { volumePercent: 67 },
+        trigger: {
+          week: 10,
+          skipped: [
+            { sessionId: 'threshold', type: 'threshold' },
+            { sessionId: 'hyrox', type: 'hyrox' },
+          ],
+        },
+        decision: 'open',
+        decidedOn: null,
+      },
+    ])
+  })
+
+  it('stays away with one Skipped Session', () => {
+    expect(inWeek11(week10({ ...TWO_SKIPPED, threshold: 'done' })).suggestions).toEqual([])
+  })
+
+  it('counts Sessions the Coach Skipped at the end of Sunday', () => {
+    const day = inWeek11(week10({ speed: 'done', strength: 'done' }))
+    expect(day.suggestions[0].trigger.skipped.map((s) => s.sessionId)).toEqual(['threshold', 'hyrox'])
+  })
+
+  it('does not count the Key session while it is carried over', () => {
+    // Speed (Key) and Strength undone: Speed carries, so only Strength is Skipped.
+    expect(inWeek11(week10({ threshold: 'done', hyrox: 'done' })).suggestions).toEqual([])
+    // Even after its carry-over runs out: the count is taken as the Week closed.
+    expect(inWeek11(week10({ threshold: 'done', hyrox: 'done' }), [], '2026-12-31').suggestions).toEqual([])
+  })
+
+  it('is about this Week only: gone the Week after', () => {
+    const logs = [...week10(TWO_SKIPPED), ...['speed', 'strength', 'easy-deload', 'hyrox'].map((id) => log(12, id, '2027-01-04'))]
+    expect(inWeek11(logs, [], '2027-01-04').suggestions.map((s) => s.id)).not.toContain('re-entry-w11')
+  })
+
+  it('never lightens a Deload week, nor the Taper or Race week', () => {
+    // Week 3 with two Skipped, then Week 4, a Deload.
+    const deload = coach({
+      program,
+      today: localDate('2026-11-10'),
+      logs: [...keysDoneBefore(localDate('2026-11-02')), log(3, 'speed', '2026-11-02', 'skipped'), log(3, 'hyrox', '2026-11-02', 'skipped')],
+    })
+    expect(deload.suggestions).toEqual([])
+    // Nothing logged in Week 25 or 26.
+    expect(coach({ program, today: localDate('2027-04-13'), logs: keysDoneBefore(localDate('2027-04-13')) }).suggestions).toEqual([])
+    expect(coach({ program, today: localDate('2027-04-20'), logs: keysDoneBefore(localDate('2027-04-20')) }).suggestions).toEqual([])
+  })
+
+  it('changes nothing until it is Accepted', () => {
+    const day = inWeek11(week10(TWO_SKIPPED))
+    expect(day.upNext).toMatchObject({ id: 'speed', headline: '4 × 4′', minutes: 45 })
+    expect(day.week).toBe(findWeek(program, 11))
+  })
+
+  it('lightens every Prescription of the Week by a third once Accepted', () => {
+    const day = inWeek11(week10(TWO_SKIPPED), [decided('accepted')])
+    expect(day.suggestions[0]).toMatchObject({ decision: 'accepted', decidedOn: '2026-12-29' })
+    expect(day.upNext).toMatchObject({ id: 'speed', headline: '3 × 4′', minutes: 30 })
+    expect(day.bucket.map((e) => e.session.minutes)).toEqual([30, 30, 30, 34, 27])
+    const intervals = day.upNext!.blocks.find((b) => b.main)!.exercises[0].prescription
+    expect(intervals).toMatchObject({ kind: 'intervals', reps: 3, workSeconds: 240 })
+  })
+
+  it('keeps the Program as written when Kept, and again after Undo', () => {
+    for (const d of [decided('kept'), decided('open')]) {
+      const day = inWeek11(week10(TWO_SKIPPED), [d])
+      expect(day.suggestions[0].decision).toBe(d.decision)
+      expect(day.upNext).toMatchObject({ headline: '4 × 4′', minutes: 45 })
+    }
+  })
+
+  it('shows the lighter Week on other screens too', () => {
+    const logs = [...keysDoneBefore(localDate('2026-12-21')), ...week10(TWO_SKIPPED)]
+    expect(prescribedWeek(program, 11, logs, [decided('accepted')])?.sessions[0].headline).toBe('3 × 4′')
+    expect(prescribedWeek(program, 11, logs, [decided('kept')])?.sessions[0].headline).toBe('4 × 4′')
+    expect(prescribedWeek(program, 10, logs, [decided('accepted')])).toBe(findWeek(program, 10))
   })
 })

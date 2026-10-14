@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef } from 'react'
+import { addDays } from '../domain/calendar'
 import { Link, RouterProvider } from 'react-aria-components'
-import { coach, findWeek, type CoachDay } from '../domain/coach'
+import { coach, findWeek, keyDeadline, prescribedWeek, type CoachDay } from '../domain/coach'
 import type { Environment, RunContext } from '../domain/paces'
-import type { Session, Week } from '../domain/program/types'
+import type { Session } from '../domain/program/types'
 import { environmentOn } from '../domain/settings'
 import { program } from '../domain/program/program'
 import { Icon } from './components/Icons'
@@ -16,6 +17,7 @@ import { LogAfter } from './screens/LogAfter'
 import { Today } from './screens/Today'
 import { WeekScreen } from './screens/Week'
 import { usePicked } from './usePicked'
+import { editedAt, useDecisions } from './useDecisions'
 import { useSessionLogs } from './useSessionLogs'
 import { environmentKey, useSettings } from './useSettings'
 import { useToday } from './useToday'
@@ -40,28 +42,32 @@ const NAV_SCREEN: Partial<Record<Screen, Screen>> = { week: 'plan', log: 'today'
 
 /**
  * The shell: a cobalt side rail from 960px, a bottom tab bar below it. The
- * Coach runs here, on the device, against today's date in Toronto.
+ * Coach runs here, on the device, against today's date in Toronto and the
+ * Session logs stored on the device, so Today works without signal.
  */
 export function App() {
   const today = useToday()
-  const { logs, save, error } = useSessionLogs()
+  const { logs, save, pending, error } = useSessionLogs()
+  const { decisions, decide, error: decisionError } = useDecisions()
   const [picked, pick] = usePicked()
+  const day = useMemo(() => coach({ program, today, logs, picked, decisions }), [today, logs, picked, decisions])
   const { settings, change, overrides, override } = useSettings()
-  const day = useMemo(() => coach({ program, today, logs, picked }), [today, logs, picked])
   /** How a Session's runs read: the Training paces, in this Session's Environment and the chosen units. */
-  const runContext = (week: Week, session: Session): RunContext => {
-    const inWeek = day.position.kind === 'in-week' && day.position.week === week.number
-    const date = session.date ?? (inWeek ? today : week.startDate)
+  const runContext = (week: number, session: Session): RunContext => {
+    const inWeek = day.position.kind === 'in-week' && day.position.week === week
+    const start = findWeek(program, week)?.startDate ?? today
+    const date = session.date ?? (inWeek ? today : start)
     return {
       paces: day.paces,
       unit: settings.unit,
-      environment: environmentOn(date, settings, overrides[environmentKey(week.number, session.id)]),
+      environment: environmentOn(date, settings, overrides[environmentKey(week, session.id)]),
     }
   }
-  const setEnvironment = (week: Week, session: Session, environment: Environment) =>
-    override(week.number, session.id, environment)
+  const setEnvironment = (week: number, session: Session, environment: Environment) =>
+    override(week, session.id, environment)
   const route = useRoute()
-  const week = route.screen === 'week' || route.screen === 'log' ? findWeek(program, route.week ?? 0) : null
+  const week =
+    route.screen === 'week' || route.screen === 'log' ? prescribedWeek(program, route.week ?? 0, logs, decisions) : null
   const logged = route.screen === 'log' ? week?.sessions.find((s) => s.id === route.sessionId) : undefined
   const screen: Screen =
     (route.screen === 'week' && !week) || (route.screen === 'log' && !logged) ? 'not-found' : route.screen
@@ -83,8 +89,13 @@ export function App() {
             <Today
               day={day}
               weekCount={program.weekCount}
-              error={error}
-              onPick={(sessionId) => day.week && pick(day.week.number, sessionId, today)}
+              pending={pending}
+              error={error ?? decisionError}
+              onPick={(weekNumber, sessionId) => pick(weekNumber, sessionId, today)}
+              onDecide={(suggestion, decision) => {
+                const previous = decisions.find((d) => d.id === suggestion.id)
+                decide({ id: suggestion.id, decision, date: today, updatedAt: editedAt(previous?.updatedAt) })
+              }}
               runContext={runContext}
               onEnvironment={setEnvironment}
               settings={settings}
@@ -95,6 +106,7 @@ export function App() {
             <LogAfter
               week={week}
               session={logged}
+              lastDay={logged.key ? keyDeadline(program, week) : addDays(week.startDate, 6)}
               logs={logs}
               today={today}
               defaultEnvironment={(date) => environmentOn(date, settings)}

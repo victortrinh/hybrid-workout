@@ -6,10 +6,12 @@
  * every time, which is what makes it testable. Pain reports and Recovery
  * data join the input as later rules need them.
  */
+import { lightenWeek, RE_ENTRY_PERCENT } from './adapt'
 import { addDays, daysBetween, mondayOf, type LocalDate } from './calendar'
 import { logFor, trained, type LoggedStatus, type SessionLog } from './log'
 import { latestFiveKTest, trainingPaces, type TrainingPaces } from './paces'
 import type { Phase, PhaseId, Program, Session, SessionType, Week } from './program/types'
+import { decisionFor, reEntryId, type ReEntrySuggestion, type Suggestion, type SuggestionDecision } from './suggestion'
 
 export interface CoachInput {
   program: Program
@@ -19,6 +21,8 @@ export interface CoachInput {
   logs?: SessionLog[]
   /** A Session the athlete tapped in the Bucket to do instead of Up next. Counts only on its `date`. */
   picked?: PickedSession | null
+  /** The athlete's decisions on Suggestions. */
+  decisions?: SuggestionDecision[]
 }
 
 export interface PickedSession {
@@ -32,9 +36,13 @@ export type BucketState = 'planned' | 'next' | LoggedStatus
 
 export interface BucketEntry {
   session: Session
+  /** The Week the Session belongs to: last Week's, for a carried Key session. */
+  week: number
   state: BucketState
   /** The log behind a logged state; null while Planned or Next. */
   log: SessionLog | null
+  /** For last Week's Key session carried into this one: the last day it can be done. */
+  carriedUntil: LocalDate | null
 }
 
 /** Why there is no Up next today. */
@@ -81,10 +89,14 @@ export interface CoachDay {
   phases: PhaseProgress[]
   /**
    * The Week whose Bucket Today shows: the current Week, or Week 1 before the
-   * Program starts. Null after the Program, or when that Week isn't encoded yet.
+   * Program starts, with accepted Suggestions applied. Null after the Program,
+   * or when that Week isn't encoded yet.
    */
   week: Week | null
-  /** That Week's Sessions in display order, each with its state. Empty when there is no Week. */
+  /**
+   * Last Week's Key session while it is carried over, then that Week's
+   * Sessions in display order, each with its state. Empty when there is no Week.
+   */
   bucket: BucketEntry[]
   /** The one Session to do today. Null before the Program starts, after it ends, and on a rest day. */
   upNext: Session | null
@@ -94,20 +106,30 @@ export interface CoachDay {
   fiveKTest: SessionLog | null
   /** Null before the baseline 5K test: until then every run is RPE only. */
   paces: TrainingPaces | null
+  /** The Suggestions for this Week, whatever their decision. */
+  suggestions: Suggestion[]
 }
 
-export function coach({ program, today, logs = [], picked = null }: CoachInput): CoachDay {
+export function coach({ program, today, logs = [], picked = null, decisions = [] }: CoachInput): CoachDay {
   const position = positionOf(program, today)
   const shownWeek =
     position.kind === 'in-week' ? position.week : position.kind === 'before-start' ? 1 : null
-  const week = shownWeek === null ? null : findWeek(program, shownWeek)
+  const planned = shownWeek === null ? null : findWeek(program, shownWeek)
+  const suggestions = position.kind === 'in-week' && planned ? suggestionsFor(program, planned, logs, decisions) : []
+  const week = planned && adapt(planned, suggestions)
 
-  const logged = week
-    ? week.sessions.map((session) => ({ session, log: logFor(logs, week.number, session.id) }))
-    : []
+  const previous = position.kind === 'in-week' && week ? findWeek(program, week.number - 1) : null
+  const carried = previous ? weekOutcome(program, previous, logs, today).carried : null
+  const logged: Logged[] = [
+    ...(carried && previous
+      ? [{ session: carried.session, week: previous.number, carriedUntil: carried.until }]
+      : []),
+    ...(week ? week.sessions.map((session) => ({ session, week: week.number, carriedUntil: null })) : []),
+  ].map((entry) => ({ ...entry, log: logFor(logs, entry.week, entry.session.id) }))
+
   const { upNext, rest } =
     position.kind === 'in-week' && week
-      ? chooseUpNext({ program, week, logged, logs, today, picked, daysLeft: position.daysLeft })
+      ? chooseUpNext({ program, logged, logs, today, picked, daysLeft: position.daysLeft })
       : { upNext: null, rest: null }
   const fiveKTest = latestFiveKTest(logs, today)
 
@@ -118,16 +140,23 @@ export function coach({ program, today, logs = [], picked = null }: CoachInput):
     position,
     phases: program.phases.map((phase) => phaseProgress(phase, position)),
     week,
-    bucket: logged.map(({ session, log }) => ({
-      session,
-      log,
-      state: log ? log.status : session === upNext ? 'next' : 'planned',
+    bucket: logged.map((entry) => ({
+      ...entry,
+      state: entry.log ? entry.log.status : entry === upNext ? 'next' : 'planned',
     })),
-    upNext,
+    upNext: upNext?.session ?? null,
     rest,
     fiveKTest,
     paces: fiveKTest?.resultSeconds ? trainingPaces(fiveKTest.resultSeconds) : null,
+    suggestions,
   }
+}
+
+interface Logged {
+  session: Session
+  week: number
+  log: SessionLog | null
+  carriedUntil: LocalDate | null
 }
 
 /** Week 1's Monday: Race week's Monday, counted back `weekCount - 1` Weeks. */
@@ -198,8 +227,8 @@ const isLoad = (type: SessionType) => type === 'strength' || type === 'hyrox' ||
 
 interface UpNextInput {
   program: Program
-  week: Week
-  logged: { session: Session; log: SessionLog | null }[]
+  /** The Bucket's entries, oldest-waiting first. */
+  logged: Logged[]
   logs: SessionLog[]
   today: LocalDate
   picked: PickedSession | null
@@ -218,43 +247,43 @@ interface UpNextInput {
  *    the Week has room to rest today and still fit the Hard sessions left.
  * 6. Of what remains, the Session waiting longest; within a Week, Bucket order.
  */
-function chooseUpNext({ program, week, logged, logs, today, picked, daysLeft }: UpNextInput): {
-  upNext: Session | null
+function chooseUpNext({ program, logged, logs, today, picked, daysLeft }: UpNextInput): {
+  upNext: Logged | null
   rest: RestReason | null
 } {
-  const open = logged.filter((entry) => !entry.log).map((entry) => entry.session)
+  const open = logged.filter((entry) => !entry.log)
   if (open.length === 0) return { upNext: null, rest: { kind: 'week-done' } }
 
-  if (picked && picked.date === today && picked.week === week.number) {
-    const choice = open.find((s) => s.id === picked.sessionId)
+  if (picked && picked.date === today) {
+    const choice = open.find((e) => e.week === picked.week && e.session.id === picked.sessionId)
     if (choice) return { upNext: choice, rest: null }
   }
 
-  const pinnedToday = open.find((s) => s.date === today)
+  const pinnedToday = open.find((e) => e.session.date === today)
   if (pinnedToday) return { upNext: pinnedToday, rest: null }
 
-  const available = open.filter((s) => !s.date)
+  const available = open.filter((e) => !e.session.date)
   if (available.length === 0) {
-    const pinned = open.find((s) => s.date)!
+    const pinned = open.find((e) => e.session.date)!.session
     return { upNext: null, rest: { kind: 'waiting', session: pinned, date: pinned.date! } }
   }
-  const required = available.filter((s) => !s.optional)
+  const required = available.filter((e) => !e.session.optional)
   const pool = required.length > 0 ? required : available
 
   const yesterday = addDays(today, -1)
   const typesOn = (date: LocalDate) => trainedTypes(program, logs, date)
   const before = [...typesOn(yesterday), ...typesOn(today)]
 
-  const allowed = before.some(isLoad) ? pool.filter((s) => !isSpeed(s.type)) : pool
+  const allowed = before.some(isLoad) ? pool.filter((e) => !isSpeed(e.session.type)) : pool
   if (allowed.length === 0) return { upNext: null, rest: { kind: 'speed-after-load' } }
 
   const hardToday = typesOn(today).some(isHard)
   const hardYesterday = typesOn(yesterday).some(isHard)
   if (hardToday || hardYesterday) {
-    const easy = allowed.filter((s) => !isHard(s.type))
+    const easy = allowed.filter((e) => !isHard(e.session.type))
     if (easy.length > 0) return { upNext: oldestWaiting(easy), rest: null }
 
-    const hardLeft = available.filter((s) => isHard(s.type)).length
+    const hardLeft = available.filter((e) => isHard(e.session.type)).length
     // Resting today leaves `daysLeft - 1` days from tomorrow; tomorrow can't be Hard after a Hard today.
     if (hardLeft <= mostHardSessions(daysLeft - 1, hardToday)) {
       return { upNext: null, rest: { kind: hardToday ? 'hard-today' : 'hard-yesterday' } }
@@ -278,8 +307,141 @@ function mostHardSessions(days: number, firstDayBlocked: boolean): number {
 
 /**
  * Every open Session of a Week has waited since its Monday, so Bucket order
- * breaks the tie. Key sessions carried over from last Week will wait longer.
+ * breaks the tie. A Key session carried over from last Week comes first in
+ * the Bucket: it has waited longest.
  */
-function oldestWaiting(sessions: Session[]): Session {
-  return sessions[0]
+function oldestWaiting(entries: Logged[]): Logged {
+  return entries[0]
+}
+
+// ---------------------------------------------------------------------------
+// Week rollover (docs/training-plan.md, "How a Week works"): the Key session
+// carries over up to three days; anything else not done by Sunday is Skipped.
+
+/** Days into the next Week a Key session stays open: Monday to Wednesday. */
+export const CARRY_DAYS = 3
+
+/**
+ * The last day a Week's Key session can be done: Wednesday of the next Week.
+ * Sunday where it can't carry: the last Week, and the Taper, whose Key
+ * session never spills into Race week.
+ */
+export function keyDeadline(program: Program, week: Week): LocalDate {
+  const sunday = addDays(week.startDate, 6)
+  const next = findWeek(program, week.number + 1)
+  return next && !next.race ? addDays(sunday, CARRY_DAYS) : sunday
+}
+
+export interface WeekOutcome {
+  /**
+   * Missed Sessions: logged Skipped by the athlete, or not done once the Week
+   * (or, for the Key session, its carry-over) is over. The Optional session
+   * is never a miss.
+   */
+  skipped: { session: Session; by: 'athlete' | 'coach' }[]
+  /**
+   * The Key session, not done by Sunday, while its carry-over lasts: open, or
+   * logged on one of the carry-over days.
+   */
+  carried: { session: Session; until: LocalDate } | null
+}
+
+/** Where a Week stands on `today`: what was missed, and what is still carried. */
+export function weekOutcome(program: Program, week: Week, logs: SessionLog[], today: LocalDate): WeekOutcome {
+  const sunday = addDays(week.startDate, 6)
+  const over = daysBetween(sunday, today) > 0
+  const outcome: WeekOutcome = { skipped: [], carried: null }
+  for (const session of week.sessions) {
+    if (session.optional) continue
+    const log = logFor(logs, week.number, session.id)
+    const until = session.key ? keyDeadline(program, week) : null
+    const carrying = over && until !== null && daysBetween(today, until) >= 0
+    if (log) {
+      if (log.status === 'skipped') outcome.skipped.push({ session, by: 'athlete' })
+      if (carrying && daysBetween(sunday, log.date) > 0) outcome.carried = { session, until }
+      continue
+    }
+    if (!over) continue
+    if (carrying) outcome.carried = { session, until }
+    else outcome.skipped.push({ session, by: 'coach' })
+  }
+  return outcome
+}
+
+// ---------------------------------------------------------------------------
+// Suggestions. Each is derived from the logs; only the decision is stored.
+
+/** Skipped Sessions in a Week that make the next one a lighter re-entry. */
+export const RE_ENTRY_SKIPS = 2
+
+function suggestionsFor(
+  program: Program,
+  week: Week,
+  logs: SessionLog[],
+  decisions: SuggestionDecision[],
+): Suggestion[] {
+  const reEntry = reEntryFor(program, week, logs, decisions)
+  return reEntry ? [reEntry] : []
+}
+
+/**
+ * Two or more Sessions Skipped last Week: suggest this Week a third lighter.
+ * Counted as the Week closed on Sunday, so a Key session still carried over
+ * isn't a miss yet. Deload weeks are lighter already, and the Taper follows
+ * the race-week rules, so neither gets one.
+ */
+function reEntryFor(
+  program: Program,
+  week: Week,
+  logs: SessionLog[],
+  decisions: SuggestionDecision[],
+): ReEntrySuggestion | null {
+  const previous = findWeek(program, week.number - 1)
+  if (!previous || week.deload || phaseOfWeek(program, week.number).id === 'taper') return null
+
+  const { skipped } = weekOutcome(program, previous, logs, week.startDate)
+  if (skipped.length < RE_ENTRY_SKIPS) return null
+
+  const id = reEntryId(week.number)
+  const decided = decisionFor(decisions, id)
+  return {
+    id,
+    kind: 're-entry',
+    week: week.number,
+    sessionId: null,
+    date: week.startDate,
+    from: { volumePercent: 100 },
+    to: { volumePercent: RE_ENTRY_PERCENT },
+    trigger: {
+      week: previous.number,
+      skipped: skipped.map(({ session }) => ({ sessionId: session.id, type: session.type })),
+    },
+    decision: decided?.decision ?? 'open',
+    decidedOn: decided?.date ?? null,
+  }
+}
+
+/** The Week with every accepted Suggestion applied. */
+function adapt(week: Week, suggestions: Suggestion[]): Week {
+  return suggestions.reduce(
+    (adapted, s) =>
+      s.decision === 'accepted' && s.kind === 're-entry' && s.week === adapted.number
+        ? lightenWeek(adapted, s.to.volumePercent)
+        : adapted,
+    week,
+  )
+}
+
+/**
+ * A Week as it will be trained: the Program's Week with accepted Suggestions
+ * applied. For screens that show a Week other than today's.
+ */
+export function prescribedWeek(
+  program: Program,
+  number: number,
+  logs: SessionLog[],
+  decisions: SuggestionDecision[],
+): Week | null {
+  const week = findWeek(program, number)
+  return week && adapt(week, suggestionsFor(program, week, logs, decisions))
 }
