@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { isTreadmill, matchActivities, type Activity } from '../domain/activity'
 import { addDays } from '../domain/calendar'
+import { nowDate, nowMs } from '../domain/clock'
 import { Link, RouterProvider } from 'react-aria-components'
 import { coach, findWeek, keyDeadline, prescribedWeek, type CoachDay } from '../domain/coach'
 import { liftsLog, startLifts } from '../domain/lifts'
@@ -102,7 +103,7 @@ export function App() {
     area,
     week,
     sessionId,
-    updatedAt: new Date().toISOString(),
+    updatedAt: nowDate().toISOString(),
   })
   /**
    * Start session, once the pain step is answered: the report and the
@@ -146,7 +147,7 @@ export function App() {
         doneToday: true,
       })?.sessions.find((s) => s.id === session.id) ??
       session
-    const now = Date.now()
+    const now = nowMs()
     setLive(
       started.type === 'strength'
         ? startLifts({ week, session: started, date: today, weights: day.workingWeights }, now)
@@ -190,9 +191,9 @@ export function App() {
             live={live}
             runContext={{ paces: day.paces, unit: settings.unit, environment: 'indoor' }}
             onChange={setLive}
-            onSave={(run, finish) => saveLive((id, updatedAt) => liveLog(run, Date.now(), { ...finish, id, updatedAt }))}
+            onSave={(run, finish) => saveLive((id, updatedAt) => liveLog(run, nowMs(), { ...finish, id, updatedAt }))}
             onSaveLifts={(lifts, finish) =>
-              saveLive((id, updatedAt) => liftsLog(lifts, Date.now(), { ...finish, id, updatedAt }))
+              saveLive((id, updatedAt) => liftsLog(lifts, nowMs(), { ...finish, id, updatedAt }))
             }
           />
         </main>

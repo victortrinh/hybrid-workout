@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
 import { Button, Form, Group, Input, Label, NumberField, Radio, RadioGroup } from 'react-aria-components'
+import { nowMs } from '../../domain/clock'
 import {
   addSet,
   currentSet,
@@ -65,7 +66,7 @@ export function Lifting({
   const act = useCallback(
     (step: (lifts: LiveLifts, now: number) => LiveLifts) => {
       unlockSound()
-      liftsRef.current = step(liftsRef.current, Date.now())
+      liftsRef.current = step(liftsRef.current, nowMs())
       onChange(liftsRef.current)
     },
     [onChange],
@@ -80,14 +81,14 @@ export function Lifting({
     if (restFillRef.current) restFillRef.current.style.width = `${Math.min(100, (1 - left / rest.seconds) * 100)}%`
   }, [])
 
-  useLayoutEffect(() => paint(Date.now()))
+  useLayoutEffect(() => paint(nowMs()))
 
   const restStarted = lifts.rest?.startedAt ?? null
   useEffect(() => {
     if (restStarted === null) return
     let timer = 0
     const tick = () => {
-      const now = Date.now()
+      const now = nowMs()
       const left = restLeft(liftsRef.current, now)
       if (left === null) return
       if (left <= 0) {

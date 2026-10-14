@@ -55,6 +55,8 @@ async function verifiedClaims(token: string, teamDomain: string, fetchKeys: Fetc
     const signed = new TextEncoder().encode(`${parts[0]}.${parts[1]}`)
     if (!(await crypto.subtle.verify('RSASSA-PKCS1-v1_5', publicKey, bytes(parts[2]), signed))) return null
     const claims = JSON.parse(text(parts[1])) as Claims
+    // Token expiry checks real time, not the clock seam (src/domain/clock.ts):
+    // a pinned mock date must never make an expired assertion look current.
     const now = Date.now() / 1000
     if (claims.iss !== teamDomain.replace(/\/+$/, '')) return null
     if (typeof claims.exp !== 'number' || claims.exp < now) return null
@@ -65,7 +67,7 @@ async function verifiedClaims(token: string, teamDomain: string, fetchKeys: Fetc
   }
 }
 
-/** Access rotates its keys every few weeks; an hour in this isolate's memory is plenty. */
+/** Access rotates its keys every few weeks; an hour in this isolate's memory is plenty. Real time, like token expiry. */
 let cache: { domain: string; keys: JsonWebKey[]; until: number } | null = null
 
 async function teamKeys(teamDomain: string): Promise<JsonWebKey[]> {

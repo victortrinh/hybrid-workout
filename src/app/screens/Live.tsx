@@ -30,6 +30,7 @@ import {
   type LiveTarget,
   type StationChange,
 } from '../../domain/live'
+import { nowMs } from '../../domain/clock'
 import { isLifts, type LiveLifts, type LiveSession } from '../../domain/lifts'
 import { PACE_SECONDS, STATION_METERS, STATION_POUNDS, STATION_REPS } from '../../domain/log'
 import { clock, KM_PER_MILE, parseClock, type RunContext } from '../../domain/paces'
@@ -145,14 +146,14 @@ function Running({
     if (fillRef.current && seconds) fillRef.current.style.width = `${Math.min(100, (elapsed / seconds) * 100)}%`
   }, [])
 
-  useLayoutEffect(() => paint(Date.now()))
+  useLayoutEffect(() => paint(nowMs()))
 
   // One tick per second shown, on the timer's next whole second; none while paused.
   useEffect(() => {
     if (over || paused) return
     let timer = 0
     const tick = () => {
-      const now = Date.now()
+      const now = nowMs()
       const next = advance(runRef.current, now)
       if (next !== runRef.current) {
         // Ahead of the render, so nothing moves on from the same Block twice.
@@ -194,7 +195,7 @@ function Running({
   /** Every control goes through here: the tap also lets the phone make sound. */
   const act = (step: (run: LiveRun, now: number) => LiveRun) => {
     unlockSound()
-    runRef.current = step(runRef.current, Date.now())
+    runRef.current = step(runRef.current, nowMs())
     onChange(runRef.current)
   }
 
