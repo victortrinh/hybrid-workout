@@ -17,9 +17,11 @@ import {
 import { addDays, daysBetween, type LocalDate } from '../../domain/calendar'
 import { LOGGED_STATUSES, logFor, NOTES_MAX, type LoggedStatus, type SessionLog } from '../../domain/log'
 import { clock, FIVE_K_SECONDS, parseClock, type Environment } from '../../domain/paces'
+import type { PainArea } from '../../domain/pain'
 import { describeSession } from '../../domain/program/describe'
 import type { Session, Week } from '../../domain/program/types'
 import { Icon } from '../components/Icons'
+import { answered, PainFields, type PainAnswer } from '../components/PainFields'
 import { Segmented } from '../components/Segmented'
 import { longDay, nb, shortWeekday, STATUS_LABEL } from '../format'
 import { navigate, SCREEN_PATH } from '../router'
@@ -53,6 +55,7 @@ export function LogAfter({
   today,
   defaultEnvironment,
   onSave,
+  onPain,
 }: {
   week: Week
   session: Session
@@ -63,6 +66,8 @@ export function LogAfter({
   /** Where runs happen on a day unless the log says otherwise: the month's setting. */
   defaultEnvironment: (date: LocalDate) => Environment
   onSave: (log: SessionLog) => void
+  /** The pain step's answer, if given: a Pain report for this Session, from today. */
+  onPain: (score: number, area: PainArea | null) => void
 }) {
   const existing = logFor(logs, week.number, session.id)
   const days = Array.from({ length: daysBetween(week.startDate, loggableUntil) + 1 }, (_, i) => addDays(week.startDate, i))
@@ -77,6 +82,10 @@ export function LogAfter({
   const [time, setTime] = useState(existing?.resultSeconds ? clock(existing.resultSeconds) : '')
   /** Null follows the month's default for the chosen day. */
   const [environment, setEnvironment] = useState<Environment | null>(existing?.environment ?? null)
+  /** Unanswered gives no Pain report; the Coach goes on with the last one. */
+  const [hurts, setHurts] = useState<'no' | 'yes' | null>(null)
+  const [pain, setPain] = useState<PainAnswer>({ score: null, area: null })
+  const [painMissing, setPainMissing] = useState(false)
 
   const description = describeSession(session)
   const trained = status !== 'skipped'
@@ -89,6 +98,12 @@ export function LogAfter({
     if (!date) return
     const resultSeconds = result ? parseClock(time) : null
     if (result && resultSeconds === null) return
+    if (hurts === 'yes' && !answered(pain)) {
+      setPainMissing(true)
+      return
+    }
+    if (hurts === 'no') onPain(0, null)
+    if (hurts === 'yes' && answered(pain)) onPain(pain.score, pain.area)
     onSave({
       id: existing?.id ?? crypto.randomUUID(),
       week: week.number,
@@ -243,6 +258,37 @@ export function LogAfter({
                 </Text>
               </RadioGroup>
             </>
+          )}
+
+          <RadioGroup
+            value={hurts}
+            onChange={(v) => {
+              setHurts(v as 'no' | 'yes')
+              setPainMissing(false)
+            }}
+            className="grid gap-2"
+          >
+            <Label className={groupLabel}>Anything hurt?</Label>
+            <div className="grid max-w-72 grid-cols-2 gap-1.5">
+              <Radio value="no" className={toggleClass}>
+                No
+              </Radio>
+              <Radio value="yes" className={toggleClass}>
+                Yes
+              </Radio>
+            </div>
+            <Text slot="description" className={`text-body-quiet ${painMissing ? 'font-bold text-ink' : 'text-muted'}`}>
+              {painMissing ? 'How bad and where, first. Or No.' : 'Pain changes what the Coach lets you do next.'}
+            </Text>
+          </RadioGroup>
+          {hurts === 'yes' && (
+            <PainFields
+              value={pain}
+              onChange={(p) => {
+                setPain(p)
+                setPainMissing(false)
+              }}
+            />
           )}
 
           <TextField value={notes} onChange={setNotes} maxLength={NOTES_MAX} className="grid gap-2">

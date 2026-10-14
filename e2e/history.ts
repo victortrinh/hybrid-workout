@@ -32,12 +32,21 @@ export async function seedLogs(request: APIRequestContext, project: string, logs
  * syncs, without touching the shared database. Returns the logs the page
  * sends, latest last, for tests that check what was saved.
  */
-export async function serveHistory(page: Page, logs: SeedLog[]): Promise<Record<string, unknown>[]> {
+export async function serveHistory(
+  page: Page,
+  logs: SeedLog[],
+  /** Where to put the Pain reports the page sends, for tests that check them. */
+  painReports: Record<string, unknown>[] = [],
+): Promise<Record<string, unknown>[]> {
   const sent: Record<string, unknown>[] = []
   const history = logs.map((l) => toLog(l, 'served'))
   await page.route(/\/api\/(state|sync)$/, (route) => {
-    if (route.request().method() === 'POST') sent.push(...(route.request().postDataJSON().sessionLogs ?? []))
-    return route.fulfill({ json: { sessionLogs: [...history, ...sent], suggestionDecisions: [] } })
+    if (route.request().method() === 'POST') {
+      const body = route.request().postDataJSON()
+      sent.push(...(body.sessionLogs ?? []))
+      painReports.push(...(body.painReports ?? []))
+    }
+    return route.fulfill({ json: { sessionLogs: [...history, ...sent], suggestionDecisions: [], painReports } })
   })
   return sent
 }

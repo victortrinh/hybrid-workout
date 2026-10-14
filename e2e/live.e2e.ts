@@ -47,6 +47,7 @@ test('a full Threshold Session from Start to logged', async ({ page }) => {
   await bucket.getByRole('button', { name: /^Threshold/ }).click()
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Threshold, 2 × 12′')
   await page.getByRole('button', { name: 'Start session' }).click()
+  await page.getByRole('button', { name: 'No. Let’s go' }).click()
 
   await expect(page).toHaveURL('/live')
   await expect(page).toHaveTitle('Live session · Compromised')
@@ -158,6 +159,7 @@ test('a 5K test Live session records the time and updates the Training paces', a
 
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('5K test, baseline')
   await page.getByRole('button', { name: 'Start session' }).click()
+  await page.getByRole('button', { name: 'No. Let’s go' }).click()
   const s = live(page)
   await expect(s.block).toHaveText('Warm-up · 12 min')
   await expect(page.locator('header').getByText('Strides 4 × 15″')).toBeVisible()

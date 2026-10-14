@@ -1,20 +1,33 @@
+import { useState } from 'react'
 import { Button, Link } from 'react-aria-components'
 import { addDays } from '../../domain/calendar'
 import type { BucketEntry, CoachDay, PhaseProgress, RestReason } from '../../domain/coach'
 import { isLiveRun, type LiveRun } from '../../domain/live'
 import type { Environment, RunContext } from '../../domain/paces'
+import { isRising, painLevel, type PainArea } from '../../domain/pain'
 import { describeSession, SESSION_TYPES } from '../../domain/program/describe'
 import type { Session } from '../../domain/program/types'
 import type { Settings } from '../../domain/settings'
 import type { Decision, Suggestion } from '../../domain/suggestion'
-import { suggestionCopy } from '../coachCopy'
+import { painLine, suggestionCopy } from '../coachCopy'
 import { FieldLane } from '../components/FieldLane'
 import { LaneChip } from '../components/LaneChip'
+import { answered, PainFields, type PainAnswer } from '../components/PainFields'
 import { Segmented } from '../components/Segmented'
 import { SettingsPopover } from '../components/SettingsPopover'
 import { StripedNumeral } from '../components/StripedNumeral'
 import { longDay, nb, plural, shortDay, shortWeekday, STATUS_LABEL, weekday, weekRange } from '../format'
 import { logPath, SCREEN_PATH } from '../router'
+
+/** The pain step's answer at Start: "No" is a score of 0. */
+export interface PainAtStart {
+  score: number
+  area: PainArea | null
+  /** The pain Suggestion it triggers, decided on the spot; null when it triggers none. */
+  decision: 'accepted' | 'kept' | null
+  /** Off to the Live session, or back to Today when the Session became an easy day. */
+  start: boolean
+}
 
 /**
  * Today: one number (days to the race), one instruction (Up next), then the
@@ -34,6 +47,7 @@ export function Today({
   onDecide,
   live,
   onStart,
+  onSomethingHurts,
 }: {
   day: CoachDay
   weekCount: number
@@ -53,8 +67,10 @@ export function Today({
   onSettings: (patch: Partial<Settings>) => void
   /** The Live session running on this device, if any. */
   live: LiveRun | null
-  /** Start session: opens a Live session of Up next. */
-  onStart: (week: number, session: Session) => void
+  /** Start session, after the pain step: a Pain report, then a Live session of Up next. */
+  onStart: (week: number, session: Session, pain: PainAtStart) => void
+  /** A Pain report given from Today, outside any Session. */
+  onSomethingHurts: (score: number, area: PainArea) => void
 }) {
   return (
     <section
@@ -72,6 +88,7 @@ export function Today({
         onEnvironment={onEnvironment}
         live={live}
         onStart={onStart}
+        onSomethingHurts={onSomethingHurts}
       />
       <ThisWeek day={day} onPick={onPick} />
     </section>
@@ -170,6 +187,7 @@ function UpNext({
   onEnvironment,
   live,
   onStart,
+  onSomethingHurts,
 }: {
   day: CoachDay
   weekCount: number
@@ -179,9 +197,12 @@ function UpNext({
   runContext: (week: number, session: Session) => RunContext
   onEnvironment: (week: number, session: Session, environment: Environment) => void
   live: LiveRun | null
-  onStart: (week: number, session: Session) => void
+  onStart: (week: number, session: Session, pain: PainAtStart) => void
+  onSomethingHurts: (score: number, area: PainArea) => void
 }) {
+  const [asking, setAsking] = useState(false)
   const { position, upNext } = day
+  const previousPain = day.pain?.report.score ?? null
   const upNextWeek = day.bucket.find((e) => e.state === 'next')?.week
   const run = upNext && upNextWeek ? runContext(upNextWeek, upNext) : undefined
   let heading: string
@@ -239,21 +260,28 @@ function UpNext({
             Resume {nb(live.heading)}
           </Link>
         </div>
+      ) : upNext && upNextWeek && position.kind === 'in-week' && asking && isLiveRun(upNext) ? (
+        <PainStep
+          previous={previousPain}
+          onAnswer={(pain) => {
+            setAsking(false)
+            onStart(upNextWeek, upNext, pain)
+          }}
+          onCancel={() => setAsking(false)}
+        />
       ) : upNext && upNextWeek && position.kind === 'in-week' && (
         <div className="mt-4 flex gap-2.5">
           {isLiveRun(upNext) && (
-            <Button onPress={() => onStart(upNextWeek, upNext)} className={primaryAction}>
+            <Button onPress={() => setAsking(true)} className={primaryAction}>
               Start session
             </Button>
           )}
-          <Link
-            href={logPath(upNextWeek, upNext.id)}
-            className="inline-grid min-h-[54px] flex-1 place-items-center rounded-sm px-5 text-[17px] font-bold text-ink no-underline shadow-[inset_0_0_0_2px_var(--ink)] hover:bg-sunk desktop:flex-none"
-          >
+          <Link href={logPath(upNextWeek, upNext.id)} className={`${lineAction} no-underline`}>
             Log after
           </Link>
         </div>
       )}
+      {!asking && <SomethingHurts previous={previousPain} onReport={onSomethingHurts} />}
       <div aria-live="polite">
         {error && <p className="mt-3 text-body">{error}</p>}
         {pending > 0 && (
@@ -269,6 +297,9 @@ function UpNext({
     </div>
   )
 }
+
+const lineAction =
+  'inline-grid min-h-[54px] flex-1 cursor-pointer place-items-center rounded-sm px-5 text-center text-[17px] font-bold text-ink shadow-[inset_0_0_0_2px_var(--ink)] hover:bg-sunk data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-link desktop:flex-none'
 
 const primaryAction =
   'inline-grid min-h-[54px] flex-1 cursor-pointer place-items-center rounded-sm bg-cobalt px-5 text-center text-[17px] font-bold text-on-cobalt hover:bg-cobalt-hover data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-link desktop:flex-none'
@@ -314,6 +345,145 @@ function SuggestionNote({ suggestion, onDecide }: { suggestion: Suggestion; onDe
             Undo
           </Button>
         )}
+      </div>
+    </section>
+  )
+}
+
+/**
+ * Anything hurt? Before every Live session: "No" is one tap and starts it.
+ * "Yes" asks how bad and where, says what the Coach makes of it, and starts
+ * with that, or as written, or (from pain 5) settles for the easy day.
+ */
+function PainStep({
+  previous,
+  onAnswer,
+  onCancel,
+}: {
+  /** The score standing before this one: rising pain counts. */
+  previous: number | null
+  onAnswer: (pain: PainAtStart) => void
+  onCancel: () => void
+}) {
+  const [yes, setYes] = useState(false)
+  const [answer, setAnswer] = useState<PainAnswer>({ score: null, area: null })
+  const level = answer.score === null ? null : painLevel(answer.score, previous)
+
+  return (
+    <section aria-labelledby="pain-step-heading" className="mt-4 border-t-2 border-ink pt-3.5">
+      <h2 id="pain-step-heading" className="text-title">
+        Anything hurt?
+      </h2>
+      <p className="mt-1 text-body-quiet text-muted">One tap. Pain changes what the Coach lets you do next.</p>
+      <div className="mt-3 flex gap-2.5">
+        <Button
+          autoFocus
+          onPress={() => onAnswer({ score: 0, area: null, decision: null, start: true })}
+          className={primaryAction}
+        >
+          No. Let’s go
+        </Button>
+        <Button onPress={() => setYes(true)} aria-expanded={yes} className={lineAction}>
+          Yes
+        </Button>
+      </div>
+      {yes && (
+        <div className="mt-5 grid gap-5">
+          <PainFields value={answer} onChange={setAnswer} />
+          {answered(answer) && (
+            <div aria-live="polite" className="grid gap-3">
+              <p className="text-[17px] leading-[1.3] font-semibold">
+                {painLine(answer.score, level, isRising(answer.score, previous))}
+              </p>
+              <div className="flex flex-wrap gap-2.5">
+                {level === null ? (
+                  <Button onPress={() => onAnswer({ ...answer, decision: null, start: true })} className={primaryAction}>
+                    Start session
+                  </Button>
+                ) : (
+                  <>
+                    <Button
+                      onPress={() => onAnswer({ ...answer, decision: 'accepted', start: level === 'ease' })}
+                      className={primaryAction}
+                    >
+                      {level === 'ease' ? 'Start with that' : 'Take the easy day'}
+                    </Button>
+                    <Button onPress={() => onAnswer({ ...answer, decision: 'kept', start: true })} className={lineAction}>
+                      Start as written
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      <Button onPress={onCancel} className={`mt-2 ${quietButton}`}>
+        Not now
+      </Button>
+    </section>
+  )
+}
+
+/** Something hurts: a Pain report from Today at any time, outside any Session. */
+function SomethingHurts({
+  previous,
+  onReport,
+}: {
+  previous: number | null
+  onReport: (score: number, area: PainArea) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [answer, setAnswer] = useState<PainAnswer>({ score: null, area: null })
+  const [noted, setNoted] = useState<string | null>(null)
+
+  if (!open) {
+    return (
+      <div className="mt-3">
+        <Button
+          onPress={() => {
+            setOpen(true)
+            setNoted(null)
+          }}
+          aria-expanded={false}
+          className={quietButton}
+        >
+          Something hurts
+        </Button>
+        {noted && (
+          <p role="status" className="text-body-quiet text-muted">
+            {noted}
+          </p>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <section aria-labelledby="something-hurts-heading" className="mt-4 grid gap-5 border-t-2 border-ink pt-3.5">
+      <h2 id="something-hurts-heading" tabIndex={-1} className="text-title">
+        Something hurts
+      </h2>
+      <PainFields value={answer} onChange={setAnswer} />
+      <div className="flex gap-2.5">
+        <Button
+          isDisabled={!answered(answer)}
+          onPress={() => {
+            if (!answered(answer)) return
+            onReport(answer.score, answer.area)
+            const level = painLevel(answer.score, previous)
+            // From 3, or rising, the Coach's Suggestion says the rest.
+            setNoted(level ? null : painLine(answer.score, level, false))
+            setAnswer({ score: null, area: null })
+            setOpen(false)
+          }}
+          className={`${primaryAction} data-disabled:cursor-default data-disabled:opacity-50`}
+        >
+          Tell the Coach
+        </Button>
+        <Button onPress={() => setOpen(false)} className={lineAction}>
+          Cancel
+        </Button>
       </div>
     </section>
   )

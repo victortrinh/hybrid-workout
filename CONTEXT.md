@@ -129,7 +129,7 @@ The athlete's state for a day, combining Recovery data and the latest Pain repor
 Sleep duration, heart-rate variability and resting heart rate measured by the ring overnight.
 
 **Pain report**:
-A 0–10 pain score with a body area, given at the start of a Session or at any time.
+A 0–10 pain score with a body area, given at the start of a Session, in Log after, or at any time; "No" is a score of 0. The latest one stands until the next.
 
 **Activity**:
 A workout recorded by the watch and imported from Strava, which is matched to a Session.

@@ -7,6 +7,7 @@
  */
 import { localDate, type LocalDate } from './calendar'
 import { ENVIRONMENTS, FIVE_K_SECONDS, type Environment } from './paces'
+import type { PainReport } from './pain'
 import type { SuggestionDecision } from './suggestion'
 
 export const LOGGED_STATUSES = ['done', 'partial', 'skipped', 'swapped'] as const
@@ -58,6 +59,7 @@ export interface IntervalLog {
 export interface SyncState {
   sessionLogs: SessionLog[]
   suggestionDecisions: SuggestionDecision[]
+  painReports: PainReport[]
 }
 
 export const NOTES_MAX = 2000

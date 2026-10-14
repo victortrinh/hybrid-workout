@@ -7,6 +7,7 @@
  * thing stored is the athlete's decision, keyed by the Suggestion's id.
  */
 import { localDate, type LocalDate } from './calendar'
+import type { PainArea, PainLevel } from './pain'
 import type { SessionType } from './program/types'
 
 export const DECISIONS = ['open', 'accepted', 'kept'] as const
@@ -47,9 +48,33 @@ export interface ReEntrySuggestion {
   decidedOn: LocalDate | null
 }
 
-export type Suggestion = ReEntrySuggestion
+/** The pain rules, for every open Session while a Pain report stands. */
+export interface PainSuggestion {
+  id: string
+  kind: 'pain'
+  /** The Week it changes: the one Today shows. */
+  week: number
+  /** Null: whichever Session is trained while the report stands. */
+  sessionId: null
+  /** The day it applies from: the day of the report. */
+  date: LocalDate
+  /** Bike for jumps and accelerations with fewer reps, or easy low-impact work. */
+  level: PainLevel
+  trigger: {
+    score: number
+    area: PainArea | null
+    /** The report before it, when this one is higher: rising pain. */
+    risingFrom: number | null
+  }
+  decision: Decision
+  decidedOn: LocalDate | null
+}
+
+export type Suggestion = ReEntrySuggestion | PainSuggestion
 
 export const reEntryId = (week: number) => `re-entry-w${week}`
+/** One per Pain report: a decision on it stands as long as the report does. */
+export const painId = (reportId: string) => `pain-${reportId}`
 
 const ID = /^[a-z0-9-]{1,64}$/
 const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/

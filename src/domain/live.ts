@@ -25,7 +25,10 @@ import type { Block, Exercise, Lane, RunEffort, Session, SessionType } from './p
 /** The Session types a Live run session runs: everything that is only running. */
 export const LIVE_RUN_TYPES: readonly SessionType[] = ['speed', 'threshold', 'easy', '5k-test']
 
-export const isLiveRun = (session: Session) => LIVE_RUN_TYPES.includes(session.type)
+/** A run Session that still has running in it: not one the pain rules turned into easy bike. */
+export const isLiveRun = (session: Session) =>
+  LIVE_RUN_TYPES.includes(session.type) &&
+  session.blocks.some((b) => b.exercises.some((e) => e.prescription.kind === 'run' || e.prescription.kind === 'intervals'))
 
 export type LiveBlockKind = 'warm-up' | 'drills' | 'rep' | 'recovery' | 'run' | 'distance' | 'cooldown'
 
@@ -136,6 +139,8 @@ function exerciseWords({ name, prescription: rx }: Exercise): string {
       return `${name} ${rx.reps} × ${rx.seconds}″`
     case 'accelerations':
       return `${name} ${rx.reps} × ${rx.meters} m at ${range(rx.percentOfMax)}%`
+    case 'sprints':
+      return [name, rx.seconds && `${range(rx.seconds)}″`, rx.meters && `${range(rx.meters)} m`].filter(Boolean).join(' ')
     default:
       return name
   }

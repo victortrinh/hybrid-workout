@@ -2,6 +2,7 @@
  * The Coach's words for a Suggestion, from its facts. Blunt, a little funny,
  * and always with the number and the reason (PRODUCT.md, Coach voice).
  */
+import { PAIN_AREA_LABEL, PAIN_REPS_PERCENT, type PainLevel } from '../domain/pain'
 import { SESSION_TYPES } from '../domain/program/describe'
 import type { Suggestion } from '../domain/suggestion'
 import { plural } from './format'
@@ -32,7 +33,37 @@ export function suggestionCopy(s: Suggestion): SuggestionCopy {
         kept: 'Keeping full volume. Your call. Your calves.',
       }
     }
+    case 'pain': {
+      const { score, area, risingFrom } = s.trigger
+      const where = area ? ` · ${PAIN_AREA_LABEL[area]}` : ''
+      const rising = risingFrom === null ? '' : `, up from ${risingFrom}`
+      return {
+        line: painLine(score, s.level, risingFrom !== null),
+        why: `Pain ${score}${rising}${where} · ${painChange(s.level)}`,
+        keep: 'Keep as written',
+        accepted:
+          s.level === 'low-impact'
+            ? 'Done. Easy bike or rest until it settles. Tell me when it does.'
+            : 'Done. Bike for the jumps, fewer reps. Tell me when it settles.',
+        kept: 'Keeping it as written. Your call. Stop if it gets worse.',
+      }
+    }
   }
+}
+
+/** The pain step's line and a pain Suggestion's: what the score does to training. */
+export function painLine(score: number, level: PainLevel | null, rising: boolean): string {
+  if (level === 'low-impact') return `Pain ${score}. Today becomes easy bike or rest. Not negotiable.`
+  if (level === 'ease' && rising) return `Pain ${score} and rising. No jumps, fewer reps, before it gets a vote.`
+  if (level === 'ease') return `Pain ${score}. No jumps, fewer reps. Your tendons will thank you.`
+  return score === 0 ? 'Nothing hurts. Carry on.' : 'Noted. Carry on, carefully.'
+}
+
+/** What the pain rules change, in a few words. */
+function painChange(level: PainLevel): string {
+  return level === 'low-impact'
+    ? 'every Session easy and low-impact'
+    : `bike for jumps and accelerations, ${100 - PAIN_REPS_PERCENT}% fewer interval reps`
 }
 
 /** "Speed", "Speed and HYROX", "Speed, Strength and HYROX" */
