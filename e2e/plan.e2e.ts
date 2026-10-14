@@ -51,8 +51,8 @@ for (const colorScheme of ['light', 'dark'] as const) {
         'Race simulation, full run',
         'Easy run, 45′',
       ])
-      await expect(page.getByText('Sled push · 25 m · 335 lb')).toBeVisible()
-      await expect(page.getByText('Farmers carry · 100 m · 2 × 53 lb')).toBeVisible()
+      await expect(page.getByText('Sled push · 25 m · 335 lb plates')).toBeVisible()
+      await expect(page.getByText('Farmers carry · 100 m · 2 × 55 lb')).toBeVisible()
       await expectNoAxeViolations(page)
 
       await page.getByRole('link', { name: 'Week 25 →' }).click()

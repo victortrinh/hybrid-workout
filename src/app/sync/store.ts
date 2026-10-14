@@ -72,12 +72,13 @@ export async function openIndexedDbStore(): Promise<LocalStore> {
   }
 }
 
-/** Logs stored before Live sessions had no console distance, reps or sets. */
+/** Logs stored before Live sessions had no console distance, reps, Station logs or sets. */
 const upgrade = (log: SessionLog): SessionLog => ({
   ...log,
   distanceMeters: log.distanceMeters ?? null,
   intervals: log.intervals ?? [],
   sets: log.sets ?? [],
+  stations: log.stations ?? [],
 })
 
 /** A store that forgets on reload: for tests, and for browsers that block IndexedDB. */

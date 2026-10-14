@@ -22,6 +22,7 @@ const toLog = (seed: SeedLog, project: string) => ({
   environment: null,
   distanceMeters: null,
   intervals: [],
+  stations: [],
   sets: [],
   ...seed,
   id: `e2e-${project}-w${seed.week}-${seed.sessionId}`,

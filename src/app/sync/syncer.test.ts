@@ -18,6 +18,7 @@ const log = (id: string, change: Partial<SessionLog> = {}): SessionLog => ({
   distanceMeters: null,
   intervals: [],
   sets: [],
+  stations: [],
   updatedAt: '2026-11-04T20:00:00.000Z',
   ...change,
 })

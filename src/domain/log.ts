@@ -8,6 +8,8 @@
 import { localDate, type LocalDate } from './calendar'
 import { ENVIRONMENTS, FIVE_K_SECONDS, type Environment } from './paces'
 import { LIFTS, type LiftId } from './program/types'
+import { stations } from './program/program'
+import type { StationId } from './program/types'
 import type { SuggestionDecision } from './suggestion'
 
 export const LOGGED_STATUSES = ['done', 'partial', 'skipped', 'swapped'] as const
@@ -37,6 +39,8 @@ export interface SessionLog {
   intervals: IntervalLog[]
   /** One per set logged in a Live Strength session, in Exercise and set order. */
   sets: SetLog[]
+  /** A HYROX session's rounds or a Race simulation's splits: times, and the loads and distances actually done. */
+  stations: StationLog[]
   /** ISO instant of the last edit. */
   updatedAt: string
 }
@@ -74,6 +78,26 @@ export interface SetLog {
   rpe: number
 }
 
+/** What a Station log is of: a Station, the run before it, or a whole HYROX round. */
+export type StationPart = StationId | 'run' | 'round'
+
+/**
+ * One line of a HYROX session or a Race simulation. A HYROX round logs its
+ * time on the `round` line, and its run and Stations as done; a Race
+ * simulation logs a split on every run and every Station, in race order.
+ */
+export interface StationLog {
+  /** The round, from 1. In a Race simulation, the place of the run and its Station in the Session. */
+  round: number
+  part: StationPart
+  /** Per implement; on a sled, the plates alone. Null where the Station has no load. */
+  pounds: number | null
+  meters: number | null
+  reps: number | null
+  /** The time it took; null where only the round was timed. */
+  seconds: number | null
+}
+
 /** Everything the device needs from the server. More records join as they arrive. */
 export interface SyncState {
   sessionLogs: SessionLog[]
@@ -83,12 +107,19 @@ export interface SyncState {
 export const NOTES_MAX = 2000
 /** A treadmill console reading from 100 m to 100 km is believable. */
 export const DISTANCE_METERS = [100, 100_000] as const
+/** A Station's load per implement: an empty sled to a heavy one. */
+export const STATION_POUNDS = [0, 1000] as const
+/** A Station's or a run's distance. */
+export const STATION_METERS = [1, 5000] as const
+export const STATION_REPS = [1, 500] as const
 /** A pace from 2:00/km (30 km/h) to 20:00/km (a walk). */
 export const PACE_SECONDS = [120, 1200] as const
 const MAX_INTERVALS = 50
 const MAX_SETS = 60
 /** From an empty hand to a heavy squat: anything else is a typo. */
 export const POUNDS = [0, 1000] as const
+const MAX_STATION_LOGS = 60
+const STATION_PARTS: readonly StationPart[] = [...(Object.keys(stations) as StationId[]), 'run', 'round']
 const ID = /^[A-Za-z0-9_-]{8,64}$/
 const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/
 
@@ -128,6 +159,7 @@ export function parseSessionLog(value: unknown): SessionLog {
   const distanceMeters = optionalInteger(v.distanceMeters, 'distanceMeters', ...DISTANCE_METERS)
   const intervals = parseIntervals(v.intervals ?? [])
   const sets = parseSets(v.sets ?? [])
+  const stationLogs = parseStationLogs(v.stations ?? [])
   const updatedAt = v.updatedAt
   if (typeof updatedAt !== 'string' || !INSTANT.test(updatedAt) || Number.isNaN(Date.parse(updatedAt))) {
     throw new Error('updatedAt must be an ISO instant in UTC')
@@ -147,6 +179,7 @@ export function parseSessionLog(value: unknown): SessionLog {
     distanceMeters,
     intervals,
     sets,
+    stations: stationLogs,
     updatedAt,
   }
 }
@@ -195,6 +228,33 @@ function parseIntervals(value: unknown): IntervalLog[] {
     if (v.held && actualPace !== null) throw new Error(`intervals[${i}]: a held rep has no actual pace`)
     if (!v.held && actualPace === null) throw new Error(`intervals[${i}]: a changed rep needs its actual pace`)
     return { block, rep, targetPace, held: v.held, actualPace }
+  })
+}
+
+function parseStationLogs(value: unknown): StationLog[] {
+  if (!Array.isArray(value) || value.length > MAX_STATION_LOGS) {
+    throw new Error(`stations must be a list of at most ${MAX_STATION_LOGS}`)
+  }
+  const seen = new Set<string>()
+  return value.map((item, i) => {
+    if (typeof item !== 'object' || item === null) throw new Error(`stations[${i}] must be an object`)
+    const v = item as Record<string, unknown>
+    const round = optionalInteger(v.round, `stations[${i}].round`, 1, 20)
+    if (round === null) throw new Error(`stations[${i}] needs a round`)
+    if (!STATION_PARTS.includes(v.part as StationPart)) {
+      throw new Error(`stations[${i}].part must be a Station, run or round`)
+    }
+    const part = v.part as StationPart
+    if (seen.has(`${round}/${part}`)) throw new Error(`stations[${i}]: ${part} in round ${round} is logged twice`)
+    seen.add(`${round}/${part}`)
+    return {
+      round,
+      part,
+      pounds: optionalInteger(v.pounds, `stations[${i}].pounds`, ...STATION_POUNDS),
+      meters: optionalInteger(v.meters, `stations[${i}].meters`, ...STATION_METERS),
+      reps: optionalInteger(v.reps, `stations[${i}].reps`, ...STATION_REPS),
+      seconds: optionalInteger(v.seconds, `stations[${i}].seconds`, 0, 3 * 3600),
+    }
   })
 }
 

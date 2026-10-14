@@ -251,16 +251,32 @@ function loadWords(load: StrengthLoad): string {
 }
 
 
+/** The sleds: their load is the plates added, the sled itself counting as zero. */
+export const isSled = (id: StationId) => id === 'sled-push' || id === 'sled-pull'
+
 /**
- * "200 lb", "2 × 30 lb", "13 lb ball", or nothing for a Station without a load.
- * A share of Race load rounds to the nearest 5 lb; Race load itself is exact.
+ * A Station's load in pounds at a share of Race load, as it's set up in the
+ * gym: per implement, the plates alone on a sled, rounded to the nearest 5 lb.
+ * The wall ball stays the ball it is. Null for a Station without a load.
  */
+export function stationPounds(station: Station, percent = 100): number | null {
+  const { pounds, fixedLoad } = station.raceLoad
+  if (pounds === undefined) return null
+  return fixedLoad ? pounds : roundToFive((pounds * percent) / 100)
+}
+
+/** "200 lb plates", "2 × 30 lb", "13 lb ball", or nothing for a Station without a load. */
 export function stationLoad(station: Station, percent = 100): string {
-  const { pounds, implements: count, fixedLoad } = station.raceLoad
-  if (pounds === undefined) return ''
-  if (fixedLoad) return `${pounds} lb ball`
-  const each = percent === 100 ? pounds : roundToFive((pounds * percent) / 100)
-  return count && count > 1 ? `${count} × ${each} lb` : `${each} lb`
+  return poundsWords(station, stationPounds(station, percent))
+}
+
+/** A Station's load in words, whatever was actually used: "225 lb plates", "2 × 55 lb". */
+export function poundsWords(station: Station, pounds: number | null): string {
+  if (pounds === null) return ''
+  if (station.raceLoad.fixedLoad) return `${pounds} lb ball`
+  if (isSled(station.id)) return `${pounds} lb plates`
+  const count = station.raceLoad.implements ?? 1
+  return count > 1 ? `${count} × ${pounds} lb` : `${pounds} lb`
 }
 
 const SUBSTITUTION_REASON: Record<SubstitutionReason, string> = {

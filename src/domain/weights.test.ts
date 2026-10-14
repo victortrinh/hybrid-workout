@@ -40,6 +40,7 @@ function strength(week: number, lifts: Partial<Record<LiftId, SetSpec[]>>, statu
     environment: null,
     distanceMeters: null,
     intervals: [],
+    stations: [],
     sets,
     updatedAt: `${WEDNESDAY[week]}T20:00:00.000Z`,
   }

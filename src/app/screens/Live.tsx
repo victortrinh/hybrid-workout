@@ -13,6 +13,7 @@ import {
 import {
   advance,
   answer,
+  answerStations,
   blockElapsed,
   blockLeft,
   distanceSeconds,
@@ -25,11 +26,15 @@ import {
   resume,
   type LiveBlock,
   type LiveRun,
+  type LiveStation,
   type LiveTarget,
+  type StationChange,
 } from '../../domain/live'
 import { isLifts, type LiveLifts, type LiveSession } from '../../domain/lifts'
-import { PACE_SECONDS } from '../../domain/log'
+import { PACE_SECONDS, STATION_METERS, STATION_POUNDS, STATION_REPS } from '../../domain/log'
 import { clock, KM_PER_MILE, parseClock, type RunContext } from '../../domain/paces'
+import { poundsWords } from '../../domain/program/describe'
+import { stations } from '../../domain/program/program'
 import type { Lane } from '../../domain/program/types'
 import { StripedNumeral } from '../components/StripedNumeral'
 import { nb } from '../format'
@@ -246,6 +251,7 @@ function Running({
                 className="text-figure font-stretch-125%"
               />
             </div>
+            {block.stations.length > 0 && <StationList block={block} />}
             {block.detail.length > 0 && (
               <ul className="mt-3 text-body">
                 {block.detail.map((d) => (
@@ -261,7 +267,12 @@ function Running({
       </header>
 
       <div className="flex-1 px-pad pb-6 desktop:max-w-plan desktop:px-gutter">
-        <HeldCheck run={run} context={context} onAnswer={(b, pace, actual) => act((r) => answer(r, b, pace, actual))} />
+        <HeldCheck
+          run={run}
+          context={context}
+          onAnswer={(b, pace, actual) => act((r) => answer(r, b, pace, actual))}
+          onStations={(b, change) => act((r) => answerStations(r, b, change))}
+        />
         {over ? (
           <FinishSheet run={run} context={context} onKeepGoing={() => act(resume)} onSave={(f) => onSave(run, f)} onDiscard={() => {
               onChange(null)
@@ -279,7 +290,7 @@ function Running({
             {paused ? 'Resume' : 'Pause'}
           </Button>
           <Button onPress={() => act(nextBlock)} className={`${lineButton} desktop:max-w-60`}>
-            {block.seconds === null ? `Finished ${km(block.meters ?? 0)}` : 'Skip block'}
+            {finishedLabel(block)}
           </Button>
         </div>
       )}
@@ -287,12 +298,64 @@ function Running({
   )
 }
 
-/** The hero target: the exact speed or pace, the RPE before there are paces, or the distance of a 5 km. */
+/**
+ * The hero target: the exact speed or pace, the RPE before there are paces,
+ * the distance of a 5 km or a HYROX round's run, or a Station's volume.
+ */
 function targetFor(block: LiveBlock, context: RunContext): LiveTarget | null {
-  if (block.kind === 'distance' && block.meters) {
-    return { value: String(block.meters / 1000), unit: 'km', incline: null, pace: null, words: km(block.meters) }
+  const none = { incline: null, pace: null }
+  if ((block.kind === 'distance' || block.kind === 'round') && block.meters) {
+    const unit = block.kind === 'round' ? ' run' : ''
+    return block.meters % 1000 === 0
+      ? { ...none, value: String(block.meters / 1000), unit: `km${unit}`, words: km(block.meters) }
+      : { ...none, value: String(block.meters), unit: `m${unit}`, words: km(block.meters) }
+  }
+  if (block.kind === 'station') {
+    const [leg] = block.stations
+    if (leg.reps) return { ...none, value: String(leg.reps), unit: 'reps', words: volume(leg) }
+    // Four digits don't fit a phone: 1000 m reads as 1 km, like the runs.
+    const meters = leg.meters ?? 0
+    return meters % 1000 === 0
+      ? { ...none, value: String(meters / 1000), unit: 'km', words: volume(leg) }
+      : { ...none, value: String(meters), unit: 'm', words: volume(leg) }
   }
   return liveTarget(block, context)
+}
+
+/** The tap that ends a Block run to a distance or to the end of its work; Skip block on a timed one. */
+function finishedLabel(block: LiveBlock): string {
+  if (block.seconds !== null) return 'Skip block'
+  if (block.kind === 'round') return `Finished round ${block.round}`
+  if (block.kind === 'station') return `Finished ${block.name}`
+  return `Finished ${km(block.meters ?? 0)}`
+}
+
+/** A Station's distance or reps: "25 m", "20 reps". */
+const volume = (leg: LiveStation) => (leg.reps ? `${leg.reps} reps` : km(leg.meters ?? 0))
+
+/** "25 m · 200 lb plates", "20 reps · 13 lb ball", "250 m" */
+const stationWords = (leg: LiveStation) =>
+  [volume(leg), poundsWords(stations[leg.station], leg.pounds)].filter(Boolean).join(' · ')
+
+/**
+ * A round's Stations, large enough to read from the floor; a Race
+ * simulation Station's load. Sled loads are the plates to add.
+ */
+function StationList({ block }: { block: LiveBlock }) {
+  if (block.kind === 'station') {
+    const load = poundsWords(stations[block.stations[0].station], block.stations[0].pounds)
+    return load ? <p className="mt-2 text-[22px] font-bold">{nb(load)}</p> : null
+  }
+  return (
+    <ul aria-label="Stations" className="mt-3 grid gap-1">
+      {block.stations.map((leg) => (
+        <li key={leg.station} className="text-[22px] leading-tight font-bold">
+          {stations[leg.station].name}{' '}
+          <span className="block text-[17px] font-semibold">{nb(stationWords(leg))}</span>
+        </li>
+      ))}
+    </ul>
+  )
 }
 
 /** Where there's nothing to dial: what the Block is about instead. */
@@ -306,8 +369,13 @@ function feelWords(block: LiveBlock): string {
   return block.kind === 'drills' ? 'Drills' : 'Walk'
 }
 
-/** "12 min", "90 s", "5 km" */
+/** "12 min", "90 s", "5 km", "600 m + 2 Stations", "50 m" */
 function blockLength(block: LiveBlock): string {
+  if (block.kind === 'round') {
+    const n = block.stations.length
+    return `${km(block.meters ?? 0)} + ${n} ${n === 1 ? 'Station' : 'Stations'}`
+  }
+  if (block.kind === 'station') return volume(block.stations[0])
   if (block.seconds === null) return km(block.meters ?? 0)
   return block.seconds % 60 === 0 ? `${block.seconds / 60} min` : `${block.seconds} s`
 }
@@ -337,6 +405,7 @@ function Lanes({
       {run.blocks.map((b, i) => {
         const current = i === run.block
         const target = b.kind === 'rep' ? liveTarget(b, context) : null
+        const split = b.round !== null ? run.splits.find((s) => s.block === i) : undefined
         return (
           <li
             key={i}
@@ -347,7 +416,10 @@ function Lanes({
               {b.name}
               {i < run.block && <span className="sr-only">{run.skipped.includes(i) ? ', skipped' : ', done'}</span>}
             </span>
-            <span className="text-muted">{target ? targetShort(target) : blockLength(b)}</span>
+            <span className="text-muted">
+              {target ? targetShort(target) : blockLength(b)}
+              {split && ` · ${clock(split.seconds)}`}
+            </span>
             <span aria-hidden="true" className={`relative col-span-full block overflow-hidden bg-rule ${current ? 'h-[26px]' : 'h-3'}`}>
               <i
                 ref={current ? fillRef : undefined}
@@ -367,10 +439,12 @@ function HeldCheck({
   run,
   context,
   onAnswer,
+  onStations,
 }: {
   run: LiveRun
   context: RunContext
   onAnswer: (block: number, targetPace: number | null, actualPace: number | null) => void
+  onStations: (block: number, change: StationChange | null) => void
 }) {
   const [changing, setChanging] = useState<number | null>(null)
   const [speed, setSpeed] = useState(Number.NaN)
@@ -379,6 +453,9 @@ function HeldCheck({
   if (asked === undefined) return null
 
   const block = run.blocks[asked]
+  if (block.kind === 'round' || block.kind === 'station') {
+    return <StationCheck key={asked} block={block} onAnswer={(change) => onStations(asked, change)} />
+  }
   const target = liveTarget(block, context)
   const indoor = run.environment === 'indoor'
   const unit = context.unit === 'kmh' ? 'km/h' : 'mph'
@@ -449,6 +526,100 @@ function HeldCheck({
   )
 }
 
+/**
+ * After a HYROX round or a Race simulation Station: As written, one tap, or
+ * Changed with the load and distance actually done. Left alone, it logs as written.
+ */
+function StationCheck({ block, onAnswer }: { block: LiveBlock; onAnswer: (change: StationChange | null) => void }) {
+  const [changing, setChanging] = useState(false)
+  const [runMeters, setRunMeters] = useState(block.meters ?? Number.NaN)
+  const [legs, setLegs] = useState(block.stations)
+  const round = block.kind === 'round'
+  const set = (i: number, field: 'pounds' | 'meters' | 'reps', value: number) =>
+    setLegs((all) => all.map((leg, j) => (j === i ? { ...leg, [field]: Number.isFinite(value) ? Math.round(value) : leg[field] } : leg)))
+
+  function submit(event: FormEvent) {
+    event.preventDefault()
+    onAnswer({ runMeters: round && Number.isFinite(runMeters) ? Math.round(runMeters) : undefined, stations: legs })
+  }
+
+  return (
+    <section aria-label={`${block.name}: as written?`} className="mt-4 border-t-2 border-ink pt-3 pb-1">
+      <p className="text-body">
+        {block.name}: {nb(round ? `${blockLength(block)}, as written?` : `${stationWords(block.stations[0])}, as written?`)}
+      </p>
+      {changing ? (
+        <Form onSubmit={submit} className="mt-2 grid gap-4">
+          {round && (
+            <AmountField label="Run, m" value={runMeters} onChange={setRunMeters} range={STATION_METERS} step={1} autoFocus />
+          )}
+          {legs.map((leg, i) => {
+            const name = stations[leg.station].name
+            return (
+              <fieldset key={leg.station} className="flex flex-wrap gap-3">
+                <legend className="sr-only">{name}</legend>
+                {leg.reps !== null ? (
+                  <AmountField label={`${name}, reps`} value={leg.reps} onChange={(v) => set(i, 'reps', v)} range={STATION_REPS} step={1} autoFocus={!round && i === 0} />
+                ) : (
+                  <AmountField label={`${name}, m`} value={leg.meters ?? Number.NaN} onChange={(v) => set(i, 'meters', v)} range={STATION_METERS} step={1} autoFocus={!round && i === 0} />
+                )}
+                {leg.pounds !== null && (
+                  <AmountField label={`${name}, lb`} value={leg.pounds} onChange={(v) => set(i, 'pounds', v)} range={STATION_POUNDS} step={5} />
+                )}
+              </fieldset>
+            )
+          })}
+          <Button type="submit" className={`${lineButton} justify-self-start flex-none`}>
+            Save
+          </Button>
+        </Form>
+      ) : (
+        <div className="mt-1 flex gap-5">
+          <Button onPress={() => onAnswer(null)} className={linkButton}>
+            As written
+          </Button>
+          <Button onPress={() => setChanging(true)} className={quietButton}>
+            Changed
+          </Button>
+        </div>
+      )}
+    </section>
+  )
+}
+
+function AmountField({
+  label,
+  value,
+  onChange,
+  range,
+  step,
+  autoFocus = false,
+}: {
+  label: string
+  value: number
+  onChange: (value: number) => void
+  range: readonly [number, number]
+  step: number
+  autoFocus?: boolean
+}) {
+  return (
+    <NumberField
+      value={value}
+      onChange={onChange}
+      minValue={range[0]}
+      maxValue={range[1]}
+      step={step}
+      isRequired
+      autoFocus={autoFocus}
+      formatOptions={{ maximumFractionDigits: 0, useGrouping: false }}
+      className="grid gap-2"
+    >
+      <Label className={groupLabel}>{label}</Label>
+      <Input inputMode="numeric" className={inputClass} />
+    </NumberField>
+  )
+}
+
 const paceOk = (pace: number | null) => pace !== null && pace >= PACE_SECONDS[0] && pace <= PACE_SECONDS[1]
 
 /** A treadmill speed in the chosen unit to seconds per km. */
@@ -477,7 +648,8 @@ function FinishSheet({
   const status = liveStatus(run)
   const covered = distanceSeconds(run)
   const result = run.type === '5k-test' && status === 'done'
-  const indoor = run.environment === 'indoor'
+  // A circuit's runs are logged round by round, not as a console total.
+  const indoor = run.environment === 'indoor' && run.type !== 'hyrox' && run.type !== 'race-simulation'
   const mile = context.unit === 'mph'
   const [time, setTime] = useState(covered === null ? '' : clock(covered))
   const [distance, setDistance] = useState(Number.NaN)

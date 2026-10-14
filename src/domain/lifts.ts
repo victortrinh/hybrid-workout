@@ -7,7 +7,7 @@
  * nothing.
  */
 import type { LocalDate } from './calendar'
-import { isLiveRun, parseLiveRun, type LiveRun } from './live'
+import { isLive as isLiveRunOrCircuit, parseLiveRun, type LiveRun } from './live'
 import { POUNDS, type SessionLog, type SetLog } from './log'
 import { SESSION_TYPES } from './program/describe'
 import type { Block, LiftId, Prescription, Range, Session } from './program/types'
@@ -258,6 +258,7 @@ export function liftsLog(lifts: LiveLifts, now: number, input: LiftsLogInput): S
     environment: null,
     distanceMeters: null,
     intervals: [],
+    stations: [],
     sets,
     updatedAt: input.updatedAt,
   }
@@ -276,13 +277,13 @@ export function parseLiveLifts(value: unknown): LiveLifts | null {
   return { ...v, ending: v.ending === true } as LiveLifts
 }
 
-/** Whatever is running on the device: a run against the clock, or sets at the rack. */
+/** Whatever is running on the device: a run or a HYROX circuit against the clock, or sets at the rack. */
 export type LiveSession = LiveRun | LiveLifts
 
 export const isLifts = (live: LiveSession): live is LiveLifts => live.type === 'strength'
 
 /** The Session types Start session runs live. */
-export const isLive = (session: Session) => session.type === 'strength' || isLiveRun(session)
+export const isLive = (session: Session) => session.type === 'strength' || isLiveRunOrCircuit(session)
 
 export function parseLiveSession(value: unknown): LiveSession | null {
   return parseLiveLifts(value) ?? parseLiveRun(value)

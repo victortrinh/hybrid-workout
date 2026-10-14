@@ -104,6 +104,7 @@ export function LogAfter({
       distanceMeters: trained ? (existing?.distanceMeters ?? null) : null,
       intervals: trained ? (existing?.intervals ?? []) : [],
       sets: trained ? (existing?.sets ?? []) : [],
+      stations: trained ? (existing?.stations ?? []) : [],
       updatedAt: editedAt(existing),
     })
     navigate(SCREEN_PATH.today)
