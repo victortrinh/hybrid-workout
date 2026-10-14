@@ -122,10 +122,10 @@ export function SettingsPopover({
           <div className="grid gap-1 border-t border-rule pt-3">
             <span className="text-[18px] font-bold">Your data</span>
             <div className="flex gap-4">
-              <Link href="/api/export.json" download className={linkClass}>
+              <Link {...exportLink('/api/export.json')} className={linkClass}>
                 Export JSON
               </Link>
-              <Link href="/api/export.zip" download className={linkClass}>
+              <Link {...exportLink('/api/export.zip')} className={linkClass}>
                 Export CSV
               </Link>
             </div>
@@ -137,4 +137,13 @@ export function SettingsPopover({
       </Popover>
     </DialogTrigger>
   )
+}
+
+/**
+ * A download link; in mock mode, where Mock Service Worker doesn't see a
+ * download navigation, a fetch saved as a file instead (src/mock/browser.ts).
+ */
+function exportLink(href: string) {
+  if (import.meta.env.VITE_API !== 'mock') return { href, download: true }
+  return { onPress: () => void import('virtual:compromised-mock').then((mock) => mock.saveDownload(href)) }
 }

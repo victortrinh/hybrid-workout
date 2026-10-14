@@ -35,6 +35,14 @@ jobs:
       - name: Unit tests (Coach)
         run: npm test
 
+      # Mock mode never ships (ADR-0005): a normal build holds none of it, and a
+      # mock build holds all of it, which proves the guard looks for the right things.
+      - name: Build without mocks
+        run: npm run build && npm run check:no-mocks
+
+      - name: Build in mock mode
+        run: npm run build:mock && npm run check:no-mocks -- --expect
+
       - name: Install Playwright's Chromium
         run: npx playwright install --with-deps chromium
 
