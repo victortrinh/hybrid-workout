@@ -7,6 +7,7 @@ import { Hono } from 'hono'
 import { findWeek } from '../domain/coach'
 import { isCircuit, isLiveRun } from '../domain/live'
 import { parseSessionLog, type SessionLog, type StationPart, type SyncState } from '../domain/log'
+import { parsePainReport, type PainReport } from '../domain/pain'
 import { program } from '../domain/program/program'
 import { parseDecision, type SuggestionDecision } from '../domain/suggestion'
 
@@ -32,8 +33,9 @@ app.get('/state', async (c) => c.json(await readState(c.env.DB)))
 app.post('/sync', async (c) => {
   let logs: SessionLog[]
   let decisions: SuggestionDecision[]
+  let reports: PainReport[]
   try {
-    ;({ logs, decisions } = parseSyncRequest(await c.req.json()))
+    ;({ logs, decisions, reports } = parseSyncRequest(await c.req.json()))
   } catch (error) {
     return c.json({ error: error instanceof Error ? error.message : 'Invalid request' }, 400)
   }
@@ -107,16 +109,43 @@ app.post('/sync', async (c) => {
     )
     await c.env.DB.batch(decisions.map((d) => upsert.bind(d.id, d.decision, d.date, d.updatedAt)))
   }
+  if (reports.length > 0) {
+    const upsert = c.env.DB.prepare(
+      `insert into pain_reports (id, date, score, area, week, session_id, updated_at)
+       values (?, ?, ?, ?, ?, ?, ?)
+       on conflict (id) do update set
+         date = excluded.date, score = excluded.score, area = excluded.area,
+         week = excluded.week, session_id = excluded.session_id, updated_at = excluded.updated_at
+       where excluded.updated_at > pain_reports.updated_at`,
+    )
+    await c.env.DB.batch(reports.map((r) => upsert.bind(r.id, r.date, r.score, r.area, r.week, r.sessionId, r.updatedAt)))
+  }
   return c.json(await readState(c.env.DB))
 })
 
 app.notFound((c) => c.json({ error: 'Not found' }, 404))
 
-/** Either list may be left out; whatever is there must all be valid. */
-function parseSyncRequest(body: unknown): { logs: SessionLog[]; decisions: SuggestionDecision[] } {
+/** Any list may be left out; whatever is there must all be valid. */
+function parseSyncRequest(body: unknown): { logs: SessionLog[]; decisions: SuggestionDecision[]; reports: PainReport[] } {
   if (typeof body !== 'object' || body === null) throw new Error('The body must be an object')
-  const { sessionLogs = [], suggestionDecisions = [] } = body as Record<string, unknown>
-  return { logs: parseLogs(sessionLogs), decisions: parseDecisions(suggestionDecisions) }
+  const { sessionLogs = [], suggestionDecisions = [], painReports = [] } = body as Record<string, unknown>
+  return { logs: parseLogs(sessionLogs), decisions: parseDecisions(suggestionDecisions), reports: parseReports(painReports) }
+}
+
+function parseReports(raw: unknown): PainReport[] {
+  if (!Array.isArray(raw)) throw new Error('painReports must be an array')
+  if (raw.length > MAX_BATCH) throw new Error(`At most ${MAX_BATCH} pain reports per sync`)
+  return raw.map((value, i) => {
+    try {
+      const report = parsePainReport(value)
+      if (report.week !== null && !findWeek(program, report.week)?.sessions.some((s) => s.id === report.sessionId)) {
+        throw new Error(`Week ${report.week} has no Session "${report.sessionId}"`)
+      }
+      return report
+    } catch (error) {
+      throw new Error(`painReports[${i}]: ${error instanceof Error ? error.message : 'invalid'}`)
+    }
+  })
 }
 
 function parseDecisions(raw: unknown): SuggestionDecision[] {
@@ -178,6 +207,16 @@ interface IntervalRow {
   actual_pace: number | null
 }
 
+interface PainRow {
+  id: string
+  date: string
+  score: number
+  area: string | null
+  week: number | null
+  session_id: string | null
+  updated_at: string
+}
+
 interface StationRow {
   session_log_id: string
   round: number
@@ -206,15 +245,23 @@ interface DecisionRow {
 }
 
 async function readState(db: D1Database): Promise<SyncState> {
-  const [{ results }, decisions, intervals, stationRows, setRows] = (await db.batch<
-    SessionLogRow | DecisionRow | IntervalRow | StationRow | SetRow
+  const [{ results }, decisions, intervals, stationRows, setRows, pain] = (await db.batch<
+    SessionLogRow | DecisionRow | IntervalRow | StationRow | SetRow | PainRow
   >([
     db.prepare('select * from session_logs order by date, updated_at'),
     db.prepare('select * from suggestion_decisions order by updated_at'),
     db.prepare('select * from interval_logs order by session_log_id, block'),
     db.prepare('select * from station_logs order by session_log_id, round, rowid'),
     db.prepare('select * from set_logs order by session_log_id, exercise, "set"'),
-  ])) as [D1Result<SessionLogRow>, D1Result<DecisionRow>, D1Result<IntervalRow>, D1Result<StationRow>, D1Result<SetRow>]
+    db.prepare('select * from pain_reports order by date, updated_at'),
+  ])) as [
+    D1Result<SessionLogRow>,
+    D1Result<DecisionRow>,
+    D1Result<IntervalRow>,
+    D1Result<StationRow>,
+    D1Result<SetRow>,
+    D1Result<PainRow>,
+  ]
   const reps = new Map<string, IntervalRow[]>()
   for (const row of intervals.results) reps.set(row.session_log_id, [...(reps.get(row.session_log_id) ?? []), row])
   const stationLogs = new Map<string, StationRow[]>()
@@ -224,6 +271,17 @@ async function readState(db: D1Database): Promise<SyncState> {
   const sets = new Map<string, SetRow[]>()
   for (const row of setRows.results) sets.set(row.session_log_id, [...(sets.get(row.session_log_id) ?? []), row])
   return {
+    painReports: pain.results.map((row) =>
+      parsePainReport({
+        id: row.id,
+        date: row.date,
+        score: row.score,
+        area: row.area,
+        week: row.week,
+        sessionId: row.session_id,
+        updatedAt: row.updated_at,
+      }),
+    ),
     suggestionDecisions: decisions.results.map((row) =>
       parseDecision({ id: row.id, decision: row.decision, date: row.date, updatedAt: row.updated_at }),
     ),

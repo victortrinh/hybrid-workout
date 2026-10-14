@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { daysBetween, isoWeekday, localDate, localDateIn, type LocalDate } from './calendar'
 import { DEFAULT_EQUIPMENT, equipWeek } from './equipment'
 import { coach, findWeek, keyDeadline, prescribedWeek, programStart, weekOutcome, type CoachInput } from './coach'
+import { isLive } from './lifts'
 import type { LoggedStatus, SessionLog } from './log'
+import type { PainArea, PainReport } from './pain'
 import { program } from './program/program'
 import type { Program } from './program/types'
 import type { Decision, SuggestionDecision } from './suggestion'
@@ -696,5 +698,221 @@ describe('the re-entry Suggestion', () => {
     expect(prescribedWeek(program, 11, logs, [decided('accepted')])?.sessions[0].headline).toBe('3 × 4′')
     expect(prescribedWeek(program, 11, logs, [decided('kept')])?.sessions[0].headline).toBe('4 × 4′')
     expect(prescribedWeek(program, 10, logs, [decided('accepted')])).toEqual(equipWeek(findWeek(program, 10)!, DEFAULT_EQUIPMENT))
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The pain rules. Week 3 (Mon 2 – Sun 8 Nov): Speed 5 × 3′ with jumps and
+// four accelerations, Strength, Threshold 2 × 12′ (Key), HYROX, Easy run.
+
+let nextReport = 0
+function pain(
+  date: string,
+  score: number,
+  { area = score === 0 ? null : 'achilles-calf', session = null, at = '12:00' }: { area?: PainArea | null; session?: [number, string] | null; at?: string } = {},
+): PainReport {
+  return {
+    id: `report-${String(++nextReport).padStart(4, '0')}`,
+    date: localDate(date),
+    score,
+    area,
+    week: session?.[0] ?? null,
+    sessionId: session?.[1] ?? null,
+    updatedAt: `${date}T${at}:00.000Z`,
+  }
+}
+
+const painDecision = (report: PainReport, decision: Decision, date = report.date): SuggestionDecision => ({
+  id: `pain-${report.id}`,
+  decision,
+  date: localDate(date),
+  updatedAt: `${date}T13:00:00.000Z`,
+})
+
+function withPain(iso: string, painReports: PainReport[], decisions: SuggestionDecision[] = [], logs: SessionLog[] = []) {
+  return coach({ program, today: localDate(iso), logs: [...keysDoneBefore(localDate(iso)), ...logs], painReports, decisions })
+}
+
+/** Only the pain Suggestions: Week 2's Sessions other than the Key one went undone, so re-entry is there too. */
+const painOf = (day: ReturnType<typeof coach>) => day.suggestions.filter((s) => s.kind === 'pain')
+
+const exerciseNames = (day: ReturnType<typeof coach>) => day.upNext!.blocks.flatMap((b) => b.exercises.map((e) => e.name))
+const mainIntervals = (session: { blocks: { main?: boolean; exercises: { prescription: unknown }[] }[] }) =>
+  session.blocks.find((b) => b.main)!.exercises[0].prescription
+
+describe('the pain rules', () => {
+  it('stay out of it with no Pain report, or with pain under 3 and not rising', () => {
+    expect(painOf(withPain('2026-11-04', []))).toEqual([])
+    expect(withPain('2026-11-04', []).pain).toBeNull()
+    for (const score of [0, 1, 2]) {
+      const day = withPain('2026-11-04', [pain('2026-11-04', score)])
+      expect(painOf(day)).toEqual([])
+      expect(day.pain).toMatchObject({ report: { score }, level: null })
+    }
+  })
+
+  it('suggest bike for the jumps and fewer reps at pain 3', () => {
+    const report = pain('2026-11-04', 3, { area: 'shin' })
+    const day = withPain('2026-11-04', [report])
+    expect(painOf(day)).toEqual([
+      {
+        id: `pain-${report.id}`,
+        kind: 'pain',
+        week: 3,
+        sessionId: null,
+        date: '2026-11-04',
+        level: 'ease',
+        trigger: { score: 3, area: 'shin', risingFrom: null },
+        decision: 'open',
+        decidedOn: null,
+      },
+    ])
+    expect(day.pain).toMatchObject({ level: 'ease' })
+  })
+
+  it('change nothing until the Suggestion is Accepted, nor once it is Kept', () => {
+    const report = pain('2026-11-04', 4)
+    for (const decisions of [[], [painDecision(report, 'kept')], [painDecision(report, 'open')]]) {
+      const day = withPain('2026-11-04', [report], decisions)
+      expect(day.upNext).toBe(findWeek(program, 3)!.sessions[0])
+    }
+  })
+
+  it('swap jumps and accelerations for bike sprints and cut interval reps by about 30% once Accepted', () => {
+    const report = pain('2026-11-04', 4)
+    const day = withPain('2026-11-04', [report], [painDecision(report, 'accepted')])
+    expect(day.upNext).toMatchObject({ id: 'speed', headline: '4 × 3′', minutes: 41 })
+    expect(exerciseNames(day)).toEqual([
+      'Easy jog',
+      'Leg swings, skips, drills',
+      'Bike sprints',
+      'Bike sprints',
+      'Bike sprints',
+      'Intervals',
+      'Jog or walk',
+    ])
+    expect(exerciseNames(day)).not.toContain('Accelerations')
+    expect(day.upNext!.blocks.map((b) => b.name)).toEqual(['Warm-up', 'Bike sprints', 'Bike sprints', 'Intervals', 'Cooldown'])
+    expect(mainIntervals(day.upNext!)).toMatchObject({ kind: 'intervals', reps: 4, workSeconds: 180 })
+    expect(day.upNext!.blocks.find((b) => b.main)!.minutes).toBe(16)
+    // Threshold's two reps go to one; Strength, with nothing to swap or cut, stays as written.
+    const threshold = day.bucket.find((e) => e.session.id === 'threshold')!.session
+    expect(threshold.headline).toBe('1 × 12′')
+    expect(day.bucket.find((e) => e.session.id === 'strength')!.session).toEqual(prescribedWeek(program, 3, [], [])!.sessions[1])
+  })
+
+  it('make every Session easy low-impact work or rest at pain 5 or more', () => {
+    for (const score of [5, 8, 10]) {
+      const report = pain('2026-11-04', score, { area: 'knee' })
+      const day = withPain('2026-11-04', [report], [painDecision(report, 'accepted')])
+      expect(painOf(day)[0]).toMatchObject({ level: 'low-impact', trigger: { score, area: 'knee' } })
+      expect(day.bucket.map((e) => e.session.headline)).toEqual([
+        'easy bike 30′ or rest',
+        'easy bike 30′ or rest',
+        'easy bike 30′ or rest',
+        'easy bike 30′ or rest',
+        'easy bike 25′ or rest',
+      ])
+      expect(day.bucket.map((e) => e.session.type)).toEqual(['speed', 'strength', 'threshold', 'hyrox', 'easy'])
+      expect(day.upNext!.blocks).toHaveLength(1)
+      expect(mainIntervals(day.upNext!)).toEqual({ kind: 'note', minutes: 30 })
+      // Nothing left to run, lift or push: Log after, not Start session.
+      expect(day.bucket.map((e) => isLive(e.session))).toEqual([false, false, false, false, false])
+    }
+  })
+
+  it('count rising pain, higher than the report before, as pain 3', () => {
+    const before = pain('2026-11-03', 1)
+    const rising = pain('2026-11-04', 2)
+    const day = withPain('2026-11-04', [before, rising])
+    expect(painOf(day)[0]).toMatchObject({ id: `pain-${rising.id}`, level: 'ease', trigger: { score: 2, risingFrom: 1 } })
+
+    expect(painOf(withPain('2026-11-04', [pain('2026-11-03', 2), pain('2026-11-04', 2)]))).toEqual([])
+    expect(painOf(withPain('2026-11-04', [pain('2026-11-03', 2), pain('2026-11-04', 1)]))).toEqual([])
+    // Rising from no pain at all is still rising.
+    expect(painOf(withPain('2026-11-04', [pain('2026-11-03', 0), pain('2026-11-04', 1)]))[0]).toMatchObject({
+      level: 'ease',
+      trigger: { risingFrom: 0 },
+    })
+  })
+
+  it('compare reports given the same day in the order they were given', () => {
+    const morning = pain('2026-11-04', 1, { at: '11:00' })
+    const evening = pain('2026-11-04', 2, { at: '22:00' })
+    expect(painOf(withPain('2026-11-04', [evening, morning]))[0]).toMatchObject({ trigger: { risingFrom: 1 } })
+  })
+
+  it('end when the next report says No', () => {
+    const report = pain('2026-11-03', 6)
+    const day = withPain('2026-11-04', [report, pain('2026-11-04', 0)], [painDecision(report, 'accepted')])
+    expect(painOf(day)).toEqual([])
+    expect(day.upNext).toBe(findWeek(program, 3)!.sessions[0])
+  })
+
+  it('stand until the next report, Accepted or not', () => {
+    const report = pain('2026-11-02', 4)
+    const day = withPain('2026-11-05', [report], [painDecision(report, 'accepted')])
+    expect(painOf(day)[0]).toMatchObject({ date: '2026-11-02', decision: 'accepted', decidedOn: '2026-11-02' })
+    expect(day.upNext).toMatchObject({ headline: '4 × 3′' })
+  })
+
+  it('ignore a report from a later day', () => {
+    expect(painOf(withPain('2026-11-04', [pain('2026-11-05', 7)]))).toEqual([])
+  })
+
+  describe('a next-morning report after a Session', () => {
+    // Speed done on Tuesday after saying 2 at Start; Wednesday morning, Something hurts.
+    const atStart = pain('2026-11-03', 2, { session: [3, 'speed'], at: '22:00' })
+    const speedDone = log(3, 'speed', '2026-11-03')
+
+    it('applies the rules from that morning when it reaches 3', () => {
+      const morning = pain('2026-11-04', 3)
+      const day = withPain('2026-11-04', [atStart, morning], [painDecision(morning, 'accepted')], [speedDone])
+      expect(painOf(day)[0]).toMatchObject({ date: '2026-11-04', level: 'ease', trigger: { score: 3, risingFrom: 2 } })
+      expect(day.bucket.find((e) => e.session.id === 'threshold')!.session.headline).toBe('1 × 12′')
+    })
+
+    it('counts as rising when it is higher than the report at Start, even under 3', () => {
+      const lower = pain('2026-11-03', 1, { session: [3, 'speed'], at: '22:00' })
+      const morning = pain('2026-11-04', 2)
+      const day = withPain('2026-11-04', [lower, morning], [], [speedDone])
+      expect(painOf(day)[0]).toMatchObject({ level: 'ease', trigger: { score: 2, risingFrom: 1 } })
+    })
+
+    it('leaves the Session already logged as it was written', () => {
+      const morning = pain('2026-11-04', 6)
+      const day = withPain('2026-11-04', [atStart, morning], [painDecision(morning, 'accepted')], [speedDone])
+      expect(day.bucket.find((e) => e.session.id === 'speed')!.session).toBe(findWeek(program, 3)!.sessions[0])
+      expect(day.bucket.find((e) => e.session.id === 'hyrox')!.session.headline).toBe('easy bike 30′ or rest')
+    })
+  })
+
+  it('leave the race alone', () => {
+    const report = pain('2027-04-21', 7)
+    const day = withPain('2027-04-21', [report], [painDecision(report, 'accepted')])
+    expect(day.upNext).toMatchObject({ id: 'race', headline: findWeek(program, 27)!.sessions.find((s) => s.id === 'race')!.headline })
+  })
+
+  it('apply to a carried Key session still open', () => {
+    // Week 3's Threshold (Key) carried into Week 4, Monday.
+    const logs = ['speed', 'strength', 'hyrox'].map((id) => log(3, id, '2026-11-03'))
+    const report = pain('2026-11-09', 4)
+    const day = coach({
+      program,
+      today: localDate('2026-11-09'),
+      logs: [...keysDoneBefore(localDate('2026-11-02')), ...logs],
+      painReports: [report],
+      decisions: [painDecision(report, 'accepted')],
+    })
+    expect(day.bucket[0]).toMatchObject({ week: 3, carriedUntil: '2026-11-11', session: { id: 'threshold', headline: '1 × 12′' } })
+  })
+
+  it('show on other screens for the Week holding today only', () => {
+    const report = pain('2026-11-04', 4)
+    const decisions = [painDecision(report, 'accepted')]
+    const today = localDate('2026-11-04')
+    expect(prescribedWeek(program, 3, [], decisions, undefined, { reports: [report], today })?.sessions[0].headline).toBe('4 × 3′')
+    expect(prescribedWeek(program, 4, [], decisions, undefined, { reports: [report], today })).toEqual(prescribedWeek(program, 4, [], []))
+    expect(prescribedWeek(program, 3, [], decisions)).toEqual(prescribedWeek(program, 3, [], []))
   })
 })

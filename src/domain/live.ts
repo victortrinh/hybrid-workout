@@ -38,7 +38,10 @@ export const isCircuit = (session: Session) => CIRCUIT_TYPES.includes(session.ty
 /** Everything Start session runs. */
 const LIVE_TYPES: readonly SessionType[] = [...LIVE_RUN_TYPES, ...CIRCUIT_TYPES]
 
-export const isLive = (session: Session) => LIVE_TYPES.includes(session.type)
+/** A Session Start session runs, as long as it still has running in it: not one the pain rules made easy bike. */
+export const isLive = (session: Session) =>
+  LIVE_TYPES.includes(session.type) &&
+  session.blocks.some((b) => b.exercises.some((e) => e.prescription.kind === 'run' || e.prescription.kind === 'intervals'))
 
 export type LiveBlockKind =
   | 'warm-up'
@@ -246,6 +249,8 @@ function exerciseWords({ name, prescription: rx }: Exercise): string {
       return `${name} ${rx.reps} × ${rx.seconds}″`
     case 'accelerations':
       return `${name} ${rx.reps} × ${rx.meters} m at ${range(rx.percentOfMax)}%`
+    case 'sprints':
+      return [name, rx.seconds && `${range(rx.seconds)}″`, rx.meters && `${range(rx.meters)} m`].filter(Boolean).join(' ')
     default:
       return name
   }

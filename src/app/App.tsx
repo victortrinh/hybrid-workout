@@ -6,6 +6,8 @@ import { liftsLog, startLifts } from '../domain/lifts'
 import { liveLog, startRun } from '../domain/live'
 import { logFor, type SessionLog } from '../domain/log'
 import type { Environment, RunContext } from '../domain/paces'
+import type { PainArea, PainReport } from '../domain/pain'
+import { mergeDecisions, painId } from '../domain/suggestion'
 import type { Session } from '../domain/program/types'
 import { environmentOn } from '../domain/settings'
 import { program } from '../domain/program/program'
@@ -19,10 +21,11 @@ import { Progress } from './screens/Progress'
 import { unlockSound } from './liveCues'
 import { Live } from './screens/Live'
 import { LogAfter } from './screens/LogAfter'
-import { Today } from './screens/Today'
+import { Today, type PainAtStart } from './screens/Today'
 import { WeekScreen } from './screens/Week'
 import { usePicked } from './usePicked'
 import { editedAt, useDecisions } from './useDecisions'
+import { usePainReports } from './usePainReports'
 import { useSessionLogs } from './useSessionLogs'
 import { environmentKey, useSettings } from './useSettings'
 import { useLiveRun } from './useLiveRun'
@@ -57,11 +60,12 @@ export function App() {
   const { logs, save, pending, error } = useSessionLogs()
   const { decisions, decide, error: decisionError } = useDecisions()
   const [picked, pick] = usePicked()
+  const { reports: painReports, report } = usePainReports()
   const { settings, change, overrides, override } = useSettings()
   const { equipment } = settings
   const day = useMemo(
-    () => coach({ program, today, logs, picked, decisions, equipment }),
-    [today, logs, picked, decisions, equipment],
+    () => coach({ program, today, logs, picked, decisions, equipment, painReports }),
+    [today, logs, picked, decisions, equipment, painReports],
   )
   /** How a Session's runs read: the Training paces, in this Session's Environment and the chosen units. */
   const runContext = (week: number, session: Session): RunContext => {
@@ -77,17 +81,41 @@ export function App() {
   const setEnvironment = (week: number, session: Session, environment: Environment) =>
     override(week, session.id, environment)
   const [live, setLive] = useLiveRun()
+  /** A Pain report given now, for a Session or (with neither) from Something hurts. */
+  const painReport = (score: number, area: PainArea | null, week: number | null, sessionId: string | null): PainReport => ({
+    id: crypto.randomUUID(),
+    date: today,
+    score,
+    area,
+    week,
+    sessionId,
+    updatedAt: new Date().toISOString(),
+  })
   /**
-   * Start session: Strength prefilled with today's Working weights; a run's
+   * Start session, once the pain step is answered: the report and the
+   * decision on its Suggestion count at once, and the Live session starts
+   * from the Coach's answer with them in it, so the pain rules are already in
+   * its Blocks. Strength is prefilled with today's Working weights; a run's
    * clock starts at the tap, in the Environment Today shows for it.
    */
-  const startLive = (week: number, session: Session) => {
+  const startLive = (week: number, session: Session, pain: PainAtStart) => {
     unlockSound()
+    const given = painReport(pain.score, pain.area, week, session.id)
+    report(given)
+    let decided = decisions
+    if (pain.decision) {
+      const decision = { id: painId(given.id), decision: pain.decision, date: today, updatedAt: editedAt(undefined) }
+      decide(decision)
+      decided = mergeDecisions(decisions, [decision])
+    }
+    if (!pain.start) return
+    const after = coach({ program, today, logs, picked, decisions: decided, equipment, painReports: [...painReports, given] })
+    const started = after.bucket.find((e) => e.week === week && e.session.id === session.id)?.session ?? session
     const now = Date.now()
     setLive(
-      session.type === 'strength'
-        ? startLifts({ week, session, date: today, weights: day.workingWeights }, now)
-        : startRun({ week, session, date: today, environment: runContext(week, session).environment }, now),
+      started.type === 'strength'
+        ? startLifts({ week, session: started, date: today, weights: day.workingWeights }, now)
+        : startRun({ week, session: started, date: today, environment: runContext(week, session).environment }, now),
     )
     navigate(SCREEN_PATH.live)
   }
@@ -102,7 +130,7 @@ export function App() {
   const route = useRoute()
   const week =
     route.screen === 'week' || route.screen === 'log'
-      ? prescribedWeek(program, route.week ?? 0, logs, decisions, equipment)
+      ? prescribedWeek(program, route.week ?? 0, logs, decisions, equipment, { reports: painReports, today })
       : null
   const logged = route.screen === 'log' ? week?.sessions.find((s) => s.id === route.sessionId) : undefined
   const screen: Screen =
@@ -157,6 +185,7 @@ export function App() {
               onSettings={change}
               live={live}
               onStart={startLive}
+              onSomethingHurts={(score, area) => report(painReport(score, area, null, null))}
             />
           )}
           {screen === 'log' && week && logged && (
@@ -168,6 +197,7 @@ export function App() {
               today={today}
               defaultEnvironment={(date) => environmentOn(date, settings)}
               onSave={save}
+              onPain={(score, area) => report(painReport(score, area, week.number, logged.id))}
             />
           )}
           {screen === 'plan' && <Plan program={program} day={day} />}

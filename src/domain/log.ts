@@ -7,6 +7,7 @@
  */
 import { localDate, type LocalDate } from './calendar'
 import { ENVIRONMENTS, FIVE_K_SECONDS, type Environment } from './paces'
+import type { PainReport } from './pain'
 import { LIFTS, type LiftId } from './program/types'
 import { stations } from './program/program'
 import type { StationId } from './program/types'
@@ -102,6 +103,7 @@ export interface StationLog {
 export interface SyncState {
   sessionLogs: SessionLog[]
   suggestionDecisions: SuggestionDecision[]
+  painReports: PainReport[]
 }
 
 export const NOTES_MAX = 2000

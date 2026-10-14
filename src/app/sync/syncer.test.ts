@@ -40,7 +40,7 @@ function fakeServer(held: SessionLog[] = []): FakeServer {
       if (!server.online) return { kind: 'unreachable' }
       if (batch.some(server.refuses)) return { kind: 'refused' }
       server.logs = mergeLogs(server.logs, batch)
-      return { kind: 'taken', state: { sessionLogs: server.logs, suggestionDecisions: [] } }
+      return { kind: 'taken', state: { sessionLogs: server.logs, suggestionDecisions: [], painReports: [] } }
     },
   }
   return server

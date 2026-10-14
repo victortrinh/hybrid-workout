@@ -70,6 +70,7 @@ test('a full Strength session: a load change, RPEs, a missed rep, then the Coach
     'Squat 3 × 5 at 185 lb, RDL 3 × 6 at 135 lb · RPE 7',
   )
   await page.getByRole('button', { name: 'Start session' }).click()
+  await page.getByRole('button', { name: 'No. Let’s go' }).click()
 
   await expect(page).toHaveURL('/live')
   const band = page.locator('header')
@@ -191,6 +192,7 @@ test('Week 1 calibrates: ramp to RPE 7, and that load is the Working weight', as
   await bucket.getByRole('button', { name: /^Strength/ }).click()
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Strength, find Working weights')
   await page.getByRole('button', { name: 'Start session' }).click()
+  await page.getByRole('button', { name: 'No. Let’s go' }).click()
 
   const band = page.locator('header')
   await expect(band.locator('.stripe-num')).toHaveText('45')

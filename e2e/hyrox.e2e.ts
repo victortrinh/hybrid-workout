@@ -40,6 +40,7 @@ test('a three-round HYROX session, with a lighter sled from round 1 on', async (
   await bucketOf(page).getByRole('button', { name: /^HYROX/ }).click()
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('HYROX, 3 rounds')
   await page.getByRole('button', { name: 'Start session' }).click()
+  await page.getByRole('button', { name: 'No. Let’s go' }).click()
 
   await expect(page).toHaveURL('/live')
   const s = live(page)
@@ -143,6 +144,7 @@ test('half simulation A logs a split for every run and Station, in race order', 
   await bucketOf(page).getByRole('button', { name: /^Race simulation/ }).click()
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Race simulation, half A')
   await page.getByRole('button', { name: 'Start session' }).click()
+  await page.getByRole('button', { name: 'No. Let’s go' }).click()
 
   const s = live(page)
   await expect(s.block).toHaveText('Warm-up · 10 min')

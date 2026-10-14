@@ -282,8 +282,10 @@ export type LiveSession = LiveRun | LiveLifts
 
 export const isLifts = (live: LiveSession): live is LiveLifts => live.type === 'strength'
 
-/** The Session types Start session runs live. */
-export const isLive = (session: Session) => session.type === 'strength' || isLiveRunOrCircuit(session)
+/** What Start session runs: not a Session the pain rules turned into easy bike, with nothing left to lift or run. */
+export const isLive = (session: Session) =>
+  (session.type === 'strength' && session.blocks.some((b) => b.exercises.some((e) => e.prescription.kind === 'sets'))) ||
+  isLiveRunOrCircuit(session)
 
 export function parseLiveSession(value: unknown): LiveSession | null {
   return parseLiveLifts(value) ?? parseLiveRun(value)

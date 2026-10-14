@@ -129,6 +129,9 @@ function target(session: Session, main: Block[], run?: RunContext, weights?: Wor
         .filter(Boolean)
         .join(' · ')
     }
+    case 'note':
+      // Done by instruction, like the easy bike the pain rules swap in.
+      return main[0].exercises[0].note ?? ''
     default:
       return ''
   }
