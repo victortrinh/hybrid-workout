@@ -16,16 +16,17 @@ import {
 } from 'react-aria-components'
 import type { Activity } from '../../domain/activity'
 import { addDays, daysBetween, type LocalDate } from '../../domain/calendar'
-import { DISTANCE_METERS, LOGGED_STATUSES, logFor, NOTES_MAX, type LoggedStatus, type SessionLog } from '../../domain/log'
+import { DISTANCE_METERS, LOGGED_STATUSES, logDays, logFor, NOTES_MAX, type LoggedStatus, type SessionLog } from '../../domain/log'
 import { clock, FIVE_K_SECONDS, parseClock, type Environment } from '../../domain/paces'
 import type { PainArea } from '../../domain/pain'
 import { describeSession } from '../../domain/program/describe'
 import type { Session, Week } from '../../domain/program/types'
+import { outsideWeekLine } from '../coachCopy'
 import { Icon } from '../components/Icons'
 import { answered, PainFields, type PainAnswer } from '../components/PainFields'
 import { Segmented } from '../components/Segmented'
 import { activitySummary, km, longDay, nb, shortWeekday, STATUS_LABEL, timeOfDay } from '../format'
-import { navigate, SCREEN_PATH } from '../router'
+import { navigate, SCREEN_PATH, weekPath } from '../router'
 
 const linkClass =
   'inline-block py-2 text-[15px] font-bold text-link underline decoration-2 underline-offset-4 hover:decoration-[3px]'
@@ -77,15 +78,16 @@ export function LogAfter({
   treadmill: (activity: Activity) => boolean
 }) {
   const existing = logFor(logs, week.number, session.id)
-  const days = Array.from({ length: daysBetween(week.startDate, loggableUntil) + 1 }, (_, i) => addDays(week.startDate, i))
-  const last = days.at(-1)!
-  const lastDay = days.find((d) => d === today) ?? (daysBetween(today, last) < 0 ? last : null)
+  const { days, outside, when } = logDays(week.startDate, loggableUntil, today)
+  /** Early or late, it was opened from its Week: back there, not to Today. */
+  const back = when ? { href: weekPath(week.number), label: `← Week ${week.number}` } : { href: SCREEN_PATH.today, label: '← Today' }
 
   const onTreadmill = activity !== null && treadmill(activity)
   const [status, setStatus] = useState<LoggedStatus>(existing?.status ?? 'done')
   // The watch knows the day and how long it took better than a guess does.
-  const watchDay = activity && days.includes(activity.date) && daysBetween(activity.date, lastDay ?? activity.date) >= 0
-  const [date, setDate] = useState<LocalDate | null>(existing?.date ?? (watchDay ? activity.date : lastDay))
+  const watchDay =
+    activity && (days.includes(activity.date) || activity.date === outside) && daysBetween(activity.date, today) >= 0
+  const [date, setDate] = useState<LocalDate | null>(existing?.date ?? (watchDay ? activity.date : today))
   const [minutes, setMinutes] = useState(existing?.minutes ?? activity?.minutes ?? session.minutes)
   /** The treadmill console's distance in km; NaN while empty. */
   const [consoleKm, setConsoleKm] = useState(existing?.distanceMeters ? existing.distanceMeters / 1000 : NaN)
@@ -140,13 +142,13 @@ export function LogAfter({
       stations: trained ? (existing?.stations ?? []) : [],
       updatedAt: editedAt(existing),
     })
-    navigate(SCREEN_PATH.today)
+    navigate(back.href)
   }
 
   return (
     <div className="px-pad pt-4 desktop:max-w-plan desktop:px-gutter desktop:pt-7">
-      <Link href={SCREEN_PATH.today} className={linkClass}>
-        ← Today
+      <Link href={back.href} className={linkClass}>
+        {back.label}
       </Link>
       <p className="mt-2 text-label text-muted">
         {existing ? 'Edit log' : 'Log after'} · Week {week.number}
@@ -155,6 +157,9 @@ export function LogAfter({
         {nb(description.heading)}
       </h1>
       <p className="mt-1 text-body-quiet text-muted">{nb(description.summary)}</p>
+      {when && (
+        <p className="mt-2 text-body">{nb(outsideWeekLine(when, week.number, week.startDate, addDays(week.startDate, 6)))}</p>
+      )}
       {activity && (
         <section aria-labelledby="from-the-watch" className="mt-5 border-t-2 border-ink pt-3.5">
           <h2 id="from-the-watch" className="text-title-sm">
@@ -175,32 +180,31 @@ export function LogAfter({
         </section>
       )}
 
-      {!lastDay ? (
-        <p className="mt-6 text-body">Week {week.number} hasn’t started. Nothing to log yet.</p>
-      ) : (
-        <Form onSubmit={submit} className="mt-6 grid gap-6 border-t-2 border-ink pt-4">
-          <RadioGroup value={status} onChange={(v) => setStatus(v as LoggedStatus)} className="grid gap-2">
-            <Label className={groupLabel}>How did it go?</Label>
-            <div className="grid grid-cols-2 gap-1.5 min-[420px]:grid-cols-4">
-              {LOGGED_STATUSES.map((s) => (
-                <Radio key={s} value={s} className={toggleClass}>
-                  {STATUS_LABEL[s]}
-                </Radio>
-              ))}
-            </div>
-            <Text slot="description" className="text-body-quiet text-muted">
-              {STATUS_HINT[status]}
-            </Text>
-          </RadioGroup>
+      <Form onSubmit={submit} className="mt-6 grid gap-6 border-t-2 border-ink pt-4">
+        <RadioGroup value={status} onChange={(v) => setStatus(v as LoggedStatus)} className="grid gap-2">
+          <Label className={groupLabel}>How did it go?</Label>
+          <div className="grid grid-cols-2 gap-1.5 min-[420px]:grid-cols-4">
+            {LOGGED_STATUSES.map((s) => (
+              <Radio key={s} value={s} className={toggleClass}>
+                {STATUS_LABEL[s]}
+              </Radio>
+            ))}
+          </div>
+          <Text slot="description" className="text-body-quiet text-muted">
+            {STATUS_HINT[status]}
+          </Text>
+        </RadioGroup>
 
-          <RadioGroup value={date} onChange={(v) => setDate(v as LocalDate)} className="grid gap-2">
-            <Label className={groupLabel}>Day</Label>
+        <RadioGroup value={date} onChange={(v) => setDate(v as LocalDate)} className="grid gap-2">
+          <Label className={groupLabel}>Day</Label>
+          {/* Early, none of the Week's days has come yet: today is the only choice. */}
+          {when !== 'early' && (
             <div className="grid grid-cols-7 gap-1">
               {days.map((d) => (
                 <Radio
                   key={d}
                   value={d}
-                  isDisabled={daysBetween(d, lastDay) < 0}
+                  isDisabled={daysBetween(d, today) < 0}
                   aria-label={longDay(d)}
                   className={`${toggleClass} py-1 leading-tight`}
                 >
@@ -212,169 +216,176 @@ export function LogAfter({
                 </Radio>
               ))}
             </div>
-          </RadioGroup>
-
-          {result && (
-            <>
-              <TextField
-                value={time}
-                onChange={setTime}
-                isRequired
-                validate={validateTime}
-                inputMode="numeric"
-                className="grid gap-2"
-              >
-                {({ isInvalid }) => (
-                  <>
-                    <Label className={groupLabel}>5 km time</Label>
-                    <Input
-                      placeholder="mm:ss"
-                      autoComplete="off"
-                      className="h-11 w-32 rounded-sm bg-paper px-3 text-center text-[17px] font-bold shadow-[inset_0_0_0_2px_var(--edge)] outline-none placeholder:font-semibold placeholder:text-muted focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-link data-invalid:shadow-[inset_0_0_0_2px_var(--ink)]"
-                    />
-                    {/* The error takes the hint's place, so nothing below moves when it clears. */}
-                    {isInvalid ? (
-                      <FieldError className="text-body-quiet font-bold text-ink" />
-                    ) : (
-                      <Text slot="description" className="text-body-quiet text-muted">
-                        Minutes and seconds, like 23:00. It sets the Training paces.
-                      </Text>
-                    )}
-                  </>
-                )}
-              </TextField>
-
-              <Segmented
-                label="Where"
-                labelClassName={groupLabel}
-                className="max-w-72"
-                value={where}
-                options={[
-                  { value: 'indoor', label: 'Indoor' },
-                  { value: 'outdoor', label: 'Outdoor' },
-                ]}
-                onChange={setEnvironment}
-              />
-            </>
           )}
-
-          {trained && (
-            <>
-              <NumberField
-                value={minutes}
-                onChange={setMinutes}
-                minValue={1}
-                maxValue={600}
-                className="grid gap-2"
-              >
-                <Label className={groupLabel}>Duration, minutes</Label>
-                <Group className="flex gap-1.5">
-                  <Button slot="decrement" className={`${toggleClass} size-11 shrink-0`}>
-                    <Icon name="minus" />
-                  </Button>
-                  <Input className="h-11 w-24 rounded-sm bg-paper px-3 text-center text-[17px] font-bold shadow-[inset_0_0_0_2px_var(--edge)] outline-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-link" />
-                  <Button slot="increment" className={`${toggleClass} size-11 shrink-0`}>
-                    <Icon name="plus" />
-                  </Button>
-                </Group>
-              </NumberField>
-
-              {onTreadmill && (
-                <NumberField
-                  value={consoleKm}
-                  onChange={setConsoleKm}
-                  minValue={DISTANCE_METERS[0] / 1000}
-                  maxValue={DISTANCE_METERS[1] / 1000}
-                  step={0.01}
-                  formatOptions={{ maximumFractionDigits: 2 }}
-                  className="grid gap-2"
-                >
-                  <Label className={groupLabel}>Console distance, km</Label>
-                  <Input
-                    inputMode="decimal"
-                    className="h-11 w-32 rounded-sm bg-paper px-3 text-center text-[17px] font-bold shadow-[inset_0_0_0_2px_var(--edge)] outline-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-link"
-                  />
-                  <Text slot="description" className="text-body-quiet text-muted">
-                    What the treadmill says. The watch guesses indoors.
-                  </Text>
-                </NumberField>
-              )}
-
-              <RadioGroup
-                value={rpe === null ? null : String(rpe)}
-                onChange={(v) => setRpe(Number(v))}
-                className="grid gap-2"
-              >
-                <Label className={groupLabel}>Overall RPE</Label>
-                <div className="grid grid-cols-5 gap-1.5">
-                  {Array.from({ length: 10 }, (_, i) => String(i + 1)).map((v) => (
-                    <Radio key={v} value={v} className={toggleClass}>
-                      {v}
-                    </Radio>
-                  ))}
-                </div>
-                <Text slot="description" className="text-body-quiet text-muted">
-                  The whole Session. 7 is about three reps left in the tank; 10 is nothing left.
-                </Text>
-              </RadioGroup>
-            </>
-          )}
-
-          <RadioGroup
-            value={hurts}
-            onChange={(v) => {
-              setHurts(v as 'no' | 'yes')
-              setPainMissing(false)
-            }}
-            className="grid gap-2"
-          >
-            <Label className={groupLabel}>Anything hurt?</Label>
-            <div className="grid max-w-72 grid-cols-2 gap-1.5">
-              <Radio value="no" className={toggleClass}>
-                No
-              </Radio>
-              <Radio value="yes" className={toggleClass}>
-                Yes
+          {outside && (
+            <div className="grid grid-cols-2 gap-1 min-[420px]:grid-cols-4">
+              <Radio value={outside} aria-label={`Today, ${longDay(outside)}`} className={toggleClass}>
+                {nb(`Today · ${shortWeekday(outside)} ${Number(outside.slice(8))}`)}
               </Radio>
             </div>
-            <Text slot="description" className={`text-body-quiet ${painMissing ? 'font-bold text-ink' : 'text-muted'}`}>
-              {painMissing ? 'How bad and where, first. Or No.' : 'Pain changes what the Coach lets you do next.'}
-            </Text>
-          </RadioGroup>
-          {hurts === 'yes' && (
-            <PainFields
-              value={pain}
-              onChange={(p) => {
-                setPain(p)
-                setPainMissing(false)
-              }}
-            />
           )}
+        </RadioGroup>
 
-          <TextField value={notes} onChange={setNotes} maxLength={NOTES_MAX} className="grid gap-2">
-            <Label className={groupLabel}>Notes</Label>
-            <TextArea
-              rows={3}
-              className="rounded-sm bg-paper px-3 py-2.5 text-[17px] shadow-[inset_0_0_0_2px_var(--edge)] outline-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-link"
+        {result && (
+          <>
+            <TextField
+              value={time}
+              onChange={setTime}
+              isRequired
+              validate={validateTime}
+              inputMode="numeric"
+              className="grid gap-2"
+            >
+              {({ isInvalid }) => (
+                <>
+                  <Label className={groupLabel}>5 km time</Label>
+                  <Input
+                    placeholder="mm:ss"
+                    autoComplete="off"
+                    className="h-11 w-32 rounded-sm bg-paper px-3 text-center text-[17px] font-bold shadow-[inset_0_0_0_2px_var(--edge)] outline-none placeholder:font-semibold placeholder:text-muted focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-link data-invalid:shadow-[inset_0_0_0_2px_var(--ink)]"
+                  />
+                  {/* The error takes the hint's place, so nothing below moves when it clears. */}
+                  {isInvalid ? (
+                    <FieldError className="text-body-quiet font-bold text-ink" />
+                  ) : (
+                    <Text slot="description" className="text-body-quiet text-muted">
+                      Minutes and seconds, like 23:00. It sets the Training paces.
+                    </Text>
+                  )}
+                </>
+              )}
+            </TextField>
+
+            <Segmented
+              label="Where"
+              labelClassName={groupLabel}
+              className="max-w-72"
+              value={where}
+              options={[
+                { value: 'indoor', label: 'Indoor' },
+                { value: 'outdoor', label: 'Outdoor' },
+              ]}
+              onChange={setEnvironment}
             />
-          </TextField>
+          </>
+        )}
 
-          <div className="flex gap-2.5">
-            <Button
-              type="submit"
-              className="min-h-[54px] flex-1 cursor-pointer rounded-sm bg-cobalt px-5 text-[17px] font-bold text-on-cobalt hover:bg-cobalt-hover data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-link desktop:flex-none"
+        {trained && (
+          <>
+            <NumberField
+              value={minutes}
+              onChange={setMinutes}
+              minValue={1}
+              maxValue={600}
+              className="grid gap-2"
             >
-              Save log
-            </Button>
-            <Link
-              href={SCREEN_PATH.today}
-              className="inline-grid min-h-[54px] place-items-center rounded-sm px-5 text-[17px] font-bold text-ink no-underline shadow-[inset_0_0_0_2px_var(--ink)] hover:bg-sunk"
+              <Label className={groupLabel}>Duration, minutes</Label>
+              <Group className="flex gap-1.5">
+                <Button slot="decrement" className={`${toggleClass} size-11 shrink-0`}>
+                  <Icon name="minus" />
+                </Button>
+                <Input className="h-11 w-24 rounded-sm bg-paper px-3 text-center text-[17px] font-bold shadow-[inset_0_0_0_2px_var(--edge)] outline-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-link" />
+                <Button slot="increment" className={`${toggleClass} size-11 shrink-0`}>
+                  <Icon name="plus" />
+                </Button>
+              </Group>
+            </NumberField>
+
+            {onTreadmill && (
+              <NumberField
+                value={consoleKm}
+                onChange={setConsoleKm}
+                minValue={DISTANCE_METERS[0] / 1000}
+                maxValue={DISTANCE_METERS[1] / 1000}
+                step={0.01}
+                formatOptions={{ maximumFractionDigits: 2 }}
+                className="grid gap-2"
+              >
+                <Label className={groupLabel}>Console distance, km</Label>
+                <Input
+                  inputMode="decimal"
+                  className="h-11 w-32 rounded-sm bg-paper px-3 text-center text-[17px] font-bold shadow-[inset_0_0_0_2px_var(--edge)] outline-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-link"
+                />
+                <Text slot="description" className="text-body-quiet text-muted">
+                  What the treadmill says. The watch guesses indoors.
+                </Text>
+              </NumberField>
+            )}
+
+            <RadioGroup
+              value={rpe === null ? null : String(rpe)}
+              onChange={(v) => setRpe(Number(v))}
+              className="grid gap-2"
             >
-              Cancel
-            </Link>
+              <Label className={groupLabel}>Overall RPE</Label>
+              <div className="grid grid-cols-5 gap-1.5">
+                {Array.from({ length: 10 }, (_, i) => String(i + 1)).map((v) => (
+                  <Radio key={v} value={v} className={toggleClass}>
+                    {v}
+                  </Radio>
+                ))}
+              </div>
+              <Text slot="description" className="text-body-quiet text-muted">
+                The whole Session. 7 is about three reps left in the tank; 10 is nothing left.
+              </Text>
+            </RadioGroup>
+          </>
+        )}
+
+        <RadioGroup
+          value={hurts}
+          onChange={(v) => {
+            setHurts(v as 'no' | 'yes')
+            setPainMissing(false)
+          }}
+          className="grid gap-2"
+        >
+          <Label className={groupLabel}>Anything hurt?</Label>
+          <div className="grid max-w-72 grid-cols-2 gap-1.5">
+            <Radio value="no" className={toggleClass}>
+              No
+            </Radio>
+            <Radio value="yes" className={toggleClass}>
+              Yes
+            </Radio>
           </div>
-        </Form>
-      )}
+          <Text slot="description" className={`text-body-quiet ${painMissing ? 'font-bold text-ink' : 'text-muted'}`}>
+            {painMissing ? 'How bad and where, first. Or No.' : 'Pain changes what the Coach lets you do next.'}
+          </Text>
+        </RadioGroup>
+        {hurts === 'yes' && (
+          <PainFields
+            value={pain}
+            onChange={(p) => {
+              setPain(p)
+              setPainMissing(false)
+            }}
+          />
+        )}
+
+        <TextField value={notes} onChange={setNotes} maxLength={NOTES_MAX} className="grid gap-2">
+          <Label className={groupLabel}>Notes</Label>
+          <TextArea
+            rows={3}
+            className="rounded-sm bg-paper px-3 py-2.5 text-[17px] shadow-[inset_0_0_0_2px_var(--edge)] outline-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-link"
+          />
+        </TextField>
+
+        <div className="flex gap-2.5">
+          <Button
+            type="submit"
+            className="min-h-[54px] flex-1 cursor-pointer rounded-sm bg-cobalt px-5 text-[17px] font-bold text-on-cobalt hover:bg-cobalt-hover data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-link desktop:flex-none"
+          >
+            Save log
+          </Button>
+          <Link
+            href={back.href}
+            className="inline-grid min-h-[54px] place-items-center rounded-sm px-5 text-[17px] font-bold text-ink no-underline shadow-[inset_0_0_0_2px_var(--ink)] hover:bg-sunk"
+          >
+            Cancel
+          </Link>
+        </div>
+      </Form>
     </div>
   )
 }

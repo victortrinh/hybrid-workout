@@ -19,7 +19,7 @@ A numbered Monday–Sunday period of the Program, counted back from Race day.
 _Avoid_: microcycle
 
 **Bucket**:
-The set of Sessions a Week prescribes, done on any day and in any order within that Week.
+The set of Sessions a Week prescribes, done on any day and in any order within that Week. A Session may also be done early or late, outside its Week; it still counts for its own Week.
 _Avoid_: schedule, calendar
 
 **Deload week**:

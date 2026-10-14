@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { logFor, mergeLogs, parseSessionLog, type SessionLog } from './log'
+import { localDate } from './calendar'
+import { logDays, logFor, mergeLogs, parseSessionLog, type SessionLog } from './log'
 
 const valid = {
   id: '3f0c9a52-6f1e-4c55-9a6b-0b5f0f2b7e11',
@@ -139,5 +140,31 @@ describe('logFor', () => {
     expect(logFor([later, a], 3, 'threshold')).toBe(later)
     expect(logFor([a], 3, 'speed')).toBeNull()
     expect(logFor([a], 4, 'threshold')).toBeNull()
+  })
+})
+
+describe('logDays', () => {
+  const monday = localDate('2026-11-02')
+  const sunday = localDate('2026-11-08')
+  const week = ['02', '03', '04', '05', '06', '07', '08'].map((d) => `2026-11-${d}`)
+
+  it('offers the Week up to today, and nothing else, inside the Week', () => {
+    expect(logDays(monday, sunday, localDate('2026-11-04'))).toEqual({ days: week, outside: null, when: null })
+  })
+
+  it('offers today on its own before the Week starts', () => {
+    expect(logDays(monday, sunday, localDate('2026-10-14'))).toEqual({ days: week, outside: '2026-10-14', when: 'early' })
+  })
+
+  it('offers today as well once the Week is over', () => {
+    expect(logDays(monday, sunday, localDate('2026-11-20'))).toEqual({ days: week, outside: '2026-11-20', when: 'late' })
+  })
+
+  it('keeps a carried Key session in its window through the carry-over', () => {
+    const wednesday = localDate('2026-11-11')
+    const days = logDays(monday, wednesday, localDate('2026-11-10'))
+    expect(days.days).toHaveLength(10)
+    expect(days.when).toBeNull()
+    expect(logDays(monday, wednesday, localDate('2026-11-12')).when).toBe('late')
   })
 })

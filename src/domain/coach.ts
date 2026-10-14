@@ -486,6 +486,8 @@ export const RE_ENTRY_SKIPS = 2
 interface PainInput {
   reports: PainReport[]
   today: LocalDate
+  /** A Session of this Week done today, early or late: today's pain counts for it too. */
+  doneToday?: boolean
 }
 
 function suggestionsFor(
@@ -503,11 +505,16 @@ function suggestionsFor(
 /**
  * The pain rules, while a Pain report of 3 or more, or a rising one, stands:
  * bike for jumps and accelerations and about 30% fewer reps, or from 5 easy
- * low-impact work or rest. Only for the Week holding today.
+ * low-impact work or rest. Only for the Week holding today, or a Session of
+ * another Week done today.
  */
-function painFor(week: Week, { reports, today }: PainInput, decisions: SuggestionDecision[]): PainSuggestion | null {
+function painFor(
+  week: Week,
+  { reports, today, doneToday = false }: PainInput,
+  decisions: SuggestionDecision[],
+): PainSuggestion | null {
   const offset = daysBetween(week.startDate, today)
-  if (offset < 0 || offset > 6) return null
+  if (!doneToday && (offset < 0 || offset > 6)) return null
   const standing = standingPain(reports, today)
   if (!standing) return null
   const { report, previous } = standing

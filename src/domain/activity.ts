@@ -253,11 +253,12 @@ export type ActivityOutcome =
   | { activity: Activity; state: 'dismissed' }
 
 /**
- * Matches each Activity to a Session of its Week by date and Session type.
- * The athlete's answers come first. Then, in start order, an Activity
- * attaches to the one fitting Session logged as trained on its day, or, with
- * none logged that day, the one fitting Session still Planned; with more than
- * one, it asks. A Session takes at most one Activity.
+ * Matches each Activity to a Session by date and Session type. The athlete's
+ * answers come first. Then, in start order, an Activity attaches to the one
+ * fitting Session logged as trained on its day, of any Week (done early or
+ * late), or, with none logged that day, the one fitting Session of its own
+ * Week still Planned; with more than one, it asks. A Session takes at most
+ * one Activity.
  */
 export function matchActivities(
   program: Program,
@@ -282,13 +283,20 @@ export function matchActivities(
 
   for (const activity of ordered) {
     if (outcomes.has(activity.id)) continue
+    const fits = (week: number, session: Session) =>
+      FITS[activity.kind].includes(session.type) && !claimed.has(`${week}/${session.id}`)
+    const doneThatDay = new Map<string, Candidate>()
+    for (const l of logs) {
+      const session = findWeek(program, l.week)?.sessions.find((s) => s.id === l.sessionId)
+      if (session && l.date === activity.date && trained(l) && fits(l.week, session)) {
+        doneThatDay.set(`${l.week}/${session.id}`, { week: l.week, session })
+      }
+    }
     const week = weekOn(program, activity.date)
-    const fitting = (week?.sessions ?? [])
-      .filter((s) => FITS[activity.kind].includes(s.type) && !claimed.has(`${week!.number}/${s.id}`))
-      .map((session) => ({ session, logs: logs.filter((l) => l.week === week!.number && l.sessionId === session.id) }))
-    const doneThatDay = fitting.filter((f) => f.logs.some((l) => l.date === activity.date && trained(l)))
-    const planned = fitting.filter((f) => f.logs.length === 0)
-    const candidates = (doneThatDay.length > 0 ? doneThatDay : planned).map((f) => ({ week: week!.number, session: f.session }))
+    const planned = (week?.sessions ?? [])
+      .filter((s) => fits(week!.number, s) && !logs.some((l) => l.week === week!.number && l.sessionId === s.id))
+      .map((session) => ({ week: week!.number, session }))
+    const candidates = doneThatDay.size > 0 ? [...doneThatDay.values()] : planned
     if (candidates.length === 1) {
       const [{ week: number, session }] = candidates
       claimed.add(`${number}/${session.id}`)

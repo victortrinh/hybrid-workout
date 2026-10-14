@@ -1,31 +1,50 @@
-import { Link } from 'react-aria-components'
-import { addDays } from '../../domain/calendar'
+import { useState } from 'react'
+import { Button, Link } from 'react-aria-components'
+import { addDays, daysBetween } from '../../domain/calendar'
 import type { CoachDay } from '../../domain/coach'
+import { isLive, type LiveSession } from '../../domain/lifts'
+import { logFor, trained, type SessionLog } from '../../domain/log'
 import { clock, type RunContext } from '../../domain/paces'
 import { describeExercise, describeSession, SESSION_TYPES } from '../../domain/program/describe'
 import type { Program, Session, Week } from '../../domain/program/types'
 import type { WorkingWeights } from '../../domain/weights'
+import { outsideWeekLine } from '../coachCopy'
+import { lineAction, primaryAction } from '../components/actions'
 import { LaneChip } from '../components/LaneChip'
-import { longDay, nb, shortDay, weekRange } from '../format'
-import { SCREEN_PATH, weekPath } from '../router'
+import { PainStep, type PainAtStart } from '../components/PainStep'
+import { longDay, nb, shortDay, STATUS_LABEL, weekRange } from '../format'
+import { logPath, SCREEN_PATH, weekPath } from '../router'
 import { weekMark } from './Plan'
 
 const linkClass =
   'inline-block py-2 text-[15px] font-bold text-link underline decoration-2 underline-offset-4 hover:decoration-[3px]'
 
-/** One Week: its dates, Phase and marks, then every Session of the Bucket with its Prescriptions. */
+/**
+ * One Week: its dates, Phase and marks, then every Session of the Bucket with
+ * its Prescriptions. Outside the Week Today runs, each Session can be started
+ * or logged from here, early or late; it still counts for this Week.
+ */
 export function WeekScreen({
   program,
   week,
   day,
   runContext,
+  logs,
+  live,
+  onStart,
 }: {
   program: Program
   week: Week
   day: CoachDay
   /** How each Session's runs read: exact speeds or paces once there is a 5K test. */
   runContext: (week: number, session: Session) => RunContext
+  logs: SessionLog[]
+  live: LiveSession | null
+  onStart: (week: number, session: Session, pain: PainAtStart) => void
 }) {
+  const [asking, setAsking] = useState<string | null>(null)
+  /** The Session whose pain step was just dismissed, to put focus back on its Start. */
+  const [dismissed, setDismissed] = useState<string | null>(null)
   const phase = program.phases.find((p) => week.number >= p.firstWeek && week.number <= p.lastWeek)
   const current = day.position.kind === 'in-week' && day.position.week === week.number
   const mark = weekMark(week)
@@ -34,6 +53,9 @@ export function WeekScreen({
   // Loads from today's Working weights, for this Week and later ones: a past Week's are in its logs.
   const past = day.position.kind === 'finished' || (day.position.kind === 'in-week' && week.number < day.position.week)
   const weights = past ? undefined : day.workingWeights
+  const sunday = addDays(week.startDate, 6)
+  /** Early or late: whatever is done here today still counts for this Week. */
+  const when = current ? null : daysBetween(day.today, week.startDate) > 0 ? 'early' : daysBetween(sunday, day.today) > 0 ? 'late' : null
 
   return (
     <div className="px-pad pt-4 desktop:max-w-plan desktop:px-gutter desktop:pt-7">
@@ -48,6 +70,8 @@ export function WeekScreen({
           .filter(Boolean)
           .join(' · ')}
       </p>
+
+      {when && <p className="mt-2 text-body">{nb(outsideWeekLine(when, week.number, week.startDate, sunday))}</p>}
 
       <p className="mt-1 text-body-quiet text-muted">
         {day.fiveKTest?.resultSeconds
@@ -70,7 +94,36 @@ export function WeekScreen({
           program={program}
           run={runContext(week.number, session)}
           weights={weights}
-        />
+        >
+          {current ? (
+            <p className="mt-3 text-body-quiet text-muted">
+              This Week runs from{' '}
+              <Link href={SCREEN_PATH.today} className={linkClass}>
+                Today
+              </Link>
+              .
+            </p>
+          ) : (
+            <SessionActions
+              week={week.number}
+              session={session}
+              headingId={`session-${session.id}`}
+              log={logFor(logs, week.number, session.id)}
+              live={live}
+              asking={asking === session.id}
+              refocus={dismissed === session.id}
+              previousPain={day.pain?.report.score ?? null}
+              onAsk={(ask) => {
+                setAsking(ask ? session.id : null)
+                setDismissed(ask ? null : session.id)
+              }}
+              onStart={(pain) => {
+                setAsking(null)
+                onStart(week.number, session, pain)
+              }}
+            />
+          )}
+        </SessionDetail>
       ))}
 
       <nav aria-label="Other Weeks" className="mt-8 flex justify-between gap-3 border-t-2 border-ink pt-2">
@@ -91,16 +144,98 @@ export function WeekScreen({
   )
 }
 
+/**
+ * Start session and Log after for a Session of another Week. Start is a line
+ * button, not cobalt: a Week has no single answer, Today does. Start asks the
+ * pain step first, as Today does; a trained log leaves only Edit log. While
+ * a Live session runs, only its own Session offers Resume.
+ */
+function SessionActions({
+  week,
+  session,
+  headingId,
+  log,
+  live,
+  asking,
+  refocus,
+  previousPain,
+  onAsk,
+  onStart,
+}: {
+  week: number
+  session: Session
+  /** The Session's heading: every action names the Session it acts on. */
+  headingId: string
+  log: SessionLog | null
+  live: LiveSession | null
+  asking: boolean
+  /** Back from the pain step with "Not now": focus returns to Start session. */
+  refocus: boolean
+  previousPain: number | null
+  onAsk: (asking: boolean) => void
+  onStart: (pain: PainAtStart) => void
+}) {
+  if (asking && !live) return <PainStep previous={previousPain} onAnswer={onStart} onCancel={() => onAsk(false)} />
+  const running = live !== null && live.week === week && live.sessionId === session.id
+  const startable = isLive(session) && !(log && trained(log))
+  const status = log ? `${STATUS_LABEL[log.status]}, ${shortDay(log.date)}` : null
+  const statusId = `${headingId}-status`
+  return (
+    <div className="mt-3">
+      {(status || (live && !running && startable)) && (
+        <p id={statusId} className="text-body-quiet text-muted">
+          {[status, live && !running && startable && nb(`${live.heading} is running. Finish it first.`)]
+            .filter(Boolean)
+            .join(' · ')}
+        </p>
+      )}
+      <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1">
+        {running ? (
+          <Link
+            href={SCREEN_PATH.live}
+            aria-describedby={headingId}
+            className={`${primaryAction} no-underline desktop:flex-none`}
+          >
+            Resume
+          </Link>
+        ) : (
+          startable &&
+          !live && (
+            <Button
+              autoFocus={refocus}
+              onPress={() => onAsk(true)}
+              aria-describedby={headingId}
+              className={`${lineAction} flex-none`}
+            >
+              Start session
+            </Button>
+          )
+        )}
+        <Link
+          href={logPath(week, session.id)}
+          aria-describedby={status ? `${headingId} ${statusId}` : headingId}
+          className={linkClass}
+        >
+          {log ? 'Edit log' : 'Log after'}
+        </Link>
+      </div>
+    </div>
+  )
+}
+
 function SessionDetail({
   session,
   program,
   run,
   weights,
+  children,
 }: {
   session: Session
   program: Program
   run: RunContext
   weights?: WorkingWeights
+  /** What can be done with it: start or log it, or where to from. */
+  children?: React.ReactNode
 }) {
   const description = describeSession(session, run, weights)
   const headingId = `session-${session.id}`
@@ -116,6 +251,7 @@ function SessionDetail({
         {[description.meta, session.date && longDay(session.date)].filter(Boolean).join(' · ')}
       </p>
       {session.note && <p className="mt-1.5 text-body">{session.note}</p>}
+      {children}
 
       {session.blocks.map((block, i) => (
         <div key={`${block.name}-${i}`} className="mt-4">

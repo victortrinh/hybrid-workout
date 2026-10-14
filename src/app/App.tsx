@@ -5,7 +5,7 @@ import { Link, RouterProvider } from 'react-aria-components'
 import { coach, findWeek, keyDeadline, prescribedWeek, type CoachDay } from '../domain/coach'
 import { liftsLog, startLifts } from '../domain/lifts'
 import { liveLog, startRun } from '../domain/live'
-import { logFor, type SessionLog } from '../domain/log'
+import { logDays, logFor, type SessionLog } from '../domain/log'
 import type { Environment, RunContext } from '../domain/paces'
 import type { PainArea, PainReport } from '../domain/pain'
 import { mergeDecisions, painId } from '../domain/suggestion'
@@ -24,7 +24,8 @@ import { Workouts } from './screens/Workouts'
 import { unlockSound } from './liveCues'
 import { Live } from './screens/Live'
 import { LogAfter } from './screens/LogAfter'
-import { Today, type PainAtStart } from './screens/Today'
+import type { PainAtStart } from './components/PainStep'
+import { Today } from './screens/Today'
 import { WeekScreen } from './screens/Week'
 import { useActivities } from './useActivities'
 import { usePicked } from './usePicked'
@@ -133,7 +134,15 @@ export function App() {
       activities,
       activityAnswers,
     })
-    const started = after.bucket.find((e) => e.week === week && e.session.id === session.id)?.session ?? session
+    // Early or late, the Session isn't in the Bucket: its own Week, with the same pain rules.
+    const started =
+      after.bucket.find((e) => e.week === week && e.session.id === session.id)?.session ??
+      prescribedWeek(program, week, logs, decided, equipment, {
+        reports: [...painReports, given],
+        today,
+        doneToday: true,
+      })?.sessions.find((s) => s.id === session.id) ??
+      session
     const now = Date.now()
     setLive(
       started.type === 'strength'
@@ -164,7 +173,10 @@ export function App() {
   const screen: Screen =
     (route.screen === 'week' && !week) || (route.screen === 'log' && !logged) ? 'not-found' : route.screen
   useScreenChange(screen, screen === 'week' && week ? `Week ${week.number}` : TITLES[screen], route)
-  const navScreen = NAV_SCREEN[screen] ?? screen
+  const loggableUntil = week && logged ? (logged.key ? keyDeadline(program, week) : addDays(week.startDate, 6)) : null
+  // A Session logged early or late was opened from its Week, under Plan.
+  const outsideWeek = week && loggableUntil ? logDays(week.startDate, loggableUntil, today).when !== null : false
+  const navScreen = screen === 'log' && outsideWeek ? 'plan' : (NAV_SCREEN[screen] ?? screen)
 
   if (screen === 'live') {
     // Full screen, no navigation: nothing on it moves or competes with the clock.
@@ -225,7 +237,7 @@ export function App() {
             <LogAfter
               week={week}
               session={logged}
-              lastDay={logged.key ? keyDeadline(program, week) : addDays(week.startDate, 6)}
+              lastDay={loggableUntil!}
               logs={logs}
               today={today}
               defaultEnvironment={(date) => environmentOn(date, settings)}
@@ -236,7 +248,17 @@ export function App() {
             />
           )}
           {screen === 'plan' && <Plan program={program} day={day} />}
-          {screen === 'week' && week && <WeekScreen program={program} week={week} day={day} runContext={runContext} />}
+          {screen === 'week' && week && (
+            <WeekScreen
+              program={program}
+              week={week}
+              day={day}
+              runContext={runContext}
+              logs={logs}
+              live={live}
+              onStart={startLive}
+            />
+          )}
           {screen === 'progress' && <Progress program={program} day={day} logs={logs} recoveryNights={recoveryNights} unit={settings.unit} />}
           {screen === 'shortcut' && <Shortcut nights={recoveryNights} />}
           {screen === 'workouts' && <Workouts activities={activities} />}

@@ -2,11 +2,12 @@
  * The Coach's words for a Suggestion, from its facts. Blunt, a little funny,
  * and always with the number and the reason (PRODUCT.md, Coach voice).
  */
+import type { LocalDate } from '../domain/calendar'
 import { PAIN_AREA_LABEL, PAIN_REPS_PERCENT, type PainLevel } from '../domain/pain'
 import { LIFT_NAME, SESSION_TYPES } from '../domain/program/describe'
 import { EASY_DAY_MINUTES, SLEEP_RPE_CAP, sleepText } from '../domain/recovery'
 import type { Suggestion } from '../domain/suggestion'
-import { plural } from './format'
+import { plural, shortDay } from './format'
 
 export interface SuggestionCopy {
   /** The change and the reason, while it is Open. */
@@ -115,4 +116,11 @@ function painChange(level: PainLevel): string {
 /** "Speed", "Speed and HYROX", "Speed, Strength and HYROX" */
 function list(items: string[]): string {
   return items.length <= 1 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`
+}
+
+/** A Session done outside its Week, on the Week screen and in Log after: which Week it still counts for. */
+export function outsideWeekLine(when: 'early' | 'late', week: number, startDate: LocalDate, sunday: LocalDate): string {
+  return when === 'early'
+    ? `Early. Week ${week} starts ${shortDay(startDate)}. Anything done today counts for Week ${week}.`
+    : `Late. Week ${week} closed ${shortDay(sunday)}. Better late than Skipped: anything done today counts for Week ${week}.`
 }

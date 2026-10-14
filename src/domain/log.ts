@@ -5,7 +5,7 @@
  * device, so a log can be written before the server has seen it; on sync the
  * later `updatedAt` wins, per log.
  */
-import { localDate, type LocalDate } from './calendar'
+import { addDays, daysBetween, localDate, type LocalDate } from './calendar'
 import { ENVIRONMENTS, FIVE_K_SECONDS, type Environment } from './paces'
 import type { Activity, ActivityAnswer } from './activity'
 import type { PainReport } from './pain'
@@ -294,4 +294,23 @@ export function logFor(logs: SessionLog[], week: number, sessionId: string): Ses
     if (!latest || log.updatedAt > latest.updatedAt) latest = log
   }
   return latest
+}
+
+export interface LogDays {
+  /** The Session's own days, Monday to its last day: those after today can't be picked. */
+  days: LocalDate[]
+  /** Today, when it falls outside those days: the Session done early or late. */
+  outside: LocalDate | null
+  /** Before the Session's Week starts, or after its last day has passed. */
+  when: 'early' | 'late' | null
+}
+
+/**
+ * The days a Session can be logged on: any day of its Week up to today, or,
+ * done early or late, today itself. It still counts for its own Week.
+ */
+export function logDays(startDate: LocalDate, lastDay: LocalDate, today: LocalDate): LogDays {
+  const days = Array.from({ length: daysBetween(startDate, lastDay) + 1 }, (_, i) => addDays(startDate, i))
+  const when = daysBetween(startDate, today) < 0 ? 'early' : daysBetween(lastDay, today) > 0 ? 'late' : null
+  return { days, outside: when ? today : null, when }
 }

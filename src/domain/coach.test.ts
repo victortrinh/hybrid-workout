@@ -823,6 +823,21 @@ describe('the pain rules', () => {
     }
   })
 
+  it('apply to a Session of another Week done today, early or late, and only then', () => {
+    const report = pain('2026-11-04', 4)
+    const decisions = [painDecision(report, 'accepted')]
+    const reports = { reports: [report], today: localDate('2026-11-04') }
+    const asWritten = (week: number) => prescribedWeek(program, week, [], decisions)!
+    const withPainToday = (week: number, doneToday: boolean) =>
+      prescribedWeek(program, week, [], decisions, undefined, { ...reports, doneToday })!
+    expect(withPainToday(5, false)).toEqual(asWritten(5))
+    for (const week of [1, 5]) {
+      const names = (w: ReturnType<typeof asWritten>) => w.sessions[0].blocks.flatMap((b) => b.exercises.map((e) => e.name))
+      expect(names(asWritten(week))).toContain('Accelerations')
+      expect(names(withPainToday(week, true))).not.toContain('Accelerations')
+    }
+  })
+
   it('count rising pain, higher than the report before, as pain 3', () => {
     const before = pain('2026-11-03', 1)
     const rising = pain('2026-11-04', 2)
