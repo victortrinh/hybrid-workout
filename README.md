@@ -21,6 +21,16 @@ npm run dev
 
 This opens the app at http://localhost:5173 with hot reload. The Worker runs alongside it in workerd, so `/api/*` and the D1 binding work in development too (try http://localhost:5173/api/health). Local D1 data is kept in `.wrangler/state`; run `npm run db:migrate:local` again whenever `migrations/` gains a file.
 
+### Mock mode
+
+```bash
+npm run dev:mock
+```
+
+The app with no Worker or database behind it, for QA ([ADR-0005](docs/adr/0005-qa-mocks-msw-over-in-browser-hono.md)). Mock Service Worker answers every `/api/*` request in the browser with the Worker's own Hono app, on SQLite in WebAssembly (sql.js) with every migration applied. Data lives in the tab's session storage: it survives a reload and goes when the tab closes. A **MOCK** badge on every screen says so. The Shortcut routes take the mock service token's headers, `CF-Access-Client-Id: mock-shortcut.access` and `CF-Access-Client-Secret: mock-shortcut-secret` (`src/mock/api.ts`).
+
+`npm run build:mock` builds the same thing into `dist/`. Mock builds don't register the offline service worker (`/sw.js`), since a page has only one service worker and Mock Service Worker is it. Nothing of mock mode reaches a normal build; CI checks with `npm run check:no-mocks`.
+
 ## Test
 
 ```bash
@@ -72,8 +82,9 @@ Production is the Worker on its workers.dev address, behind Cloudflare Access wi
 src/domain/   Pure TypeScript: calendar (local dates in Toronto), the Program as data, the Coach
 src/app/      The React app: shell, screens, components, design tokens (styles.css)
 src/worker/   The Hono API and the Worker entry
+src/mock/     Mock mode: the Worker's app in the browser, on sql.js (ADR-0005)
 migrations/   D1 migrations, applied with Wrangler
-scripts/      Small Node scripts (check:access)
+scripts/      Small Node scripts (check:access, check:no-mocks)
 e2e/          Playwright + axe specs
 prototype/    The approved clickable prototype (reference only)
 ```

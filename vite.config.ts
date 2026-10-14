@@ -4,12 +4,24 @@ import react from '@vitejs/plugin-react'
 import { createHash } from 'node:crypto'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
-import { defineConfig, type Plugin } from 'vite'
+import { msw } from 'msw/vite'
+import { fileURLToPath } from 'node:url'
+import { defineConfig, loadEnv, type Plugin } from 'vite'
 
 // One dev server for everything: Vite serves the app with HMR and the
 // Cloudflare plugin runs the Worker (Hono + D1) in workerd beside it.
-export default defineConfig({
-  plugins: [react(), tailwindcss(), cloudflare(), serviceWorker()],
+//
+// Mock mode (`--mode mock`, or VITE_API=mock; ADR-0005) answers /api/* in the
+// browser instead: Mock Service Worker's script is served and built in place
+// of /sw.js, and `virtual:compromised-mock` resolves to src/mock/browser.ts.
+export default defineConfig(({ mode }) => {
+  const mock = loadEnv(mode, process.cwd(), 'VITE_').VITE_API === 'mock'
+  return {
+    plugins: [react(), tailwindcss(), cloudflare(), mock ? msw({ mode: 'worker-only' }) : serviceWorker()],
+    resolve: {
+      alias: { 'virtual:compromised-mock': fileURLToPath(new URL('src/mock/browser.ts', import.meta.url)) },
+    },
+  }
 })
 
 /**
