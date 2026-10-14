@@ -46,3 +46,24 @@ test('in Week 3, a Week 1 Session never done is started late from its Week', asy
   await expect(page).toHaveURL('/live')
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^Speed, /)
 })
+
+test('with Week 1 all logged before it starts, Today points to Week 2', async ({ page }) => {
+  await serveHistory(page, weekDone(1, ['speed', 'strength', 'threshold', 'hyrox', 'easy'], '2026-10-13'))
+  await page.clock.setFixedTime(BEFORE_WEEK_1)
+  await page.goto('/')
+
+  await page.getByRole('link', { name: 'Can’t wait? Start a Week 2 Session early' }).click()
+  await expect(page).toHaveURL('/plan/week/2')
+  await expect(page.getByText('Early. Week 2 starts Mon 26 Oct.')).toBeVisible()
+})
+
+test('once Week 1 is done, Today points to Week 2', async ({ page }) => {
+  await serveHistory(page, weekDone(1, ['speed', 'strength', 'threshold', 'hyrox', 'easy'], '2026-10-20'))
+  await page.clock.setFixedTime(new Date('2026-10-22T12:00:00-04:00'))
+  await page.goto('/')
+
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Week done.')
+  await page.getByRole('link', { name: 'Can’t wait? Start a Week 2 Session early' }).click()
+  await expect(page).toHaveURL('/plan/week/2')
+  await expectNoAxeViolations(page)
+})

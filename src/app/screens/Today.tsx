@@ -222,6 +222,16 @@ function UpNext({
   const previousPain = day.pain?.report.score ?? null
   const upNextWeek = day.bucket.find((e) => e.state === 'next')?.week
   const run = upNext && upNextWeek ? runContext(upNextWeek, upNext) : undefined
+  /** Where to start a Session early: Week 1 before the Program, the next Week once this one is all logged. */
+  const weekDone = day.bucket.length > 0 && day.bucket.every((e) => e.log !== null)
+  const ahead =
+    position.kind === 'before-start'
+      ? weekDone && weekCount > 1
+        ? 2
+        : 1
+      : position.kind === 'in-week' && day.rest?.kind === 'week-done' && position.week < weekCount
+        ? position.week + 1
+        : null
   let heading: string
   let target: string
   let meta = ''
@@ -258,12 +268,12 @@ function UpNext({
       </h1>
       <p className="mt-2 text-prescription">{nb(target)}</p>
       {meta && <p className="mt-1 text-body-quiet text-muted">{meta}</p>}
-      {position.kind === 'before-start' && (
+      {ahead && (
         <Link
-          href={weekPath(1)}
+          href={weekPath(ahead)}
           className="mt-2 inline-block py-2 text-[15px] font-bold text-link underline decoration-2 underline-offset-4 hover:decoration-[3px]"
         >
-          Can’t wait? Start a Week 1 Session early
+          Can’t wait? Start a Week {ahead} Session early
         </Link>
       )}
       {day.recovery && day.recoveryChange === 'short-sleep' && (
