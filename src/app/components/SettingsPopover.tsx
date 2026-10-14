@@ -3,6 +3,7 @@ import { EQUIPMENT, EQUIPMENT_LABEL, type Equipment } from '../../domain/equipme
 import { UNIT_LABEL, type SpeedUnit } from '../../domain/paces'
 import { MONTHS, type Settings, type Theme } from '../../domain/settings'
 import { SCREEN_PATH } from '../router'
+import { ScenarioPicker } from './ScenarioPicker'
 import { Segmented } from './Segmented'
 
 const THEME_OPTIONS = [
@@ -53,6 +54,7 @@ export function SettingsPopover({
         className="w-[264px] overflow-y-auto rounded-sm border-2 border-ink bg-paper p-[14px] text-ink shadow-[0_10px_30px_rgba(0,0,0,.18)] outline-none"
       >
         <div className="grid gap-3">
+          {import.meta.env.VITE_API === 'mock' && <ScenarioPicker />}
           <Segmented
             label="Theme"
             value={settings.theme}
