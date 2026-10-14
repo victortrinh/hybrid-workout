@@ -5,6 +5,7 @@ interface __BaseEnv_Env {
 	DB: D1Database;
 	ACCESS_CLIENT_ID: string;
 	ACCESS_CLIENT_SECRET: string;
+	ACCESS_TEAM_DOMAIN: string;
 }
 declare namespace Cloudflare {
 	interface Env extends __BaseEnv_Env {}

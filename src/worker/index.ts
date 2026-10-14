@@ -4,6 +4,7 @@
  * front of the whole site (ADR-0001), so no route here handles sign-in.
  */
 import { Hono } from 'hono'
+import { isServiceToken } from './access'
 import { findWeek } from '../domain/coach'
 import { isCircuit, isLiveRun } from '../domain/live'
 import { parseSessionLog, type SessionLog, type StationPart, type SyncState } from '../domain/log'
@@ -132,7 +133,7 @@ app.post('/sync', async (c) => {
  * Idempotent per morning: the latest send for a date replaces the last.
  */
 app.post('/recovery', async (c) => {
-  if (!(await hasServiceToken(c.req.raw.headers, c.env))) {
+  if (!(await isServiceToken(c.req.raw.headers, c.env))) {
     return c.json({ error: 'Send the Access service token: CF-Access-Client-Id and CF-Access-Client-Secret' }, 401)
   }
   let night: RecoveryNight
@@ -153,23 +154,6 @@ app.post('/recovery', async (c) => {
     .run()
   return c.json({ ok: true, night })
 })
-
-/** Both service-token headers, matching the Worker's secrets. With no secrets set, nothing matches. */
-async function hasServiceToken(headers: Headers, env: Env): Promise<boolean> {
-  const id = headers.get('cf-access-client-id')
-  const secret = headers.get('cf-access-client-secret')
-  if (!env.ACCESS_CLIENT_ID || !env.ACCESS_CLIENT_SECRET || !id || !secret) return false
-  const [a, b] = await Promise.all([sameText(id, env.ACCESS_CLIENT_ID), sameText(secret, env.ACCESS_CLIENT_SECRET)])
-  return a && b
-}
-
-/** Compares digests, so the time taken says nothing about how much matched. */
-async function sameText(given: string, expected: string): Promise<boolean> {
-  const digest = async (text: string) =>
-    new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))
-  const [x, y] = await Promise.all([digest(given), digest(expected)])
-  return x.every((byte, i) => byte === y[i])
-}
 
 app.notFound((c) => c.json({ error: 'Not found' }, 404))
 
