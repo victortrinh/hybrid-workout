@@ -59,14 +59,23 @@ export function Shortcut({ nights }: { nights: RecoveryNight[] }) {
             <Code>CF-Access-Client-Secret</Code>: the service token’s Client Secret
           </Field>
           <Field term="Body">
-            <Code>sleepMinutes</Code>, <Code>hrvMs</Code>, <Code>restingHeartRate</Code> (numbers) and{' '}
-            <Code>source</Code> (text, the ring’s name). The night counts for the day it arrives; add{' '}
-            <Code>date</Code> (yyyy-MM-dd) only to send another day’s.
+            <Code>sleep</Code> (text: each sleep entry’s start and end, one pair per line), <Code>hrvMs</Code>,{' '}
+            <Code>restingHeartRate</Code> (numbers) and <Code>source</Code> (text). The server merges entries that
+            overlap, so a night tracked by the Watch and the ring counts once, and keeps only the latest night.
           </Field>
         </dl>
-        <pre className="mt-3 overflow-x-auto rounded-sm bg-sunk p-3 text-[14px]">
+        <pre
+          tabIndex={0}
+          aria-label="Example request body"
+          className="mt-3 overflow-x-auto rounded-sm bg-sunk p-3 text-[14px] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-link"
+        >
           {JSON.stringify(
-            { sleepMinutes: 341, hrvMs: 38, restingHeartRate: 52, source: 'Ultrahuman' },
+            {
+              sleep: '2026-12-15T23:30:00-05:00 2026-12-16T03:10:00-05:00\n2026-12-16T03:25:00-05:00 2026-12-16T05:26:00-05:00',
+              hrvMs: 38,
+              restingHeartRate: 52,
+              source: 'Ultrahuman',
+            },
             null,
             2,
           )}
@@ -82,34 +91,33 @@ export function Shortcut({ nights }: { nights: RecoveryNight[] }) {
           Build it
         </h2>
         <p className="mt-2 text-body-quiet text-muted">
-          In every Find Health Samples action, filter Source to the ring. The Watch writes sleep and HRV too, and mixing
-          the two wrecks the averages.
+          No Source filter needed: the server counts overlapping entries from the Watch and the ring once.
         </p>
         <ol className="mt-3 grid list-decimal gap-3 pl-6 text-body">
           <li>Shortcuts app → Shortcuts → +. Name it “Compromised recovery”.</li>
           <li>
-            <b>Find Health Samples</b> where Type is Sleep Analysis, Source is your Ultrahuman ring, Start Date is in the
-            last 18 hours, Value is not In Bed and Value is not Awake.
+            <b>Find Health Samples</b> where Type is Sleep, Start Date is in the last 2 days, Value is not Awake and
+            Value is not In Bed.
           </li>
           <li>
-            <b>Get Details of Health Samples</b>: Duration. Then <b>Calculate Statistics</b>: Sum. Convert the total to
-            minutes (<b>Calculate</b> ÷ 60 if it’s in seconds) and <b>Set Variable</b> Sleep.
+            <b>Repeat with Each</b> Health Sample. Inside it, a <b>Text</b> action: Repeat Item’s Start Date, a space,
+            then Repeat Item’s End Date, both with Date Format ISO 8601 and the time included.
           </li>
           <li>
-            <b>Find Health Samples</b> where Type is Heart Rate Variability, Source is the ring, Start Date is in the
-            last 18 hours. <b>Get Details</b>: Value. <b>Calculate Statistics</b>: Average. <b>Set Variable</b> HRV.
+            After End Repeat, <b>Combine Text</b>: Repeat Results, with New Lines. <b>Set Variable</b> Sleep.
           </li>
           <li>
-            <b>Find Health Samples</b> where Type is Resting Heart Rate, Source is the ring; sort by Start Date, latest
-            first, limit 1. <b>Get Details</b>: Value. <b>Set Variable</b> RHR.
+            <b>Find Health Samples</b> where Type is Heart Rate Variability, Start Date is in the last 1 day; sort by
+            Start Date, latest first, limit 1. <b>Get Details</b>: Value. <b>Set Variable</b> HRV. The same for Type
+            Resting Heart Rate into RHR.
           </li>
           <li>
-            <b>Get Contents of URL</b>: the address above, Method POST, the two headers, Request Body JSON with sleepMinutes =
-            Sleep, hrvMs = HRV, restingHeartRate = RHR (all three as Number) and source = “Ultrahuman”.
+            <b>Get Contents of URL</b>: the address above, Method POST, the two headers, Request Body JSON with Text
+            sleep = Sleep, Number hrvMs = HRV, Number restingHeartRate = RHR and Text source = “Ultrahuman”.
           </li>
           <li>
-            Run it once and allow Health access and the connection. “Last night received” above should show the same
-            numbers as the Ultrahuman app. No sleep synced yet is refused: open the Ultrahuman app and run it again.
+            Run it once and allow Health access and the connection. “Last night received” above should show about
+            the sleep the Health app shows. No sleep synced yet is refused: open the Ultrahuman app and run it again.
           </li>
           <li>
             Automation → + → Time of Day, daily, a little after you usually wake and open the Ultrahuman app (it syncs

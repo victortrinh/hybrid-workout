@@ -164,17 +164,19 @@ curl -i -X POST https://compromised.<your-subdomain>.workers.dev/api/recovery -H
 The app has the same steps with your address filled in: Today → your initial (Settings) → **Recovery Shortcut setup**.
 
 1. **Shortcuts** app → **Shortcuts** tab → **+**. Tap the name at the top → **Rename** → `Compromised recovery`.
-2. Sleep. Add **Find Health Samples**. Tap the filter: **Type is Sleep Analysis**. **Add Filter** → **Source is** → your Ultrahuman ring. **Add Filter** → **Start Date is in the last** 18 hours. **Add Filter** → **Value is not In Bed**, and again **Value is not Awake** (if Value isn't offered, leave it out and check the total in step 8).
-3. Add **Get Details of Health Sample** → **Duration**. Add **Calculate Statistics** → **Sum**. Add **Calculate** → ÷ 60 if the sum is in seconds (step 8 tells you). Add **Set Variable** → `Sleep`.
-4. HRV. **Find Health Samples**: **Type is Heart Rate Variability**, **Source is** the ring, **Start Date is in the last** 18 hours. **Get Details of Health Sample** → **Value**. **Calculate Statistics** → **Average**. **Set Variable** → `HRV`.
-5. Resting heart rate. **Find Health Samples**: **Type is Resting Heart Rate**, **Source is** the ring; **Sort by** Start Date, **Order** Latest First, **Limit** on, 1. **Get Details of Health Sample** → **Value**. **Set Variable** → `RHR`.
+2. Sleep. Add **Find Health Samples**: **Type is Sleep**, **Start Date is in the last 2 days**, **Value is not Awake**, **Value is not In Bed**. No Source filter: it doesn't match reliably, and the server merges the Watch's and the ring's overlapping entries anyway.
+3. Add **Repeat with Each** (input: Health Samples). Inside it, add **Text** and insert **Repeat Item** → tap it → **Start Date**, Date Format **ISO 8601** with the time; type a space; insert **Repeat Item** → **End Date**, the same format.
+4. After **End Repeat**, add **Combine Text**: **Repeat Results**, with **New Lines**. **Set Variable** → `Sleep`.
+5. HRV. **Find Health Samples**: **Type is Heart Rate Variability**, **Start Date is in the last 1 day**; **Sort by** Start Date, **Latest First**, **Limit** 1. **Get Details of Health Sample** → **Value**. **Set Variable** → `HRV`. The same for **Resting Heart Rate** → `RHR`.
 6. Send. **Get Contents of URL**, URL `https://compromised.<your-subdomain>.workers.dev/api/recovery`. Tap **Show More**:
    - **Method** POST.
-   - **Headers** → Add new header: `CF-Access-Client-Id` = the Client ID; again: `CF-Access-Client-Secret` = the Client Secret.
-   - **Request Body** JSON → Add new field: **Number** `sleepMinutes` = Sleep; **Number** `hrvMs` = HRV; **Number** `restingHeartRate` = RHR; **Text** `source` = `Ultrahuman`. No date: the night counts for the day it arrives, in Toronto.
-7. For the first run only, add **Show Result** at the end.
-8. Tap ▶. Allow the Health data it asks for and **Always Allow** the connection. The result should be `{"ok":true,"night":{...}}`, with `sleepMinutes` around 400–500 for a 7–8 hour night (about 7 for a 7 hour night means drop the ÷ 60; about 25,000 means add it). `No sleep in Apple Health from the ring yet` means the ring hasn't synced: open the Ultrahuman app, wait for its sync, run again. Then check Settings → Recovery Shortcut setup → **Last night received** against the Ultrahuman app, and remove **Show Result**.
-9. **Automation** tab → **+** (New Automation) → **Time of Day** → a time a little after you usually wake and open the Ultrahuman app (the ring syncs to Health through it), **Daily** → **Run Immediately** (turn **Notify When Run** off if you like) → **Next** → `Compromised recovery` → **Done**.
+   - **Headers** → `CF-Access-Client-Id` = the Client ID; `CF-Access-Client-Secret` = the Client Secret (no trailing space or line break: Cloudflare answers a bare `400 Bad Request` page to a malformed header).
+   - **Request Body** JSON: **Text** `sleep` = Sleep; **Number** `hrvMs` = HRV; **Number** `restingHeartRate` = RHR; **Text** `source` = `Ultrahuman`. No date: the night counts for the day it arrives, in Toronto.
+7. If Shortcuts says the action is trying to share too many Health items: Settings → Apps → Shortcuts → Advanced → **Allow Sharing Large Amounts of Data**.
+8. Add **Show Result** for the first run and tap ▶. Allow the Health data and **Always Allow** the connection. The result should be `{"ok":true,"night":{...}}` with `sleepMinutes` close to the Time Asleep the Health app shows. `No sleep in Apple Health from the ring yet` means nothing has synced: open the Ultrahuman app, run again. Then remove **Show Result**.
+9. **Automation** tab → **+** → **Time of Day** → a little after you usually wake and open the Ultrahuman app, **Daily** → **Run Immediately** → **Next** → `Compromised recovery` → **Done**.
+
+The server merges overlapping entries (each minute counts once, as Health's own total does) and keeps only the latest night: entries more than 3 hours before the next belong to the night before. Sending `sleepMinutes` instead of `sleep` still works.
 
 #### 7g. The next morning
 
