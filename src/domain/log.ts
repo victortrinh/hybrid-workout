@@ -6,6 +6,7 @@
  * later `updatedAt` wins, per log.
  */
 import { localDate, type LocalDate } from './calendar'
+import { ENVIRONMENTS, FIVE_K_SECONDS, type Environment } from './paces'
 
 export const LOGGED_STATUSES = ['done', 'partial', 'skipped', 'swapped'] as const
 
@@ -24,6 +25,10 @@ export interface SessionLog {
   /** Overall RPE, 1–10. */
   rpe: number | null
   notes: string | null
+  /** A 5K test's time in seconds; it sets the Training paces. Null for every other Session. */
+  resultSeconds: number | null
+  /** Where a run happened. Recorded with each 5K test result. */
+  environment: Environment | null
   /** ISO instant of the last edit. */
   updatedAt: string
 }
@@ -65,6 +70,11 @@ export function parseSessionLog(value: unknown): SessionLog {
   if (notes !== null && (typeof notes !== 'string' || notes.length > NOTES_MAX)) {
     throw new Error(`notes must be text of at most ${NOTES_MAX} characters`)
   }
+  const resultSeconds = optionalInteger(v.resultSeconds, 'resultSeconds', ...FIVE_K_SECONDS)
+  const environment = v.environment ?? null
+  if (environment !== null && !ENVIRONMENTS.includes(environment as Environment)) {
+    throw new Error(`environment must be one of ${ENVIRONMENTS.join(', ')}`)
+  }
   const updatedAt = v.updatedAt
   if (typeof updatedAt !== 'string' || !INSTANT.test(updatedAt) || Number.isNaN(Date.parse(updatedAt))) {
     throw new Error('updatedAt must be an ISO instant in UTC')
@@ -79,6 +89,8 @@ export function parseSessionLog(value: unknown): SessionLog {
     minutes,
     rpe,
     notes: notes === null || notes.trim() === '' ? null : notes,
+    resultSeconds,
+    environment: environment as Environment | null,
     updatedAt,
   }
 }

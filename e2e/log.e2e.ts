@@ -86,6 +86,8 @@ test.describe('the sync endpoint', () => {
     minutes: 40,
     rpe: 8,
     notes: null,
+    resultSeconds: null,
+    environment: null,
     updatedAt: '2027-03-08T20:00:00.000Z',
     ...change,
   })
@@ -117,6 +119,8 @@ test.describe('the sync endpoint', () => {
       [entry(project, { rpe: 12 })],
       [entry(project, { sessionId: 'yoga' })],
       [entry(project, { week: 28 })],
+      // Only a 5K test has a result time.
+      [entry(project, { resultSeconds: 1380 })],
     ]) {
       const response = await request.post('/api/sync', { data: { sessionLogs } })
       expect(response.status()).toBe(400)

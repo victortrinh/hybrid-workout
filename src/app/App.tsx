@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { Link, RouterProvider } from 'react-aria-components'
 import { coach, findWeek, type CoachDay } from '../domain/coach'
+import type { Environment, RunContext } from '../domain/paces'
+import type { Session, Week } from '../domain/program/types'
+import { environmentOn } from '../domain/settings'
 import { program } from '../domain/program/program'
 import { Icon } from './components/Icons'
 import { StripedNumeral } from './components/StripedNumeral'
@@ -14,6 +17,7 @@ import { Today } from './screens/Today'
 import { WeekScreen } from './screens/Week'
 import { usePicked } from './usePicked'
 import { useSessionLogs } from './useSessionLogs'
+import { environmentKey, useSettings } from './useSettings'
 import { useToday } from './useToday'
 
 const NAV = [
@@ -42,7 +46,20 @@ export function App() {
   const today = useToday()
   const { logs, save, error } = useSessionLogs()
   const [picked, pick] = usePicked()
+  const { settings, change, overrides, override } = useSettings()
   const day = useMemo(() => coach({ program, today, logs, picked }), [today, logs, picked])
+  /** How a Session's runs read: the Training paces, in this Session's Environment and the chosen units. */
+  const runContext = (week: Week, session: Session): RunContext => {
+    const inWeek = day.position.kind === 'in-week' && day.position.week === week.number
+    const date = session.date ?? (inWeek ? today : week.startDate)
+    return {
+      paces: day.paces,
+      unit: settings.unit,
+      environment: environmentOn(date, settings, overrides[environmentKey(week.number, session.id)]),
+    }
+  }
+  const setEnvironment = (week: Week, session: Session, environment: Environment) =>
+    override(week.number, session.id, environment)
   const route = useRoute()
   const week = route.screen === 'week' || route.screen === 'log' ? findWeek(program, route.week ?? 0) : null
   const logged = route.screen === 'log' ? week?.sessions.find((s) => s.id === route.sessionId) : undefined
@@ -68,13 +85,24 @@ export function App() {
               weekCount={program.weekCount}
               error={error}
               onPick={(sessionId) => day.week && pick(day.week.number, sessionId, today)}
+              runContext={runContext}
+              onEnvironment={setEnvironment}
+              settings={settings}
+              onSettings={change}
             />
           )}
           {screen === 'log' && week && logged && (
-            <LogAfter week={week} session={logged} logs={logs} today={today} onSave={save} />
+            <LogAfter
+              week={week}
+              session={logged}
+              logs={logs}
+              today={today}
+              defaultEnvironment={(date) => environmentOn(date, settings)}
+              onSave={save}
+            />
           )}
           {screen === 'plan' && <Plan program={program} day={day} />}
-          {screen === 'week' && week && <WeekScreen program={program} week={week} day={day} />}
+          {screen === 'week' && week && <WeekScreen program={program} week={week} day={day} runContext={runContext} />}
           {screen === 'progress' && <Progress program={program} />}
           {screen === 'not-found' && <NotFound />}
         </main>

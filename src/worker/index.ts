@@ -37,16 +37,22 @@ app.post('/sync', async (c) => {
 
   if (logs.length > 0) {
     const upsert = c.env.DB.prepare(
-      `insert into session_logs (id, week, session_id, date, status, minutes, rpe, notes, updated_at)
-       values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `insert into session_logs
+         (id, week, session_id, date, status, minutes, rpe, notes, result_seconds, environment, updated_at)
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        on conflict (id) do update set
          week = excluded.week, session_id = excluded.session_id, date = excluded.date,
          status = excluded.status, minutes = excluded.minutes, rpe = excluded.rpe,
-         notes = excluded.notes, updated_at = excluded.updated_at
+         notes = excluded.notes, result_seconds = excluded.result_seconds,
+         environment = excluded.environment, updated_at = excluded.updated_at
        where excluded.updated_at > session_logs.updated_at`,
     )
     await c.env.DB.batch(
-      logs.map((l) => upsert.bind(l.id, l.week, l.sessionId, l.date, l.status, l.minutes, l.rpe, l.notes, l.updatedAt)),
+      logs.map((l) =>
+        upsert.bind(
+          l.id, l.week, l.sessionId, l.date, l.status, l.minutes, l.rpe, l.notes, l.resultSeconds, l.environment, l.updatedAt,
+        ),
+      ),
     )
   }
   return c.json(await readState(c.env.DB))
@@ -61,8 +67,10 @@ function parseSyncRequest(body: unknown): SessionLog[] {
   return raw.map((value, i) => {
     try {
       const log = parseSessionLog(value)
-      if (!findWeek(program, log.week)?.sessions.some((s) => s.id === log.sessionId)) {
-        throw new Error(`Week ${log.week} has no Session "${log.sessionId}"`)
+      const session = findWeek(program, log.week)?.sessions.find((s) => s.id === log.sessionId)
+      if (!session) throw new Error(`Week ${log.week} has no Session "${log.sessionId}"`)
+      if (log.resultSeconds !== null && session.type !== '5k-test') {
+        throw new Error('Only a 5K test has a result time')
       }
       return log
     } catch (error) {
@@ -80,6 +88,8 @@ interface SessionLogRow {
   minutes: number | null
   rpe: number | null
   notes: string | null
+  result_seconds: number | null
+  environment: string | null
   updated_at: string
 }
 
@@ -98,6 +108,8 @@ async function readState(db: D1Database): Promise<SyncState> {
         minutes: row.minutes,
         rpe: row.rpe,
         notes: row.notes,
+        resultSeconds: row.result_seconds,
+        environment: row.environment,
         updatedAt: row.updated_at,
       }),
     ),

@@ -208,6 +208,8 @@ function log(week: number, sessionId: string, date: string, status: LoggedStatus
     minutes: 45,
     rpe: 7,
     notes: null,
+    resultSeconds: null,
+    environment: null,
     updatedAt,
   }
 }
