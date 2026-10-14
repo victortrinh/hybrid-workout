@@ -6,18 +6,24 @@
  * lives in this tab's session storage, so a reload keeps it and closing the
  * tab ends it. `?scenario=<name>` switches scenario: everything the app kept
  * goes, and the scenario loads fresh.
+ * Returns, with the scenarios, the mock panel's controls: the network
+ * between the app and the Worker, and the Shortcut sends.
  */
 import { http } from 'msw'
 import { setupWorker } from 'msw/browser'
 import initSqlJs from 'sql.js'
 import wasmUrl from 'sql.js/dist/sql-wasm-browser.wasm?url'
-import { nowMs, pinClock } from '../domain/clock'
+import { localDateIn } from '../domain/calendar'
+import { nowDate, nowMs, pinClock } from '../domain/clock'
 import { mockApi } from './api'
+import type { MockControls } from './controls'
 import { d1 } from './d1'
 import { openDatabase } from './database'
+import { network, NETWORK_KEY, throughNetwork } from './network'
 import { chooseScenario, type Current } from './scenarios/choose'
 import { findScenario, SCENARIOS } from './scenarios/index'
 import { deviceStorage, loadScenario } from './scenarios/load'
+import { DEFAULT_NIGHT, DEFAULT_WORKOUT, sendNight, sendWorkout } from './shortcut'
 
 const STORAGE_KEY = 'compromised:mock-db'
 const SCENARIO_KEY = 'compromised:mock-scenario'
@@ -26,12 +32,14 @@ const APP_DB = 'compromised'
 /** Every key the app keeps in local storage starts with this. */
 const APP_PREFIX = 'compromised:'
 
-/** What the app shows of mock mode: the badge and the scenario picker. */
+/** What the app shows of mock mode: the badge, the scenario picker and the mock panel (src/app/mockInfo.ts). */
 export interface MockInfo {
   scenario: string
   /** A `?scenario=` that named no scenario, so the default stood in. */
   unknown: string | null
   scenarios: { name: string; summary: string }[]
+  /** The mock panel's. */
+  controls: MockControls
 }
 
 export async function startMock(): Promise<MockInfo> {
@@ -69,16 +77,40 @@ export async function startMock(): Promise<MockInfo> {
     attempt(() => sessionStorage.setItem(SCENARIO_KEY, JSON.stringify(current)))
   }
   save()
+  const net = network()
   // MSW's request is the browser's own; the Worker's types call theirs `Request` too, with Cloudflare's extras.
-  await setupWorker(http.all('/api/*', ({ request }) => api(request as unknown as Request))).start({
-    quiet: true,
-    onUnhandledFrame: 'bypass',
-  })
+  await setupWorker(
+    http.all('/api/*', ({ request }) => throughNetwork(net.mode(), request as unknown as Request, api)),
+  ).start({ quiet: true, onUnhandledFrame: 'bypass' })
+
+  const today = () => localDateIn(nowDate())
   return {
     scenario: chosen.name,
     unknown: chosen.unknown,
     scenarios: SCENARIOS.map(({ name, summary }) => ({ name, summary })),
+    controls: {
+      network: net.mode,
+      setNetwork(mode) {
+        net.set(mode)
+        // What the phone says when the signal comes and goes: back online, the outbox syncs.
+        window.dispatchEvent(new Event(mode === 'offline' ? 'offline' : 'online'))
+      },
+      subscribe: net.subscribe,
+      today,
+      defaults: { night: DEFAULT_NIGHT, workout: DEFAULT_WORKOUT },
+      sendNight: async (fields) => refreshed(await sendNight(api, today(), fields)),
+      sendWorkout: async (fields) => refreshed(await sendWorkout(api, today(), fields)),
+    },
   }
+}
+
+/**
+ * The app reads Recovery data and workouts again whenever it comes back to
+ * the front, as it does after the real Shortcut ran. So it does here.
+ */
+function refreshed<T>(outcome: T): T {
+  document.dispatchEvent(new Event('visibilitychange'))
+  return outcome
 }
 
 /** Opens `scenario` fresh: a new page load, so nothing of the app holds the old one open. */
@@ -96,6 +128,8 @@ async function wipeDevice(): Promise<void> {
   attempt(() => {
     sessionStorage.removeItem(STORAGE_KEY)
     sessionStorage.removeItem(SCENARIO_KEY)
+    // The network mode holds until the scenario changes.
+    sessionStorage.removeItem(NETWORK_KEY)
   })
   await new Promise<void>((resolve) => {
     try {

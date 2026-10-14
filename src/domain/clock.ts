@@ -42,8 +42,8 @@ export function unpinClock(): void {
 
 const TIME = /^(\d{2}):(\d{2})$/
 
-/** The instant it is `time` on `date` in `timeZone`. */
-function instantAt(date: LocalDate, time: string, timeZone: string): number {
+/** The instant (ms since the epoch) it is `time` (`HH:MM`) on `date` in `timeZone`. */
+export function instantAt(date: LocalDate, time: string, timeZone: string = TIME_ZONE): number {
   const match = TIME.exec(time)
   if (!match) throw new Error(`Not a time: ${time}`)
   const [y, m, d] = date.split('-').map(Number)
