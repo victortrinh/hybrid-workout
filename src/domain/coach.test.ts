@@ -468,6 +468,14 @@ describe('Up next with Session logs', () => {
       const day = withLogs('2026-11-04', [log(3, 'threshold', '2026-11-04')], picked('threshold'))
       expect(day.upNext?.id).toBe('speed')
     })
+
+    it('before the Program, makes a Week 1 Session Up next, early', () => {
+      const day = withLogs('2026-10-13', [], picked('threshold', '2026-10-13', 1))
+      expect(day.upNext?.id).toBe('threshold')
+      expect(states(day)).toMatchObject({ speed: 'planned', threshold: 'next' })
+      expect(withLogs('2026-10-14', [], picked('threshold', '2026-10-13', 1)).upNext).toBeNull()
+      expect(withLogs('2026-10-13', [log(1, 'threshold', '2026-10-13')], picked('threshold', '2026-10-13', 1)).upNext).toBeNull()
+    })
   })
 
   describe('Race week', () => {

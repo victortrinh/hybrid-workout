@@ -31,6 +31,24 @@ test('before the Program, a Week 1 Session is logged early from its Week', async
   expect(sent.at(-1)).toMatchObject({ week: 1, sessionId: 'speed', date: '2026-10-13', status: 'done' })
 })
 
+test('before the Program, a Week 1 Session tapped on Today is started early from there', async ({ page }) => {
+  await serveHistory(page, [])
+  await page.clock.setFixedTime(BEFORE_WEEK_1)
+  await page.goto('/')
+
+  await expect(page.getByText('Tap any Session to do it today, early.')).toBeVisible()
+  await page.getByRole('button', { name: /^Threshold/ }).click()
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^Threshold/)
+  await expect(page.getByText('Early. Week 1 starts Mon 19 Oct. Anything done today counts for Week 1.')).toBeVisible()
+  await expect(page.getByRole('link', { name: /Start a Week 1 Session early/ })).toHaveCount(0)
+  await expectNoAxeViolations(page)
+
+  await page.getByRole('button', { name: 'Start session' }).click()
+  await page.getByRole('button', { name: 'No. Let’s go' }).click()
+  await expect(page).toHaveURL('/live')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^Threshold, /)
+})
+
 test('in Week 3, a Week 1 Session never done is started late from its Week', async ({ page }) => {
   await serveHistory(page, weekDone(2, ['speed', 'strength', 'threshold', 'hyrox'], '2026-10-28'))
   await page.clock.setFixedTime(WEEK_3)
