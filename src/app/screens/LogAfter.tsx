@@ -45,19 +45,23 @@ const STATUS_HINT: Record<LoggedStatus, string> = {
 export function LogAfter({
   week,
   session,
+  lastDay: loggableUntil,
   logs,
   today,
   onSave,
 }: {
   week: Week
   session: Session
+  /** The last day the Session can be logged on: Sunday, or later for a carried Key session. */
+  lastDay: LocalDate
   logs: SessionLog[]
   today: LocalDate
   onSave: (log: SessionLog) => void
 }) {
   const existing = logFor(logs, week.number, session.id)
-  const days = Array.from({ length: 7 }, (_, i) => addDays(week.startDate, i))
-  const lastDay = days.find((d) => d === today) ?? (daysBetween(today, days[6]) < 0 ? days[6] : null)
+  const days = Array.from({ length: daysBetween(week.startDate, loggableUntil) + 1 }, (_, i) => addDays(week.startDate, i))
+  const last = days.at(-1)!
+  const lastDay = days.find((d) => d === today) ?? (daysBetween(today, last) < 0 ? last : null)
 
   const [status, setStatus] = useState<LoggedStatus>(existing?.status ?? 'done')
   const [date, setDate] = useState<LocalDate | null>(existing?.date ?? lastDay)

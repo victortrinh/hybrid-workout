@@ -6,6 +6,7 @@
  * later `updatedAt` wins, per log.
  */
 import { localDate, type LocalDate } from './calendar'
+import type { SuggestionDecision } from './suggestion'
 
 export const LOGGED_STATUSES = ['done', 'partial', 'skipped', 'swapped'] as const
 
@@ -31,6 +32,7 @@ export interface SessionLog {
 /** Everything the device needs from the server. More records join as they arrive. */
 export interface SyncState {
   sessionLogs: SessionLog[]
+  suggestionDecisions: SuggestionDecision[]
 }
 
 export const NOTES_MAX = 2000

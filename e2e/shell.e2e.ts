@@ -1,7 +1,10 @@
 import { expect, test } from '@playwright/test'
 import { expectNoAxeViolations, WEEK_3 } from './axe'
+import { serveHistory, weekDone } from './history'
 
 test.beforeEach(async ({ page }) => {
+  // Week 2 done in full, so Today opens on Week 3's own Up next.
+  await serveHistory(page, weekDone(2, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-10-26'))
   await page.clock.setFixedTime(WEEK_3)
 })
 

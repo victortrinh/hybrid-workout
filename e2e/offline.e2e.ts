@@ -1,13 +1,19 @@
 import { expect, test, type Page } from '@playwright/test'
 import { expectNoAxeViolations, WEEK_3 } from './axe'
+import { seedLogs, serveHistory, weekDone } from './history'
 
 /**
  * These tests write Session logs to the shared e2e database, so each project
- * gets a Week no other test reads: the phone logs in Week 10, desktop in Week 11.
+ * gets a Week no other test reads: the phone logs in Week 10, desktop in Week 15,
+ * each after a Week done in full (9 and 14), so nothing carries over.
  */
-const WEEK = { phone: 10, desktop: 11 } as Record<string, number>
-/** Wednesday noon in Toronto of Week 10 (Mon 21 Dec) or Week 11 (Mon 28 Dec). */
-const WEDNESDAY = { 10: new Date('2026-12-23T12:00:00-05:00'), 11: new Date('2026-12-30T12:00:00-05:00') } as Record<
+const WEEK = { phone: 10, desktop: 15 } as Record<string, number>
+const BEFORE = {
+  10: weekDone(9, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-12-14'),
+  15: weekDone(14, ['speed', 'strength', 'threshold', 'hyrox'], '2027-01-18'),
+} as Record<number, ReturnType<typeof weekDone>>
+/** Wednesday noon in Toronto of Week 10 (Mon 21 Dec) or Week 15 (Mon 25 Jan). */
+const WEDNESDAY = { 10: new Date('2026-12-23T12:00:00-05:00'), 15: new Date('2027-01-27T12:00:00-05:00') } as Record<
   number,
   Date
 >
@@ -26,8 +32,10 @@ test('a Session logged with no signal syncs once back online, and another browse
   browser,
   context,
   page,
+  request,
 }, testInfo) => {
   const week = WEEK[testInfo.project.name]
+  await seedLogs(request, testInfo.project.name, BEFORE[week])
   await page.clock.setFixedTime(WEDNESDAY[week])
   await page.goto('/')
   await shellCached(page)
@@ -67,6 +75,8 @@ test('a Session logged with no signal syncs once back online, and another browse
 })
 
 test('the installed app opens offline on any screen', async ({ context, page, request }) => {
+  // Week 2 done in full, kept on the phone from the first visit: Week 3 opens on its own Up next.
+  await serveHistory(page, weekDone(2, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-10-26'))
   await page.clock.setFixedTime(WEEK_3)
   await page.goto('/')
   await shellCached(page)
