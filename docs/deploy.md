@@ -147,7 +147,7 @@ Paste the Client ID when asked. Then:
 npx wrangler secret put ACCESS_CLIENT_SECRET
 ```
 
-Paste the Client Secret. `npx wrangler secret list` should list both. Secrets survive later deploys.
+Paste the Client Secret. `npx wrangler secret list` should list both. Secrets survive later deploys. Behind Access only the Client ID is compared: Access checks the secret at the edge, then vouches for the token with a signed assertion the Worker verifies against `ACCESS_TEAM_DOMAIN` (`wrangler.jsonc`). The secret is compared only where nothing sits in front, as in local dev.
 
 #### 7e. Check it (terminal)
 
@@ -157,7 +157,7 @@ curl -i -X POST https://compromised.<your-subdomain>.workers.dev/api/recovery -H
 
 - `200` with `{"ok":true,...}`: done. The test night is dated 1 January, long before the Program, so the Coach never reads it.
 - `302` or `403` from Access: the 7c policy doesn't match (path, or the token chosen).
-- `401` from the Worker (a JSON `error`): the secrets from 7d don't match the headers, or Access strips the headers before the Worker (tell Claude: the check then moves to Access's JWT).
+- `401` from the Worker (a JSON `error`): Access let the token through, but the Worker didn't recognize it. Behind Access the Worker checks Access's signed assertion (`Cf-Access-Jwt-Assertion`) and compares its Client ID with `ACCESS_CLIENT_ID`, so check that secret first (`npx wrangler secret put ACCESS_CLIENT_ID` again), and that `ACCESS_TEAM_DOMAIN` in `wrangler.jsonc` is your team's login address.
 
 #### 7f. Build the Shortcut (iPhone)
 
