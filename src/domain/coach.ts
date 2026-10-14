@@ -589,7 +589,8 @@ const acceptedPain = (suggestions: Suggestion[]): PainLevel | null =>
 /**
  * Two or more Sessions Skipped last Week: suggest this Week a third lighter.
  * Counted as the Week closed on Sunday, so a Key session still carried over
- * isn't a miss yet. Deload weeks are lighter already, and the Taper follows
+ * isn't a miss yet, and a Session made up late, from this Monday on, doesn't
+ * undo one: a late make-up never cancels the lighter Week. Deload weeks are lighter already, and the Taper follows
  * the race-week rules, so neither gets one.
  */
 function reEntryFor(
@@ -601,7 +602,8 @@ function reEntryFor(
   const previous = findWeek(program, week.number - 1)
   if (!previous || week.deload || phaseOfWeek(program, week.number).id === 'taper') return null
 
-  const { skipped } = weekOutcome(program, previous, logs, week.startDate)
+  const closed = logs.filter((log) => !trained(log) || daysBetween(log.date, week.startDate) > 0)
+  const { skipped } = weekOutcome(program, previous, closed, week.startDate)
   if (skipped.length < RE_ENTRY_SKIPS) return null
 
   const id = reEntryId(week.number)

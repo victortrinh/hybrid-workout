@@ -654,6 +654,19 @@ describe('the re-entry Suggestion', () => {
     expect(inWeek11(week10({ threshold: 'done', hyrox: 'done' }), [], '2026-12-31').suggestions).toEqual([])
   })
 
+  it('stays when Skipped Sessions are made up late, from Monday on', () => {
+    const madeUp = [log(10, 'threshold', '2026-12-28'), log(10, 'hyrox', '2026-12-29')]
+    const day = inWeek11([...week10({ speed: 'done', strength: 'done' }), ...madeUp], [], '2026-12-29')
+    expect(day.suggestions.map((s) => s.id)).toEqual(['re-entry-w11'])
+    // A Skipped log edited to Done after the Week closed still counts as Skipped.
+    const edited = week10(TWO_SKIPPED).map((l) =>
+      l.status === 'skipped' ? { ...l, status: 'done' as const, date: localDate('2026-12-29') } : l,
+    )
+    expect(inWeek11(edited).suggestions.map((s) => s.id)).toEqual(['re-entry-w11'])
+    // Done by Sunday, it was never a miss.
+    expect(inWeek11(week10({ ...TWO_SKIPPED, threshold: 'done', hyrox: 'done' })).suggestions).toEqual([])
+  })
+
   it('is about this Week only: gone the Week after', () => {
     const logs = [...week10(TWO_SKIPPED), ...['speed', 'strength', 'easy-deload', 'hyrox'].map((id) => log(12, id, '2027-01-04'))]
     expect(inWeek11(logs, [], '2027-01-04').suggestions.map((s) => s.id)).not.toContain('re-entry-w11')
