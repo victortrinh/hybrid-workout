@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { localDate } from './calendar'
-import { logDays, logFor, mergeLogs, parseSessionLog, type SessionLog } from './log'
+import { logDays, logFor, mergeLogs, missingRequired, parseSessionLog, type SessionLog } from './log'
 
 const valid = {
   id: '3f0c9a52-6f1e-4c55-9a6b-0b5f0f2b7e11',
@@ -140,6 +140,32 @@ describe('logFor', () => {
     expect(logFor([later, a], 3, 'threshold')).toBe(later)
     expect(logFor([a], 3, 'speed')).toBeNull()
     expect(logFor([a], 4, 'threshold')).toBeNull()
+  })
+})
+
+describe('missingRequired', () => {
+  const a = parseSessionLog(valid)
+  const week = {
+    number: 3,
+    sessions: [
+      { id: 'threshold', optional: false },
+      { id: 'speed', optional: false },
+      { id: 'easy', optional: true },
+    ],
+  }
+
+  it('is true while a required Session has no log', () => {
+    expect(missingRequired(week, [a])).toBe(true)
+  })
+
+  it('is false once every required Session has a log, Skipped or not, whatever the optional ones', () => {
+    const skipped: SessionLog = { ...a, id: 'speed-log', sessionId: 'speed', status: 'skipped' }
+    expect(missingRequired(week, [a, skipped])).toBe(false)
+  })
+
+  it("ignores another Week's logs", () => {
+    const elsewhere: SessionLog = { ...a, id: 'speed-log', sessionId: 'speed', week: 4 }
+    expect(missingRequired(week, [a, elsewhere])).toBe(true)
   })
 })
 
