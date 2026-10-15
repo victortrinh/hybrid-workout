@@ -11,6 +11,15 @@
         ],
         "createdAt": "2026-10-13T20:59:50.185Z",
         "reason": "Agent: spent direction-round sketches of unchosen worlds (Métro, Gate Board, canon) intentionally use their own fonts; they are not shipping surfaces of the Lanes '76 system"
+      },
+      {
+        "rule": "border-accent-on-rounded",
+        "value": "*",
+        "files": [
+          "src/app/components/SessionSheet.tsx"
+        ],
+        "createdAt": "2026-10-15T22:44:55.981Z",
+        "reason": "Claude: the desktop sheet is a full 2px ink border with 4px corners, the same treatment DESIGN.md specifies for the Settings popover; the phone sheet has a top rule and no radius, so no one-sided accent meets a rounded corner"
       }
     ]
   }

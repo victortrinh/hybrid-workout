@@ -6,7 +6,7 @@ import { isLive, type LiveSession } from '../../domain/lifts'
 import { logFor, missingRequired, trained, type SessionLog } from '../../domain/log'
 import { logSummary } from '../../domain/logSummary'
 import { clock, type RunContext } from '../../domain/paces'
-import { describeExercise, describeSession, SESSION_TYPES } from '../../domain/program/describe'
+import { describeSession, SESSION_TYPES } from '../../domain/program/describe'
 import type { Program, Session, Week } from '../../domain/program/types'
 import type { PainReport } from '../../domain/pain'
 import type { PainSuggestion } from '../../domain/suggestion'
@@ -14,6 +14,7 @@ import type { WorkingWeights } from '../../domain/weights'
 import { outsideWeekLine } from '../coachCopy'
 import { lineAction, primaryAction } from '../components/actions'
 import { LaneChip } from '../components/LaneChip'
+import { Prescription } from '../components/Prescription'
 import { asksPain, PAIN_FREE, painSuggestionFor, PainStep, type PainAtStart } from '../components/PainStep'
 import { longDay, nb, shortDay, STATUS_LABEL, weekRange } from '../format'
 import { logPath, SCREEN_PATH, weekPath } from '../router'
@@ -295,18 +296,6 @@ function SessionDetail({
   /** The athlete's own choice, once made; until then Up next can move as the day loads. */
   const [chosen, setChosen] = useState<boolean | null>(null)
   const open = chosen ?? openAtFirst
-  const lines = session.blocks.map((block) =>
-    block.exercises.map((exercise) => describeExercise(exercise, program.stations, run, weights)),
-  )
-  // A Substitution shared by several Exercises reads once, after the Block of the last of them.
-  const users = new Map<string, { names: string[]; block: number }>()
-  lines.forEach((block, i) => {
-    for (const line of block) {
-      for (const sub of line.substitutions) {
-        users.set(sub, { names: [...(users.get(sub)?.names ?? []), line.name], block: i })
-      }
-    }
-  })
   const description = describeSession(session, run, weights)
   const headingId = `session-${session.id}`
   const prescriptionId = `${headingId}-prescription`
@@ -343,54 +332,8 @@ function SessionDetail({
       </Button>
 
       {open && (
-        <div id={prescriptionId}>
-          {session.blocks.map((block, i) => (
-            <div key={`${block.name}-${i}`} className="mt-7">
-              <h3 className="flex items-baseline justify-between gap-3 text-title-sm">
-                {block.name}
-                {block.minutes !== undefined && (
-                  <small className="text-body-quiet tracking-normal text-muted font-stretch-100%">
-                    {block.minutes} min
-                  </small>
-                )}
-              </h3>
-              <ul className="mt-1.5">
-                {lines[i].map((line, j) => (
-                  <li key={`${line.name}-${j}`} className="border-b border-rule py-3">
-                    {/* The name carries the weight; the numbers read by tabular figures, not boldness. */}
-                    <span className="block text-body font-bold">
-                      {line.name}
-                      {line.detail && <span className="font-normal"> · {nb(line.detail)}</span>}
-                    </span>
-                    {line.note && <span className="mt-0.5 block text-body-quiet text-muted">{line.note}</span>}
-                    {line.substitutions
-                      .filter((sub) => users.get(sub)!.names.length === 1)
-                      .map((sub) => (
-                        <span key={sub} className="mt-2 block border-l-2 border-edge pl-3 text-body-quiet text-muted">
-                          Instead, if {lowerFirst(sub)}
-                        </span>
-                      ))}
-                  </li>
-                ))}
-              </ul>
-              {block.note && <p className="mt-3 text-body-quiet text-muted">{block.note}</p>}
-              {[...users]
-                .filter(([, use]) => use.names.length > 1 && use.block === i)
-                .map(([sub, use]) => (
-                  <p key={sub} className="mt-3 border-l-2 border-edge pl-3 text-body-quiet text-muted">
-                    Instead of {listWords(use.names)}, if {lowerFirst(sub)}
-                  </p>
-                ))}
-            </div>
-          ))}
-        </div>
+        <Prescription id={prescriptionId} session={session} stations={program.stations} run={run} weights={weights} />
       )}
     </section>
   )
 }
-
-const lowerFirst = (text: string) => `${text.charAt(0).toLowerCase()}${text.slice(1)}`
-
-/** "Pogo jumps, Broad jumps and Accelerations" */
-const listWords = (names: string[]) =>
-  names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`

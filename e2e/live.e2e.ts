@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { expectNoAxeViolations, WEEK_3 } from './axe'
 import { serveHistory, weekDone } from './history'
+import { aMinuteBefore, doToday } from './today'
 
 /**
  * Live run sessions under a controlled clock: the page's timers only move
@@ -42,12 +43,12 @@ const minutes = (from: Date, m: number) => new Date(from.getTime() + m * 60_000)
 test('a full Threshold Session from Start to logged', async ({ page }) => {
   const sent = await serveHistory(page, [...WEEK_2])
   const start = new Date(WEEK_3.getTime() + 1000)
-  await page.clock.install({ time: WEEK_3 })
+  await page.clock.install({ time: aMinuteBefore(WEEK_3) })
   await page.goto('/')
+  const bucket = page.getByRole('list').filter({ hasText: 'Strength' })
+  await doToday(page, bucket.getByRole('button', { name: /^Threshold/ }))
   await page.clock.pauseAt(start)
 
-  const bucket = page.getByRole('list').filter({ hasText: 'Strength' })
-  await bucket.getByRole('button', { name: /^Threshold/ }).click()
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Threshold, 2 × 12′')
   await page.getByRole('button', { name: /^Start / }).click()
 
@@ -163,6 +164,7 @@ test('the target speed fits its column on a phone', async ({ page }) => {
   await page.clock.install({ time: WEEK_3 })
   await page.goto('/')
   await page.getByRole('list').filter({ hasText: 'Strength' }).getByRole('button', { name: /^Threshold/ }).click()
+  await page.getByRole('button', { name: /^Do it today/ }).click()
   await page.getByRole('button', { name: /^Start / }).click()
   const s = live(page)
   await s.skip.click()
@@ -231,8 +233,9 @@ test('a 5K test Live session records the time and updates the Training paces', a
   })
 
   // The paces come from the new test at once: Threshold is 4:46/km outdoors.
-  const bucket = page.getByRole('list').filter({ hasText: 'Strength' })
-  await bucket.getByRole('button', { name: /^Threshold/ }).click()
+  // The Live session is over: the clock can run again for the sheet to open.
+  await page.clock.resume()
+  await doToday(page, page.getByRole('list').filter({ hasText: 'Strength' }).getByRole('button', { name: /^Threshold/ }))
   await expect(page.getByRole('heading', { level: 1 }).locator('xpath=following-sibling::p[1]')).toHaveText(/^4:46\/km/)
 })
 

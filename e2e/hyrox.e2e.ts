@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { expectNoAxeViolations, WEEK_3 } from './axe'
 import { serveHistory, weekDone } from './history'
+import { aMinuteBefore, doToday } from './today'
 
 /**
  * HYROX and Race simulation Live sessions under a controlled clock. The
@@ -37,11 +38,11 @@ const bucketOf = (page: Page) => page.getByRole('list').filter({ hasText: 'Stren
 test('a three-round HYROX session: Set up off the clock, then a lighter sled from round 1 on', async ({ page }) => {
   const sent = await serveHistory(page, weekDone(2, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-10-28'))
   const start = new Date(WEEK_3.getTime() + 1000)
-  await page.clock.install({ time: WEEK_3 })
+  await page.clock.install({ time: aMinuteBefore(WEEK_3) })
   await page.goto('/')
+  await doToday(page, bucketOf(page).getByRole('button', { name: /^HYROX/ }))
   await page.clock.pauseAt(start)
 
-  await bucketOf(page).getByRole('button', { name: /^HYROX/ }).click()
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('HYROX, 3 rounds')
   // Set up isn't in the minutes: it shows beside them.
   await expect(page.getByText('45 min + ~5′ setup', { exact: true })).toBeVisible()
@@ -193,10 +194,10 @@ test('a three-round HYROX session: Set up off the clock, then a lighter sled fro
 test('on an iPhone SE a HYROX round fits: target, clock and action without scrolling, and each Block opens at the top', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 667 })
   await serveHistory(page, weekDone(2, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-10-28'))
-  await page.clock.install({ time: WEEK_3 })
+  await page.clock.install({ time: aMinuteBefore(WEEK_3) })
   await page.goto('/')
+  await doToday(page, bucketOf(page).getByRole('button', { name: /^HYROX/ }))
   await page.clock.pauseAt(new Date(WEEK_3.getTime() + 1000))
-  await bucketOf(page).getByRole('button', { name: /^HYROX/ }).click()
   await page.getByRole('button', { name: /^Start / }).click()
 
   const s = live(page)
@@ -249,10 +250,10 @@ test('on an iPhone SE a HYROX round fits: target, clock and action without scrol
 
 test('a split too quick to be true is asked about before saving, and saved as put right', async ({ page }) => {
   const sent = await serveHistory(page, weekDone(2, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-10-28'))
-  await page.clock.install({ time: WEEK_3 })
+  await page.clock.install({ time: aMinuteBefore(WEEK_3) })
   await page.goto('/')
+  await doToday(page, bucketOf(page).getByRole('button', { name: /^HYROX/ }))
   await page.clock.pauseAt(new Date(WEEK_3.getTime() + 1000))
-  await bucketOf(page).getByRole('button', { name: /^HYROX/ }).click()
   await page.getByRole('button', { name: /^Start / }).click()
 
   const s = live(page)
@@ -297,11 +298,11 @@ test('half simulation A logs a split for every run and Station, in race order', 
   // Wednesday of Week 18, Week 17 done.
   const wednesday = new Date('2027-02-17T12:00:00-05:00')
   const sent = await serveHistory(page, weekDone(17, ['5k-test', 'strength', 'threshold', 'hyrox'], '2027-02-10'))
-  await page.clock.install({ time: wednesday })
+  await page.clock.install({ time: aMinuteBefore(wednesday) })
   await page.goto('/')
+  await doToday(page, bucketOf(page).getByRole('button', { name: /^Race simulation/ }))
   await page.clock.pauseAt(new Date(wednesday.getTime() + 1000))
 
-  await bucketOf(page).getByRole('button', { name: /^Race simulation/ }).click()
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Race simulation, half A')
   await page.getByRole('button', { name: /^Start / }).click()
 

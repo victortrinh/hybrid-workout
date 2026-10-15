@@ -33,8 +33,9 @@ test('logging Threshold as Done strikes it through on Today and changes Up next'
   const bucket = page.getByRole('list').filter({ hasText: 'Strength' })
   await expect(upNext).toHaveText(/^Speed, /)
 
-  // Tapping a Session in the Bucket makes it today's; Speed goes back to planned.
+  // A Session tapped in the Bucket, then Do it today instead, is today's; Speed goes back to planned.
   await bucket.getByRole('button', { name: /^Threshold/ }).click()
+  await page.getByRole('button', { name: /^Do it today/ }).click()
   await expect(upNext).toHaveText(/^Threshold, /)
   await expect(bucket.getByRole('listitem')).toHaveText([/^Speed/, /^Strength/, /^Threshold.*Next$/, /^HYROX/, /^Easy run.*Optional$/])
   await expect(bucket.getByRole('listitem').first()).not.toContainText('Next')
