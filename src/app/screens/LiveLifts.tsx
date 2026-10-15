@@ -3,6 +3,7 @@ import { Button, Form, Group, Input, Label, NumberField, Radio, RadioGroup } fro
 import { nowMs } from '../../domain/clock'
 import {
   addSet,
+  answerPrompt,
   currentSet,
   endRest,
   finish,
@@ -19,6 +20,8 @@ import {
   type LiveSet,
 } from '../../domain/lifts'
 import { clock } from '../../domain/paces'
+import type { WorkingWeightSuggestion } from '../../domain/suggestion'
+import { suggestionCopy } from '../coachCopy'
 import { FieldLane } from '../components/FieldLane'
 import { Icon } from '../components/Icons'
 import { StripedNumeral } from '../components/StripedNumeral'
@@ -26,7 +29,17 @@ import { nb } from '../format'
 import { blockChangeCue, keepAwake, letSleep, unlockSound } from '../liveCues'
 import { ALL_SETS_LINE, finishLine, liftsStartLine, loggedLine, REST_OVER_LINE, rpeLine } from '../liveCopy'
 import { navigate, SCREEN_PATH } from '../router'
-import { DiscardButton, finishBarClass, inputClass, lineButton, OverallRpe, primaryButton, quietButton, toggleClass } from './liveUi'
+import {
+  DiscardButton,
+  finishBarClass,
+  inputClass,
+  lineButton,
+  linkButton,
+  OverallRpe,
+  primaryButton,
+  quietButton,
+  toggleClass,
+} from './liveUi'
 
 /** What the finish sheet hands back to be saved as the Session log. */
 export interface LiftsFinish {
@@ -56,10 +69,13 @@ export function Lifting({
   lifts,
   onChange,
   onSave,
+  onDecide,
 }: {
   lifts: LiveLifts
   onChange: (lifts: LiveLifts | null) => void
   onSave: (lifts: LiveLifts, finish: LiftsFinish) => void
+  /** Records the answer to a Working weight prompt as the Suggestion's decision, as Today does. */
+  onDecide: (suggestion: WorkingWeightSuggestion, decision: 'accepted' | 'kept') => void
 }) {
   const current = currentSet(lifts)
   const [say, setSay] = useState(() => liftsStartLine(lifts))
@@ -220,6 +236,17 @@ export function Lifting({
           />
         ) : (
           <>
+            {lifts.prompts.map((p) => (
+              <WeightPrompt
+                key={p.id}
+                suggestion={p}
+                name={lifts.exercises.find((e) => e.lift === p.lift)?.name ?? p.lift}
+                onDecide={(decision) => {
+                  onDecide(p, decision)
+                  act((l) => answerPrompt(l, p.id, decision))
+                }}
+              />
+            ))}
             {lifts.exercises.map((e, x) => (
               <ExerciseSets
                 key={x}
@@ -398,6 +425,43 @@ function RestBar({
   )
 }
 
+/**
+ * A Working weight Suggestion for a lift in this session, asked before set 1:
+ * Accept moves the lift's sets to the new weight, Keep leaves them. Either is
+ * the Suggestion's decision, as on Today.
+ */
+function WeightPrompt({
+  suggestion,
+  name,
+  onDecide,
+}: {
+  suggestion: WorkingWeightSuggestion
+  name: string
+  onDecide: (decision: 'accepted' | 'kept') => void
+}) {
+  const copy = suggestionCopy(suggestion)
+  return (
+    <section aria-label={`Working weight, ${name}`} className="border-b-2 border-ink py-4">
+      <p className="text-[20px] font-bold">{nb(`${name}: ${suggestion.from.pounds} → ${suggestion.to.pounds} lb?`)}</p>
+      <p className="mt-1 text-[14px] text-muted">{nb(copy.why)}</p>
+      <div className="mt-2.5 flex gap-5">
+        <Button onPress={() => onDecide('accepted')} className={linkButton}>
+          Accept
+        </Button>
+        <Button onPress={() => onDecide('kept')} className={quietButton}>
+          {copy.keep}
+        </Button>
+      </div>
+    </section>
+  )
+}
+
+/** Focus selects the whole load, so typing 225 replaces it; after the tap, or iOS puts the caret back. */
+const selectAll = (event: { currentTarget: HTMLInputElement }) => {
+  const input = event.currentTarget
+  requestAnimationFrame(() => input.select())
+}
+
 function ExerciseSets({
   exercise,
   index,
@@ -511,7 +575,8 @@ function SetRow({
               <span className="flex items-baseline">
                 <Input
                   inputMode="numeric"
-                  className="w-[4ch] rounded-sm bg-transparent text-right outline-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-link disabled:text-ink"
+                  onFocus={selectAll}
+                  className="h-11 w-[5ch] rounded-sm bg-transparent px-1 text-right text-[22px] shadow-[inset_0_-2px_0_var(--edge)] outline-none focus:shadow-[inset_0_-2px_0_var(--ink)] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-link disabled:text-ink disabled:shadow-none"
                 />
                 <span className="ml-1">lb</span>
               </span>

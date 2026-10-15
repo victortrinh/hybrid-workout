@@ -18,9 +18,10 @@ export async function seedLogs(request: APIRequestContext, project: string, logs
 
 /**
  * Answers /api/state and /api/sync with this history, plus whatever the page
- * syncs (the Starting point too, the last one sent), without touching the
- * shared database. Returns the logs the page sends, latest last, for tests
- * that check what was saved.
+ * syncs, without touching the shared database. Returns the logs the page
+ * sends, latest last, for tests that check what was saved. Decisions on
+ * Suggestions the page sends are served back, as the server would, and so is
+ * the last Starting point sent.
  */
 export async function serveHistory(
   page: Page,
@@ -38,6 +39,12 @@ export async function serveHistory(
       sent.push(...(body.sessionLogs ?? []))
       painReports.push(...(body.painReports ?? []))
       startingPoint = body.startingPoint ?? startingPoint
+      // The latest decision on a Suggestion stands, as the server keeps it.
+      for (const d of body.suggestionDecisions ?? []) {
+        const i = suggestionDecisions.findIndex((o) => o.id === d.id)
+        if (i >= 0) suggestionDecisions.splice(i, 1)
+        suggestionDecisions.push(d)
+      }
     }
     return route.fulfill({
       json: { sessionLogs: [...history, ...sent], suggestionDecisions, painReports, recoveryNights, startingPoint },

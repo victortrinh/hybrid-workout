@@ -77,7 +77,7 @@ test('a full Strength session: a load change, RPEs, a missed rep, then the Coach
   await expect(band.locator('p').first()).toHaveText('Back squat · Set 1 of 3')
   await expect(band.locator('.stripe-num')).toHaveText('185')
   await expect(band.getByText('lb × 5')).toBeVisible()
-  await expect(band.locator('[aria-live]')).toHaveText('Back squat first. RPE 7 means three left in the tank.')
+  await expect(band.locator('[aria-live]')).toHaveText('Back squat first. RPE 7: three left in the tank.')
   await expect(page.getByRole('img', { name: '0 of 15 sets logged' })).toBeVisible()
   // The Substitutions from the athlete's gym: no calf machines.
   await expect(page.getByRole('heading', { name: 'Single-leg calf raise' })).toBeVisible()
@@ -289,4 +289,97 @@ test('the Equipment profile swaps Exercises for what the gym has', async ({ page
   await expect(strength).toContainText('Standing calf raise')
   await expect(strength).toContainText('Instead, if no standing calf machine: Single-leg calf raise')
   await expect(strength).toContainText('Loaded seated calf raise')
+})
+
+/** Week 2's squat was every rep at RPE 7: the Coach suggests 190 lb, still open. */
+const EASY_SQUAT: SeedLog[] = HISTORY.map((log) =>
+  log.week === 2 && log.sessionId === 'strength'
+    ? {
+        ...log,
+        sets: sets([
+          [0, 'back-squat', 185, 5, 7, 3],
+          [1, 'romanian-deadlift', 135, 6, 8, 3],
+        ]),
+      }
+    : log,
+)
+
+test('a pending Working weight is asked before set 1: Accept moves every squat set, and Today shows it decided', async ({
+  page,
+}) => {
+  const decisions: Record<string, unknown>[] = []
+  await serveHistory(page, EASY_SQUAT, [], { suggestionDecisions: decisions })
+  await page.clock.install({ time: WEEK_3 })
+  await page.goto('/')
+  await page.clock.pauseAt(new Date(WEEK_3.getTime() + 1000))
+
+  await page.getByRole('list').filter({ hasText: 'Threshold' }).getByRole('button', { name: /^Strength/ }).click()
+  await page.getByRole('button', { name: /^Start / }).click()
+  await expect(page).toHaveURL('/live')
+
+  // Only the squat: the RDL held at RPE 8, so nothing to ask.
+  const prompt = page.getByRole('region', { name: /^Working weight, / })
+  await expect(prompt).toHaveCount(1)
+  await expect(prompt).toHaveAccessibleName('Working weight, Back squat')
+  await expect(prompt).toContainText('Back squat: 185 → 190 lb?')
+  await expect(prompt).toContainText('Week 2: 3 × 5 at 185 lb, top RPE 7 · +5 lb')
+  await expect(prompt.getByRole('button', { name: 'Keep 185 lb' })).toBeVisible()
+  await scan(page)
+
+  await prompt.getByRole('button', { name: 'Accept' }).click()
+  await expect(prompt).toHaveCount(0)
+  const squat = page.getByRole('region', { name: 'Back squat' })
+  for (const n of [1, 2, 3]) {
+    await expect(squat.getByRole('listitem', { name: `Back squat, set ${n}` }).getByRole('textbox')).toHaveValue('190')
+  }
+  await expect(page.locator('header .stripe-num')).toHaveText('190')
+  await expect(currentLog(page)).toHaveAccessibleName('Log set 1 · 190 lb, Back squat')
+  await expect.poll(() => decisions).toEqual([expect.objectContaining({ id: 'ww-back-squat-w2', decision: 'accepted' })])
+
+  // The same decision as an Accept on Today.
+  await page.goto('/')
+  const suggestion = page.getByRole('region', { name: 'Coach’s Suggestion' }).filter({ hasText: 'Squat' })
+  await expect(suggestion).toContainText('Squat is 190 lb now. Same face, more plates.')
+  await expect(suggestion.getByRole('button', { name: 'Undo' })).toBeVisible()
+})
+
+test('Keep leaves the loads where they are', async ({ page }) => {
+  const decisions: Record<string, unknown>[] = []
+  await serveHistory(page, EASY_SQUAT, [], { suggestionDecisions: decisions })
+  await page.clock.install({ time: WEEK_3 })
+  await page.goto('/')
+  await page.clock.pauseAt(new Date(WEEK_3.getTime() + 1000))
+  await page.getByRole('list').filter({ hasText: 'Threshold' }).getByRole('button', { name: /^Strength/ }).click()
+  await page.getByRole('button', { name: /^Start / }).click()
+
+  await page.getByRole('button', { name: 'Keep 185 lb' }).click()
+  await expect(page.getByRole('region', { name: /^Working weight, / })).toHaveCount(0)
+  await expect(currentLog(page)).toHaveAccessibleName('Log set 1 · 185 lb, Back squat')
+  await expect.poll(() => decisions).toEqual([expect.objectContaining({ id: 'ww-back-squat-w2', decision: 'kept' })])
+})
+
+test('tapping a load selects it, so typing 225 replaces it in one go', async ({ page }) => {
+  await serveHistory(page, HISTORY)
+  await page.clock.install({ time: WEEK_3 })
+  await page.goto('/')
+  await page.clock.pauseAt(new Date(WEEK_3.getTime() + 1000))
+  await page.getByRole('list').filter({ hasText: 'Threshold' }).getByRole('button', { name: /^Strength/ }).click()
+  await page.getByRole('button', { name: /^Start / }).click()
+
+  const squat = page.getByRole('region', { name: 'Back squat' })
+  const load = (n: number) => squat.getByRole('listitem', { name: `Back squat, set ${n}` }).getByRole('textbox')
+  await expect(load(1)).toHaveAttribute('inputmode', 'numeric')
+  const box = await load(1).boundingBox()
+  expect(box!.height).toBeGreaterThanOrEqual(44)
+
+  await load(1).click()
+  await page.clock.runFor(50)
+  await page.keyboard.type('225')
+  await page.keyboard.press('Enter')
+  await expect(load(1)).toHaveValue('225')
+  await expect(load(3)).toHaveValue('225')
+  await expect(currentLog(page)).toHaveAccessibleName('Log set 1 · 225 lb, Back squat')
+  // − and + still step 5 lb.
+  await squat.getByRole('listitem', { name: 'Back squat, set 1' }).getByRole('button', { name: 'Heavier' }).click()
+  await expect(load(1)).toHaveValue('230')
 })
