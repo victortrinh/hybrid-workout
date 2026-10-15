@@ -169,7 +169,7 @@ export function LogAfter({
         {nb(description.heading)}
       </h1>
       <p className="mt-1 text-body-quiet text-muted">{nb(description.summary)}</p>
-      {when && (
+      {when && !existing && (
         <p className="mt-2 text-body">{nb(outsideWeekLine(when, week.number, week.startDate, addDays(week.startDate, 6)))}</p>
       )}
       {activity && (

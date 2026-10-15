@@ -299,6 +299,14 @@ export function logFor(logs: SessionLog[], week: number, sessionId: string): Ses
   return latest
 }
 
+/** Whether a required (non-optional) Session of the Week is still Planned: nothing logged for it yet. */
+export function missingRequired(
+  week: { number: number; sessions: { id: string; optional: boolean }[] },
+  logs: SessionLog[],
+): boolean {
+  return week.sessions.some((s) => !s.optional && logFor(logs, week.number, s.id) === null)
+}
+
 export interface LogDays {
   /** The Session's own days, Monday to its last day: those after today can't be picked. */
   days: LocalDate[]

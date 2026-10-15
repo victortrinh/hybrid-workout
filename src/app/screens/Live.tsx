@@ -153,6 +153,8 @@ function Running({
   runRef.current = run
   const timerRef = useRef<HTMLSpanElement>(null)
   const fillRef = useRef<HTMLElement>(null)
+  const bandRef = useRef<HTMLElement>(null)
+  const restRef = useRef<HTMLDivElement>(null)
 
   /** Writes the clock into the page without React: the timer's text and the current lane's fill. */
   const paint = useCallback((now: number) => {
@@ -203,6 +205,13 @@ function Running({
   }, [over, paused])
   useEffect(() => letSleep, [])
 
+  // A new Block opens on its target, however far the last one was scrolled.
+  useLayoutEffect(() => {
+    bandRef.current?.scrollTo(0, 0)
+    restRef.current?.scrollTo(0, 0)
+    window.scrollTo(0, 0)
+  }, [run.block, run.ready])
+
   const shownBlock = useRef(run.block)
   useEffect(() => {
     if (shownBlock.current === run.block) return
@@ -218,8 +227,13 @@ function Running({
   }
 
   return (
-    <div className="flex min-h-dvh flex-col">
-      <header className="on-field bg-cobalt px-pad pt-[calc(14px+env(safe-area-inset-top))] pb-5 text-on-cobalt desktop:px-gutter desktop:pb-7">
+    // On the clock the page is one screen that never scrolls: the band keeps the target and the clock at
+    // the top, the Blocks scroll in what's left (or fold away to make room), and the actions stay docked.
+    <div className={`flex flex-col ${over ? 'min-h-dvh' : 'h-dvh'}`}>
+      <header
+        ref={bandRef}
+        className={`on-field bg-cobalt px-pad pt-[calc(14px+env(safe-area-inset-top))] pb-5 text-on-cobalt desktop:px-gutter desktop:pb-7 ${over ? '' : 'relative min-h-0 flex-[0_1_auto] overflow-y-auto'}`}
+      >
         <div className="flex items-center justify-between gap-3">
           <h1 tabIndex={-1} className="text-[22px]">
             {nb(run.heading)}
@@ -288,7 +302,11 @@ function Running({
       </header>
 
       {/* On the finish sheet its actions sit on the screen's bottom edge, so no padding under them. */}
-      <div className={`flex flex-1 flex-col px-pad desktop:max-w-plan desktop:px-gutter ${over ? 'desktop:pb-6' : 'pb-6'}`}>
+      {/* A question about the Block just finished keeps room for itself; the Blocks alone can fold to nothing. */}
+      <div
+        ref={restRef}
+        className={`flex flex-1 flex-col px-pad desktop:max-w-plan desktop:px-gutter ${over ? 'desktop:pb-6' : 'relative min-h-0 basis-0 overflow-y-auto pb-6 has-[section]:min-h-28'}`}
+      >
         <HeldCheck
           run={run}
           context={context}
@@ -331,7 +349,7 @@ function Running({
       </div>
 
       {!over && block && (
-        <div className="sticky bottom-0 border-t-2 border-ink bg-paper px-pad pt-3 pb-[calc(12px+env(safe-area-inset-bottom))] desktop:px-gutter">
+        <div className="flex-none border-t-2 border-ink bg-paper px-pad pt-3 pb-[calc(12px+env(safe-area-inset-bottom))] desktop:px-gutter">
           <UndoToast run={run} onUndo={() => act(undo)} />
           <div className="flex gap-2.5">
             {run.ready ? (

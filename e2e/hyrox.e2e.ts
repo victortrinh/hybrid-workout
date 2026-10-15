@@ -165,6 +165,55 @@ test('a three-round HYROX session: Set up off the clock, then a lighter sled fro
   })
 })
 
+test('on an iPhone SE a HYROX round fits: target, clock and action without scrolling, and each Block opens at the top', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 667 })
+  await serveHistory(page, weekDone(2, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-10-28'))
+  await page.clock.install({ time: WEEK_3 })
+  await page.goto('/')
+  await page.clock.pauseAt(new Date(WEEK_3.getTime() + 1000))
+  await bucketOf(page).getByRole('button', { name: /^HYROX/ }).click()
+  await page.getByRole('button', { name: /^Start / }).click()
+
+  const s = live(page)
+  const blockList = page.getByRole('list', { name: 'Blocks' })
+  const onScreen = async () => {
+    // The page itself never scrolls; what doesn't fit scrolls inside the Block list.
+    expect(await page.evaluate(() => document.documentElement.scrollHeight - innerHeight)).toBeLessThanOrEqual(0)
+    for (const el of [s.target, s.timer, s.finished]) await expect(el).toBeInViewport({ ratio: 1 })
+  }
+  const scrollBlocksDown = () =>
+    // The band too, in case a long Block let it scroll.
+    blockList.evaluate((list) => {
+      const rest = list.parentElement!
+      rest.scrollTop = rest.scrollHeight
+      rest.previousElementSibling!.scrollTop = rest.previousElementSibling!.scrollHeight
+    })
+
+  await expect(s.block).toHaveText('Warm-up · 5 min')
+  await scrollBlocksDown()
+  await s.finished.click()
+  await page.getByRole('checkbox', { name: 'Lunges 10 · 1 of 2' }).click({ force: true })
+  await page.getByRole('checkbox', { name: 'Lunges 10 · 2 of 2' }).click({ force: true })
+  await expect(s.block).toHaveText('Set up · 4 Stations')
+  await scrollBlocksDown()
+  await s.finished.click()
+  await s.start.click()
+
+  await expect(s.block).toHaveText('Round 1 of 3 · 600 m + 2 Stations')
+  await onScreen()
+  await expect(page.locator('header')).toHaveJSProperty('scrollTop', 0)
+  await expect(page.getByRole('heading', { level: 1 })).toBeInViewport()
+
+  // Scrolled down the list mid-round, the next round still opens on its distance.
+  await scrollBlocksDown()
+  await page.clock.runFor('10:00')
+  await s.finished.click()
+  await s.start.click()
+  await expect(s.block).toHaveText('Round 2 of 3 · 600 m + 2 Stations')
+  await onScreen()
+  await expect(page.locator('header')).toHaveJSProperty('scrollTop', 0)
+})
+
 test('half simulation A logs a split for every run and Station, in race order', async ({ page }) => {
   // Wednesday of Week 18, Week 17 done.
   const wednesday = new Date('2027-02-17T12:00:00-05:00')

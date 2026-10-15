@@ -3,7 +3,7 @@ import { Button, Link } from 'react-aria-components'
 import { addDays, daysBetween } from '../../domain/calendar'
 import type { CoachDay } from '../../domain/coach'
 import { isLive, type LiveSession } from '../../domain/lifts'
-import { logFor, trained, type SessionLog } from '../../domain/log'
+import { logFor, missingRequired, trained, type SessionLog } from '../../domain/log'
 import { logSummary } from '../../domain/logSummary'
 import { clock, type RunContext } from '../../domain/paces'
 import { describeExercise, describeSession, SESSION_TYPES } from '../../domain/program/describe'
@@ -58,8 +58,14 @@ export function WeekScreen({
   const past = day.position.kind === 'finished' || (day.position.kind === 'in-week' && week.number < day.position.week)
   const weights = past ? undefined : day.workingWeights
   const sunday = addDays(week.startDate, 6)
-  /** Early or late: whatever is done here today still counts for this Week. */
-  const when = current ? null : daysBetween(day.today, week.startDate) > 0 ? 'early' : daysBetween(sunday, day.today) > 0 ? 'late' : null
+  /** Early, or late while a required Session is still to log: whatever is done here today still counts for this Week. */
+  const when = current
+    ? null
+    : daysBetween(day.today, week.startDate) > 0
+      ? 'early'
+      : daysBetween(sunday, day.today) > 0 && missingRequired(week, logs)
+        ? 'late'
+        : null
   /** The Session Today offers as Next, when it is one of this Week's: it gets the one cobalt Start. */
   const nextUp = day.bucket.find((e) => e.state === 'next' && e.week === week.number)?.session.id
   /** A link to `#session-<id>` opens that Session's Prescription. */
