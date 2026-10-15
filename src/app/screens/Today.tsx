@@ -558,7 +558,7 @@ function SomethingHurts({
             setNoted(null)
           }}
           aria-expanded={false}
-          className={quietButton}
+          className={linkButton}
         >
           Something hurts
         </Button>
