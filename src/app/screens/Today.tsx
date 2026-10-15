@@ -268,8 +268,8 @@ function UpNext({
           ? weekday(position.startsOn)
           : shortDay(position.startsOn)
     heading = `Week 1 starts ${when}.`
+    // The masthead already carries the date; this line is just the Coach.
     target = `${plural(position.daysToStart, 'day')} of nothing. Enjoy them.`
-    meta = `${longDay(position.startsOn)} · Week 1’s Sessions are below`
   } else if (position.kind === 'in-week' && day.rest) {
     ;({ heading, target, meta } = restCopy(day.rest, position.week, position.endDate, weekCount))
   } else if (position.kind === 'in-week') {
