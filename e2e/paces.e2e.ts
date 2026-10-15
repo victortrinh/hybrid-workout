@@ -42,6 +42,7 @@ test('logging a 23:00 5K test sets Threshold’s speed, and mph updates every sp
 
   // Threshold now has an exact treadmill speed: 4:52/km is 12.3 km/h.
   await bucket.getByRole('button', { name: /^Threshold/ }).click()
+  await page.getByRole('button', { name: /^Do it today/ }).click()
   await expect(upNext).toHaveText(/^Threshold, /)
   const target = upNext.locator('xpath=following-sibling::p[1]')
   // February runs indoors by default, April outdoors: start both on the treadmill.

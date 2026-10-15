@@ -9,7 +9,7 @@ import type { Environment, RunContext } from '../../domain/paces'
 import { painLevel, type PainArea } from '../../domain/pain'
 import { describeSession, LIFT_NAME, SESSION_TYPES } from '../../domain/program/describe'
 import { finishClock } from '../../domain/recap'
-import type { Program, Session } from '../../domain/program/types'
+import type { Program, Session, Station, StationId } from '../../domain/program/types'
 import type { RacePlan } from '../../domain/racePlan'
 import type { Settings } from '../../domain/settings'
 import type { Decision, Suggestion, WorkingWeightSuggestion } from '../../domain/suggestion'
@@ -30,6 +30,7 @@ import { answered, PainFields, type PainAnswer } from '../components/PainFields'
 import { ActionBar } from '../components/ActionBar'
 import { asksPain, PAIN_FREE, painSuggestionFor, PainStep, type PainAtStart } from '../components/PainStep'
 import { Segmented } from '../components/Segmented'
+import { SessionSheet, useSheet, type SheetAction } from '../components/SessionSheet'
 import { SettingsPopover, type StartingPointEdit } from '../components/SettingsPopover'
 import { StripedNumeral } from '../components/StripedNumeral'
 import {
@@ -58,6 +59,7 @@ import { RaceCard } from './RaceCard'
 export function Today({
   day,
   weekCount,
+  stations,
   pending,
   error,
   onPick,
@@ -77,6 +79,8 @@ export function Today({
 }: {
   day: CoachDay
   weekCount: number
+  /** The Program's Stations, for a Prescription's HYROX lines. */
+  stations: Record<StationId, Station>
   /** The race card, the day before Race day and on it: it leads, and Up next follows it. */
   race: { plan: RacePlan; program: Program } | null
   /** From the day after Race day: the result and the Program recap, in place of Up next and the Week. */
@@ -108,6 +112,35 @@ export function Today({
   /** "Which Session was this?": a Session of its Week, or (both null) none of them. */
   onAnswer: (activity: Activity, week: number | null, sessionId: string | null) => void
 }) {
+  const [sheet, showSheet, closeSheet] = useSheet<{ week: number; sessionId: string }>()
+  /** Bumped by a pick from the sheet: focus goes to Up next, now that Session. */
+  const [landed, setLanded] = useState(0)
+  useEffect(() => {
+    if (!landed) return
+    // After the Modal has put focus back on the row it was opened from.
+    const frame = requestAnimationFrame(() =>
+      requestAnimationFrame(() => document.querySelector<HTMLElement>('[data-up-next-heading]')?.focus()),
+    )
+    return () => cancelAnimationFrame(frame)
+  }, [landed])
+  const open = sheet && day.bucket.find((e) => e.week === sheet.week && e.session.id === sheet.sessionId)
+  const action: SheetAction | null = !open
+    ? null
+    : open.state === 'next' || !open.pickable
+      ? { kind: 'none' }
+      : live
+        ? { kind: 'running', heading: live.heading }
+        : {
+            kind: 'pick',
+            label: day.position.kind === 'before-start' ? 'Do it today, early' : 'Do it today instead',
+            onPick: () => {
+              closeSheet()
+              onPick(open.week, open.session.id)
+              setLanded((n) => n + 1)
+            },
+          }
+  const openSheet = (entry: BucketEntry) => showSheet({ week: entry.week, sessionId: entry.session.id })
+
   return (
     <section
       aria-labelledby="today-heading"
@@ -148,9 +181,21 @@ export function Today({
             onSomethingHurts={onSomethingHurts}
             treadmill={treadmill}
             onAnswer={onAnswer}
+            onShow={openSheet}
           />
-          <ThisWeek day={day} onPick={onPick} treadmill={treadmill} />
+          <ThisWeek day={day} onOpen={openSheet} treadmill={treadmill} />
         </>
+      )}
+      {open && action && (
+        <SessionSheet
+          session={open.session}
+          line={bucketLine(open)}
+          stations={stations}
+          run={runContext(open.week, open.session)}
+          weights={day.workingWeights}
+          action={action}
+          onClose={closeSheet}
+        />
       )}
     </section>
   )
@@ -308,6 +353,7 @@ function UpNext({
   onSomethingHurts,
   treadmill,
   onAnswer,
+  onShow,
   lead,
 }: {
   day: CoachDay
@@ -324,8 +370,12 @@ function UpNext({
   onSomethingHurts: (score: number, area: PainArea) => void
   treadmill: (activity: Activity) => boolean
   onAnswer: (activity: Activity, week: number | null, sessionId: string | null) => void
+  /** Opens a Session's Prescription in the sheet. */
+  onShow: (entry: BucketEntry) => void
 }) {
   const [asking, setAsking] = useState(false)
+  const entrances = useEntrances()
+  const mounted = useMounted()
   /** Back from the pain step with Not now: focus returns to Start. */
   const [refocus, setRefocus] = useState(false)
   const { position, upNext } = day
@@ -384,15 +434,29 @@ function UpNext({
 
   return (
     <div className={lead ? 'px-pad pt-5 desktop:px-0 desktop:pt-7' : 'mt-section px-pad desktop:px-0'}>
-      {lead ? (
-        <h1 id="today-heading" tabIndex={-1} className="text-headline">
-          {nb(heading)}
-        </h1>
-      ) : (
-        <h2 className="border-t-2 border-ink pt-3.5 text-title">{nb(heading)}</h2>
+      {/* A Session picked from its sheet wipes in as the new Up next. */}
+      <motion.div key={upNextEntry ? `${upNextEntry.week}/${upNextEntry.session.id}` : 'none'} {...play(wipeIn, mounted && entrances)}>
+        {lead ? (
+          <h1 id="today-heading" data-up-next-heading tabIndex={-1} className="text-headline">
+            {nb(heading)}
+          </h1>
+        ) : (
+          <h2 data-up-next-heading tabIndex={-1} className="border-t-2 border-ink pt-3.5 text-title">
+            {nb(heading)}
+          </h2>
+        )}
+        <p className="mt-2 text-prescription">{nb(target)}</p>
+        {meta && <p className="mt-1 text-body-quiet text-muted">{meta}</p>}
+      </motion.div>
+      {upNextEntry && (
+        <Button
+          onPress={() => onShow(upNextEntry)}
+          aria-haspopup="dialog"
+          className="mt-1 inline-flex min-h-11 cursor-pointer items-center text-[15px] font-bold text-link underline decoration-2 underline-offset-4 hover:decoration-[3px] data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-link"
+        >
+          Show the Prescription
+        </Button>
       )}
-      <p className="mt-2 text-prescription">{nb(target)}</p>
-      {meta && <p className="mt-1 text-body-quiet text-muted">{meta}</p>}
       {upNext && position.kind === 'before-start' && (
         <p className="mt-3.5 text-body">
           {nb(outsideWeekLine('early', 1, position.startsOn, addDays(position.startsOn, 6)))}
@@ -946,22 +1010,20 @@ function restCopy(
 
 function ThisWeek({
   day,
-  onPick,
+  onOpen,
   treadmill,
 }: {
   day: CoachDay
-  onPick: (week: number, sessionId: string) => void
+  onOpen: (entry: BucketEntry) => void
   treadmill: (activity: Activity) => boolean
 }) {
   const { week, position, bucket } = day
   if (!week) return null
 
   const inWeek = position.kind === 'in-week'
-  // Before the Program, Week 1's Sessions can be picked to do early.
+  // Before the Program, Week 1's Sessions can be opened and picked to do early.
   const interactive = inWeek || position.kind === 'before-start'
   const left = bucket.filter((e) => !e.session.optional && e.toDo).length
-  // Rows that can still be made today's: still to do, not already Next, not pinned to another day.
-  const pickable = bucket.some((e) => e.pickable && e.toDo && e.state !== 'next')
   const aside = inWeek
     ? `${plural(left, 'Session')} left · ${plural(position.daysLeft, 'day')}`
     : `from ${shortDay(week.startDate)}`
@@ -977,17 +1039,12 @@ function ThisWeek({
           <BucketRow
             key={`${entry.week}/${entry.session.id}`}
             entry={entry}
-            interactive={interactive && entry.pickable}
-            onPick={() => onPick(entry.week, entry.session.id)}
+            interactive={interactive}
+            onOpen={() => onOpen(entry)}
             treadmill={treadmill}
           />
         ))}
       </ul>
-      {interactive && pickable && (
-        <p className="mt-2.5 text-[14px] text-muted">
-          {inWeek ? 'Tap any Session to do it today instead.' : 'Tap any Session to do it today, early.'}
-        </p>
-      )}
     </div>
   )
 }
@@ -995,19 +1052,19 @@ function ThisWeek({
 const rowClass = 'grid w-full grid-cols-[36px_1fr_auto] items-center gap-3 py-3.5 text-left'
 
 /**
- * One Session of the Bucket. Rows still to do (Planned, or Skipped with days
- * left) are buttons that make the Session today's; other logged rows link to
- * their log; Up next is plain, it's already today's.
+ * One Session of the Bucket. Up next and rows still to do (Planned, or
+ * Skipped with days left) open the Session's sheet, where it can be made
+ * today's; other logged rows link to their log.
  */
 function BucketRow({
   entry,
   interactive,
-  onPick,
+  onOpen,
   treadmill,
 }: {
   entry: BucketEntry
   interactive: boolean
-  onPick: () => void
+  onOpen: () => void
   treadmill: (activity: Activity) => boolean
 }) {
   const { session, state, log, week, carriedUntil, activity } = entry
@@ -1057,17 +1114,22 @@ function BucketRow({
 
   return (
     <li className="border-b border-rule">
-      {!interactive || state === 'next' ? (
+      {!interactive ? (
         <div className={rowClass}>{content}</div>
-      ) : log && !entry.toDo ? (
+      ) : log && !entry.toDo && state !== 'next' ? (
         <Link href={logPath(week, session.id)} className={`group ${rowClass} text-ink no-underline`}>
           {content}
         </Link>
       ) : (
-        <Button onPress={onPick} className={`group ${rowClass} cursor-pointer`}>
+        <Button onPress={onOpen} aria-haspopup="dialog" className={`group ${rowClass} cursor-pointer`}>
           {content}
         </Button>
       )}
     </li>
   )
+}
+
+/** Carried over from last Week, the sheet says until when; Key and Optional are already in its meta. */
+function bucketLine({ week, carriedUntil }: BucketEntry): string | undefined {
+  return carriedUntil ? `Week ${week}’s Key session, until ${shortWeekday(carriedUntil)}` : undefined
 }
