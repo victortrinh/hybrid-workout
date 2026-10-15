@@ -259,7 +259,7 @@ function Running({
               {nb(run.ready ? readyWords(block, target) : `${block.name} · ${blockLength(block)}`)}
             </p>
             {target ? (
-              <p className="mt-1.5 flex flex-wrap items-baseline gap-x-2">
+              <p className="@container mt-1.5 flex flex-wrap items-baseline gap-x-2">
                 <StripedNumeral value={target.value} className="text-numeral-live" />
                 <span className="text-[24px] font-bold">{target.unit}</span>
               </p>

@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from 'react'
+import { useLayoutEffect, useRef, type CSSProperties } from 'react'
 
 /**
  * The screen's hero number, set expanded and black with horizontal stripes cut
@@ -8,6 +8,9 @@ import { useLayoutEffect, useRef } from 'react'
  * baseline: we measure the digits' real ascent with a canvas and the baseline
  * with a zero-size marker, then fit a whole number of stripe periods between.
  * The decimal point stays solid above the stripes.
+ *
+ * It also carries its own width in ems as `--ems`, so a size can be capped to
+ * fit its column (see `--text-numeral-live`).
  */
 export function StripedNumeral({ value, className }: { value: string; className?: string }) {
   const ref = useRef<HTMLSpanElement>(null)
@@ -29,7 +32,11 @@ export function StripedNumeral({ value, className }: { value: string; className?
 
   const [whole, decimals] = value.split('.')
   return (
-    <span ref={ref} className={className ? `stripe-num ${className}` : 'stripe-num'}>
+    <span
+      ref={ref}
+      className={className ? `stripe-num ${className}` : 'stripe-num'}
+      style={{ '--ems': numeralEms(value) } as CSSProperties}
+    >
       {whole}
       {decimals !== undefined && (
         <>
@@ -40,6 +47,16 @@ export function StripedNumeral({ value, className }: { value: string; className?
       <i className="bl" aria-hidden="true" />
     </span>
   )
+}
+
+/**
+ * How wide `value` sets, in ems: Archivo's tabular digits at 900, expanded and
+ * tracked -0.04em, are 0.775em each and the point 0.34em.
+ */
+export function numeralEms(value: string): number {
+  let ems = 0
+  for (const c of value) ems += c === '.' ? 0.34 : 0.775
+  return Math.round(ems * 1000) / 1000
 }
 
 let measure: CanvasRenderingContext2D | null = null

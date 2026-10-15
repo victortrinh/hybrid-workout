@@ -357,7 +357,7 @@ The cobalt header of Today and every Live session: brand and avatar row, the str
 ### Lanes (signature)
 - **Field lanes:** 5px `cobalt-soft` tracks with white fill; the current lane is 8px and its label 800. Used for Phases on Today, exercise groups in strength Live sessions and the Logged screen.
 - **Live block lanes:** 12px `rule` tracks filled in the block's Session-type colour; the current block grows to 26px with a 17px/800 label and its time or speed right-aligned in muted.
-- **Week lanes (Plan, Weekly completion):** a two-digit expanded Week number, five 12px cells in Session-type order (Speed, Strength, Threshold, HYROX, Easy) outlined in 2px of their colour, filled when done, 18px tall for Key sessions; the current Week sits on `sunk` with a `link`-coloured number.
+- **Week lanes (Plan, Weekly completion):** a two-digit expanded Week number, five 12px cells in Session-type order (Speed, Strength, Threshold, HYROX, Easy) outlined in 2px of their colour, filled when Done, half-filled when Partial, faded when Skipped or missed (Weeks ahead stay outlined), 18px tall for Key sessions; the current Week sits on `sunk` with a `link`-coloured number.
 - **Lane chip:** five 3px stacked bars in the Session-type colour, 36px wide, leading each Week row on Today.
 - **Motion:** fills animate width over 0.9s with `cubic-bezier(.16,1,.3,1)`; the rest bar ticks linearly over 1s. All transitions are removed under reduced motion.
 

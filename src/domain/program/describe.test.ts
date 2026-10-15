@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { findWeek } from '../coach'
-import { describeSession } from './describe'
+import { describeExercise, describeSession } from './describe'
 import { program } from './program'
+import type { Session } from './types'
 
 const session = (week: number, id: string) => {
   const found = findWeek(program, week)?.sessions.find((s) => s.id === id)
@@ -28,6 +29,26 @@ describe('describeSession', () => {
       meta: '45 min · Key session this Week',
     })
     expect(session(2, 'threshold').meta).toBe('45 min')
+  })
+
+  it('drops the recovery when a cut leaves a single rep', () => {
+    const threshold = findWeek(program, 1)?.sessions.find((s) => s.id === 'threshold')
+    if (!threshold) throw new Error('No Threshold in Week 1')
+    const oneRep: Session = {
+      ...threshold,
+      blocks: threshold.blocks.map((b) => ({
+        ...b,
+        exercises: b.exercises.map((e) =>
+          e.prescription.kind === 'intervals' ? { ...e, prescription: { ...e.prescription, reps: 1 } } : e,
+        ),
+      })),
+    }
+    const described = describeSession(oneRep)
+    expect(described.summary).toBe('1 × 7′ at Threshold')
+    expect(described.target).toBe('Threshold effort, RPE 6–7')
+    const intervals = oneRep.blocks.flatMap((b) => b.exercises).find((e) => e.prescription.kind === 'intervals')
+    if (!intervals) throw new Error('No intervals in Threshold')
+    expect(describeExercise(intervals, program.stations).detail).toBe('1 × 7′ · Threshold effort, RPE 6–7')
   })
 
   it('reads Week 1 Strength as calibration and later Weeks as the main lifts', () => {
