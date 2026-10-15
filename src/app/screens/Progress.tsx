@@ -5,7 +5,7 @@ import type { CoachDay } from '../../domain/coach'
 import type { SessionLog } from '../../domain/log'
 import { clock, GOAL_PACE, speedFor, UNIT_LABEL, type SpeedUnit, type TrainingPaces } from '../../domain/paces'
 import { stations as STATIONS } from '../../domain/program/program'
-import { LIFT_NAME, SESSION_TYPES } from '../../domain/program/describe'
+import { LIFT_NAME } from '../../domain/program/describe'
 import type { Lane, Program, Station } from '../../domain/program/types'
 import {
   GOAL_SECONDS,
@@ -15,7 +15,6 @@ import {
   RECOVERY_NIGHTS,
   stationTimes,
   workingWeightRows,
-  type CompletionState,
   type FiveKProgress,
   type StationTimes,
   type WeekCompletion,
@@ -25,7 +24,8 @@ import {
 import { isShortSleep, sleepText, SHORT_SLEEP_MINUTES, type RecoveryNight } from '../../domain/recovery'
 import type { WorkingWeightChange } from '../../domain/weights'
 import { EmptyState } from '../components/EmptyState'
-import { LANE_COLOR, LANES, LaneLegend } from '../components/LaneChip'
+import { LANES, LaneLegend } from '../components/LaneChip'
+import { completionLabel, WeekLanes } from '../components/WeekLanes'
 import { shortDay } from '../format'
 import { weekPath } from '../router'
 import { useWidth } from '../useWidth'
@@ -283,8 +283,6 @@ const listWeeks = (weeks: number[]) =>
 // ---------------------------------------------------------------------------
 // Weekly completion
 
-const FILLED: CompletionState[] = ['done', 'partial']
-
 function CompletionPanel({
   program,
   day,
@@ -320,7 +318,6 @@ function CompletionPanel({
 }
 
 function CompletionRow({ program, week, current }: { program: Program; week: WeekCompletion; current: boolean }) {
-  const missed = week.cells.filter((c) => c.state === 'missed' || c.state === 'skipped').length
   const planned = program.phases.flatMap((p) => p.weeks).find((w) => w.number === week.week)
   const mark = planned ? weekMark(planned) : ''
   const tally = `${week.done} of ${week.required}`
@@ -335,21 +332,10 @@ function CompletionRow({ program, week, current }: { program: Program; week: Wee
       </span>
       <span className="sr-only">
         Week {week.week}
-        {current && ', this Week'}: {tally} done{missed > 0 && `, ${missed} missed`}
+        {current && ', this Week'}: {completionLabel(week)}
         {mark && `, ${mark}`}
       </span>
-      <span aria-hidden="true" className="grid h-[18px] grid-cols-5 items-end gap-1">
-        {week.cells.slice(0, 5).map(({ session, state }) => (
-          <i
-            key={session.id}
-            className={`relative block overflow-hidden shadow-[inset_0_0_0_2px_currentColor] ${LANE_COLOR[SESSION_TYPES[session.type].lane]} ${session.key ? 'h-[18px]' : 'h-3'}`}
-          >
-            {FILLED.includes(state) && (
-              <b className={`absolute inset-x-0 bottom-0 bg-current ${state === 'partial' ? 'h-1/2' : 'h-full'}`} />
-            )}
-          </i>
-        ))}
-      </span>
+      <WeekLanes cells={week.cells} />
       <span aria-hidden="true" className="text-right text-label text-muted">
         {current ? 'In progress' : mark || tally}
       </span>
