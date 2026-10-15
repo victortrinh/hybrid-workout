@@ -44,7 +44,7 @@ async function day(name: string): Promise<CoachDay & { state: SyncState; scenari
 const byId = <T extends { id: string }>(rows: T[]) => [...rows].sort((a, b) => a.id.localeCompare(b.id))
 
 describe('scenarios', () => {
-  it('are the thirteen the specs list, each named once, with the default among them', () => {
+  it('are the fourteen the specs list, each named once, with the default among them', () => {
     expect(SCENARIOS.map((s) => s.name)).toEqual([
       'before-program',
       'first-launch',
@@ -58,6 +58,7 @@ describe('scenarios', () => {
       'hyrox-build',
       'dense-history',
       'race-week',
+      'race-morning',
       'after-race',
     ])
     expect(findScenario(DEFAULT_SCENARIO)).not.toBeNull()
@@ -228,6 +229,12 @@ describe('each scenario falls where its name says', () => {
     expect(d.position).toMatchObject({ kind: 'in-week', week: 27 })
     expect(d.week?.race).toBe(true)
     expect(d.daysToRace).toBe(1)
+  })
+
+  it('race-morning: Race day, every Race simulation Skipped', async () => {
+    const d = await day('race-morning')
+    expect(d.daysToRace).toBe(0)
+    expect(d.state.sessionLogs.filter((l) => l.sessionId === 'race-simulation').every((l) => l.status === 'skipped')).toBe(true)
   })
 
   it('after-race: 22 April 2027, the day after Race day, the race logged', async () => {

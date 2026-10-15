@@ -1,17 +1,26 @@
 import { useState } from 'react'
 import { Button, Link } from 'react-aria-components'
-import { addDays } from '../../domain/calendar'
+import { addDays, daysBetween } from '../../domain/calendar'
 import type { Activity } from '../../domain/activity'
 import type { ActivityAttached, ActivityQuestion, BucketEntry, CoachDay, PhaseProgress, RestReason } from '../../domain/coach'
 import { isLive, type LiveSession } from '../../domain/lifts'
 import type { Environment, RunContext } from '../../domain/paces'
 import { painLevel, type PainArea } from '../../domain/pain'
 import { describeSession, LIFT_NAME, SESSION_TYPES } from '../../domain/program/describe'
-import type { Session } from '../../domain/program/types'
+import type { Program, Session } from '../../domain/program/types'
+import type { RacePlan } from '../../domain/racePlan'
 import type { Settings } from '../../domain/settings'
 import type { Decision, Suggestion, WorkingWeightSuggestion } from '../../domain/suggestion'
 import { heldCopy, liftChange, liftsCopy, suggestionBlocks, VISIBLE_BLOCKS, type SuggestionBlock } from '../suggestionBlocks'
-import { outsideWeekLine, painLine, recoveryWhy, shortSleepLine, suggestionCopy, waitingLine } from '../coachCopy'
+import {
+  outsideWeekLine,
+  painLine,
+  recoveryWhy,
+  shortSleepLine,
+  skippedTodayLine,
+  suggestionCopy,
+  waitingLine,
+} from '../coachCopy'
 import { FieldLane } from '../components/FieldLane'
 import { LaneChip } from '../components/LaneChip'
 import { buttonBase, lineAction, primaryAction, quietButton } from '../components/actions'
@@ -34,6 +43,7 @@ import {
   weekRange,
 } from '../format'
 import { logPath, SCREEN_PATH, weekPath } from '../router'
+import { RaceCard } from './RaceCard'
 
 
 /**
@@ -58,9 +68,12 @@ export function Today({
   onSomethingHurts,
   treadmill,
   onAnswer,
+  race,
 }: {
   day: CoachDay
   weekCount: number
+  /** The race card, the day before Race day and on it: it leads, and Up next follows it. */
+  race: { plan: RacePlan; program: Program } | null
   /** Logs saved on this device that the server hasn't taken yet. */
   pending: number
   /** A log the server refused or the device couldn't store, said once under Up next. */
@@ -100,8 +113,10 @@ export function Today({
         onSettings={onSettings}
         startingPoint={startingPoint}
       />
+      {race && <RaceCard plan={race.plan} program={race.program} raceDay={day.daysToRace === 0} />}
       <UpNext
         day={day}
+        lead={!race}
         weekCount={weekCount}
         pending={pending}
         error={error}
@@ -216,8 +231,11 @@ function UpNext({
   onSomethingHurts,
   treadmill,
   onAnswer,
+  lead,
 }: {
   day: CoachDay
+  /** Up next leads Today unless the race card does; then its heading steps down a level. */
+  lead: boolean
   weekCount: number
   pending: number
   error: string | null
@@ -236,10 +254,11 @@ function UpNext({
   const { position, upNext } = day
   const standing = day.pain?.report ?? null
   const previousPain = standing?.score ?? null
-  const upNextWeek = day.bucket.find((e) => e.state === 'next')?.week
+  const upNextEntry = day.bucket.find((e) => e.state === 'next')
+  const upNextWeek = upNextEntry?.week
   const run = upNext && upNextWeek ? runContext(upNextWeek, upNext) : undefined
-  /** Where to start a Session early: Week 1 before the Program, the next Week once this one is all logged. */
-  const weekDone = day.bucket.length > 0 && day.bucket.every((e) => e.log !== null)
+  /** Where to start a Session early: Week 1 before the Program, the next Week once nothing in this one is left to do. */
+  const weekDone = day.bucket.length > 0 && day.bucket.every((e) => !e.toDo)
   const ahead = upNext
     ? null
     : position.kind === 'before-start'
@@ -260,7 +279,11 @@ function UpNext({
     // Paces from the Starting point read as estimates wherever they set a run's target.
     const estimated =
       run?.paces?.estimate && describeSession(upNext, { ...run, paces: null }, day.workingWeights).target !== target
-    meta = [description.meta, estimated && 'Estimated paces'].filter(Boolean).join(' · ')
+    // Skipped earlier and back as Up next: say so, or it reads like the Coach forgot.
+    const skippedOn = upNextEntry?.log?.status === 'skipped' ? upNextEntry.log.date : null
+    meta = [skippedOn && `Skipped ${weekday(skippedOn)}, still counts`, description.meta, estimated && 'Estimated paces']
+      .filter(Boolean)
+      .join(' · ')
   } else if (position.kind === 'before-start') {
     const when =
       position.daysToStart === 1
@@ -282,10 +305,14 @@ function UpNext({
   }
 
   return (
-    <div className="px-pad pt-5 desktop:px-0 desktop:pt-7">
-      <h1 id="today-heading" tabIndex={-1} className="text-headline">
-        {nb(heading)}
-      </h1>
+    <div className={lead ? 'px-pad pt-5 desktop:px-0 desktop:pt-7' : 'mt-section px-pad desktop:px-0'}>
+      {lead ? (
+        <h1 id="today-heading" tabIndex={-1} className="text-headline">
+          {nb(heading)}
+        </h1>
+      ) : (
+        <h2 className="border-t-2 border-ink pt-3.5 text-title">{nb(heading)}</h2>
+      )}
       <p className="mt-2 text-prescription">{nb(target)}</p>
       {meta && <p className="mt-1 text-body-quiet text-muted">{meta}</p>}
       {upNext && position.kind === 'before-start' && (
@@ -403,7 +430,8 @@ function UpNext({
         />
       ))}
       {day.bucket
-        .filter((e) => e.activity && treadmill(e.activity) && e.log?.status !== 'skipped' && e.log?.distanceMeters == null)
+        // Not logged yet, the note's Log it asks for the console's distance itself.
+        .filter((e) => e.activity && treadmill(e.activity) && e.log && e.log.status !== 'skipped' && e.log.distanceMeters == null)
         .map((e) => (
           <ConsoleDistance key={e.activity!.id} entry={e} />
         ))}
@@ -411,7 +439,11 @@ function UpNext({
   )
 }
 
-/** A workout the Coach attached on its own: said in one line, undone in one tap. */
+/**
+ * A workout attached to a Session: said in one line, undone in one tap, and,
+ * while the Session isn't logged, logged in one more (Log after, filled in
+ * from the watch).
+ */
 function AttachedNote({
   attached,
   treadmill,
@@ -421,18 +453,33 @@ function AttachedNote({
   treadmill: boolean
   onDetach: () => void
 }) {
-  const { activity, session } = attached
+  const { activity, session, week, by, logged } = attached
+  const name = SESSION_TYPES[session.type].name
   return (
-    <section aria-label="From the watch" className="mt-[18px] border-t-2 border-t-ink py-3.5 desktop:border-b desktop:border-b-rule">
+    <section
+      aria-label="From the watch"
+      aria-live="polite"
+      className="mt-[18px] border-t-2 border-t-ink py-3.5 desktop:border-b desktop:border-b-rule"
+    >
       <p className="text-[17px] leading-[1.3] font-semibold">
-        {nb(`The watch’s ${activity.workoutType.toLowerCase()} went to ${SESSION_TYPES[session.type].name}.`)}
+        {by === 'coach'
+          ? nb(`The watch’s ${activity.workoutType.toLowerCase()} went to ${name}.`)
+          : nb(`${name} it was. Not logged yet.`)}
       </p>
       <p className="mt-1 text-[14px] text-muted">
-        {nb(`${timeOfDay(activity.startedAt)} · ${activitySummary(activity, treadmill)}`)}
+        {nb(`${shortWeekday(activity.date)} ${timeOfDay(activity.startedAt)} · ${activitySummary(activity, treadmill)}`)}
+        {!logged && (treadmill ? nb(' · Bring the console’s distance.') : nb(' · The watch filled in the rest.'))}
       </p>
-      <Button onPress={onDetach} className={`mt-1 ${quietButton}`}>
-        Not that Session
-      </Button>
+      <div className="mt-1 flex flex-wrap gap-x-5">
+        {!logged && (
+          <Link href={logPath(week, session.id)} className={linkButton}>
+            Log it
+          </Link>
+        )}
+        <Button onPress={onDetach} className={quietButton}>
+          Not that Session
+        </Button>
+      </div>
     </section>
   )
 }
@@ -447,7 +494,7 @@ function WhichSession({
   treadmill: boolean
   onAnswer: (week: number | null, sessionId: string | null) => void
 }) {
-  const { activity, candidates } = question
+  const { activity, candidates, guess } = question
   return (
     <section
       aria-label="Which Session was this?"
@@ -457,9 +504,15 @@ function WhichSession({
       <p className="mt-1 text-[14px] text-muted">
         {nb(`${activity.workoutType} from the watch, ${shortWeekday(activity.date)} ${timeOfDay(activity.startedAt)} · ${activitySummary(activity, treadmill)}`)}
       </p>
+      {guess && <p className="mt-1 text-[14px] text-ink">{nb(guessLine(question, guess))}</p>}
       <div className="mt-2.5 flex flex-wrap gap-x-5">
         {candidates.map((c) => (
-          <Button key={`${c.week}/${c.session.id}`} onPress={() => onAnswer(c.week, c.session.id)} className={linkButton}>
+          <Button
+            key={`${c.week}/${c.session.id}`}
+            onPress={() => onAnswer(c.week, c.session.id)}
+            // With a guess, it leads in link blue and the others step back to ink.
+            className={!guess || c === guess ? linkButton : `${quietButton} underline decoration-1 underline-offset-4`}
+          >
             {SESSION_TYPES[c.session.type].name}
           </Button>
         ))}
@@ -469,6 +522,15 @@ function WhichSession({
       </div>
     </section>
   )
+}
+
+/** Why the Coach guessed what it did: the heart rate when the watch has one, else the minutes. */
+function guessLine({ activity, candidates }: ActivityQuestion, guess: ActivityQuestion['candidates'][number]): string {
+  const name = SESSION_TYPES[guess.session.type].name
+  const next = candidates.find((c) => c !== guess)!
+  return activity.averageHeartRate !== null
+    ? `The Coach’s guess: ${name}. ${activity.minutes} min at ${activity.averageHeartRate} bpm is no ${SESSION_TYPES[next.session.type].name}.`
+    : `The Coach’s guess: ${name}. ${activity.minutes} min is closest to its ${guess.session.minutes}.`
 }
 
 /** A treadmill run attached to a Session: the watch's distance is a guess, so ask for the console's. */
@@ -766,6 +828,16 @@ function restCopy(
         target: 'Speed on legs that just lifted or pushed a sled? No. It waits a day.',
         meta: 'Tap Speed below to do it anyway',
       }
+    case 'skipped-today':
+      return {
+        heading: today === weekEnd ? 'Week over.' : 'Skipped.',
+        target: skippedTodayLine(rest.sessions, rest.lastDay, daysBetween(today, weekEnd)),
+        meta: rest.lastDay
+          ? today === weekEnd && week < weekCount
+            ? `Week ${week + 1} starts ${shortDay(addDays(weekEnd, 1))}`
+            : ''
+          : `Tap ${rest.sessions.length === 1 ? 'it' : 'one'} below to do it today anyway`,
+      }
     case 'waiting':
       return {
         heading: 'Rest.',
@@ -790,9 +862,9 @@ function ThisWeek({
   const inWeek = position.kind === 'in-week'
   // Before the Program, Week 1's Sessions can be picked to do early.
   const interactive = inWeek || position.kind === 'before-start'
-  const left = bucket.filter((e) => !e.session.optional && !e.log).length
-  // Rows that can still be made today's: not logged, not already Next, not pinned to another day.
-  const pickable = bucket.some((e) => e.pickable && !e.log && e.state !== 'next')
+  const left = bucket.filter((e) => !e.session.optional && e.toDo).length
+  // Rows that can still be made today's: still to do, not already Next, not pinned to another day.
+  const pickable = bucket.some((e) => e.pickable && e.toDo && e.state !== 'next')
   const aside = inWeek
     ? `${plural(left, 'Session')} left · ${plural(position.daysLeft, 'day')}`
     : `from ${shortDay(week.startDate)}`
@@ -826,8 +898,9 @@ function ThisWeek({
 const rowClass = 'grid w-full grid-cols-[36px_1fr_auto] items-center gap-3 py-3.5 text-left'
 
 /**
- * One Session of the Bucket. Planned rows are buttons that make the Session
- * today's; logged rows link to their log; Up next is plain, it's already today's.
+ * One Session of the Bucket. Rows still to do (Planned, or Skipped with days
+ * left) are buttons that make the Session today's; other logged rows link to
+ * their log; Up next is plain, it's already today's.
  */
 function BucketRow({
   entry,
@@ -889,7 +962,7 @@ function BucketRow({
     <li className="border-b border-rule">
       {!interactive || state === 'next' ? (
         <div className={rowClass}>{content}</div>
-      ) : log ? (
+      ) : log && !entry.toDo ? (
         <Link href={logPath(week, session.id)} className={`group ${rowClass} text-ink no-underline`}>
           {content}
         </Link>
