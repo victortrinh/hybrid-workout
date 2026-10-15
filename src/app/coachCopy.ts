@@ -6,7 +6,7 @@ import { daysBetween, type LocalDate } from '../domain/calendar'
 import { PAIN_AREA_LABEL, PAIN_REPS_PERCENT, type PainLevel } from '../domain/pain'
 import { describeSession, LIFT_NAME, SESSION_TYPES } from '../domain/program/describe'
 import type { Session } from '../domain/program/types'
-import { EASY_DAY_MINUTES, SLEEP_RPE_CAP, sleepText } from '../domain/recovery'
+import { CUT_NOUN, EASY_DAY_MINUTES, SLEEP_RPE_CAP, sleepText, type ShortSleepCut } from '../domain/recovery'
 import type { Suggestion } from '../domain/suggestion'
 import { plural, shortDay, weekday } from './format'
 
@@ -57,9 +57,9 @@ export function suggestionCopy(s: Suggestion): SuggestionCopy {
       return {
         line: `Slept ${sleepText(sleepMinutes)} and HRV is down ${down}%. Your nervous system called in sick. Easy ${EASY_DAY_MINUTES}′ or rest today.`,
         why: recoveryWhy(sleepMinutes, hrvMs, hrvMean),
-        keep: 'Keep it, one rep fewer',
+        keep: s.cut ? `Keep it, one ${CUT_NOUN[s.cut]} fewer` : `Keep it, capped at RPE ${SLEEP_RPE_CAP}`,
         accepted: `Done. Easy ${EASY_DAY_MINUTES}′ or nothing. The hard one waits for a better night.`,
-        kept: `Keeping it. One rep fewer, nothing past RPE ${SLEEP_RPE_CAP}. Your call.`,
+        kept: `Keeping it. ${s.cut ? `One ${CUT_NOUN[s.cut]} fewer, nothing` : 'Nothing'} past RPE ${SLEEP_RPE_CAP}. Your call.`,
       }
     }
     case 'working-weight': {
@@ -94,9 +94,10 @@ export function recoveryWhy(sleepMinutes: number, hrvMs: number | null, hrvMean:
   return `Sleep ${sleepText(sleepMinutes)}${hrv}`
 }
 
-/** Today's line when short sleep alone changed Up next. */
-export function shortSleepLine(sleepMinutes: number): string {
-  return `Slept ${sleepText(sleepMinutes)}. Bold of you. One fewer rep, nothing past RPE ${SLEEP_RPE_CAP}.`
+/** Today's line when short sleep alone changed Up next, naming what came off it. */
+export function shortSleepLine(sleepMinutes: number, cut: ShortSleepCut | null): string {
+  const what = cut ? `One fewer ${CUT_NOUN[cut]}, nothing` : 'Nothing'
+  return `Slept ${sleepText(sleepMinutes)}. Bold of you. ${what} past RPE ${SLEEP_RPE_CAP}.`
 }
 
 /** The pain step's line and a pain Suggestion's: what the score does to training. */

@@ -12,7 +12,15 @@ import { DEFAULT_EQUIPMENT, equip, equipWeek, type Equipment } from './equipment
 import { logFor, trained, type LoggedStatus, type SessionLog } from './log'
 import { painAdapted, painLevel, standingPain, type PainLevel, type PainReport } from './pain'
 import { currentPaces, latestFiveKTest, type TrainingPaces } from './paces'
-import { easyDayAdapted, readout, shortSleepAdapted, type Readout, type RecoveryNight } from './recovery'
+import {
+  easyDayAdapted,
+  readout,
+  shortSleepAdapted,
+  shortSleepCut,
+  type Readout,
+  type RecoveryNight,
+  type ShortSleepCut,
+} from './recovery'
 import type { Phase, PhaseId, Program, Session, SessionType, Week } from './program/types'
 import {
   decisionFor,
@@ -163,10 +171,13 @@ export interface CoachDay {
   /** Last night's Recovery data and what it means for today; null when the Shortcut sent none. */
   recovery: Readout | null
   /**
-   * What last night did to Up next: one rep fewer and an RPE cap, or (after
-   * the recovery Suggestion is accepted) an easy day. Null when it changed nothing.
+   * What last night did to Up next: a little less of the main Block and an
+   * RPE cap, or (after the recovery Suggestion is accepted) an easy day. Null
+   * when it changed nothing.
    */
   recoveryChange: 'short-sleep' | 'easy-day' | null
+  /** On a short-sleep day, what came off Up next: a rep, a set, a round or a Station; null when only RPE is capped. */
+  recoveryCut: ShortSleepCut | null
   /** Workouts from the last week that fit more than one Session, oldest first. */
   activityQuestions: ActivityQuestion[]
   /** Today's workouts the Coach attached on its own, oldest first: said once, so it's never silent. */
@@ -269,6 +280,7 @@ export function coach({
     pain: standing && { ...standing, level: painLevel(standing.report.score, standing.previous?.score ?? null) },
     recovery,
     recoveryChange: recovered.change,
+    recoveryCut: recovered.cut,
     activityQuestions: matched
       .filter((o): o is ActivityQuestion => o.state === 'ambiguous')
       .filter((o) => o.activity.date <= today && daysBetween(o.activity.date, today) < ACTIVITY_QUESTION_DAYS)
@@ -577,7 +589,8 @@ function painFor(
 
 /**
  * The recovery rules, for today's Up next only, when it is a Hard session:
- * sleep under 6 hours takes one rep off and caps RPE; with HRV at least 15%
+ * sleep under 6 hours takes a rep, set, round or Station off (by Session
+ * type) and caps RPE; with HRV at least 15%
  * under its mean too, the Coach suggests an easy day, which replaces both
  * once accepted. A day without a night changes nothing.
  */
@@ -586,9 +599,16 @@ function recoveryFor(
   recovery: Readout | null,
   today: LocalDate,
   decisions: SuggestionDecision[],
-): { upNext: Logged | null; suggestion: RecoverySuggestion | null; change: CoachDay['recoveryChange'] } {
-  const unchanged = { upNext, suggestion: null, change: null }
+): {
+  upNext: Logged | null
+  suggestion: RecoverySuggestion | null
+  change: CoachDay['recoveryChange']
+  cut: ShortSleepCut | null
+} {
+  const unchanged = { upNext, suggestion: null, change: null, cut: null }
   if (!upNext || !recovery?.shortSleep || !isHard(upNext.session.type) || upNext.session.date) return unchanged
+
+  const cut = shortSleepCut(upNext.session)
 
   let suggestion: RecoverySuggestion | null = null
   if (recovery.easyDay) {
@@ -600,6 +620,7 @@ function recoveryFor(
       week: upNext.week,
       sessionId: upNext.session.id,
       date: today,
+      cut,
       trigger: {
         sleepMinutes: recovery.night.sleepMinutes,
         hrvMs: recovery.night.hrvMs!,
@@ -610,12 +631,12 @@ function recoveryFor(
     }
   }
   if (suggestion?.decision === 'accepted') {
-    return { upNext: { ...upNext, session: easyDayAdapted(upNext.session) }, suggestion, change: 'easy-day' }
+    return { upNext: { ...upNext, session: easyDayAdapted(upNext.session) }, suggestion, change: 'easy-day', cut: null }
   }
   const session = shortSleepAdapted(upNext.session, recovery.night)
   return session === upNext.session
     ? { ...unchanged, suggestion }
-    : { upNext: { ...upNext, session }, suggestion, change: 'short-sleep' }
+    : { upNext: { ...upNext, session }, suggestion, change: 'short-sleep', cut }
 }
 
 const acceptedPain = (suggestions: Suggestion[]): PainLevel | null =>

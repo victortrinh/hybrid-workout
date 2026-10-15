@@ -1031,6 +1031,7 @@ describe('the recovery rules', () => {
   it('take one rep off and cap RPE at 7 for a Hard session after under 6 hours', () => {
     const day = withNights('2026-11-04', [...baseline, night('2026-11-04', 341, 50)])
     expect(day.recoveryChange).toBe('short-sleep')
+    expect(day.recoveryCut).toBe('rep')
     expect(day.upNext).toMatchObject({ id: 'speed', headline: '4 × 3′', minutes: asWritten.minutes - 4 })
     expect(day.upNext!.note).toMatch(/^Short sleep \(5 h 41\): one rep fewer, nothing past RPE 7\./)
     expect(mainIntervals(day.upNext!)).toMatchObject({ kind: 'intervals', reps: 4, workSeconds: 180 })
@@ -1046,7 +1047,7 @@ describe('the recovery rules', () => {
     expect(recoveryOf(day)).toEqual([])
   })
 
-  it('take a rep off every main lift and cap its sets at RPE 7 on a Strength day', () => {
+  it('take a set off every main lift and cap its sets at RPE 7 on a Strength day', () => {
     const speedYesterday: SessionLog = {
       ...keysDoneBefore(localDate('2026-11-04'))[0],
       id: 'speed-w3',
@@ -1056,6 +1057,7 @@ describe('the recovery rules', () => {
     }
     const day = withNights('2026-11-04', [...baseline, night('2026-11-04', 300)], [], [speedYesterday])
     expect(day.upNext!.type).toBe('strength')
+    expect(day.recoveryCut).toBe('set')
     const written = findWeek(program, 3)!.sessions.find((s) => s.id === day.upNext!.id)!
     const sets = (s: typeof written) =>
       s.blocks.filter((b) => b.main).flatMap((b) => b.exercises.map((e) => e.prescription)).filter((rx) => rx.kind === 'sets')
@@ -1065,11 +1067,25 @@ describe('the recovery rules', () => {
     after.forEach((rx, i) => {
       const was = before[i]
       if (rx.kind !== 'sets' || was.kind !== 'sets') throw new Error('not sets')
-      expect(rx.sets).toBe(was.sets)
-      expect(rx.reps).toEqual(typeof was.reps === 'number' ? Math.max(1, was.reps - 1) : was.reps.map((r) => Math.max(1, r - 1)))
+      expect(rx.sets).toBe(Math.max(1, was.sets - 1))
+      expect(rx.reps).toEqual(was.reps)
       expect(rx.rpeCap).toBeLessThanOrEqual(7)
       if (rx.rpe) expect(rx.rpe[1]).toBeLessThanOrEqual(7)
     })
+  })
+
+  it('take the last round off a picked HYROX session, and say so on its Suggestion', () => {
+    const day = coach({
+      program,
+      today: localDate('2026-11-04'),
+      logs: keysDoneBefore(localDate('2026-11-04')),
+      picked: { date: localDate('2026-11-04'), week: 3, sessionId: 'hyrox' },
+      recoveryNights: [...baseline, night('2026-11-04', 320, 40)],
+    })
+    expect(day.upNext!.type).toBe('hyrox')
+    expect(day.recoveryCut).toBe('round')
+    expect(day.upNext!.blocks.filter((b) => b.main).map((b) => b.name)).toEqual(['Round 1', 'Round 2'])
+    expect(recoveryOf(day)[0]).toMatchObject({ sessionId: 'hyrox', cut: 'round' })
   })
 
   it('leave an Easy run alone', () => {
@@ -1093,6 +1109,7 @@ describe('the recovery rules', () => {
         week: 3,
         sessionId: 'speed',
         date: '2026-11-04',
+        cut: 'rep',
         trigger: { sleepMinutes: 341, hrvMs: 44, hrvMean: 52 },
         decision: 'open',
         decidedOn: null,
