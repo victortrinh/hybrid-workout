@@ -60,6 +60,7 @@ function lightenPrescription(rx: Prescription, scale: number): Prescription {
     case 'accelerations':
       return { ...rx, reps: count(rx.reps, scale) }
     case 'sets':
+    case 'drill':
       return { ...rx, sets: count(rx.sets, scale) }
     case 'station':
       return {

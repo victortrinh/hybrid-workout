@@ -807,7 +807,11 @@ describe('the pain rules', () => {
     expect(day.upNext).toMatchObject({ id: 'speed', headline: '4 × 3′', minutes: 41 })
     expect(exerciseNames(day)).toEqual([
       'Easy jog',
-      'Leg swings, skips, drills',
+      'Leg swings',
+      'A-skips',
+      'B-skips',
+      'High knees',
+      'Butt kicks',
       'Bike sprints',
       'Bike sprints',
       'Bike sprints',
@@ -815,7 +819,7 @@ describe('the pain rules', () => {
       'Jog or walk',
     ])
     expect(exerciseNames(day)).not.toContain('Accelerations')
-    expect(day.upNext!.blocks.map((b) => b.name)).toEqual(['Warm-up', 'Bike sprints', 'Bike sprints', 'Intervals', 'Cooldown'])
+    expect(day.upNext!.blocks.map((b) => b.name)).toEqual(['Warm-up', 'Drills', 'Bike sprints', 'Bike sprints', 'Intervals', 'Cooldown'])
     expect(mainIntervals(day.upNext!)).toMatchObject({ kind: 'intervals', reps: 4, workSeconds: 180 })
     expect(day.upNext!.blocks.find((b) => b.main)!.minutes).toBe(16)
     // Threshold's two reps go to one; Strength, with nothing to swap or cut, stays as written.

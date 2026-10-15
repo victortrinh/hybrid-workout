@@ -49,17 +49,20 @@ Every Station is preceded by a 1 km run: 8 km of running in total.
 
 ## Session templates
 
-Warm-ups and cooldowns are included in the minutes.
+Warm-ups and cooldowns are included in the minutes. HYROX's Set up is not: it's untimed, and shown as "+ ~5′ setup" beside the minutes.
 
 ### Speed (~45 min)
 
 | Block | Prescription | Min |
 | --- | --- | --- |
-| Warm-up | Easy jog + leg swings, skips, drills | 10 |
+| Warm-up | Easy jog | 7 |
+| Drills | Leg swings 10 / leg; A-skips 2 × 20 m; B-skips 2 × 20 m; high knees 20 m; butt kicks 20 m | 3 |
 | Plyometrics | Pogo jumps 2 × 15 contacts; broad jumps 3 × 3 (full reset) | 5 |
 | Accelerations | 15 m × 2–4, walk back. Start 80–90%, build to 90–95% over weeks | 5 |
 | Intervals | Week-specific (table below), ~20 min block | 20 |
 | Cooldown | Jog / walk | 5 |
+
+The same 7 + 3 warm-up opens the Deload and Taper Speed sessions.
 
 Substitutions: no floor space or Readiness flag → **sled push sprints 10–15 m (light)** or **bike sprints 8–10 s**. On a treadmill, only the intervals run there; jumps and accelerations stay on the floor.
 
@@ -94,7 +97,9 @@ Deload weeks replace this with 35–40 min easy running.
 
 | Block | Prescription | Min |
 | --- | --- | --- |
-| Warm-up | Easy jog + lunges + Station prep (check sled and erg setup) | 7 |
+| Warm-up | Easy jog | 5 |
+| Lunges | 2 × 10 | 2 |
+| Set up | Every Station the Session uses, at its load (per implement, from Race load %). Set up once; they stay set up between rounds | ~5, not counted |
 | Circuit | 3 rounds of run + Stations (by phase, below) | 33–38 |
 | Cooldown | Walk, relaxed breathing; no extra finisher | 5 |
 
@@ -115,7 +120,7 @@ Easy pace, RPE 2–4, full sentences. No tempo, no hills. Grows into a 60-minute
 
 ### 5K test (~45 min)
 
-Warm-up 12 min easy + 4 × 15 s strides → **5 km all-out** → 8 min cooldown. Replaces that Week's Speed session. Indoor: treadmill at 1% incline. Each result records its Environment and resets the Training paces.
+Warm-up 10 min easy → 4 × 15 s strides (2 min) → **5 km all-out** → 8 min cooldown. Replaces that Week's Speed session. Indoor: treadmill at 1% incline. Each result records its Environment and resets the Training paces.
 
 ### Race simulation (60–75 min; week 24 ~75–85 min)
 

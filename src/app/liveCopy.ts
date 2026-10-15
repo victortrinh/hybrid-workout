@@ -16,7 +16,11 @@ export function liveLine(block: LiveBlock, run: LiveRun): string {
         ? 'Quality contacts. Full reset between jumps.'
         : /accel/i.test(block.name)
           ? 'Fast, not maximal. Walk back.'
-          : 'Drills. Sharp, not tired.'
+          : /stride/i.test(block.name)
+            ? 'Quick and relaxed. Not a sprint.'
+            : /lunge/i.test(block.name)
+              ? 'Lunges. Wake the legs up, don’t tire them.'
+              : 'Drills. Sharp, not tired.'
     case 'rep': {
       if (block.effort && 'feel' in block.effort && block.effort.feel === 'controlled') {
         return `Rep ${block.rep}. Controlled. It’s a Deload week, remember.`
@@ -45,6 +49,8 @@ export function liveLine(block: LiveBlock, run: LiveRun): string {
     }
     case 'station':
       return 'Race load. Smooth beats fast. Tap Finished when it’s done.'
+    case 'setup':
+      return 'Load every Station now. This clock isn’t training. Tap Done when it’s all set.'
     case 'cooldown':
       return 'Cooldown. You may now look tired.'
   }

@@ -56,6 +56,7 @@ test('pain 4 before a Speed session: the accelerations go to the bike and the re
   const blocks = page.getByRole('list', { name: 'Blocks' }).getByRole('listitem')
   await expect(blocks).toHaveText([
     /^Warm-up/,
+    /^Drills/,
     /^Bike sprints/,
     /^Bike sprints/,
     /^Rep 1 of 4/,

@@ -384,15 +384,15 @@ function targetFor(block: LiveBlock, context: RunContext): LiveTarget | null {
  * log Partial; Done on anything else. Finished on a Block run to a distance or to the end of its work.
  */
 function finishedLabel(block: LiveBlock): string {
-  if (!block.work && (block.seconds !== null || isChecklist(block))) return 'Done'
+  if (!block.work && (block.seconds !== null || isChecklist(block) || block.kind === 'setup')) return 'Done'
   if (block.seconds !== null) return 'Skip block'
   if (block.kind === 'round') return `Finished round ${block.round}`
   if (block.kind === 'station') return `Finished ${block.name}`
   return `Finished ${km(block.meters ?? 0)}`
 }
 
-/** A Station's distance or reps: "25 m", "20 reps". */
-const volume = (leg: LiveStation) => (leg.reps ? `${leg.reps} reps` : km(leg.meters ?? 0))
+/** A Station's distance or reps: "25 m", "20 reps". Nothing on Set up, where only the load matters. */
+const volume = (leg: LiveStation) => (leg.reps ? `${leg.reps} reps` : leg.meters ? km(leg.meters) : '')
 
 /** "25 m · 200 lb plates", "20 reps · 13 lb ball", "250 m" */
 const stationWords = (leg: LiveStation) =>
@@ -400,7 +400,7 @@ const stationWords = (leg: LiveStation) =>
 
 /**
  * A round's Stations, large enough to read from the floor; a Race
- * simulation Station's load. Sled loads are the plates to add.
+ * simulation Station's load; every Station to load on Set up. Sled loads are the plates to add.
  */
 function StationList({ block }: { block: LiveBlock }) {
   if (block.kind === 'station') {
@@ -412,7 +412,7 @@ function StationList({ block }: { block: LiveBlock }) {
       {block.stations.map((leg) => (
         <li key={leg.station} className="text-[22px] leading-tight font-bold">
           {stations[leg.station].name}{' '}
-          <span className="block text-[17px] font-semibold">{nb(stationWords(leg))}</span>
+          <span className="block text-[17px] font-semibold">{nb(stationWords(leg) || 'Nothing to load')}</span>
         </li>
       ))}
     </ul>
@@ -427,15 +427,17 @@ function feelWords(block: LiveBlock): string {
     ]
   }
   if (block.effort) return 'Easy'
+  if (block.kind === 'setup') return 'Not training time'
   return block.kind === 'drills' ? 'Drills' : 'Walk'
 }
 
-/** "12 min", "90 s", "5 km", "600 m + 2 Stations", "50 m" */
+/** "12 min", "90 s", "5 km", "600 m + 2 Stations", "50 m", "4 Stations" */
 function blockLength(block: LiveBlock): string {
   if (block.kind === 'round') {
     const n = block.stations.length
     return `${km(block.meters ?? 0)} + ${n} ${n === 1 ? 'Station' : 'Stations'}`
   }
+  if (block.kind === 'setup') return `${block.stations.length} ${block.stations.length === 1 ? 'Station' : 'Stations'}`
   if (block.kind === 'station') return volume(block.stations[0])
   if (isChecklist(block)) return `${block.checklist.length} sets`
   if (block.seconds === null) return km(block.meters ?? 0)

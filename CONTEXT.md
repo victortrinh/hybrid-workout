@@ -66,6 +66,9 @@ One line of a HYROX session or Race simulation log: a round's time, or a run or 
 **Block**:
 A timed part of a Session, such as warm-up, intervals, circuit or cooldown.
 
+**Set up**:
+The untimed Block before a HYROX session's first round where every Station it uses is loaded, once for the whole Session. Its time is not in the Session's minutes or Training load.
+
 **Exercise**:
 A single movement or protocol inside a Block.
 
