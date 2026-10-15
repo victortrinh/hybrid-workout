@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { localDate } from '../domain/calendar'
+import { findWeek } from '../domain/coach'
+import { program } from '../domain/program/program'
 import type { ShortSleepCut } from '../domain/recovery'
 import type { RecoverySuggestion } from '../domain/suggestion'
-import { shortSleepLine, suggestionCopy } from './coachCopy'
+import { shortSleepLine, suggestionCopy, waitingLine } from './coachCopy'
 
 const recovery = (cut: ShortSleepCut | null): RecoverySuggestion => ({
   id: 'recovery-2026-11-04',
@@ -44,5 +46,23 @@ describe('the short-sleep copy names what is cut', () => {
   it('never says rep on a HYROX session', () => {
     const copy = suggestionCopy(recovery('round'))
     expect(`${shortSleepLine(320, 'round')} ${copy.keep} ${copy.kept}`).not.toMatch(/\brep\b/)
+  })
+})
+
+const race = findWeek(program, 27)!.sessions.find((s) => s.id === 'race')!
+const shakeout = findWeek(program, 27)!.sessions.find((s) => s.id === 'shakeout')!
+
+describe('waitingLine', () => {
+  it('says tomorrow the day before the race', () => {
+    expect(waitingLine(race, localDate('2027-04-21'), localDate('2027-04-20'))).toBe('The race is tomorrow. Save it for that.')
+  })
+
+  it('names the weekday further out', () => {
+    expect(waitingLine(race, localDate('2027-04-21'), localDate('2027-04-19'))).toBe('The race is Wednesday. Save it for that.')
+  })
+
+  it('uses the Session’s heading for any other pinned Session', () => {
+    const pinned = { ...shakeout, date: localDate('2027-04-20') }
+    expect(waitingLine(pinned, localDate('2027-04-20'), localDate('2027-04-19'))).toMatch(/^\S.* is tomorrow\. Save it for that\.$/)
   })
 })

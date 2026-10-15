@@ -80,6 +80,8 @@ export interface BucketEntry {
   carriedUntil: LocalDate | null
   /** The watch's workout attached to this Session, if any. */
   activity: Activity | null
+  /** Whether it can be picked to do today: not a Session pinned to another day, like the race. */
+  pickable: boolean
 }
 
 /** A workout more than one Session fits: Today asks which. */
@@ -265,6 +267,7 @@ export function coach({
       ...entry,
       state: entry.log ? entry.log.status : entry === upNext ? 'next' : 'planned',
       activity: attached.get(`${entry.week}/${entry.session.id}`) ?? null,
+      pickable: pickableOn(entry.session, today),
     })),
     upNext: upNext?.session ?? null,
     rest,
@@ -431,11 +434,18 @@ function chooseUpNext({ program, logged, logs, today, picked, daysLeft }: UpNext
   return { upNext: oldestWaiting(allowed), rest: null }
 }
 
-/** The Session picked today, while it is still open. */
+/** The Session picked today, while it is still open and can be done today. */
 function pickedToday(logged: Logged[], picked: PickedSession | null, today: LocalDate): Logged | null {
   if (!picked || picked.date !== today) return null
-  return logged.find((e) => !e.log && e.week === picked.week && e.session.id === picked.sessionId) ?? null
+  return (
+    logged.find(
+      (e) => !e.log && e.week === picked.week && e.session.id === picked.sessionId && pickableOn(e.session, today),
+    ) ?? null
+  )
 }
+
+/** A Session pinned to a day, like the race, is done on that day and no other. */
+const pickableOn = (session: Session, today: LocalDate) => !session.date || session.date === today
 
 /** Session types logged as Done or Partial on `date`, from any Week. */
 function trainedTypes(program: Program, logs: SessionLog[], date: LocalDate): SessionType[] {

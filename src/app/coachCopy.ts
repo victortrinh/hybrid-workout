@@ -2,12 +2,13 @@
  * The Coach's words for a Suggestion, from its facts. Blunt, a little funny,
  * and always with the number and the reason (PRODUCT.md, Coach voice).
  */
-import type { LocalDate } from '../domain/calendar'
+import { daysBetween, type LocalDate } from '../domain/calendar'
 import { PAIN_AREA_LABEL, PAIN_REPS_PERCENT, type PainLevel } from '../domain/pain'
-import { LIFT_NAME, SESSION_TYPES } from '../domain/program/describe'
+import { describeSession, LIFT_NAME, SESSION_TYPES } from '../domain/program/describe'
+import type { Session } from '../domain/program/types'
 import { CUT_NOUN, EASY_DAY_MINUTES, SLEEP_RPE_CAP, sleepText, type ShortSleepCut } from '../domain/recovery'
 import type { Suggestion } from '../domain/suggestion'
-import { plural, shortDay } from './format'
+import { plural, shortDay, weekday } from './format'
 
 export interface SuggestionCopy {
   /** The change and the reason, while it is Open. */
@@ -124,4 +125,11 @@ export function outsideWeekLine(when: 'early' | 'late', week: number, startDate:
   return when === 'early'
     ? `Early. Week ${week} starts ${shortDay(startDate)}. Anything done today counts for Week ${week}.`
     : `Late. Week ${week} closed ${shortDay(sunday)}. Better late than Skipped: anything done today counts for Week ${week}.`
+}
+
+/** Today's rest line while all that's left is pinned to a later day: "The race is tomorrow. Save it for that." */
+export function waitingLine(session: Session, date: LocalDate, today: LocalDate): string {
+  const what = session.id === 'race' ? 'The race' : describeSession(session).heading
+  const when = daysBetween(today, date) === 1 ? 'tomorrow' : weekday(date)
+  return `${what} is ${when}. Save it for that.`
 }

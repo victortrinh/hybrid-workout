@@ -8,6 +8,7 @@
  * too: it is a report of 0, and it ends whatever pain stood before it.
  */
 import { localDate, type LocalDate } from './calendar'
+import { stations } from './program/program'
 import type { Block, Exercise, Session } from './program/types'
 
 export const PAIN_AREAS = ['achilles-calf', 'shin', 'knee', 'hip', 'back', 'other'] as const
@@ -109,7 +110,7 @@ function lowImpact(session: Session): Session {
   }
 }
 
-/** Jumps and accelerations to bike sprints, interval reps cut by about 30%. */
+/** Jumps and accelerations to bike sprints, Burpee broad jumps to SkiErg, interval reps cut by about 30%. */
 function eased(session: Session): Session {
   const reps = mainReps(session)
   const cut = reps === undefined ? undefined : fewerReps(reps)
@@ -121,7 +122,7 @@ function eased(session: Session): Session {
       minutes = Math.round((minutes * fewerReps(intervals.reps)) / intervals.reps)
       saved += block.minutes! - minutes
     }
-    const exercises = block.exercises.map(onTheBike)
+    const exercises = offTheFloor(block.exercises.map(onTheBike))
     // A Block of jumps or accelerations, all gone to the bike, says so.
     const allBike = exercises.every((e, i) => e !== block.exercises[i] && e.prescription.kind === 'sprints')
     return { ...block, name: allBike ? 'Bike sprints' : block.name, minutes, exercises }
@@ -154,6 +155,37 @@ function onTheBike(exercise: Exercise): Exercise {
   if (!readiness) return exercise
   const bike = readiness.options.find((o) => /bike/i.test(o.name)) ?? readiness.options[0]
   return { ...bike, note: `Instead of ${exercise.name.toLowerCase()}: pain says no impact.` }
+}
+
+/** SkiErg metres for each metre of Burpee broad jumps: about the same time, 80 m to 1000 m. */
+export const SKIERG_PER_BURPEE_METER = 12.5
+
+/**
+ * Burpee broad jumps go to SkiErg for about the same time. A Block's Stations
+ * stay one of each (a Station log is one per Station a round), so where the
+ * Block already has a SkiErg, the metres go onto it. Lunges stay: they don't
+ * leave the floor.
+ */
+function offTheFloor(exercises: Exercise[]): Exercise[] {
+  const burpees = exercises.find(({ prescription: rx }) => rx.kind === 'station' && rx.station === 'burpee-broad-jumps')
+  if (burpees?.prescription.kind !== 'station') return exercises
+  const meters = burpees.prescription.meters && burpees.prescription.meters * SKIERG_PER_BURPEE_METER
+  const skierg = exercises.find(({ prescription: rx }) => rx.kind === 'station' && rx.station === 'skierg')
+  if (skierg?.prescription.kind === 'station') {
+    const rx = skierg.prescription
+    const more: Exercise = {
+      ...skierg,
+      prescription: { ...rx, meters: rx.meters !== undefined && meters !== undefined ? rx.meters + meters : rx.meters },
+      note: meters === undefined ? skierg.note : `Plus ${meters} m instead of burpee broad jumps: pain says no impact.`,
+    }
+    return exercises.flatMap((e) => (e === burpees ? [] : e === skierg ? [more] : [e]))
+  }
+  const instead: Exercise = {
+    name: stations.skierg.name,
+    prescription: { kind: 'station', station: 'skierg', meters },
+    note: 'Instead of burpee broad jumps: pain says no impact.',
+  }
+  return exercises.map((e) => (e === burpees ? instead : e))
 }
 
 const ID = /^[a-z0-9-]{8,58}$/
