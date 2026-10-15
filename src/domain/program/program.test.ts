@@ -225,15 +225,24 @@ describe('HYROX Set up', () => {
     expect(session(1, 'hyrox').minutes).toBe(45)
   })
 
-  it('lists every Station the Session uses once, in the order they come up, with its load', () => {
+  it('lists every Station the Session loads once, in the order they come up, with its load', () => {
     expect(loads(1)).toEqual([
       'Sled push: 200 lb plates · 60% of Race load',
       'Sled pull: 135 lb plates · 60% of Race load',
       'Farmers carry: 2 × 30 lb · 60% of Race load',
       'Sandbag lunges: 25 lb · 60% of Race load',
     ])
-    expect(loads(2)).toEqual(['SkiErg: ', 'Burpee broad jumps: ', 'Row: ', 'Wall balls: 13 lb ball'])
+    expect(loads(2)).toEqual(['Wall balls: 13 lb ball'])
     expect(loads(23)).toEqual(['Sled push: 335 lb plates', 'Sled pull: 225 lb plates', 'Sandbag lunges: 45 lb'])
+  })
+
+  it('leaves out the Stations with nothing to load, and says so once', () => {
+    expect(setUp(1).note).toBeUndefined()
+    expect(setUp(2).note).toBe('Nothing else to load.')
+    const all = weeks.flatMap((w) => w.sessions).filter((s) => s.id === 'hyrox')
+    const loaded = all.flatMap((s) => s.blocks.filter((b) => b.setup)).flatMap((b) => b.exercises)
+    expect(loaded.map((e) => describeExercise(e, program.stations).detail).filter((d) => !d)).toEqual([])
+    expect(all.every((s) => s.blocks.some((b) => b.setup && b.exercises.length > 0))).toBe(true)
   })
 
   it('is in every HYROX circuit, and in no other Session', () => {

@@ -688,6 +688,13 @@ describe('split warm-ups and the HYROX Set up', () => {
       { station: 'farmers-carry', meters: null, reps: null, pounds: 30 },
       { station: 'sandbag-lunges', meters: null, reps: null, pounds: 25 },
     ])
+    expect(blocks[2].detail).toEqual([])
+  })
+
+  it('sets up only the Stations with a load, and says once that nothing else needs loading', () => {
+    const setUp = liveBlocks(session(2, 'hyrox')).find((b) => b.kind === 'setup')!
+    expect(setUp.stations).toEqual([{ station: 'wall-balls', meters: null, reps: null, pounds: 13 }])
+    expect(setUp.detail).toEqual(['Nothing else to load.'])
   })
 
   const hyrox = () => startRun({ week: 1, session: session(1, 'hyrox'), date: localDate('2026-10-21'), environment: 'indoor' }, T0)

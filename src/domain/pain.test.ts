@@ -97,7 +97,7 @@ describe('painAdapted, HYROX at the ease level', () => {
     const eased = painAdapted(build, 'ease')
     const round1 = eased.blocks.find((b) => b.name === 'Round 1')!
     expect(round1.exercises.map((e) => describeLeg(e))).toEqual(['Run', 'SkiErg 1000 m: Plus 500 m instead of burpee broad jumps: pain says no impact.'])
-    expect(eased.blocks.find((b) => b.setup)!.exercises.map((e) => e.name)).toEqual(['SkiErg', 'Row', 'Wall balls'])
+    expect(eased.blocks.find((b) => b.setup)!.exercises.map((e) => e.name)).toEqual(['Wall balls'])
     for (const s of withBurpees) {
       for (const b of painAdapted(s, 'ease').blocks) expect(new Set(stationIds(b)).size).toBe(stationIds(b).length)
     }
