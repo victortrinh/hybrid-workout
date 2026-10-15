@@ -6,9 +6,12 @@
  * athlete's decisions: every Working weight is replayed from the logs, oldest
  * first, each time it's asked for. A calibration sets a Working weight
  * outright, since the athlete picked those loads. Every change after that is a
- * Suggestion, and only an accepted one moves the weight.
+ * Suggestion, and only an accepted one moves the weight, with one exception:
+ * while a lighter Week is in force (a Deload week, or one an accepted re-entry
+ * lightened) an open increase is held rather than offered, and lands on its own
+ * the Monday after.
  */
-import { daysBetween, type LocalDate } from './calendar'
+import { addDays, daysBetween, type LocalDate } from './calendar'
 import { trained, type SessionLog, type SetLog } from './log'
 import type { LiftId, Prescription, Program, Range, Session } from './program/types'
 import {
@@ -49,7 +52,7 @@ const LIGHT_PERCENT = 60
 
 export interface WorkingWeightChange {
   lift: LiftId
-  /** The Strength session's Week and day. */
+  /** The Strength session's Week and day; for a held increase, the day it landed. */
   week: number
   date: LocalDate
   pounds: number
@@ -66,24 +69,69 @@ export interface StrengthState {
    * a Strength session logged since lets an undecided one lapse.
    */
   suggestions: WorkingWeightSuggestion[]
+  /** Open increases held while today's lighter Week is in force, each with the Monday it lands. */
+  held: HeldIncrease[]
 }
 
-/** Every lift's Working weight on `today`, replayed from the Strength sessions logged by then. */
+/** An increase earned but not offered: the Week is lighter, so it waits for the Week after. */
+export interface HeldIncrease {
+  suggestion: WorkingWeightSuggestion
+  landsOn: LocalDate
+}
+
+/** Lighter Weeks back to back, from the first one's Monday to the Monday after the last. */
+interface LighterRun {
+  start: LocalDate
+  landsOn: LocalDate
+}
+
+/**
+ * Every lift's Working weight on `today`, replayed from the Strength sessions
+ * logged by then. `lightened` lists the Weeks an accepted re-entry made lighter;
+ * Deload weeks are lighter already.
+ */
 export function strengthState(
   program: Program,
   logs: SessionLog[],
   decisions: SuggestionDecision[],
   today: LocalDate,
+  lightened: number[] = [],
 ): StrengthState {
   const weights: WorkingWeights = {}
   const changes: WorkingWeightChange[] = []
   const latest = new Map<LiftId, WorkingWeightSuggestion>()
   const holds = new Map<LiftId, number[]>()
+  const held = new Map<LiftId, HeldIncrease>()
+  const runs = lighterRuns(program, lightened).filter((run) => daysBetween(run.start, today) >= 0)
+  let reached = 0
+
+  /** Up to `date`: open increases are held from a lighter run's Monday, and land the Monday after it. */
+  const advance = (date: LocalDate) => {
+    for (; reached < runs.length && daysBetween(runs[reached].start, date) >= 0; reached++) {
+      for (const [lift, s] of latest) {
+        if (s.decision !== 'open' || s.trigger.reason !== 'all-reps-easy') continue
+        held.set(lift, { suggestion: s, landsOn: runs[reached].landsOn })
+        latest.delete(lift)
+      }
+    }
+    for (const [lift, { suggestion, landsOn }] of held) {
+      if (daysBetween(landsOn, date) < 0) continue
+      weights[lift] = suggestion.to.pounds
+      changes.push({ lift, week: suggestion.week, date: landsOn, pounds: suggestion.to.pounds, reason: 'all-reps-easy' })
+      held.delete(lift)
+    }
+  }
+  /** The run a day falls in, if it is lighter. */
+  const runOn = (date: LocalDate) =>
+    runs.find((run) => daysBetween(run.start, date) >= 0 && daysBetween(date, run.landsOn) > 0) ?? null
 
   for (const { log, session } of strengthLogs(program, logs, today)) {
+    advance(log.date)
     for (const [lift, sets] of byLift(log.sets)) {
       const rx = liftPrescription(session, lift)
       if (!rx || !('lift' in rx.load)) continue
+      // What was earned before the lighter Week stands, whatever the lighter Week's sets say.
+      if (held.has(lift)) continue
       const current = weights[lift]
       latest.delete(lift)
 
@@ -135,6 +183,11 @@ export function strengthState(
         decision: decided?.decision ?? 'open',
         decidedOn: decided?.date ?? null,
       }
+      const run = runOn(log.date)
+      if (run && suggestion.decision === 'open' && change.reason === 'all-reps-easy') {
+        held.set(lift, { suggestion, landsOn: run.landsOn })
+        continue
+      }
       latest.set(lift, suggestion)
       if (suggestion.decision === 'accepted') {
         weights[lift] = change.to
@@ -142,7 +195,21 @@ export function strengthState(
       }
     }
   }
-  return { weights, changes, suggestions: [...latest.values()] }
+  advance(today)
+  return { weights, changes, suggestions: [...latest.values()], held: [...held.values()] }
+}
+
+/** Deload weeks and lightened ones, joined where they follow each other. */
+function lighterRuns(program: Program, lightened: number[]): LighterRun[] {
+  const runs: LighterRun[] = []
+  for (const week of program.phases.flatMap((p) => p.weeks)) {
+    if (!week.deload && !lightened.includes(week.number)) continue
+    const landsOn = addDays(week.startDate, 7)
+    const last = runs.at(-1)
+    if (last && last.landsOn === week.startDate) last.landsOn = landsOn
+    else runs.push({ start: week.startDate, landsOn })
+  }
+  return runs
 }
 
 /** Trained Strength sessions with sets, on or before `today`, oldest first; the latest edit stands for each. */

@@ -161,6 +161,30 @@ describe('each scenario falls where its name says', () => {
     expect(d.state.sessionLogs.some((l) => daysBetween(l.date, end(l.week)) > 0)).toBe(true)
   })
 
+  it('rollover: the lift increases wait out the lighter Week once it is accepted, and are offered when full volume is kept', async () => {
+    const d = await day('rollover')
+    const lifts = d.suggestions.filter((s) => s.kind === 'working-weight' && s.decision === 'open').map((s) => s.id)
+    expect(lifts.length).toBeGreaterThan(1)
+    const decided = (decision: 'accepted' | 'kept') =>
+      coach({
+        program,
+        today: d.today,
+        logs: d.state.sessionLogs,
+        decisions: [
+          ...d.state.suggestionDecisions,
+          { id: 're-entry-w7', decision, date: d.today, updatedAt: '2026-11-30T12:00:00.000Z' },
+        ],
+      })
+    const lighter = decided('accepted')
+    expect(lighter.suggestions.filter((s) => s.kind === 'working-weight')).toEqual([])
+    expect(lighter.heldIncreases.map((h) => h.suggestion.id)).toEqual(lifts)
+    // Week 8 is a Deload week: they land after it, on Week 9's Monday.
+    expect(new Set(lighter.heldIncreases.map((h) => h.landsOn))).toEqual(new Set(['2026-12-14']))
+    const full = decided('kept')
+    expect(full.suggestions.filter((s) => s.kind === 'working-weight').map((s) => s.id)).toEqual(lifts)
+    expect(full.heldIncreases).toEqual([])
+  })
+
   it('deload: in a Deload week, a Strength session left running at scaled loads', async () => {
     const d = await day('deload')
     expect(d.week?.deload).toBe(true)

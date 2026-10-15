@@ -49,7 +49,14 @@ export const weekDone = (week: number, sessionIds: string[], date: string): Seed
 type Sets = NonNullable<SeedLog['sets']>
 const sets = (exercise: number, lift: string, specs: [pounds: number, reps: number, rpe: number][]): Sets =>
   specs.map(([pounds, reps, rpe], i) => ({ exercise, set: i + 1, lift, pounds, reps, rpe }))
-const station = (part: string, seconds: number | null) => ({ round: 1, part, pounds: null, meters: null, reps: null, seconds })
+const station = (part: string, seconds: number | null, done: { meters?: number; pounds?: number } = {}) => ({
+  round: 1,
+  part,
+  pounds: done.pounds ?? null,
+  meters: done.meters ?? null,
+  reps: null,
+  seconds,
+})
 
 /**
  * Week 1 mostly done and a 23:00 treadmill baseline in Week 2, with Week 2's
@@ -75,7 +82,13 @@ export const BASELINE_HISTORY: SeedLog[] = [
     status: 'done',
     minutes: 60,
     rpe: 7,
-    stations: [station('round', 600), station('run', null), station('sled-push', null), station('sled-pull', null)],
+    // Round 1 timed leg by leg: the run, then each sled.
+    stations: [
+      station('round', 600),
+      station('run', 200, { meters: 600 }),
+      station('sled-push', 190, { meters: 25, pounds: 200 }),
+      station('sled-pull', 210, { meters: 25, pounds: 135 }),
+    ],
   },
   { week: 2, sessionId: '5k-test', date: '2026-10-28', status: 'done', rpe: 9, resultSeconds: 1380, environment: 'indoor' },
   {

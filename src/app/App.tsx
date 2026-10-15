@@ -197,10 +197,14 @@ export function App() {
     setLive(null)
     navigate(SCREEN_PATH.today)
   }
-  /** Accept or Keep, on Today or at the start of a Live Strength session: the same decision. */
-  const decideSuggestion = (suggestion: Suggestion, decision: Decision) => {
-    const previous = decisions.find((d) => d.id === suggestion.id)
-    decide({ id: suggestion.id, decision, date: today, updatedAt: editedAt(previous?.updatedAt) })
+  /** Accept or Keep, on Today or at the start of a Live Strength session: the same decision. Several at once go in one request. */
+  const decideSuggestion = (suggestions: Suggestion | Suggestion[], decision: Decision) => {
+    decide(
+      ...[suggestions].flat().map((s) => {
+        const previous = decisions.find((d) => d.id === s.id)
+        return { id: s.id, decision, date: today, updatedAt: editedAt(previous?.updatedAt) }
+      }),
+    )
   }
   const route = useRoute()
   /** The watch's workout attached to a Session, from the same matching Today shows. */

@@ -5,8 +5,8 @@ import { mergeDecisions, type SuggestionDecision } from '../domain/suggestion'
 
 export interface Decisions {
   decisions: SuggestionDecision[]
-  /** Shows the decision at once, then sends it to the server; takes it back if the server can't be reached. */
-  decide: (decision: SuggestionDecision) => void
+  /** Shows the decisions at once, then sends them to the server together; takes them all back if the server can't be reached. */
+  decide: (...decisions: SuggestionDecision[]) => void
   /** A decision that didn't reach the server, for the athlete to read. */
   error: string | null
 }
@@ -35,26 +35,27 @@ export function useDecisions(): Decisions {
     }
   }, [])
 
-  const decide = useCallback(async (decision: SuggestionDecision) => {
-    let previous: SuggestionDecision | undefined
+  const decide = useCallback(async (...made: SuggestionDecision[]) => {
+    const ids = new Set(made.map((d) => d.id))
+    let previous: SuggestionDecision[] = []
     setDecisions((ours) => {
-      previous = ours.find((d) => d.id === decision.id)
-      return mergeDecisions(ours, [decision])
+      previous = ours.filter((d) => ids.has(d.id))
+      return mergeDecisions(ours, made)
     })
     setError(null)
     try {
       const state = await request('/api/sync', {
         method: 'POST',
-        body: JSON.stringify({ suggestionDecisions: [decision] }),
+        body: JSON.stringify({ suggestionDecisions: made }),
       })
       setDecisions((ours) => mergeDecisions(ours, state.suggestionDecisions))
     } catch {
-      setDecisions((ours) => [...ours.filter((d) => d.id !== decision.id), ...(previous ? [previous] : [])])
+      setDecisions((ours) => [...ours.filter((d) => !ids.has(d.id)), ...previous])
       setError('Couldn’t save that. Check the connection and try again.')
     }
   }, [])
 
-  return { decisions, decide: (d) => void decide(d), error }
+  return { decisions, decide: (...d) => void decide(...d), error }
 }
 
 /** Now, or just after the decision it replaces if this device's clock is behind the one that wrote it: the later one must win on sync. */
