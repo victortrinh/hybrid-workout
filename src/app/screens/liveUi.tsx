@@ -52,8 +52,8 @@ export function OverallRpe({
         {missing
           ? 'Pick one first. The Coach runs on it.'
           : predicted !== null && value === predicted
-            ? `The Coach’s guess: ${predicted}. Wrong? One tap. 7 is about three left in the tank; 10 is nothing left.`
-            : 'The whole Session. 7 is about three left in the tank; 10 is nothing left.'}
+            ? `The Coach’s guess: ${predicted}. Wrong? One tap. 7 is about three left; 10 is nothing left.`
+            : 'The whole Session. 7 is about three left; 10 is nothing left.'}
       </Text>
     </RadioGroup>
   )
