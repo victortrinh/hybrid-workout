@@ -11,6 +11,7 @@ import { isLive as isLiveRunOrCircuit, parseLiveRun, type LiveRun } from './live
 import { POUNDS, type SessionLog, type SetLog } from './log'
 import { SESSION_TYPES } from './program/describe'
 import type { Block, LiftId, Prescription, Range, Session } from './program/types'
+import type { Suggestion, WorkingWeightSuggestion } from './suggestion'
 import { CALIBRATION_RPE, prescribedPounds, targetReps, type WorkingWeights } from './weights'
 
 type Sets = Extract<Prescription, { kind: 'sets' }>
@@ -82,6 +83,8 @@ export interface LiveLifts {
   rest: { exercise: number; set: number; startedAt: number; seconds: number } | null
   /** Finish was tapped: the finish sheet is open until Keep going. */
   ending: boolean
+  /** Open Working weight Suggestions for lifts in this session, asked before set 1 until answered. */
+  prompts: WorkingWeightSuggestion[]
 }
 
 export interface LiftsStart {
@@ -90,9 +93,11 @@ export interface LiftsStart {
   session: Session
   date: LocalDate
   weights: WorkingWeights
+  /** The Coach's Suggestions now: the open Working weight ones for this session's lifts are asked at the start. */
+  suggestions?: Suggestion[]
 }
 
-export function startLifts({ week, session, date, weights }: LiftsStart, now: number): LiveLifts {
+export function startLifts({ week, session, date, weights, suggestions = [] }: LiftsStart, now: number): LiveLifts {
   const lifts = session.blocks.flatMap((block) =>
     block.exercises.flatMap(({ name, note, prescription: rx }) =>
       rx.kind === 'sets'
@@ -114,6 +119,45 @@ export function startLifts({ week, session, date, weights }: LiftsStart, now: nu
     startedAt: now,
     rest: null,
     ending: false,
+    prompts: suggestions.filter(
+      (s): s is WorkingWeightSuggestion =>
+        s.kind === 'working-weight' && s.decision === 'open' && movesWorkingWeight(session, s.lift, weights),
+    ),
+  }
+}
+
+/**
+ * Whether the session lifts at a lift's Working weight itself: not a
+ * calibration, a Deload share or a Taper's light sets, where the Working
+ * weight doesn't decide the load.
+ */
+function movesWorkingWeight(session: Session, lift: LiftId, weights: WorkingWeights): boolean {
+  return session.blocks.some((b) =>
+    b.exercises.some(
+      ({ prescription: rx }) =>
+        rx.kind === 'sets' && rx.load.kind === 'working-weight' && rx.load.lift === lift && weights[lift] !== undefined,
+    ),
+  )
+}
+
+/**
+ * Accept or Keep on a Working weight prompt: Accept moves every set of the
+ * lift not logged yet to the new Working weight. Either way the prompt is answered.
+ */
+export function answerPrompt(lifts: LiveLifts, id: string, decision: 'accepted' | 'kept'): LiveLifts {
+  const prompt = lifts.prompts.find((p) => p.id === id)
+  if (!prompt) return lifts
+  const prompts = lifts.prompts.filter((p) => p.id !== id)
+  if (decision === 'kept') return { ...lifts, prompts }
+  return {
+    ...lifts,
+    prompts,
+    sets: lifts.sets.map((sets, x) => {
+      const e = lifts.exercises[x]
+      return e.lift === prompt.lift && !e.calibrate
+        ? sets.map((s) => (s.done ? s : { ...s, pounds: prompt.to.pounds }))
+        : sets
+    }),
   }
 }
 
@@ -283,7 +327,7 @@ export function parseLiveLifts(value: unknown): LiveLifts | null {
   if (!Array.isArray(v.exercises) || !Array.isArray(v.sets) || v.exercises.length !== v.sets.length) return null
   if (!v.sets.every(Array.isArray)) return null
   if (v.rest !== null && (typeof v.rest !== 'object' || typeof v.rest?.startedAt !== 'number')) return null
-  return { ...v, ending: v.ending === true } as LiveLifts
+  return { ...v, ending: v.ending === true, prompts: Array.isArray(v.prompts) ? v.prompts : [] } as LiveLifts
 }
 
 /** Whatever is running on the device: a run or a HYROX circuit against the clock, or sets at the rack. */

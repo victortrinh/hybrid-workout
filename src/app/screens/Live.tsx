@@ -39,6 +39,7 @@ import { clock, clockInput, KM_PER_MILE, parseClock, type RunContext } from '../
 import { poundsWords } from '../../domain/program/describe'
 import { stations } from '../../domain/program/program'
 import type { Lane } from '../../domain/program/types'
+import type { WorkingWeightSuggestion } from '../../domain/suggestion'
 import { StripedNumeral } from '../components/StripedNumeral'
 import { nb } from '../format'
 import { blockChangeCue, keepAwake, letSleep, unlockSound } from '../liveCues'
@@ -92,6 +93,7 @@ export function Live({
   onChange,
   onSave,
   onSaveLifts,
+  onDecide,
 }: {
   live: LiveSession | null
   /** Paces and units now; the Environment is the run's own. */
@@ -99,6 +101,7 @@ export function Live({
   onChange: (live: LiveSession | null) => void
   onSave: (run: LiveRun, finish: LiveFinish) => void
   onSaveLifts: (lifts: LiveLifts, finish: LiftsFinish) => void
+  onDecide: (suggestion: WorkingWeightSuggestion, decision: 'accepted' | 'kept') => void
 }) {
   if (!live) {
     return (
@@ -113,7 +116,7 @@ export function Live({
       </div>
     )
   }
-  if (isLifts(live)) return <Lifting lifts={live} onChange={onChange} onSave={onSaveLifts} />
+  if (isLifts(live)) return <Lifting lifts={live} onChange={onChange} onSave={onSaveLifts} onDecide={onDecide} />
   return <Running run={live} runContext={runContext} onChange={onChange} onSave={onSave} />
 }
 
