@@ -77,7 +77,7 @@ test('a full Strength session: a load change, RPEs, a missed rep, then the Coach
   await expect(band.locator('p').first()).toHaveText('Back squat · Set 1 of 3')
   await expect(band.locator('.stripe-num')).toHaveText('185')
   await expect(band.getByText('lb × 5')).toBeVisible()
-  await expect(band.locator('[aria-live]')).toHaveText('Back squat first. RPE 7 means three left in the tank.')
+  await expect(band.locator('[aria-live]')).toHaveText('Back squat first. RPE 7: three left in the tank.')
   await expect(page.getByRole('img', { name: '0 of 15 sets logged' })).toBeVisible()
   // The Substitutions from the athlete's gym: no calf machines.
   await expect(page.getByRole('heading', { name: 'Single-leg calf raise' })).toBeVisible()
