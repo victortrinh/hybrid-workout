@@ -149,8 +149,12 @@ test('Today asks which Session an ambiguous workout was; the answer attaches it,
   expect(answers).toMatchObject([{ activityId: AMBIGUOUS.id, week: 18, sessionId: 'threshold' }])
   await expect(page.getByText('Watch, Wed: 42 min · avg 152 bpm')).toBeVisible()
 
-  // It was on the treadmill: Today asks for the console's distance, on Log after.
-  await page.getByRole('region', { name: 'Console distance' }).getByRole('link', { name: 'Add console distance' }).click()
+  // Attached, not logged: Today offers Log it, which asks for the treadmill console's distance.
+  const attached = page.getByRole('region', { name: 'From the watch' })
+  await expect(attached).toContainText('Threshold it was. Not logged yet.')
+  await expect(attached).toContainText('Bring the console’s distance.')
+  await expect(page.getByRole('region', { name: 'Console distance' })).toHaveCount(0)
+  await attached.getByRole('link', { name: 'Log it' }).click()
   await expect(page).toHaveURL('/log/18/threshold')
   const watch = page.getByRole('region', { name: 'From the watch' })
   await expect(watch).toContainText('Running, Wed 17 February at 7:00')
@@ -164,6 +168,7 @@ test('Today asks which Session an ambiguous workout was; the answer attaches it,
   await expect(page).toHaveURL('/')
   await expect.poll(() => logs.at(-1)).toMatchObject({ week: 18, sessionId: 'threshold', minutes: 42, distanceMeters: 8400 })
   await expect(page.getByRole('region', { name: 'Console distance' })).toHaveCount(0)
+  await expect(page.getByRole('region', { name: 'From the watch' })).toHaveCount(0)
 })
 
 test('Settings has the Workout Shortcut setup page, with the address and the steps', async ({ page }) => {
