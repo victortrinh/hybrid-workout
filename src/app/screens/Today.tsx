@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Button, Link } from 'react-aria-components'
+import { motion } from 'motion/react'
 import { addDays, daysBetween } from '../../domain/calendar'
 import type { Activity } from '../../domain/activity'
 import type { ActivityAttached, ActivityQuestion, BucketEntry, CoachDay, PhaseProgress, RestReason } from '../../domain/coach'
@@ -41,6 +42,7 @@ import {
   weekday,
   weekRange,
 } from '../format'
+import { DUR, lane, play, useEntrances, useMounted, wipeIn } from '../motion'
 import { logPath, SCREEN_PATH, weekPath } from '../router'
 import { RaceCard } from './RaceCard'
 
@@ -133,6 +135,25 @@ export function Today({
   )
 }
 
+const COUNTDOWN_SEEN = 'compromised:countdown-seen'
+
+/** Whether Today has already opened on `today` in this tab: the countdown wipes on only the first time. */
+function seenToday(today: string): boolean {
+  try {
+    return sessionStorage.getItem(COUNTDOWN_SEEN) === today
+  } catch {
+    return true
+  }
+}
+
+function markSeen(today: string) {
+  try {
+    sessionStorage.setItem(COUNTDOWN_SEEN, today)
+  } catch {
+    // No storage: the count simply stays put.
+  }
+}
+
 function FieldBand({
   day,
   weekCount,
@@ -147,6 +168,9 @@ function FieldBand({
   startingPoint: StartingPointEdit
 }) {
   const { position } = day
+  const [unveil] = useState(() => !seenToday(day.today))
+  const entrances = useEntrances()
+  useEffect(() => markSeen(day.today), [day.today])
   return (
     <header className="on-field bg-cobalt px-pad pt-4 pb-5 text-on-cobalt desktop:col-span-full desktop:-mx-gutter desktop:grid desktop:grid-cols-[auto_minmax(0,1fr)] desktop:items-end desktop:gap-x-14 desktop:gap-y-2 desktop:px-gutter desktop:py-7">
       <div className="flex items-center justify-between gap-3 desktop:col-span-full desktop:justify-end">
@@ -158,7 +182,15 @@ function FieldBand({
       <p className="mt-3 desktop:mt-0">
         {/* The wrapper carries the numeral's size so its line box matches the prototype's. */}
         <span className="block text-numeral leading-[normal]">
-          <StripedNumeral value={String(Math.abs(day.daysToRace))} />
+          {/* The day's first look: the count wipes on left to right, like a scoreboard changing over. */}
+          <motion.span
+            className="inline-block"
+            initial={unveil && entrances ? { clipPath: 'inset(0 100% 0 0)' } : false}
+            animate={{ clipPath: 'inset(0 0% 0 0)' }}
+            transition={lane(DUR.fill, 0.1)}
+          >
+            <StripedNumeral value={String(Math.abs(day.daysToRace))} />
+          </motion.span>
         </span>
         <span className="mt-2.5 block text-[18px] font-semibold">
           {countdownLabel(day.daysToRace)} · {longDay(day.raceDay)}
@@ -204,13 +236,13 @@ function PhaseLanes({ phases }: { phases: PhaseProgress[] }) {
     .join(', ')
   return (
     <div role="img" aria-label={`Phases: ${summary}`} className="mt-[18px] grid gap-1.5 desktop:mt-0">
-      {phases.map((phase) => (
+      {phases.map((phase, i) => (
         <div
           key={phase.id}
           className={`grid grid-cols-[128px_1fr] items-center gap-2.5 text-label ${phase.current ? 'font-extrabold' : 'font-semibold'}`}
         >
           <span>{phase.name}</span>
-          <FieldLane value={phase.completion} current={phase.current} />
+          <FieldLane value={phase.completion} current={phase.current} index={i} />
         </div>
       ))}
     </div>
@@ -534,15 +566,22 @@ const linkButton = `${buttonBase} text-link underline decoration-2 underline-off
 function SuggestionNote({ suggestion, onDecide }: { suggestion: Suggestion; onDecide: (d: Decision) => void }) {
   const copy = suggestionCopy(suggestion)
   const { decision } = suggestion
+  const mounted = useMounted()
+  const entrances = useEntrances()
   return (
     <section
       aria-label="Coach’s Suggestion"
       aria-live="polite"
       className="mt-[18px] border-t-2 border-t-ink py-3.5 desktop:border-b desktop:border-b-rule"
     >
-      <p className="text-[17px] leading-[1.3] font-semibold">
+      {/* Decided or undone: the Coach's new line wipes in over the old one. */}
+      <motion.p
+        key={decision}
+        {...play(wipeIn, mounted && entrances)}
+        className="text-[17px] leading-[1.3] font-semibold"
+      >
         {decision === 'open' ? copy.line : decision === 'accepted' ? copy.accepted : copy.kept}
-      </p>
+      </motion.p>
       {decision === 'open' && <p className="mt-1 text-[14px] text-muted">{nb(copy.why)}</p>}
       <div className="mt-2.5 flex gap-5">
         {decision === 'open' ? (

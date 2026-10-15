@@ -3,6 +3,7 @@ import { isTreadmill, matchActivities, type Activity } from '../domain/activity'
 import { addDays } from '../domain/calendar'
 import { nowDate, nowMs } from '../domain/clock'
 import { Link, RouterProvider } from 'react-aria-components'
+import { motion } from 'motion/react'
 import { coach, findWeek, keyDeadline, prescribedWeek, type CoachDay } from '../domain/coach'
 import { liftsLog, startLifts } from '../domain/lifts'
 import { liveLog, startRun } from '../domain/live'
@@ -19,6 +20,7 @@ import { DockContext } from './components/ActionBar'
 import { Icon } from './components/Icons'
 import { StripedNumeral } from './components/StripedNumeral'
 import { longDay } from './format'
+import { play, useEntrances, wipeIn } from './motion'
 import { navigate, SCREEN_PATH, useRoute, type Route, type Screen } from './router'
 import { NotFound } from './screens/NotFound'
 import { Plan } from './screens/Plan'
@@ -200,6 +202,7 @@ export function App() {
     decide({ id: suggestion.id, decision, date: today, updatedAt: editedAt(previous?.updatedAt) })
   }
   const route = useRoute()
+  const entrances = useEntrances()
   /** The watch's workout attached to a Session, from the same matching Today shows. */
   const attachedTo = (week: number, sessionId: string) =>
     matchActivities(program, activities, logs, activityAnswers).find(
@@ -260,6 +263,8 @@ export function App() {
         {/* Clear of the fixed dock (the tab bar, any ActionBar, the home-indicator inset), with room to spare. */}
         <DockContext value={dock}>
         <main id="main" className="min-w-0 pb-[calc(var(--dock-height,70px)+42px)] desktop:pb-12">
+          {/* Each screen wipes in from its lane; the one leaving goes at once, so a tap never waits. */}
+          <motion.div key={`${screen}/${route.week ?? ''}/${route.sessionId ?? ''}`} {...play(wipeIn, entrances)}>
           {screen === 'today' && (
             <Today
               day={day}
@@ -318,6 +323,7 @@ export function App() {
           {screen === 'shortcut' && <Shortcut nights={recoveryNights} />}
           {screen === 'workouts' && <Workouts activities={activities} />}
           {screen === 'not-found' && <NotFound />}
+          </motion.div>
         </main>
         </DockContext>
         <Dock slotRef={setDock}>
@@ -362,8 +368,12 @@ function SideRail({ screen, day }: { screen: Screen; day: CoachDay }) {
             key={item.screen}
             href={SCREEN_PATH[item.screen]}
             aria-current={screen === item.screen ? 'page' : undefined}
-            className="flex items-center gap-3 rounded-sm px-3 py-2.5 text-[17px] font-bold text-on-cobalt no-underline hover:bg-white/12 data-current:bg-on-cobalt data-current:text-cobalt"
+            className="relative isolate flex items-center gap-3 rounded-sm px-3 py-2.5 text-[17px] font-bold text-on-cobalt no-underline transition-colors duration-(--dur-ui) hover:bg-white/12 data-current:text-cobalt"
           >
+            {/* The white block runs down the rail to the new screen, like a marker moving lanes. */}
+            {screen === item.screen && (
+              <motion.span layoutId="rail-current" className="absolute inset-0 -z-10 rounded-sm bg-on-cobalt" />
+            )}
             <Icon name={item.screen} />
             {item.label}
           </Link>
@@ -415,7 +425,7 @@ function TabBar({ screen }: { screen: Screen }) {
           key={item.screen}
           href={SCREEN_PATH[item.screen]}
           aria-current={screen === item.screen ? 'page' : undefined}
-          className="flex min-w-18 flex-col items-center gap-[3px] py-1 text-label text-muted no-underline data-current:text-link"
+          className="flex min-w-18 flex-col items-center gap-[3px] py-1 text-label text-muted no-underline transition-colors duration-(--dur-ui) data-current:text-link"
         >
           <Icon name={item.screen} />
           {item.label}

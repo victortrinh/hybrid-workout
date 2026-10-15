@@ -1,6 +1,8 @@
 import { SESSION_TYPES } from '../../domain/program/describe'
 import type { Session } from '../../domain/program/types'
 import type { CompletionState, WeekCompletion } from '../../domain/progress'
+import { motion } from 'motion/react'
+import { lane, useEntrances } from '../motion'
 import { LANE_COLOR } from './LaneChip'
 
 /**
@@ -10,15 +12,23 @@ import { LANE_COLOR } from './LaneChip'
  * Decorative: the row says the same in its label.
  */
 export function WeekLanes({ cells }: { cells: { session: Session; state?: CompletionState }[] }) {
+  const entrances = useEntrances()
   return (
     <span aria-hidden="true" className="grid h-[18px] grid-cols-5 items-end gap-1">
-      {cells.slice(0, 5).map(({ session, state }) => (
+      {cells.slice(0, 5).map(({ session, state }, i) => (
         <i
           key={session.id}
           className={`relative block overflow-hidden shadow-[inset_0_0_0_2px_currentColor] ${LANE_COLOR[SESSION_TYPES[session.type].lane]} ${session.key ? 'h-[18px]' : 'h-3'} ${state === 'skipped' || state === 'missed' ? 'opacity-35' : ''}`}
         >
           {(state === 'done' || state === 'partial') && (
-            <b className={`absolute inset-x-0 bottom-0 bg-current ${state === 'partial' ? 'h-1/2' : 'h-full'}`} />
+            // Done lanes fill from the floor up, left to right, the first time the Week scrolls into view.
+            <motion.b
+              initial={entrances ? { scaleY: 0 } : false}
+              whileInView={{ scaleY: 1 }}
+              viewport={{ once: true }}
+              transition={lane(0.4, i * 0.05)}
+              className={`absolute inset-x-0 bottom-0 origin-bottom bg-current ${state === 'partial' ? 'h-1/2' : 'h-full'}`}
+            />
           )}
         </i>
       ))}

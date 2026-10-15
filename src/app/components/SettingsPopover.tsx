@@ -62,7 +62,7 @@ export function SettingsPopover({
         aria-label="Settings"
         placement="bottom end"
         offset={8}
-        className="w-[264px] overflow-y-auto rounded-sm border-2 border-ink bg-paper p-[14px] text-ink shadow-[0_10px_30px_rgba(0,0,0,.18)] outline-none"
+        className="popover-drop w-[264px] overflow-y-auto rounded-sm border-2 border-ink bg-paper p-[14px] text-ink shadow-[0_10px_30px_rgba(0,0,0,.18)] outline-none"
       >
         <div className="grid gap-3">
           {import.meta.env.VITE_API === 'mock' && <ScenarioPicker />}

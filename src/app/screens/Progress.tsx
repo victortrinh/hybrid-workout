@@ -1,5 +1,6 @@
 import { Link } from 'react-aria-components'
-import { useMemo, type ReactNode } from 'react'
+import { createContext, useContext, useId, useMemo, useRef, type ReactNode } from 'react'
+import { motion, useInView, useReducedMotion } from 'motion/react'
 import type { LocalDate } from '../../domain/calendar'
 import type { CoachDay } from '../../domain/coach'
 import type { SessionLog } from '../../domain/log'
@@ -28,6 +29,7 @@ import { LANES, LaneLegend } from '../components/LaneChip'
 import { completionLabel, WeekLanes } from '../components/WeekLanes'
 import { shortDay } from '../format'
 import { weekPath } from '../router'
+import { DUR, lane } from '../motion'
 import { useWidth } from '../useWidth'
 import { weekMark } from './Plan'
 
@@ -105,10 +107,45 @@ function Panel({
 /** Draws `render` at the slot's measured width, once there is one. */
 function ChartSlot({ render }: { render: (width: number) => ReactNode }) {
   const [ref, width] = useWidth<HTMLDivElement>()
+  const seen = useRef<HTMLDivElement>(null)
+  const inView = useInView(seen, { once: true, amount: 0.4 })
   return (
-    <div ref={ref} className="mt-3 min-h-[120px]">
-      {width > 0 && render(width)}
+    <div ref={seen}>
+      <div ref={ref} className="mt-3 min-h-[120px]">
+        <ChartInView value={inView}>{width > 0 && render(width)}</ChartInView>
+      </div>
     </div>
+  )
+}
+
+const ChartInView = createContext(true)
+
+/**
+ * A chart's data, revealed left to right the first time it scrolls into view,
+ * the way a lane fills: Weeks in order, from the start line. Axes and the goal
+ * line are there from the start; only what was logged sweeps in.
+ */
+function Sweep({ width, height, children }: { width: number; height: number; children: ReactNode }) {
+  const id = useId()
+  const inView = useContext(ChartInView)
+  // Still: the data is simply there, scrolled to or not.
+  if (useReducedMotion()) return children
+  return (
+    <>
+      <defs>
+        <clipPath id={id}>
+          <motion.rect
+            x={0}
+            y={0}
+            height={height}
+            initial={{ width: 0 }}
+            animate={{ width: inView ? width : 0 }}
+            transition={lane(DUR.fill)}
+          />
+        </clipPath>
+      </defs>
+      <g clipPath={`url(#${id})`}>{children}</g>
+    </>
   )
 }
 
@@ -221,6 +258,7 @@ function FiveKChart({ width: W, weekCount, fiveK }: { width: number; weekCount: 
           </text>
         </>
       )}
+      <Sweep width={W} height={H}>
       {fiveK.upcoming.map(
         (u) =>
           u.seconds !== null && (
@@ -262,6 +300,7 @@ function FiveKChart({ width: W, weekCount, fiveK }: { width: number; weekCount: 
         {clock(latest.seconds)}
         {latest.environment && ` · ${ENVIRONMENT_WORD[latest.environment]}`}
       </text>
+      </Sweep>
     </svg>
   )
 }
@@ -400,6 +439,7 @@ function LoadChart({ width: W, weekCount, load }: { width: number; weekCount: nu
         .map((w) => (
           <rect key={w} x={x(w) - bar / 2} y={H - B - 2} width={bar} height={2} fill="var(--edge)" />
         ))}
+      <Sweep width={W} height={H}>
       {load.map((week) => {
         let below = 0
         return LANES.map((lane) => {
@@ -419,6 +459,7 @@ function LoadChart({ width: W, weekCount, load }: { width: number; weekCount: nu
           )
         })
       })}
+      </Sweep>
     </svg>
   )
 }
@@ -596,6 +637,7 @@ function RecoveryChart({ width: W, trend }: { width: number; trend: Trend }) {
         stroke="var(--ink)"
         strokeDasharray="4 4"
       />
+      <Sweep width={W} height={H}>
       {trend.map(({ date, night }, i) =>
         night ? (
           <rect
@@ -618,6 +660,7 @@ function RecoveryChart({ width: W, trend }: { width: number; trend: Trend }) {
           <circle key={date} cx={x(i)} cy={yh(night.hrvMs)} r={4} fill="var(--link)" stroke="var(--paper)" strokeWidth={2} />
         ) : null,
       )}
+      </Sweep>
       <text className="strong" x={W - R} y={12} textAnchor="end">
         {lastNight ? 'Last night' : shortDay(latest.date)}: {sleepText(latest.night!.sleepMinutes)}
         {latest.night!.hrvMs !== null && ` · ${latest.night!.hrvMs} ms`}
