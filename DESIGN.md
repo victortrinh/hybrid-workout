@@ -359,7 +359,7 @@ The cobalt header of Today and every Live session: brand and avatar row, the str
 - **Live block lanes:** 12px `rule` tracks filled in the block's Session-type colour; the current block grows to 26px with a 17px/800 label and its time or speed right-aligned in muted.
 - **Week lanes (Plan, Weekly completion):** a two-digit expanded Week number, five 12px cells in Session-type order (Speed, Strength, Threshold, HYROX, Easy) outlined in 2px of their colour, filled when Done, half-filled when Partial, faded when Skipped or missed (Weeks ahead stay outlined), 18px tall for Key sessions; the current Week sits on `sunk` with a `link`-coloured number.
 - **Lane chip:** five 3px stacked bars in the Session-type colour, 36px wide, leading each Week row on Today.
-- **Motion:** fills animate width over 0.9s with `cubic-bezier(.16,1,.3,1)`; the rest bar ticks linearly over 1s. All transitions are removed under reduced motion.
+- **Motion:** fills animate width over 0.9s with `cubic-bezier(.16,1,.3,1)`, stacked field lanes 60ms apart; Week lane cells fill from the floor up; the rest bar ticks linearly over 1s. See Motion.
 
 ### Action bar (the thumb rule)
 On the phone a screen's primary action sits at the bottom, where the thumb already is; the top keeps what is read or rarely touched (End, back links, Settings).
@@ -373,6 +373,24 @@ Sticky cobalt strip at the bottom of a strength Live session, in two rows: "Rest
 
 ### Charts
 SVG on paper: 12px/600 muted axis text, `rule` gridlines, Session-type stacked bars, `link` plan and HRV lines, `speed` goal line, square markers, one bold ink annotation for the latest value.
+
+## Motion
+
+Motion is a lane being run: things come in from the left or fill from the start line, fast, hard-ended, on one easing (`--ease-lane`, `cubic-bezier(.16,1,.3,1)`). Built with Motion (`motion/react`) and CSS; the tokens live in `src/app/motion.tsx` and `styles.css`.
+
+- **Durations:** press 120ms (`--dur-tap`), UI change 180ms (`--dur-ui`), a screen or block arriving 240ms (`--dur-enter`), a lane or chart filling 0.9s.
+- **Wipe in:** a screen, a new Block's name, a Coach line after Accept or Undo, a just-logged set: opacity and 8px from the left. Screens wipe in on arrival only; the one leaving goes at once, so a tap never waits.
+- **Fill:** field lanes, Week lane cells (once, as they scroll into view) and Progress chart data, which a clip sweeps in left to right the first time the chart is seen. Axes and the goal line are there from the start.
+- **Drop:** the Live field band unrolls from the top as a session opens; the Settings popover drops 6px out of the avatar.
+- **Rise:** strips and toasts at the foot (rest timer, Undo) rise 8px into place and drop away.
+- **Marker:** the selected segment's ink block and the side rail's white block slide to the new choice.
+- **Press:** a pressed button sits 1px lower; colour, stroke and underline ease over 120ms.
+- **Countdown:** the race countdown wipes on left to right on the day's first look at Today, and stands still after that.
+
+### Named Rules
+**The Still Numbers Rule.** In a Live session no number the athlete reads mid-effort moves: target speed, target load, block timer and rest countdown change in place. Only the labels around them announce the change.
+
+**The Reduced Motion Rule.** Under `prefers-reduced-motion` every Motion animation is skipped and every CSS transition and animation removed; anything that waits for a scroll to appear is simply there.
 
 ## Do's and Don'ts
 
@@ -394,3 +412,5 @@ SVG on paper: 12px/600 muted axis text, `rule` gridlines, Session-type stacked b
 - **Don't** stripe body figures, timers or table values; they stay solid.
 - **Don't** set display type at a third width or in a different family.
 - **Don't** write cheerleading or motivational-poster copy, or a joke that hides the instruction.
+- **Don't** bounce, overshoot, scale-pop or throw confetti; nothing in motion is cuter than the copy.
+- **Don't** animate a number the athlete reads mid-effort, or make a tap wait for an animation to finish.

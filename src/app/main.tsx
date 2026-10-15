@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { App } from './App'
 import { MockBadge } from './components/MockBadge'
 import { mockInfo, setMockInfo } from './mockInfo'
+import { LaneMotion } from './motion'
 import './styles.css'
 import { applyTheme, readSettings } from './useSettings'
 
@@ -16,7 +17,9 @@ if (mock) setMockInfo(await (await import('virtual:compromised-mock')).startMock
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <LaneMotion>
+      <App />
+    </LaneMotion>
     {mock && <MockBadge info={mockInfo()!} />}
   </StrictMode>,
 )

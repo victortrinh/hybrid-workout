@@ -180,6 +180,11 @@
 
   --shadow-popover: 0 10px 30px rgba(0, 0, 0, 0.18);
   --ease-lane: cubic-bezier(0.16, 1, 0.3, 1);
+  /* Motion (DESIGN.md): a press, a UI change, a screen or block arriving. Lane fills take 0.9s. */
+  --dur-tap: 120ms;
+  --dur-ui: 180ms;
+  --dur-enter: 240ms;
+  --default-transition-timing-function: var(--ease-lane);
 }
 
 @layer base {
@@ -285,9 +290,38 @@
     font-weight: 800;
   }
 
+  /*
+   * Presses (DESIGN.md, Motion): every react-aria control eases its colour,
+   * stroke and underline over --dur-tap, and a button pressed sits 1px lower,
+   * like a key. No scale, no spring.
+   */
+  [data-rac]:is(button, a, label) {
+    transition-property: background-color, color, box-shadow, text-decoration-color, text-decoration-thickness, transform;
+    transition-duration: var(--dur-tap);
+    transition-timing-function: var(--ease-lane);
+  }
+  button[data-rac][data-pressed] {
+    transform: translateY(1px);
+  }
+
+  /* The Settings popover drops 6px out of the avatar, and lifts back on close. */
+  .popover-drop[data-entering] {
+    animation: drop-in var(--dur-ui) var(--ease-lane);
+  }
+  .popover-drop[data-exiting] {
+    animation: drop-in var(--dur-tap) ease-in reverse;
+  }
+
   /* Field lane: a flat bar with hard ends that fills left to right. */
   .lane-fill {
     transition: width 0.9s var(--ease-lane);
+  }
+}
+
+@keyframes drop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
   }
 }
 

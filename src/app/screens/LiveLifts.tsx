@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type RefObject } from 'react'
 import { Button, Form, Group, Input, Label, NumberField, Radio, RadioGroup } from 'react-aria-components'
+import { motion } from 'motion/react'
 import { nowMs } from '../../domain/clock'
 import {
   addSet,
@@ -27,6 +28,7 @@ import { FieldLane } from '../components/FieldLane'
 import { Icon } from '../components/Icons'
 import { StripedNumeral } from '../components/StripedNumeral'
 import { nb } from '../format'
+import { DUR, dropIn, lane, LanePresence, play, riseIn, useEntrances, useMounted, wipeIn } from '../motion'
 import { blockChangeCue, keepAwake, letSleep, unlockSound } from '../liveCues'
 import { ALL_SETS_LINE, finishLine, liftsStartLine, loggedLine, REST_OVER_LINE, rpeLine } from '../liveCopy'
 import { navigate, SCREEN_PATH } from '../router'
@@ -76,6 +78,7 @@ export function Lifting({
   /** Records the answer to a Working weight prompt as the Suggestion's decision, as Today does. */
   onDecide: (suggestion: WorkingWeightSuggestion, decision: 'accepted' | 'kept') => void
 }) {
+  const entrances = useEntrances()
   const current = currentSet(lifts)
   const [say, setSay] = useState(() => liftsStartLine(lifts))
   const liftsRef = useRef(lifts)
@@ -168,7 +171,11 @@ export function Lifting({
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <header className="on-field bg-cobalt px-pad pt-[calc(14px+env(safe-area-inset-top))] pb-5 text-on-cobalt desktop:px-gutter desktop:pb-7">
+      {/* The field drops in from the top as the session opens, once. */}
+      <motion.header
+        {...play(dropIn, entrances)}
+        className="on-field bg-cobalt px-pad pt-[calc(14px+env(safe-area-inset-top))] pb-5 text-on-cobalt desktop:px-gutter desktop:pb-7"
+      >
         <div className="flex items-center justify-between gap-3">
           <h1 tabIndex={-1} className="text-[22px]">
             {nb(lifts.heading)}
@@ -219,7 +226,7 @@ export function Lifting({
             </p>
           </>
         )}
-      </header>
+      </motion.header>
 
       {/* On the finish sheet its actions sit on the screen's bottom edge, so no padding under them. */}
       <div className={`flex flex-1 flex-col px-pad desktop:max-w-plan desktop:px-gutter ${lifts.ending ? 'desktop:pb-6' : 'pb-6'}`}>
@@ -269,7 +276,10 @@ export function Lifting({
 
       {!lifts.ending && (
         <div className="sticky bottom-0 z-10">
+          {/* The rest strip rises over the set bar and drops away when rest ends; the bar under it never waits. */}
+          <LanePresence popLayout>
           {lifts.rest ? (
+            <motion.div key={`rest-${lifts.rest.exercise}-${lifts.rest.set}`} {...play(riseIn, entrances)}>
             <RestBar
               key={`${lifts.rest.exercise}-${lifts.rest.set}`}
               exercise={lifts.exercises[lifts.rest.exercise]}
@@ -290,8 +300,9 @@ export function Lifting({
               }}
               onSkip={() => act(endRest)}
             />
+            </motion.div>
           ) : (
-            <div className={`${liveBarClass} flex gap-2.5`}>
+            <div key="bar" className={`${liveBarClass} flex gap-2.5`}>
               {current && exercise && set ? (
                 <>
                   {set.pounds !== null && (
@@ -329,6 +340,7 @@ export function Lifting({
               )}
             </div>
           )}
+          </LanePresence>
         </div>
       )}
     </div>
@@ -549,6 +561,8 @@ function SetRow({
   onReps: (reps: number) => void
 }) {
   const name = `${exercise.name}, set ${number + 1}`
+  const mounted = useMounted()
+  const entrances = useEntrances()
   return (
     <li aria-label={name} aria-current={current ? 'step' : undefined}>
       <div className="grid min-h-[52px] grid-cols-[24px_1fr_auto] items-center gap-2.5">
@@ -586,13 +600,22 @@ function SetRow({
           </NumberField>
         )}
         {set.done ? (
-          <span className="flex items-center gap-1 px-3.5 text-[15px] font-bold">
+          // Logged just now: the tick draws and the word wipes in. Opened already logged: it simply sits there.
+          <motion.span
+            {...play(wipeIn, mounted && entrances)}
+            className="flex items-center gap-1 px-3.5 text-[15px] font-bold"
+          >
             {/* Green as a graphic only: as text it falls short of 4.5:1 on paper. */}
             <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5 fill-none stroke-good stroke-3">
-              <path d="M5 12.5l4.5 4.5L19 7.5" />
+              <motion.path
+                d="M5 12.5l4.5 4.5L19 7.5"
+                initial={mounted && entrances ? { pathLength: 0 } : false}
+                animate={{ pathLength: 1 }}
+                transition={lane(DUR.enter, 0.06)}
+              />
             </svg>
             Logged
-          </span>
+          </motion.span>
         ) : (
           <Button
             onPress={onLog}

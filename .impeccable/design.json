@@ -766,5 +766,42 @@
       "Don't set display type at a third width or in a different family.",
       "Don't write cheerleading or motivational-poster copy, or a joke that hides the instruction."
     ]
-  }
+  },
+  "motion": [
+    {
+      "name": "lane-ease",
+      "value": "cubic-bezier(.16,1,.3,1)",
+      "purpose": "The one easing for every transition and Motion animation."
+    },
+    {
+      "name": "tap",
+      "value": "120ms",
+      "purpose": "Presses: colour, stroke, underline; a pressed button sits 1px lower."
+    },
+    {
+      "name": "ui",
+      "value": "180ms",
+      "purpose": "UI changes: popover drop, rest strip and Undo rise, segmented marker."
+    },
+    {
+      "name": "enter",
+      "value": "240ms",
+      "purpose": "A screen, a Block name or a Coach line wiping in from 8px left; the Live band unrolling."
+    },
+    {
+      "name": "lane-fill",
+      "value": "width .9s cubic-bezier(.16,1,.3,1)",
+      "purpose": "Every lane fill (Phase, block, set group), stacked lanes 60ms apart; chart data sweeps in over the same 0.9s."
+    },
+    {
+      "name": "rest-tick",
+      "value": "width 1s linear",
+      "purpose": "Rest timer bar, ticking each second."
+    },
+    {
+      "name": "reduced-motion",
+      "value": "skipAnimations; transition:none; animation:none",
+      "purpose": "All motion removed under prefers-reduced-motion."
+    }
+  ]
 }

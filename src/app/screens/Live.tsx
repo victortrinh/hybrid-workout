@@ -11,6 +11,7 @@ import {
   Text,
   TextField,
 } from 'react-aria-components'
+import { motion } from 'motion/react'
 import {
   advance,
   answer,
@@ -57,6 +58,7 @@ import { stations } from '../../domain/program/program'
 import type { Lane } from '../../domain/program/types'
 import type { StationPart } from '../../domain/log'
 import type { WorkingWeightSuggestion } from '../../domain/suggestion'
+import { dropIn, LanePresence, play, riseIn, useEntrances, wipeIn } from '../motion'
 import { StripedNumeral } from '../components/StripedNumeral'
 import { nb } from '../format'
 import { blockChangeCue, keepAwake, letSleep, unlockSound } from '../liveCues'
@@ -152,6 +154,7 @@ function Running({
   onSave: (run: LiveRun, finish: LiveFinish) => void
 }) {
   const context: RunContext = { ...runContext, environment: run.environment }
+  const entrances = useEntrances()
   const over = isOver(run)
   const paused = run.pausedAt !== null
   const block: LiveBlock | undefined = run.blocks[run.block]
@@ -241,8 +244,10 @@ function Running({
     // On the clock the page is one screen that never scrolls: the band keeps the target and the clock at
     // the top, the Blocks scroll in what's left (or fold away to make room), and the actions stay docked.
     <div className={`flex flex-col ${over ? 'min-h-dvh' : 'h-dvh'}`}>
-      <header
+      {/* The field drops in from the top as the session opens, once. */}
+      <motion.header
         ref={bandRef}
+        {...play(dropIn, entrances)}
         className={`on-field bg-cobalt px-pad pt-[calc(14px+env(safe-area-inset-top))] pb-5 text-on-cobalt desktop:px-gutter desktop:pb-7 ${over ? '' : 'relative min-h-0 flex-[0_1_auto] overflow-y-auto'}`}
       >
         <div className="flex items-center justify-between gap-3">
@@ -266,9 +271,10 @@ function Running({
           </>
         ) : (
           <>
-            <p className="mt-3.5 text-[20px] font-bold">
+            {/* A new Block's name wipes in; its numbers below change at once, to be read mid-stride. */}
+            <motion.p key={run.block} {...play(wipeIn, entrances)} className="mt-3.5 text-[20px] font-bold">
               {nb(run.ready ? readyWords(block, target) : `${block.name} · ${blockLength(block)}`)}
-            </p>
+            </motion.p>
             {target ? (
               <p className="@container mt-1.5 flex flex-wrap items-baseline gap-x-2">
                 <StripedNumeral value={target.value} className="text-numeral-live" />
@@ -320,7 +326,7 @@ function Running({
             </p>
           </>
         )}
-      </header>
+      </motion.header>
 
       {/* On the finish sheet its actions sit on the screen's bottom edge, so no padding under them. */}
       {/* A question about the Block just finished keeps room for itself; the Blocks alone can fold to nothing. */}
@@ -590,6 +596,7 @@ function Checklist({ block, ticked, onTick }: { block: LiveBlock; ticked: number
  * clock still running. Gone on its own; the run keeps the snapshot until the next tap.
  */
 function UndoToast({ run, onUndo }: { run: LiveRun; onUndo: () => void }) {
+  const entrances = useEntrances()
   const at = run.undo?.at ?? null
   const [expired, setExpired] = useState<number | null>(null)
   useEffect(() => {
@@ -597,15 +604,19 @@ function UndoToast({ run, onUndo }: { run: LiveRun; onUndo: () => void }) {
     const timer = window.setTimeout(() => setExpired(at), Math.max(0, UNDO_MS - (nowMs() - at)))
     return () => window.clearTimeout(timer)
   }, [at])
-  if (!run.undo || expired === at || !canUndo(run, nowMs())) return null
-  const left = run.undo.run.blocks[run.undo.run.block]
+  const shown = run.undo && expired !== at && canUndo(run, nowMs()) ? run.undo : null
+  const left = shown?.run.blocks[shown.run.block]
   return (
-    <div role="status" className="mb-3 flex items-center justify-between gap-3">
-      <p className="text-body font-semibold">{nb(`${left.name}: ${left.work ? 'skipped' : 'done'}.`)}</p>
-      <Button onPress={onUndo} className={linkButton}>
-        Undo
-      </Button>
-    </div>
+    <LanePresence>
+      {shown && left && (
+        <motion.div key={shown.at} {...play(riseIn, entrances)} role="status" className="mb-3 flex items-center justify-between gap-3">
+          <p className="text-body font-semibold">{nb(`${left.name}: ${left.work ? 'skipped' : 'done'}.`)}</p>
+          <Button onPress={onUndo} className={linkButton}>
+            Undo
+          </Button>
+        </motion.div>
+      )}
+    </LanePresence>
   )
 }
 
@@ -688,7 +699,7 @@ function Lanes({
               {target ? targetShort(target) : blockLength(b)}
               {split && ` · ${clock(split.seconds)}`}
             </span>
-            <span aria-hidden="true" className={`relative col-span-full block overflow-hidden bg-rule ${current ? 'h-[26px]' : 'h-3'}`}>
+            <span aria-hidden="true" className={`relative col-span-full block overflow-hidden bg-rule transition-[height] duration-(--dur-enter) ${current ? 'h-[26px]' : 'h-3'}`}>
               <i
                 ref={current ? fillRef : undefined}
                 className={`lane-fill absolute inset-y-0 left-0 ${LANE_BG[b.lane]}`}
