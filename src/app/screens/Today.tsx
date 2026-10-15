@@ -18,7 +18,7 @@ import { answered, PainFields, type PainAnswer } from '../components/PainFields'
 import { ActionBar } from '../components/ActionBar'
 import { asksPain, PAIN_FREE, PainStep, type PainAtStart } from '../components/PainStep'
 import { Segmented } from '../components/Segmented'
-import { SettingsPopover } from '../components/SettingsPopover'
+import { SettingsPopover, type StartingPointEdit } from '../components/SettingsPopover'
 import { StripedNumeral } from '../components/StripedNumeral'
 import {
   activitySummary,
@@ -50,6 +50,7 @@ export function Today({
   onEnvironment,
   settings,
   onSettings,
+  startingPoint,
   onDecide,
   live,
   onStart,
@@ -73,6 +74,8 @@ export function Today({
   onEnvironment: (week: number, session: Session, environment: Environment) => void
   settings: Settings
   onSettings: (patch: Partial<Settings>) => void
+  /** The Starting point's estimates, as Settings edits them. */
+  startingPoint: StartingPointEdit
   /** The Live session running on this device, if any. */
   live: LiveSession | null
   /** Start session, after the pain step: a Pain report, then a Live session of Up next. */
@@ -89,7 +92,13 @@ export function Today({
       aria-labelledby="today-heading"
       className="desktop:grid desktop:grid-cols-2 desktop:gap-x-12 desktop:px-gutter"
     >
-      <FieldBand day={day} weekCount={weekCount} settings={settings} onSettings={onSettings} />
+      <FieldBand
+        day={day}
+        weekCount={weekCount}
+        settings={settings}
+        onSettings={onSettings}
+        startingPoint={startingPoint}
+      />
       <UpNext
         day={day}
         weekCount={weekCount}
@@ -114,11 +123,13 @@ function FieldBand({
   weekCount,
   settings,
   onSettings,
+  startingPoint,
 }: {
   day: CoachDay
   weekCount: number
   settings: Settings
   onSettings: (patch: Partial<Settings>) => void
+  startingPoint: StartingPointEdit
 }) {
   const { position } = day
   return (
@@ -126,7 +137,7 @@ function FieldBand({
       <div className="flex items-center justify-between gap-3 desktop:col-span-full desktop:justify-end">
         <span className="text-brand uppercase font-stretch-125% desktop:hidden">Compromised</span>
         {/* The athlete's initial opens Settings. */}
-        <SettingsPopover settings={settings} onChange={onSettings} />
+        <SettingsPopover settings={settings} onChange={onSettings} startingPoint={startingPoint} />
       </div>
 
       <p className="mt-3 desktop:mt-0">
@@ -245,7 +256,10 @@ function UpNext({
     const description = describeSession(upNext, run, day.workingWeights)
     heading = description.heading
     target = description.target
-    meta = description.meta
+    // Paces from the Starting point read as estimates wherever they set a run's target.
+    const estimated =
+      run?.paces?.estimate && describeSession(upNext, { ...run, paces: null }, day.workingWeights).target !== target
+    meta = [description.meta, estimated && 'Estimated paces'].filter(Boolean).join(' · ')
   } else if (position.kind === 'before-start') {
     const when =
       position.daysToStart === 1

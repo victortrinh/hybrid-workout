@@ -11,7 +11,7 @@ import { addDays, daysBetween, mondayOf, type LocalDate } from './calendar'
 import { DEFAULT_EQUIPMENT, equip, equipWeek, type Equipment } from './equipment'
 import { logFor, trained, type LoggedStatus, type SessionLog } from './log'
 import { painAdapted, painLevel, standingPain, type PainLevel, type PainReport } from './pain'
-import { latestFiveKTest, trainingPaces, type TrainingPaces } from './paces'
+import { currentPaces, latestFiveKTest, type TrainingPaces } from './paces'
 import { easyDayAdapted, readout, shortSleepAdapted, type Readout, type RecoveryNight } from './recovery'
 import type { Phase, PhaseId, Program, Session, SessionType, Week } from './program/types'
 import {
@@ -25,6 +25,7 @@ import {
   type Suggestion,
   type SuggestionDecision,
 } from './suggestion'
+import { startingWeights, type StartingPoint } from './startingPoint'
 import { strengthState, type WorkingWeightChange, type WorkingWeights } from './weights'
 
 export interface CoachInput {
@@ -47,6 +48,8 @@ export interface CoachInput {
   activities?: Activity[]
   /** The athlete's answers to "Which Session was this?". */
   activityAnswers?: ActivityAnswer[]
+  /** The estimates given at first launch, if any. */
+  startingPoint?: StartingPoint | null
 }
 
 export interface PickedSession {
@@ -137,7 +140,10 @@ export interface CoachDay {
   rest: RestReason | null
   /** The latest 5K test on or before today, which the Training paces come from. */
   fiveKTest: SessionLog | null
-  /** Null before the baseline 5K test: until then every run is RPE only. */
+  /**
+   * From the latest 5K test, or estimated from the Starting point before the
+   * first one; null with neither, when every run is RPE only.
+   */
   paces: TrainingPaces | null
   /**
    * The Suggestions for this Week, whatever their decision, then each lift's
@@ -146,6 +152,8 @@ export interface CoachDay {
   suggestions: Suggestion[]
   /** Each lift's Working weight; a lift without one is found in its next Strength session. */
   workingWeights: WorkingWeights
+  /** The Starting point's estimates for lifts with no Working weight yet: where their calibration starts. */
+  estimatedWeights: WorkingWeights
   /** Every time a Working weight was set or moved, oldest first. */
   workingWeightChanges: WorkingWeightChange[]
   /** The Pain report standing today, and what the pain rules make of it; null before the first. */
@@ -181,6 +189,7 @@ export function coach({
   recoveryNights = [],
   activities = [],
   activityAnswers = [],
+  startingPoint = null,
 }: CoachInput): CoachDay {
   const position = positionOf(program, today)
   const shownWeek =
@@ -249,9 +258,10 @@ export function coach({
     upNext: upNext?.session ?? null,
     rest,
     fiveKTest,
-    paces: fiveKTest?.resultSeconds ? trainingPaces(fiveKTest.resultSeconds) : null,
+    paces: currentPaces(logs, today, startingPoint?.fiveKSeconds ?? null),
     suggestions,
     workingWeights: strength.weights,
+    estimatedWeights: startingWeights(startingPoint, strength.weights),
     workingWeightChanges: strength.changes,
     pain: standing && { ...standing, level: painLevel(standing.report.score, standing.previous?.score ?? null) },
     recovery,

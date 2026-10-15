@@ -24,6 +24,25 @@ export default defineConfig({
     locale: 'en-CA',
     // Lanes fill with a transition; without motion the page is still and the scan deterministic.
     contextOptions: { reducedMotion: 'reduce' },
+    // Past first launch: the Starting point answered and skipped on this device, so every test opens on
+    // Today with RPE-only runs. e2e/starting-point.e2e.ts starts from an empty device instead.
+    storageState: {
+      cookies: [],
+      origins: [
+        {
+          origin: BASE_URL,
+          localStorage: [
+            {
+              name: 'compromised:starting-point',
+              value: JSON.stringify({
+                point: { fiveKSeconds: null, weights: {}, updatedAt: '2026-01-01T00:00:00.000Z' },
+                pending: false,
+              }),
+            },
+          ],
+        },
+      ],
+    },
   },
   webServer: {
     // The real thing: the production build served by the Worker, with D1 bound and migrated.

@@ -35,6 +35,7 @@ async function day(name: string): Promise<CoachDay & { state: SyncState; scenari
     recoveryNights: state.recoveryNights,
     activities: state.activities,
     activityAnswers: state.activityAnswers,
+    startingPoint: state.startingPoint,
     equipment: parseSettings(scenario.device.settings).equipment,
   })
   return { ...coached, state, scenario }
@@ -43,10 +44,12 @@ async function day(name: string): Promise<CoachDay & { state: SyncState; scenari
 const byId = <T extends { id: string }>(rows: T[]) => [...rows].sort((a, b) => a.id.localeCompare(b.id))
 
 describe('scenarios', () => {
-  it('are the eleven the spec lists, each named once, with the default among them', () => {
+  it('are the thirteen the specs list, each named once, with the default among them', () => {
     expect(SCENARIOS.map((s) => s.name)).toEqual([
       'before-program',
+      'first-launch',
       'week1-start',
+      'estimates',
       'after-baseline',
       'midweek-mixed',
       'rollover',
@@ -68,6 +71,7 @@ describe('scenarios', () => {
       expect(byId(state.suggestionDecisions)).toEqual(byId(server.suggestionDecisions))
       expect(byId(state.painReports)).toEqual(byId(server.painReports))
       expect(state.activityAnswers ?? []).toEqual(server.activityAnswers)
+      expect(state.startingPoint ?? null).toEqual(server.startingPoint)
       expect(
         (state.recoveryNights ?? []).map(({ date, sleepMinutes, hrvMs, restingHeartRate, source }) => ({
           date,
@@ -101,6 +105,27 @@ describe('each scenario falls where its name says', () => {
     expect(d.position).toMatchObject({ kind: 'in-week', week: 1, phase: 'foundation', daysLeft: 7 })
     expect(d.paces).toBeNull()
     expect(d.upNext).not.toBeNull()
+  })
+
+  it('first-launch: no Starting point yet, so the screen shows; every run RPE only', async () => {
+    const d = await day('first-launch')
+    expect(d.position.kind).toBe('before-start')
+    expect(d.state.startingPoint).toBeNull()
+    expect(d.paces).toBeNull()
+  })
+
+  it('estimates: Week 1 with estimated paces from 21:00 and calibrations starting from the estimates', async () => {
+    const d = await day('estimates')
+    expect(d.position).toMatchObject({ kind: 'in-week', week: 1 })
+    expect(d.fiveKTest).toBeNull()
+    expect(d.paces).toMatchObject({ fromSeconds: 21 * 60, estimate: true })
+    expect(d.estimatedWeights).toEqual({ 'back-squat': 225, 'romanian-deadlift': 185 })
+  })
+
+  it('every other scenario: the Starting point skipped, so it behaves as before', async () => {
+    for (const s of SCENARIOS.filter((s) => !['first-launch', 'estimates'].includes(s.name))) {
+      expect(s.server.startingPoint, s.name).toMatchObject({ fiveKSeconds: null, weights: {} })
+    }
   })
 
   it('after-baseline: Week 2 with Training paces from a 23:00 test, Indoor and Outdoor, in mph', async () => {

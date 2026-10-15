@@ -37,9 +37,14 @@ const WEIGHTS: WorkingWeights = {
   'seated-calf-raise': 65,
 }
 
-const start = (week: number, weights: WorkingWeights = WEIGHTS, suggestions: Suggestion[] = []): LiveLifts => {
+const start = (
+  week: number,
+  weights: WorkingWeights = WEIGHTS,
+  suggestions: Suggestion[] = [],
+  estimates: WorkingWeights = {},
+): LiveLifts => {
   const session = equip(findWeek(program, week)!.sessions.find((s) => s.id === 'strength')!, DEFAULT_EQUIPMENT)
-  return startLifts({ week, session, date: localDate('2026-11-04'), weights, suggestions }, T0)
+  return startLifts({ week, session, date: localDate('2026-11-04'), weights, suggestions, estimates }, T0)
 }
 
 /** A Working weight Suggestion from last Week's Strength session. */
@@ -92,6 +97,25 @@ describe('startLifts', () => {
     const lifts = start(1, {})
     expect(lifts.exercises[0]).toMatchObject({ calibrate: true, rpe: 7, rpeWords: 'ramp to RPE 7' })
     expect(lifts.sets[0][0]).toMatchObject({ pounds: 45, rpe: 7 })
+  })
+
+  it('starts a calibration at about 70% of the Starting point’s estimate, to the 5 lb below, still ramping to RPE 7', () => {
+    const lifts = start(1, {}, [], { 'back-squat': 225, 'romanian-deadlift': 185 })
+    expect(lifts.exercises[0]).toMatchObject({ calibrate: true, rpe: 7, rpeWords: 'ramp to RPE 7' })
+    expect(lifts.sets[0].map((s) => s.pounds)).toEqual([155, 155, 155])
+    expect(lifts.sets[1][0].pounds).toBe(125)
+    // A lift with no estimate still starts from the empty bar or a light dumbbell.
+    expect(lifts.sets[2][0].pounds).toBe(15)
+  })
+
+  it('never starts an estimate’s calibration under the empty bar', () => {
+    expect(start(1, {}, [], { 'back-squat': 50 }).sets[0][0].pounds).toBe(45)
+  })
+
+  it('takes the real Working weight over an estimate', () => {
+    const lifts = start(3, { 'back-squat': 185 }, [], { 'back-squat': 300 })
+    expect(lifts.exercises[0].calibrate).toBe(false)
+    expect(lifts.sets[0][0].pounds).toBe(185)
   })
 
   it('calibrates any lift with no Working weight yet', () => {

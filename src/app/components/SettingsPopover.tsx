@@ -3,8 +3,16 @@ import { EQUIPMENT, EQUIPMENT_LABEL, type Equipment } from '../../domain/equipme
 import { UNIT_LABEL, type SpeedUnit } from '../../domain/paces'
 import { MONTHS, type Settings, type Theme } from '../../domain/settings'
 import { SCREEN_PATH } from '../router'
+import type { StartingPoint } from '../../domain/startingPoint'
 import { ScenarioPicker } from './ScenarioPicker'
 import { Segmented } from './Segmented'
+import { StartingPointFields, type StartingFields } from './StartingPointFields'
+
+/** The Starting point as Settings shows it: estimates to edit, or the real results that replaced them. */
+export interface StartingPointEdit {
+  fields: StartingFields
+  onSave: (estimates: Omit<StartingPoint, 'updatedAt'>) => void
+}
 
 const THEME_OPTIONS = [
   { value: 'system', label: 'System' },
@@ -26,15 +34,18 @@ const linkClass =
 
 /**
  * Settings, from the athlete's initial on the field band: theme, treadmill
- * units, which months run on the treadmill, the Equipment profile and the data
- * export. Every change applies at once. Integrations each have a page of their own.
+ * units, which months run on the treadmill, the Equipment profile, the
+ * Starting point's estimates and the data export. Every change applies at
+ * once, the estimates on Save. Integrations each have a page of their own.
  */
 export function SettingsPopover({
   settings,
   onChange,
+  startingPoint,
 }: {
   settings: Settings
   onChange: (patch: Partial<Settings>) => void
+  startingPoint: StartingPointEdit
 }) {
   const indoorMonths = MONTHS.filter((_, i) => settings.environmentByMonth[i] === 'indoor')
 
@@ -104,6 +115,18 @@ export function SettingsPopover({
               for the jumps.
             </Text>
           </CheckboxGroup>
+          <div className="grid gap-1 border-t border-rule pt-3">
+            <span className="text-[18px] font-bold">Starting point</span>
+            <Text className="text-[12px] text-muted">
+              Estimates until a real result replaces each: a 5K test, or that lift calibrated.
+            </Text>
+            <StartingPointFields
+              fields={startingPoint.fields}
+              onSave={startingPoint.onSave}
+              saveLabel="Save estimates"
+              compact
+            />
+          </div>
           <div className="grid gap-1 border-t border-rule pt-3">
             <span className="text-[18px] font-bold">Integrations</span>
             <Link
