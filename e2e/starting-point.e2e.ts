@@ -58,6 +58,7 @@ test('estimates set estimated paces and the calibration start, editable in Setti
   // A 21:00 estimate reads as estimated Training paces: easy running at 5:22–5:55/km outdoors in October.
   await page.goto('/plan/week/1')
   await expect(page.getByText('Estimated paces from your 21:00 5K estimate, until the first 5K test')).toBeVisible()
+  await page.getByRole('button', { name: 'Show the Prescription' }).first().click()
   await expect(page.getByText(/5:22–5:55\/km/).first()).toBeVisible()
 
   // 225 lb estimated: the squat's calibration ramps from 155 lb, the RDL with none from the bar.

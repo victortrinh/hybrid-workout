@@ -262,6 +262,7 @@ test('Week 1 calibrates: ramp to RPE 7, and that load is the Working weight', as
   // Week 2 prescribes the heaviest set at RPE 7: 185 lb. The RDL, never ramped, waits for its first session.
   await page.goto('/plan/week/2')
   const strength = page.getByRole('region', { name: 'Strength, squat 3 × 5' })
+  await strength.getByRole('button', { name: 'Show the Prescription' }).click()
   await expect(strength.getByRole('listitem').filter({ hasText: 'Back squat' })).toHaveText(/3\s×\s5\s·\s185\slb\s·\sRPE\s7/)
   await expect(strength.getByRole('listitem').filter({ hasText: 'Romanian deadlift' })).toHaveText(/3\s×\s6\s·\sRPE\s7/)
 })
@@ -271,6 +272,7 @@ test('the Equipment profile swaps Exercises for what the gym has', async ({ page
   await page.clock.install({ time: WEEK_3 })
   await page.goto('/plan/week/3')
   const strength = page.getByRole('region', { name: 'Strength, squat 3 × 5' })
+  await strength.getByRole('button', { name: 'Show the Prescription' }).click()
   await expect(strength).toContainText('Single-leg calf raise')
   await expect(strength).not.toContainText('Standing calf raise')
 
@@ -286,6 +288,7 @@ test('the Equipment profile swaps Exercises for what the gym has', async ({ page
   await page.keyboard.press('Escape')
 
   await page.goto('/plan/week/3')
+  await strength.getByRole('button', { name: 'Show the Prescription' }).click()
   await expect(strength).toContainText('Standing calf raise')
   await expect(strength).toContainText('Instead, if no standing calf machine: Single-leg calf raise')
   await expect(strength).toContainText('Loaded seated calf raise')

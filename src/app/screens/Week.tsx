@@ -4,6 +4,7 @@ import { addDays, daysBetween } from '../../domain/calendar'
 import type { CoachDay } from '../../domain/coach'
 import { isLive, type LiveSession } from '../../domain/lifts'
 import { logFor, missingRequired, trained, type SessionLog } from '../../domain/log'
+import { logSummary } from '../../domain/logSummary'
 import { clock, type RunContext } from '../../domain/paces'
 import { describeExercise, describeSession, SESSION_TYPES } from '../../domain/program/describe'
 import type { Program, Session, Week } from '../../domain/program/types'
@@ -21,9 +22,11 @@ const linkClass =
   'inline-flex min-h-11 items-center text-[15px] font-bold text-link underline decoration-2 underline-offset-4 hover:decoration-[3px]'
 
 /**
- * One Week: its dates, Phase and marks, then every Session of the Bucket with
- * its Prescriptions. Outside the Week Today runs, each Session can be started
- * or logged from here, early or late; it still counts for this Week.
+ * One Week: its dates, Phase and marks, then every Session of the Bucket. A
+ * logged Session leads with what was done; each Prescription is one tap away,
+ * open from the start for the Session Up next or the one a link points at.
+ * Outside the Week Today runs, each Session can be started or logged from
+ * here, early or late; it still counts for this Week.
  */
 export function WeekScreen({
   program,
@@ -65,6 +68,8 @@ export function WeekScreen({
         : null
   /** The Session Today offers as Next, when it is one of this Week's: it gets the one cobalt Start. */
   const nextUp = day.bucket.find((e) => e.state === 'next' && e.week === week.number)?.session.id
+  /** A link to `#session-<id>` opens that Session's Prescription. */
+  const [linked] = useState(() => location.hash.replace(/^#session-/, ''))
 
   return (
     <div className="px-pad pt-4 desktop:max-w-plan desktop:px-gutter desktop:pt-7">
@@ -79,6 +84,16 @@ export function WeekScreen({
           .filter(Boolean)
           .join(' · ')}
       </p>
+
+      {current && (
+        <p className="mt-4 text-body">
+          This Week runs from{' '}
+          <Link href={SCREEN_PATH.today} className={linkClass}>
+            Today
+          </Link>
+          .
+        </p>
+      )}
 
       {when && <p className="mt-4 text-body">{nb(outsideWeekLine(when, week.number, week.startDate, sunday))}</p>}
 
@@ -98,46 +113,44 @@ export function WeekScreen({
         </ul>
       )}
 
-      {week.sessions.map((session) => (
-        <SessionDetail
-          key={session.id}
-          session={session}
-          program={program}
-          run={runContext(week.number, session)}
-          weights={weights}
-          next={!current && session.id === nextUp}
-        >
-          {current ? (
-            <p className="mt-3 text-body-quiet text-muted">
-              This Week runs from{' '}
-              <Link href={SCREEN_PATH.today} className={linkClass}>
-                Today
-              </Link>
-              .
-            </p>
-          ) : (
-            <SessionActions
-              week={week.number}
-              session={session}
-              headingId={`session-${session.id}`}
-              log={logFor(logs, week.number, session.id)}
-              next={session.id === nextUp}
-              live={live}
-              asking={asking === session.id}
-              refocus={dismissed === session.id}
-              standing={day.pain?.report ?? null}
-              onAsk={(ask) => {
-                setAsking(ask ? session.id : null)
-                setDismissed(ask ? null : session.id)
-              }}
-              onStart={(pain) => {
-                setAsking(null)
-                onStart(week.number, session, pain)
-              }}
-            />
-          )}
-        </SessionDetail>
-      ))}
+      {week.sessions.map((session) => {
+        const log = logFor(logs, week.number, session.id)
+        return (
+          <SessionDetail
+            key={session.id}
+            session={session}
+            program={program}
+            run={runContext(week.number, session)}
+            weights={weights}
+            log={log}
+            open={session.id === nextUp || session.id === linked}
+            withStatus={current}
+            next={!current && session.id === nextUp}
+          >
+            {!current && (
+              <SessionActions
+                week={week.number}
+                session={session}
+                headingId={`session-${session.id}`}
+                log={log}
+                next={session.id === nextUp}
+                live={live}
+                asking={asking === session.id}
+                refocus={dismissed === session.id}
+                standing={day.pain?.report ?? null}
+                onAsk={(ask) => {
+                  setAsking(ask ? session.id : null)
+                  setDismissed(ask ? null : session.id)
+                }}
+                onStart={(pain) => {
+                  setAsking(null)
+                  onStart(week.number, session, pain)
+                }}
+              />
+            )}
+          </SessionDetail>
+        )
+      })}
 
       <nav aria-label="Other Weeks" className="mt-8 flex justify-between gap-3 border-t-2 border-ink pt-2">
         {previous ? (
@@ -253,6 +266,9 @@ function SessionDetail({
   program,
   run,
   weights,
+  log,
+  open: openAtFirst,
+  withStatus,
   next = false,
   children,
 }: {
@@ -260,18 +276,45 @@ function SessionDetail({
   program: Program
   run: RunContext
   weights?: WorkingWeights
+  /** What was logged for it: a trained one leads with what was done. */
+  log: SessionLog | null
+  /** Its Prescription starts open: the Session Up next, or the one a link points at. */
+  open: boolean
+  /** Says the log's status and day too: no actions below do. */
+  withStatus: boolean
   /** Today's Next Session, tagged as on Today's Week list. */
   next?: boolean
-  /** What can be done with it: start or log it, or where to from. */
+  /** What can be done with it: start or log it. */
   children?: React.ReactNode
 }) {
+  /** The athlete's own choice, once made; until then Up next can move as the day loads. */
+  const [chosen, setChosen] = useState<boolean | null>(null)
+  const open = chosen ?? openAtFirst
+  const lines = session.blocks.map((block) =>
+    block.exercises.map((exercise) => describeExercise(exercise, program.stations, run, weights)),
+  )
+  // A Substitution shared by several Exercises reads once, after the Block of the last of them.
+  const users = new Map<string, { names: string[]; block: number }>()
+  lines.forEach((block, i) => {
+    for (const line of block) {
+      for (const sub of line.substitutions) {
+        users.set(sub, { names: [...(users.get(sub)?.names ?? []), line.name], block: i })
+      }
+    }
+  })
   const description = describeSession(session, run, weights)
   const headingId = `session-${session.id}`
+  const prescriptionId = `${headingId}-prescription`
+  const done = log && [
+    withStatus && `${STATUS_LABEL[log.status]}, ${shortDay(log.date)}`,
+    logSummary(log, session.type),
+  ]
+  const summary = done?.filter(Boolean).join(' · ')
   return (
     <section aria-labelledby={headingId} className="mt-section border-t-2 border-ink pt-3.5">
       <div className="grid grid-cols-[36px_1fr_auto] items-center gap-3">
         <LaneChip lane={SESSION_TYPES[session.type].lane} />
-        <h2 id={headingId} className="text-title">
+        <h2 id={headingId} className="scroll-mt-4 text-title">
           {nb(description.heading)}
         </h2>
         {next && <span className="rounded-sm bg-cobalt px-2 py-1 text-label text-on-cobalt">Next</span>}
@@ -279,43 +322,70 @@ function SessionDetail({
       <p className="mt-1.5 text-body-quiet text-muted">
         {[description.meta, session.date && longDay(session.date)].filter(Boolean).join(' · ')}
       </p>
+      {summary && <p className="mt-1.5 text-body font-bold">{nb(summary)}</p>}
+      {log?.notes && <p className="mt-1 text-body-quiet text-muted">{log.notes}</p>}
       {session.note && <p className="mt-1.5 text-body">{session.note}</p>}
       {children}
 
-      {session.blocks.map((block, i) => (
-        <div key={`${block.name}-${i}`} className="mt-7">
-          <h3 className="flex items-baseline justify-between gap-3 text-title-sm">
-            {block.name}
-            {block.minutes !== undefined && (
-              <small className="text-body-quiet tracking-normal text-muted font-stretch-100%">
-                {block.minutes} min
-              </small>
-            )}
-          </h3>
-          <ul className="mt-1.5">
-            {block.exercises.map((exercise, j) => {
-              const line = describeExercise(exercise, program.stations, run, weights)
-              return (
-                <li key={`${exercise.name}-${j}`} className="border-b border-rule py-3">
-                  {/* The name carries the weight; the numbers read by tabular figures, not boldness. */}
-                  <span className="block text-body font-bold">
-                    {line.name}
-                    {line.detail && <span className="font-normal"> · {nb(line.detail)}</span>}
-                  </span>
-                  {line.note && <span className="mt-0.5 block text-body-quiet text-muted">{line.note}</span>}
-                  {line.substitutions.map((sub) => (
-                    <span key={sub} className="mt-2 block border-l-2 border-edge pl-3 text-body-quiet text-muted">
-                      Instead, if {sub.charAt(0).toLowerCase()}
-                      {sub.slice(1)}
+      <Button
+        onPress={() => setChosen(!open)}
+        aria-expanded={open}
+        aria-controls={open ? prescriptionId : undefined}
+        aria-describedby={headingId}
+        className={`${linkClass} mt-1`}
+      >
+        {open ? 'Hide the Prescription' : 'Show the Prescription'}
+      </Button>
+
+      {open && (
+        <div id={prescriptionId}>
+          {session.blocks.map((block, i) => (
+            <div key={`${block.name}-${i}`} className="mt-7">
+              <h3 className="flex items-baseline justify-between gap-3 text-title-sm">
+                {block.name}
+                {block.minutes !== undefined && (
+                  <small className="text-body-quiet tracking-normal text-muted font-stretch-100%">
+                    {block.minutes} min
+                  </small>
+                )}
+              </h3>
+              <ul className="mt-1.5">
+                {lines[i].map((line, j) => (
+                  <li key={`${line.name}-${j}`} className="border-b border-rule py-3">
+                    {/* The name carries the weight; the numbers read by tabular figures, not boldness. */}
+                    <span className="block text-body font-bold">
+                      {line.name}
+                      {line.detail && <span className="font-normal"> · {nb(line.detail)}</span>}
                     </span>
-                  ))}
-                </li>
-              )
-            })}
-          </ul>
-          {block.note && <p className="mt-3 text-body-quiet text-muted">{block.note}</p>}
+                    {line.note && <span className="mt-0.5 block text-body-quiet text-muted">{line.note}</span>}
+                    {line.substitutions
+                      .filter((sub) => users.get(sub)!.names.length === 1)
+                      .map((sub) => (
+                        <span key={sub} className="mt-2 block border-l-2 border-edge pl-3 text-body-quiet text-muted">
+                          Instead, if {lowerFirst(sub)}
+                        </span>
+                      ))}
+                  </li>
+                ))}
+              </ul>
+              {block.note && <p className="mt-3 text-body-quiet text-muted">{block.note}</p>}
+              {[...users]
+                .filter(([, use]) => use.names.length > 1 && use.block === i)
+                .map(([sub, use]) => (
+                  <p key={sub} className="mt-3 border-l-2 border-edge pl-3 text-body-quiet text-muted">
+                    Instead of {listWords(use.names)}, if {lowerFirst(sub)}
+                  </p>
+                ))}
+            </div>
+          ))}
         </div>
-      ))}
+      )}
     </section>
   )
 }
+
+const lowerFirst = (text: string) => `${text.charAt(0).toLowerCase()}${text.slice(1)}`
+
+/** "Pogo jumps, Broad jumps and Accelerations" */
+const listWords = (names: string[]) =>
+  names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
