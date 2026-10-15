@@ -69,6 +69,11 @@ export const SETUP_MINUTES = 5
 
 export const hasSetUp = (session: Session) => session.blocks.some((b) => b.setup)
 
+/** "2′ jog", or nothing when a single rep leaves no recovery to take. */
+function recoveryWords(rx: Extract<Prescription, { kind: 'intervals' }>): string {
+  return rx.reps > 1 ? `${duration(rx.recoverySeconds)} ${rx.recovery}` : ''
+}
+
 /** "20 m", "10 / leg", "10" */
 export function drillAmount(rx: Extract<Prescription, { kind: 'drill' }>): string {
   if (rx.meters) return km(rx.meters)
@@ -79,7 +84,9 @@ function summary(session: Session, main: Block[]): string {
   const rx = firstPrescription(main)
   switch (rx?.kind) {
     case 'intervals':
-      return `${rx.reps} × ${duration(rx.workSeconds)} ${effortWord(rx.effort)} / ${duration(rx.recoverySeconds)} ${rx.recovery}`
+      return [`${rx.reps} × ${duration(rx.workSeconds)} ${effortWord(rx.effort)}`, recoveryWords(rx)]
+        .filter(Boolean)
+        .join(' / ')
     case 'run': {
       if (isCircuit(main)) return `${main.length} × (${runLength(main)} + ${stationsPerRound(main)})`
       const runs = main[0].exercises.filter((e) => e.prescription.kind === 'run').length
@@ -103,7 +110,7 @@ function target(session: Session, main: Block[], run?: RunContext, weights?: Wor
       const accelerations = findPrescription(session, 'accelerations')
       return [
         effortTarget(rx.effort, run),
-        `${duration(rx.recoverySeconds)} ${rx.recovery}`,
+        recoveryWords(rx),
         accelerations && `${accelerations.reps} accelerations first`,
       ]
         .filter(Boolean)
@@ -345,7 +352,7 @@ function prescriptionWords(
     }
     case 'intervals':
       return [
-        `${rx.reps} × ${duration(rx.workSeconds)} / ${duration(rx.recoverySeconds)} ${rx.recovery}`,
+        [`${rx.reps} × ${duration(rx.workSeconds)}`, recoveryWords(rx)].filter(Boolean).join(' / '),
         effortTarget(rx.effort, run),
       ].join(' · ')
     case 'strides':
