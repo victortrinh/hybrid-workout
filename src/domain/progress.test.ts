@@ -125,7 +125,7 @@ describe('weekly completion', () => {
       // The Optional session is never a miss.
       ['easy', 'open'],
     ])
-    expect(one).toMatchObject({ done: 2, required: 4 })
+    expect(one).toMatchObject({ done: 2, required: 4, missed: 2 })
     // Week 2's Key session (the 5K test) carries until Wednesday of Week 3, and today is Wednesday.
     expect(two.cells.find((c) => c.session.type === '5k-test')?.state).toBe('open')
     expect(two.cells.filter((c) => c.state === 'missed').map((c) => c.session.type)).toEqual([
@@ -133,7 +133,9 @@ describe('weekly completion', () => {
       'threshold',
       'hyrox',
     ])
+    expect(two).toMatchObject({ done: 0, missed: 3 })
     expect(three.cells.every((c) => c.state === 'open')).toBe(true)
+    expect(three).toMatchObject({ done: 0, missed: 0 })
   })
 
   it('is empty before Week 1 and stops at the last Week after the Program', () => {

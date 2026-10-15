@@ -299,7 +299,7 @@ export function App() {
               treadmill={treadmill}
             />
           )}
-          {screen === 'plan' && <Plan program={program} day={day} />}
+          {screen === 'plan' && <Plan program={program} day={day} logs={logs} />}
           {screen === 'week' && week && (
             <WeekScreen
               program={program}

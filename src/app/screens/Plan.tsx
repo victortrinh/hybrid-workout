@@ -1,18 +1,27 @@
+import { useMemo } from 'react'
 import { Link } from 'react-aria-components'
 import type { CoachDay } from '../../domain/coach'
+import type { SessionLog } from '../../domain/log'
 import { SESSION_TYPES } from '../../domain/program/describe'
 import type { Program, Week } from '../../domain/program/types'
-import { LANE_COLOR, LaneLegend } from '../components/LaneChip'
+import { weeklyCompletion, type WeekCompletion } from '../../domain/progress'
+import { LaneLegend } from '../components/LaneChip'
+import { completionLabel, WeekLanes } from '../components/WeekLanes'
 import { longDay, shortDay } from '../format'
 import { weekPath } from '../router'
 
 /**
  * Plan: all 27 Weeks as five-lane rows, grouped by Phase. Each cell is one
  * Session of the Bucket in its Session type's colour; Key sessions stand
- * taller. Tapping a Week opens its Sessions.
+ * taller. Weeks so far fill in from the logs, the same as Weekly completion
+ * on Progress; Weeks ahead stay outlined. Tapping a Week opens its Sessions.
  */
-export function Plan({ program, day }: { program: Program; day: CoachDay }) {
+export function Plan({ program, day, logs }: { program: Program; day: CoachDay; logs: SessionLog[] }) {
   const current = day.position.kind === 'in-week' ? day.position.week : null
+  const completion = useMemo(
+    () => new Map(weeklyCompletion(program, logs, day.today).map((w) => [w.week, w])),
+    [program, logs, day.today],
+  )
   return (
     <div className="px-pad pt-6 desktop:max-w-plan desktop:px-gutter desktop:pt-9">
       <h1 tabIndex={-1} className="text-headline-page">
@@ -35,7 +44,7 @@ export function Plan({ program, day }: { program: Program; day: CoachDay }) {
             {phase.weeks.map((week) => (
               // The current Week is where Plan opens: the shell scrolls it into the thumb's reach.
               <li key={week.number} data-scroll-anchor={week.number === current ? '' : undefined}>
-                <WeekRow week={week} current={week.number === current} />
+                <WeekRow week={week} current={week.number === current} completion={completion.get(week.number)} />
               </li>
             ))}
           </ul>
@@ -54,7 +63,7 @@ export function weekMark(week: Week): string {
   return ''
 }
 
-function WeekRow({ week, current }: { week: Week; current: boolean }) {
+function WeekRow({ week, current, completion }: { week: Week; current: boolean; completion?: WeekCompletion }) {
   const key = week.sessions.find((s) => s.key)
   const mark = weekMark(week)
   return (
@@ -70,16 +79,10 @@ function WeekRow({ week, current }: { week: Week; current: boolean }) {
         Week {week.number}, from {shortDay(week.startDate)}
         {current && ', this Week'}
         {key && `, Key session ${SESSION_TYPES[key.type].name}`}
+        {completion && `, ${completionLabel(completion)}`}
         {mark && ', '}
       </span>
-      <span aria-hidden="true" className="grid h-[18px] grid-cols-5 items-end gap-1">
-        {week.sessions.slice(0, 5).map((session) => (
-          <i
-            key={session.id}
-            className={`block shadow-[inset_0_0_0_2px_currentColor] ${LANE_COLOR[SESSION_TYPES[session.type].lane]} ${session.key ? 'h-[18px]' : 'h-3'}`}
-          />
-        ))}
-      </span>
+      <WeekLanes cells={completion?.cells ?? week.sessions.map((session) => ({ session }))} />
       <span className="text-right text-label text-muted">{mark}</span>
     </Link>
   )
