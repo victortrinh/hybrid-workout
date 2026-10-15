@@ -7,11 +7,13 @@ import type { ActivityAttached, ActivityQuestion, BucketEntry, CoachDay, PhasePr
 import { isLive, type LiveSession } from '../../domain/lifts'
 import type { Environment, RunContext } from '../../domain/paces'
 import { painLevel, type PainArea } from '../../domain/pain'
-import { describeSession, SESSION_TYPES } from '../../domain/program/describe'
+import { describeSession, LIFT_NAME, SESSION_TYPES } from '../../domain/program/describe'
+import { finishClock } from '../../domain/recap'
 import type { Program, Session } from '../../domain/program/types'
 import type { RacePlan } from '../../domain/racePlan'
 import type { Settings } from '../../domain/settings'
-import type { Decision, Suggestion } from '../../domain/suggestion'
+import type { Decision, Suggestion, WorkingWeightSuggestion } from '../../domain/suggestion'
+import { heldCopy, liftChange, liftsCopy, suggestionBlocks, VISIBLE_BLOCKS, type SuggestionBlock } from '../suggestionBlocks'
 import {
   outsideWeekLine,
   painLine,
@@ -26,7 +28,7 @@ import { LaneChip } from '../components/LaneChip'
 import { buttonBase, lineAction, primaryAction, quietButton } from '../components/actions'
 import { answered, PainFields, type PainAnswer } from '../components/PainFields'
 import { ActionBar } from '../components/ActionBar'
-import { asksPain, PAIN_FREE, PainStep, type PainAtStart } from '../components/PainStep'
+import { asksPain, PAIN_FREE, painSuggestionFor, PainStep, type PainAtStart } from '../components/PainStep'
 import { Segmented } from '../components/Segmented'
 import { SettingsPopover, type StartingPointEdit } from '../components/SettingsPopover'
 import { StripedNumeral } from '../components/StripedNumeral'
@@ -44,6 +46,7 @@ import {
 } from '../format'
 import { DUR, lane, play, useEntrances, useMounted, wipeIn } from '../motion'
 import { logPath, SCREEN_PATH, weekPath } from '../router'
+import { ProgramRecapPanel, RaceLead, WhatsNext, type AfterRace } from './AfterRace'
 import { RaceCard } from './RaceCard'
 
 
@@ -70,11 +73,14 @@ export function Today({
   treadmill,
   onAnswer,
   race,
+  afterRace,
 }: {
   day: CoachDay
   weekCount: number
   /** The race card, the day before Race day and on it: it leads, and Up next follows it. */
   race: { plan: RacePlan; program: Program } | null
+  /** From the day after Race day: the result and the Program recap, in place of Up next and the Week. */
+  afterRace: AfterRace | null
   /** Logs saved on this device that the server hasn't taken yet. */
   pending: number
   /** A log the server refused or the device couldn't store, said once under Up next. */
@@ -82,7 +88,7 @@ export function Today({
   /** Makes a Session of the Bucket today's Session instead of Up next. */
   onPick: (week: number, sessionId: string) => void
   /** Accepts, Keeps or (with 'open') undoes a Suggestion. */
-  onDecide: (suggestion: Suggestion, decision: Decision) => void
+  onDecide: (suggestions: Suggestion | Suggestion[], decision: Decision) => void
   /** How a Session's runs read today: exact speeds or paces once there is a 5K test. */
   runContext: (week: number, session: Session) => RunContext
   /** Overrides the month's Environment for one Session. */
@@ -105,7 +111,7 @@ export function Today({
   return (
     <section
       aria-labelledby="today-heading"
-      className="desktop:grid desktop:grid-cols-2 desktop:gap-x-12 desktop:px-gutter"
+      className={`desktop:grid desktop:grid-cols-2 desktop:gap-x-12 desktop:px-gutter ${afterRace ? 'desktop:grid-rows-[auto_auto_1fr]' : ''}`}
     >
       <FieldBand
         day={day}
@@ -113,24 +119,39 @@ export function Today({
         settings={settings}
         onSettings={onSettings}
         startingPoint={startingPoint}
+        finish={afterRace?.result.state === 'finished' ? afterRace.result.seconds : null}
+        after={afterRace !== null}
       />
-      {race && <RaceCard plan={race.plan} program={race.program} raceDay={day.daysToRace === 0} />}
-      <UpNext
-        day={day}
-        lead={!race}
-        weekCount={weekCount}
-        pending={pending}
-        error={error}
-        onDecide={onDecide}
-        runContext={runContext}
-        onEnvironment={onEnvironment}
-        live={live}
-        onStart={onStart}
-        onSomethingHurts={onSomethingHurts}
-        treadmill={treadmill}
-        onAnswer={onAnswer}
-      />
-      <ThisWeek day={day} onPick={onPick} treadmill={treadmill} />
+      {afterRace ? (
+        <>
+          <RaceLead race={afterRace}>
+            <SomethingHurts previous={day.pain?.report.score ?? null} onReport={onSomethingHurts} />
+            <SyncLine pending={pending} error={error} />
+          </RaceLead>
+          <ProgramRecapPanel recap={afterRace.recap} />
+          <WhatsNext />
+        </>
+      ) : (
+        <>
+          {race && <RaceCard plan={race.plan} program={race.program} raceDay={day.daysToRace === 0} />}
+          <UpNext
+            day={day}
+            lead={!race}
+            weekCount={weekCount}
+            pending={pending}
+            error={error}
+            onDecide={onDecide}
+            runContext={runContext}
+            onEnvironment={onEnvironment}
+            live={live}
+            onStart={onStart}
+            onSomethingHurts={onSomethingHurts}
+            treadmill={treadmill}
+            onAnswer={onAnswer}
+          />
+          <ThisWeek day={day} onPick={onPick} treadmill={treadmill} />
+        </>
+      )}
     </section>
   )
 }
@@ -160,47 +181,72 @@ function FieldBand({
   settings,
   onSettings,
   startingPoint,
+  finish,
+  after,
 }: {
   day: CoachDay
   weekCount: number
   settings: Settings
   onSettings: (patch: Partial<Settings>) => void
   startingPoint: StartingPointEdit
+  /** The race's finish time once it's logged: it takes the countdown's place, the one number the Program was for. */
+  finish: number | null
+  /** Past Race day: the footer counts the Weeks done, not the Week. */
+  after: boolean
 }) {
   const { position } = day
   const [unveil] = useState(() => !seenToday(day.today))
   const entrances = useEntrances()
   useEffect(() => markSeen(day.today), [day.today])
   return (
-    <header className="on-field bg-cobalt px-pad pt-4 pb-5 text-on-cobalt desktop:col-span-full desktop:-mx-gutter desktop:grid desktop:grid-cols-[auto_minmax(0,1fr)] desktop:items-end desktop:gap-x-14 desktop:gap-y-2 desktop:px-gutter desktop:py-7">
+    <header
+      className={`on-field bg-cobalt px-pad pt-4 pb-5 text-on-cobalt desktop:col-span-full desktop:-mx-gutter desktop:grid desktop:items-end desktop:gap-x-14 desktop:gap-y-2 desktop:px-gutter desktop:py-7 ${
+        // The finish time sizes itself to its column, so that column needs a width of its own.
+        finish !== null ? 'desktop:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]' : 'desktop:grid-cols-[auto_minmax(0,1fr)]'
+      }`}
+    >
       <div className="flex items-center justify-between gap-3 desktop:col-span-full desktop:justify-end">
         <span className="text-brand uppercase font-stretch-125% desktop:hidden">Compromised</span>
         {/* The athlete's initial opens Settings. */}
         <SettingsPopover settings={settings} onChange={onSettings} startingPoint={startingPoint} />
       </div>
 
-      <p className="mt-3 desktop:mt-0">
-        {/* The wrapper carries the numeral's size so its line box matches the prototype's. */}
-        <span className="block text-numeral leading-[normal]">
-          {/* The day's first look: the count wipes on left to right, like a scoreboard changing over. */}
-          <motion.span
-            className="inline-block"
-            initial={unveil && entrances ? { clipPath: 'inset(0 100% 0 0)' } : false}
-            animate={{ clipPath: 'inset(0 0% 0 0)' }}
-            transition={lane(DUR.fill, 0.1)}
-          >
-            <StripedNumeral value={String(Math.abs(day.daysToRace))} />
-          </motion.span>
-        </span>
-        <span className="mt-2.5 block text-[18px] font-semibold">
-          {countdownLabel(day.daysToRace)} · {longDay(day.raceDay)}
-        </span>
-      </p>
+      {finish !== null ? (
+        // Seven characters: the numeral sizes itself to its column (a container).
+        <p className="@container mt-3 desktop:mt-0">
+          <StripedNumeral value={finishClock(finish)} className="text-numeral-finish" />
+          <span className="mt-2.5 block text-[18px] font-semibold">HYROX finish · {longDay(day.raceDay)}</span>
+        </p>
+      ) : (
+        <p className="mt-3 desktop:mt-0">
+          {/* The wrapper carries the numeral's size so its line box matches the prototype's. */}
+          <span className="block text-numeral leading-[normal]">
+            {/* The day's first look: the count wipes on left to right, like a scoreboard changing over. */}
+            <motion.span
+              className="inline-block"
+              initial={unveil && entrances ? { clipPath: 'inset(0 100% 0 0)' } : false}
+              animate={{ clipPath: 'inset(0 0% 0 0)' }}
+              transition={lane(DUR.fill, 0.1)}
+            >
+              <StripedNumeral value={String(Math.abs(day.daysToRace))} />
+            </motion.span>
+          </span>
+          <span className="mt-2.5 block text-[18px] font-semibold">
+            {countdownLabel(day.daysToRace)} · {longDay(day.raceDay)}
+          </span>
+        </p>
+      )}
 
       <div>
         <PhaseLanes phases={day.phases} />
         <p className="mt-3 flex justify-between gap-3 text-[15px] font-semibold">
-          {position.kind === 'in-week' && (
+          {after ? (
+            <>
+              <span>All {weekCount} Weeks done</span>
+              {/* Without the finish time the numeral already counts the days. */}
+              {finish !== null && <span>{plural(-day.daysToRace, 'day')} since the race</span>}
+            </>
+          ) : position.kind === 'in-week' && (
             <>
               <span>
                 Week {position.week} of {weekCount} · {day.phases.find((p) => p.current)?.name}
@@ -214,7 +260,7 @@ function FieldBand({
               <span>{plural(position.daysToStart, 'day')} to go</span>
             </>
           )}
-          {position.kind === 'finished' && <span>All {weekCount} Weeks done</span>}
+          {!after && position.kind === 'finished' && <span>All {weekCount} Weeks done</span>}
         </p>
       </div>
     </header>
@@ -270,7 +316,7 @@ function UpNext({
   weekCount: number
   pending: number
   error: string | null
-  onDecide: (suggestion: Suggestion, decision: Decision) => void
+  onDecide: (suggestions: Suggestion | Suggestion[], decision: Decision) => void
   runContext: (week: number, session: Session) => RunContext
   onEnvironment: (week: number, session: Session, environment: Environment) => void
   live: LiveSession | null
@@ -284,6 +330,7 @@ function UpNext({
   const [refocus, setRefocus] = useState(false)
   const { position, upNext } = day
   const standing = day.pain?.report ?? null
+  const painSuggestion = painSuggestionFor(day.suggestions, standing)
   const previousPain = standing?.score ?? null
   const upNextEntry = day.bucket.find((e) => e.state === 'next')
   const upNextWeek = upNextEntry?.week
@@ -404,6 +451,7 @@ function UpNext({
         <ActionBar label="Up next">
           <PainStep
             standing={standing}
+            suggestion={painSuggestion}
             onAnswer={(pain) => {
               setAsking(false)
               onStart(upNextWeek, upNext, pain)
@@ -437,18 +485,12 @@ function UpNext({
         )
       )}
       {!asking && <SomethingHurts previous={previousPain} onReport={onSomethingHurts} />}
-      <div aria-live="polite">
-        {error && <p className="mt-3 text-body">{error}</p>}
-        {pending > 0 && (
-          <p className="mt-3 text-body-quiet text-muted">{plural(pending, 'log')} on this phone, waiting to sync.</p>
-        )}
-      </div>
-      {day.suggestions
-        // Decided ones stay for the rest of the day, so Undo is one tap away.
-        .filter((s) => s.decision === 'open' || s.decidedOn === day.today)
-        .map((s) => (
-          <SuggestionNote key={s.id} suggestion={s} onDecide={(d) => onDecide(s, d)} />
-        ))}
+      <SyncLine pending={pending} error={error} />
+      <CoachSuggestions
+        // While the pain step asks, it carries the pain Suggestion: asked once, not twice.
+        day={asking && painSuggestion ? { ...day, suggestions: day.suggestions.filter((s) => s !== painSuggestion) } : day}
+        onDecide={onDecide}
+      />
       {day.activitiesAttached.map((a) => (
         <AttachedNote
           key={a.activity.id}
@@ -466,7 +508,8 @@ function UpNext({
         />
       ))}
       {day.bucket
-        .filter((e) => e.activity && treadmill(e.activity) && e.log?.status !== 'skipped' && e.log?.distanceMeters == null)
+        // Not logged yet, the note's Log it asks for the console's distance itself.
+        .filter((e) => e.activity && treadmill(e.activity) && e.log && e.log.status !== 'skipped' && e.log.distanceMeters == null)
         .map((e) => (
           <ConsoleDistance key={e.activity!.id} entry={e} />
         ))}
@@ -474,7 +517,23 @@ function UpNext({
   )
 }
 
-/** A workout the Coach attached on its own: said in one line, undone in one tap. */
+/** A log the server refused, said once, and how many are still on this phone. */
+function SyncLine({ pending, error }: { pending: number; error: string | null }) {
+  return (
+    <div aria-live="polite">
+      {error && <p className="mt-3 text-body">{error}</p>}
+      {pending > 0 && (
+        <p className="mt-3 text-body-quiet text-muted">{plural(pending, 'log')} on this phone, waiting to sync.</p>
+      )}
+    </div>
+  )
+}
+
+/**
+ * A workout attached to a Session: said in one line, undone in one tap, and,
+ * while the Session isn't logged, logged in one more (Log after, filled in
+ * from the watch).
+ */
 function AttachedNote({
   attached,
   treadmill,
@@ -484,18 +543,33 @@ function AttachedNote({
   treadmill: boolean
   onDetach: () => void
 }) {
-  const { activity, session } = attached
+  const { activity, session, week, by, logged } = attached
+  const name = SESSION_TYPES[session.type].name
   return (
-    <section aria-label="From the watch" className="mt-[18px] border-t-2 border-t-ink py-3.5 desktop:border-b desktop:border-b-rule">
+    <section
+      aria-label="From the watch"
+      aria-live="polite"
+      className="mt-[18px] border-t-2 border-t-ink py-3.5 desktop:border-b desktop:border-b-rule"
+    >
       <p className="text-[17px] leading-[1.3] font-semibold">
-        {nb(`The watch’s ${activity.workoutType.toLowerCase()} went to ${SESSION_TYPES[session.type].name}.`)}
+        {by === 'coach'
+          ? nb(`The watch’s ${activity.workoutType.toLowerCase()} went to ${name}.`)
+          : nb(`${name} it was. Not logged yet.`)}
       </p>
       <p className="mt-1 text-[14px] text-muted">
-        {nb(`${timeOfDay(activity.startedAt)} · ${activitySummary(activity, treadmill)}`)}
+        {nb(`${shortWeekday(activity.date)} ${timeOfDay(activity.startedAt)} · ${activitySummary(activity, treadmill)}`)}
+        {!logged && (treadmill ? nb(' · Bring the console’s distance.') : nb(' · The watch filled in the rest.'))}
       </p>
-      <Button onPress={onDetach} className={`mt-1 ${quietButton}`}>
-        Not that Session
-      </Button>
+      <div className="mt-1 flex flex-wrap gap-x-5">
+        {!logged && (
+          <Link href={logPath(week, session.id)} className={linkButton}>
+            Log it
+          </Link>
+        )}
+        <Button onPress={onDetach} className={quietButton}>
+          Not that Session
+        </Button>
+      </div>
     </section>
   )
 }
@@ -510,7 +584,7 @@ function WhichSession({
   treadmill: boolean
   onAnswer: (week: number | null, sessionId: string | null) => void
 }) {
-  const { activity, candidates } = question
+  const { activity, candidates, guess } = question
   return (
     <section
       aria-label="Which Session was this?"
@@ -520,9 +594,15 @@ function WhichSession({
       <p className="mt-1 text-[14px] text-muted">
         {nb(`${activity.workoutType} from the watch, ${shortWeekday(activity.date)} ${timeOfDay(activity.startedAt)} · ${activitySummary(activity, treadmill)}`)}
       </p>
+      {guess && <p className="mt-1 text-[14px] text-ink">{nb(guessLine(question, guess))}</p>}
       <div className="mt-2.5 flex flex-wrap gap-x-5">
         {candidates.map((c) => (
-          <Button key={`${c.week}/${c.session.id}`} onPress={() => onAnswer(c.week, c.session.id)} className={linkButton}>
+          <Button
+            key={`${c.week}/${c.session.id}`}
+            onPress={() => onAnswer(c.week, c.session.id)}
+            // With a guess, it leads in link blue and the others step back to ink.
+            className={!guess || c === guess ? linkButton : `${quietButton} underline decoration-1 underline-offset-4`}
+          >
             {SESSION_TYPES[c.session.type].name}
           </Button>
         ))}
@@ -532,6 +612,15 @@ function WhichSession({
       </div>
     </section>
   )
+}
+
+/** Why the Coach guessed what it did: the heart rate when the watch has one, else the minutes. */
+function guessLine({ activity, candidates }: ActivityQuestion, guess: ActivityQuestion['candidates'][number]): string {
+  const name = SESSION_TYPES[guess.session.type].name
+  const next = candidates.find((c) => c !== guess)!
+  return activity.averageHeartRate !== null
+    ? `The Coach’s guess: ${name}. ${activity.minutes} min at ${activity.averageHeartRate} bpm is no ${SESSION_TYPES[next.session.type].name}.`
+    : `The Coach’s guess: ${name}. ${activity.minutes} min is closest to its ${guess.session.minutes}.`
 }
 
 /** A treadmill run attached to a Session: the watch's distance is a guess, so ask for the console's. */
@@ -561,6 +650,142 @@ function dependsOnEnvironment(session: Session, run: RunContext): boolean {
 
 /** The prototype's link buttons: Accept in link blue, underlined; Keep and Undo quiet, in ink. */
 const linkButton = `${buttonBase} text-link underline decoration-2 underline-offset-4 hover:decoration-[3px]`
+
+/**
+ * The Coach's Suggestions, most important first: at most two blocks before
+ * This Week, the rest one tap away. Lift increases held by a lighter Week get
+ * one line instead.
+ */
+function CoachSuggestions({
+  day,
+  onDecide,
+}: {
+  day: CoachDay
+  onDecide: (suggestions: Suggestion | Suggestion[], decision: Decision) => void
+}) {
+  const [more, setMore] = useState(false)
+  const blocks = suggestionBlocks(day.suggestions, day.today)
+  const folded = blocks.length - VISIBLE_BLOCKS
+  const block = (b: SuggestionBlock) =>
+    b.kind === 'one' ? (
+      <SuggestionNote key={b.suggestion.id} suggestion={b.suggestion} onDecide={(d) => onDecide(b.suggestion, d)} />
+    ) : (
+      <LiftsNote key="lifts" lifts={b.lifts} onDecide={onDecide} />
+    )
+  return (
+    <>
+      {blocks.slice(0, VISIBLE_BLOCKS).map(block)}
+      {folded > 0 &&
+        (more ? (
+          blocks.slice(VISIBLE_BLOCKS).map(block)
+        ) : (
+          <Button onPress={() => setMore(true)} aria-expanded={false} className={`mt-1 ${quietButton}`}>
+            {folded} more from the Coach
+          </Button>
+        ))}
+      {day.heldIncreases.length > 0 && <HeldNote day={day} />}
+    </>
+  )
+}
+
+/**
+ * Every Working weight change as one Suggestion: Accept all or Keep all in a
+ * tap, Undo in another, or open the list and decide lift by lift.
+ */
+function LiftsNote({
+  lifts,
+  onDecide,
+}: {
+  lifts: WorkingWeightSuggestion[]
+  onDecide: (suggestions: Suggestion[], decision: Decision) => void
+}) {
+  const [oneByOne, setOneByOne] = useState(false)
+  const open = lifts.filter((s) => s.decision === 'open')
+  const copy = liftsCopy(open.length > 0 ? open : lifts)
+  // Once nothing is open the one Undo says it all.
+  const listed = open.length > 0 && (oneByOne || open.length < lifts.length)
+  return (
+    <section
+      aria-label="Coach’s Suggestion: lifts"
+      aria-live="polite"
+      className="mt-[18px] border-t-2 border-t-ink py-3.5 desktop:border-b desktop:border-b-rule"
+    >
+      <p className="text-[17px] leading-[1.3] font-semibold">{open.length > 0 ? copy.line : liftsCopy(lifts).decided}</p>
+      {open.length > 0 && <p className="mt-1 text-[14px] text-muted">{nb(copy.why)}</p>}
+      <div className="mt-2.5 flex flex-wrap gap-x-5">
+        {open.length > 0 ? (
+          <>
+            <Button onPress={() => onDecide(open, 'accepted')} className={linkButton}>
+              Accept all
+            </Button>
+            <Button onPress={() => onDecide(open, 'kept')} className={quietButton}>
+              Keep all
+            </Button>
+            {!listed && (
+              <Button onPress={() => setOneByOne(true)} aria-expanded={false} className={quietButton}>
+                One by one
+              </Button>
+            )}
+          </>
+        ) : (
+          <Button onPress={() => onDecide(lifts, 'open')} className={quietButton}>
+            Undo
+          </Button>
+        )}
+      </div>
+      {listed && (
+        <ul aria-label="Each lift" className="mt-1.5 border-t border-t-rule">
+          {lifts.map((s) => (
+            <li key={s.id} className="grid grid-cols-[1fr_auto] items-center gap-x-4 border-b border-b-rule py-1">
+              <span className="text-[15px] leading-[1.3] tabular-nums">
+                <span className="font-semibold">
+                  {LIFT_NAME[s.lift]}{' '}
+                  <span className="whitespace-nowrap">
+                    {s.from.pounds} → {s.to.pounds} lb
+                  </span>
+                </span>
+                {s.decision !== 'open' && (
+                  <span className="text-muted"> · {s.decision === 'accepted' ? 'accepted' : 'kept'}</span>
+                )}
+              </span>
+              <span className="flex gap-5">
+                {s.decision === 'open' ? (
+                  <>
+                    <Button
+                      onPress={() => onDecide([s], 'accepted')}
+                      aria-label={`Accept ${liftChange(s)}`}
+                      className={linkButton}
+                    >
+                      Accept
+                    </Button>
+                    <Button onPress={() => onDecide([s], 'kept')} aria-label={`Keep ${s.from.pounds} lb`} className={quietButton}>
+                      Keep
+                    </Button>
+                  </>
+                ) : (
+                  <Button onPress={() => onDecide([s], 'open')} aria-label={`Undo ${liftChange(s)}`} className={quietButton}>
+                    Undo
+                  </Button>
+                )}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
+/** Increases earned while the Week is lighter: said once, applied the Monday after, nothing to decide. */
+function HeldNote({ day }: { day: CoachDay }) {
+  const copy = heldCopy(day.heldIncreases, day.today)
+  return (
+    <section aria-label="From the Coach" className="mt-[18px] border-t-2 border-t-ink py-3.5 desktop:border-b desktop:border-b-rule">
+      <p className="text-[17px] leading-[1.3] font-semibold">{copy.line}</p>
+      <p className="mt-1 text-[14px] text-muted">{nb(copy.why)}</p>
+    </section>
+  )
+}
 
 /** The Coach's Suggestion between ink rules: the line, the facts, then Accept and Keep (or Undo). */
 function SuggestionNote({ suggestion, onDecide }: { suggestion: Suggestion; onDecide: (d: Decision) => void }) {

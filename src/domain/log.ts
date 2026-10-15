@@ -11,10 +11,23 @@ import type { Activity, ActivityAnswer } from './activity'
 import type { PainReport } from './pain'
 import type { RecoveryNight } from './recovery'
 import type { StartingPoint } from './startingPoint'
-import { LIFTS, type LiftId } from './program/types'
+import { LIFTS, type LiftId, type Range } from './program/types'
 import { stations } from './program/program'
 import type { StationId } from './program/types'
 import type { SuggestionDecision } from './suggestion'
+
+/** The race's id within Race week. */
+export const RACE_SESSION_ID = 'race'
+
+/** A Men's Open finish time the app believes: 30 minutes to 4 hours. */
+export const RACE_SECONDS: Range = [30 * 60, 4 * 60 * 60]
+
+/** The times a Session log's result can take: a 5K test's, the race's finish, or none for any other Session. */
+export function resultRange(sessionId: string): Range | null {
+  if (sessionId === '5k-test') return FIVE_K_SECONDS
+  if (sessionId === RACE_SESSION_ID) return RACE_SECONDS
+  return null
+}
 
 export const LOGGED_STATUSES = ['done', 'partial', 'skipped', 'swapped'] as const
 
@@ -33,7 +46,7 @@ export interface SessionLog {
   /** Overall RPE, 1–10. */
   rpe: number | null
   notes: string | null
-  /** A 5K test's time in seconds; it sets the Training paces. Null for every other Session. */
+  /** A 5K test's time in seconds, which sets the Training paces, or the race's finish time. Null for every other Session. */
   resultSeconds: number | null
   /** Where a run happened. Recorded with each 5K test result and each Live run session. */
   environment: Environment | null
@@ -164,7 +177,8 @@ export function parseSessionLog(value: unknown): SessionLog {
   if (notes !== null && (typeof notes !== 'string' || notes.length > NOTES_MAX)) {
     throw new Error(`notes must be text of at most ${NOTES_MAX} characters`)
   }
-  const resultSeconds = optionalInteger(v.resultSeconds, 'resultSeconds', ...FIVE_K_SECONDS)
+  // Each Session's own range is the Worker's to check (resultRange): this only bounds what any result can be.
+  const resultSeconds = optionalInteger(v.resultSeconds, 'resultSeconds', FIVE_K_SECONDS[0], RACE_SECONDS[1])
   const environment = v.environment ?? null
   if (environment !== null && !ENVIRONMENTS.includes(environment as Environment)) {
     throw new Error(`environment must be one of ${ENVIRONMENTS.join(', ')}`)

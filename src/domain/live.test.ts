@@ -26,10 +26,18 @@ import {
   nextBlock,
   parseLiveRun,
   pause,
+  predictedRpe,
+  sessionRpe,
   resume,
   startRun,
   stationLogs,
   activeSeconds,
+  currentLeg,
+  fastestSplit,
+  legElapsed,
+  quickSplits,
+  roundLegs,
+  type SplitFix,
   type LiveBlock,
   type LiveRun,
 } from './live'
@@ -62,6 +70,9 @@ const tap = (run: LiveRun, now: number) => resume(nextBlock(run, now), now)
 const onFiveK = (run: LiveRun) => tap(advance(run, at(10)), at(12))
 /** A HYROX session on round 1 at minute 7: the jog ran its 5, lunges Done at 6, Set up Done at 7, Start at once. */
 const onRound1 = (run: LiveRun) => tap(nextBlock(advance(run, at(5)), at(6)), at(7))
+/** A HYROX round, a tap at the end of each leg; the last one ends the round and Starts the next on Ready. */
+const legs = (run: LiveRun, ...taps: number[]) =>
+  taps.reduce((next, t, i) => (i === taps.length - 1 ? tap(next, at(t)) : nextBlock(next, at(t))), run)
 
 describe('liveBlocks', () => {
   it('lays Threshold out as warm-up, reps with jogs between, then the cooldown', () => {
@@ -349,7 +360,7 @@ describe('the Ready screen', () => {
     let hyrox = startRun({ week: 1, session: session(1, 'hyrox'), date: localDate('2026-10-21'), environment: 'indoor' }, T0)
     hyrox = nextBlock(nextBlock(advance(hyrox, at(5)), at(6)), at(7))
     expect(hyrox).toMatchObject({ block: 3, ready: true })
-    hyrox = nextBlock(resume(hyrox, at(8)), at(18))
+    hyrox = nextBlock(nextBlock(nextBlock(resume(hyrox, at(8)), at(11)), at(14)), at(18))
     expect(hyrox).toMatchObject({ block: 4, ready: true, pausedAt: at(18) })
 
     let sim = startRun({ week: 18, session: session(18, 'race-simulation'), date: localDate('2027-02-17'), environment: 'indoor' }, T0)
@@ -593,12 +604,27 @@ describe('HYROX', () => {
     expect(loads(rounds(19))['wall-balls']).toBe(13)
   })
 
-  it('times each round from the tap that ends it, and logs the round, its run and its Stations', () => {
+  it('times each leg of a round from a tap at its end: the run, then each Station', () => {
     let run = onRound1(startRun({ week: 1, session: session(1, 'hyrox'), date: localDate('2026-10-21'), environment: 'indoor' }, T0))
     expect(run.blocks[run.block].name).toBe('Round 1 of 3')
+    expect(roundLegs(run.blocks[run.block])).toEqual(['run', 'sled-push', 'sled-pull'])
     expect(blockLeft(run, at(9))).toBeNull()
+    expect(currentLeg(run)).toBe(0)
 
+    // The run in 3:00: the round goes on, onto the sled push, its clock from zero.
+    run = nextBlock(run, at(10))
+    expect(run).toMatchObject({ block: 3, legs: [{ block: 3, seconds: 180 }], asks: [] })
+    expect(currentLeg(run)).toBe(1)
+    expect(legElapsed(run, at(11))).toBe(60)
+    expect(blockElapsed(run, at(11))).toBe(240)
+    // A second tap a moment later is the same thumb bouncing: nothing happens.
+    expect(nextBlock(run, at(10) + 1500)).toBe(run)
+
+    run = nextBlock(run, at(13.5))
+    expect(currentLeg(run)).toBe(2)
     run = tap(run, at(17))
+    expect(run.legs).toEqual([{ block: 3, seconds: 180 }, { block: 3, seconds: 210 }, { block: 3, seconds: 210 }])
+    expect(run.splits).toEqual([{ block: 3, seconds: 600 }])
     expect(run.asks).toEqual([3])
     // Round 1 was heavy: the sled push went down to 180 lb and the run was 500 m.
     const [push, pull] = run.blocks[3].stations
@@ -608,25 +634,25 @@ describe('HYROX', () => {
     expect(run.blocks[2].stations[0].pounds).toBe(200)
     expect(run.blocks[5].stations[0]).toEqual({ station: 'sled-push', meters: 25, reps: null, pounds: 180 })
 
-    run = tap(run, at(28.5))
+    run = legs(run, 20.5, 24, 28.5)
     // Round 2 is never answered: it logs as written.
-    run = tap(run, at(39))
+    run = legs(run, 31.75, 35.5, 39)
     run = advance(run, at(44))
     expect(isOver(run)).toBe(true)
 
     expect(stationLogs(run)).toEqual([
       { round: 1, part: 'round', pounds: null, meters: null, reps: null, seconds: 600 },
-      { round: 1, part: 'run', pounds: null, meters: 500, reps: null, seconds: null },
-      { round: 1, part: 'sled-push', pounds: 180, meters: 25, reps: null, seconds: null },
-      { round: 1, part: 'sled-pull', pounds: 135, meters: 25, reps: null, seconds: null },
+      { round: 1, part: 'run', pounds: null, meters: 500, reps: null, seconds: 180 },
+      { round: 1, part: 'sled-push', pounds: 180, meters: 25, reps: null, seconds: 210 },
+      { round: 1, part: 'sled-pull', pounds: 135, meters: 25, reps: null, seconds: 210 },
       { round: 2, part: 'round', pounds: null, meters: null, reps: null, seconds: 690 },
-      { round: 2, part: 'run', pounds: null, meters: 600, reps: null, seconds: null },
-      { round: 2, part: 'farmers-carry', pounds: 30, meters: 50, reps: null, seconds: null },
-      { round: 2, part: 'sandbag-lunges', pounds: 25, meters: 25, reps: null, seconds: null },
+      { round: 2, part: 'run', pounds: null, meters: 600, reps: null, seconds: 210 },
+      { round: 2, part: 'farmers-carry', pounds: 30, meters: 50, reps: null, seconds: 210 },
+      { round: 2, part: 'sandbag-lunges', pounds: 25, meters: 25, reps: null, seconds: 270 },
       { round: 3, part: 'round', pounds: null, meters: null, reps: null, seconds: 630 },
-      { round: 3, part: 'run', pounds: null, meters: 600, reps: null, seconds: null },
-      { round: 3, part: 'sled-push', pounds: 180, meters: 25, reps: null, seconds: null },
-      { round: 3, part: 'sled-pull', pounds: 135, meters: 25, reps: null, seconds: null },
+      { round: 3, part: 'run', pounds: null, meters: 600, reps: null, seconds: 195 },
+      { round: 3, part: 'sled-push', pounds: 180, meters: 25, reps: null, seconds: 225 },
+      { round: 3, part: 'sled-pull', pounds: 135, meters: 25, reps: null, seconds: 210 },
     ])
     const input = { id: 'hyrox-1234', rpe: 7, distanceMeters: 1800, resultSeconds: null, updatedAt: '2026-10-21T18:00:00.000Z' }
     // 44 minutes on the clock, less the minute setting up.
@@ -635,11 +661,63 @@ describe('HYROX', () => {
 
   it('logs only the rounds finished, Partial, when it ends early', () => {
     let run = startRun({ week: 1, session: session(1, 'hyrox'), date: localDate('2026-10-21'), environment: 'outdoor' }, T0)
-    run = end(nextBlock(onRound1(run), at(18)), at(25))
+    run = end(nextBlock(nextBlock(nextBlock(onRound1(run), at(10)), at(14)), at(18)), at(25))
+    // Round 2's run was done, but the round wasn't.
+    run = { ...run, legs: [...run.legs, { block: 4, seconds: 200 }] }
     expect(stationLogs(run).filter((l) => l.part === 'round')).toEqual([
       { round: 1, part: 'round', pounds: null, meters: null, reps: null, seconds: 660 },
     ])
     expect(liveStatusOf(run)).toBe('partial')
+  })
+
+  it('goes back to a round on its last leg, the Stations before it kept', () => {
+    let run = onRound1(startRun({ week: 1, session: session(1, 'hyrox'), date: localDate('2026-10-21'), environment: 'indoor' }, T0))
+    run = legs(run, 10, 13.5, 17)
+    run = nextBlock(run, at(20))
+    run = goBack(run, 3, at(21))
+    expect(run).toMatchObject({ block: 3, splits: [], legs: [{ block: 3, seconds: 180 }, { block: 3, seconds: 210 }] })
+    expect(currentLeg(run)).toBe(2)
+    // The sled pull's clock runs on from its 3:30.
+    expect(legElapsed(run, at(22))).toBe(270)
+    expect(redone(nextBlock(run, at(23)), 3)).toEqual([3])
+  })
+
+  it('logs only the round time for a round finished before legs were timed', () => {
+    let run = onRound1(startRun({ week: 1, session: session(1, 'hyrox'), date: localDate('2026-10-21'), environment: 'indoor' }, T0))
+    run = legs(run, 10, 13.5, 17)
+    const old = { ...run, legs: [] }
+    expect(stationLogs(old).filter((l) => l.round === 1).map((l) => [l.part, l.seconds])).toEqual([
+      ['round', 600],
+      ['run', null],
+      ['sled-push', null],
+      ['sled-pull', null],
+    ])
+  })
+
+  it('asks about a split quicker than anyone could go, and saves it put right or untimed', () => {
+    let run = onRound1(startRun({ week: 19, session: session(19, 'hyrox'), date: localDate('2027-02-24'), environment: 'indoor' }, T0))
+    // 0:14 for 800 m: the run's tap slipped. The SkiErg took the rest of it.
+    run = nextBlock(run, at(7) + 14_000)
+    run = nextBlock(run, at(14))
+    run = tap(run, at(20))
+    expect(quickSplits(run)).toEqual([
+      { block: run.blocks.findIndex((b) => b.round === 1), leg: 0, seconds: 14, part: 'run', round: 1, meters: 800, reps: null, fastest: 96 },
+    ])
+    const [{ block }] = quickSplits(run)
+    const line = (fixes: SplitFix[]) => stationLogs(run, fixes).find((l) => l.round === 1 && l.part === 'run')!.seconds
+    expect(line([{ block, leg: 0, seconds: 200 }])).toBe(200)
+    expect(line([{ block, leg: 0, seconds: null }])).toBeNull()
+    const input = { id: 'hyrox-1234', rpe: 8, distanceMeters: null, resultSeconds: null, updatedAt: '', fixes: [{ block, leg: 0, seconds: 200 }] }
+    expect(liveLog(run, at(30), input).stations.find((l) => l.part === 'run')!.seconds).toBe(200)
+  })
+
+  it.each([
+    ['run', 800, null, 96],
+    ['skierg', 500, null, 75],
+    ['sled-push', 25, null, 10],
+    ['wall-balls', null, 50, 50],
+  ] as const)('no %s of %s m or %s reps goes under %i s', (part, meters, reps, fastest) => {
+    expect(fastestSplit(part, meters, reps)).toBe(fastest)
   })
 })
 
@@ -717,7 +795,7 @@ describe('split warm-ups and the HYROX Set up', () => {
   it('leaves Set up out of the active time and the log’s minutes', () => {
     let run = nextBlock(onSetUp(), at(12))
     run = resume(run, at(13))
-    for (const t of [23, 33, 43]) run = tap(run, at(t))
+    for (const t of [23, 33, 43]) run = legs(run, t - 6, t - 3, t)
     run = advance(run, at(48))
     expect(isOver(run)).toBe(true)
     // 48 minutes on the clock, less a minute on Ready and six setting up.
@@ -808,7 +886,22 @@ describe('Race simulations', () => {
 
 describe('parseLiveRun for HYROX', () => {
   it('takes back a HYROX session in progress', () => {
-    const run = nextBlock(onRound1(startRun({ week: 1, session: session(1, 'hyrox'), date: localDate('2026-10-21'), environment: 'indoor' }, T0)), at(17))
+    const run = nextBlock(onRound1(startRun({ week: 1, session: session(1, 'hyrox'), date: localDate('2026-10-21'), environment: 'indoor' }, T0)), at(10))
+    expect(run.legs).toHaveLength(1)
     expect(parseLiveRun(JSON.parse(JSON.stringify(run)))).toEqual(run)
+  })
+
+  it('takes back one stored before rounds were timed leg by leg, on the round’s first leg', () => {
+    const { legs: _, ...old } = onRound1(startRun({ week: 1, session: session(1, 'hyrox'), date: localDate('2026-10-21'), environment: 'indoor' }, T0))
+    const parsed = parseLiveRun(JSON.parse(JSON.stringify(old)))!
+    expect(parsed.legs).toEqual([])
+    expect(currentLeg(parsed)).toBe(0)
+  })
+})
+
+describe('sessionRpe', () => {
+  it('guesses a Session’s Overall RPE as Live’s finish sheet does, for every Session of a Week', () => {
+    for (const s of findWeek(program, 3)!.sessions) expect(sessionRpe(s)).toBe(predictedRpe(start(s)))
+    expect(sessionRpe(session(3, 'easy'))).toBeLessThan(sessionRpe(session(3, 'speed')))
   })
 })

@@ -17,7 +17,16 @@ import {
 import type { Activity } from '../../domain/activity'
 import { addDays, daysBetween, type LocalDate } from '../../domain/calendar'
 import { nowMs } from '../../domain/clock'
-import { DISTANCE_METERS, LOGGED_STATUSES, logDays, logFor, NOTES_MAX, type LoggedStatus, type SessionLog } from '../../domain/log'
+import {
+  DISTANCE_METERS,
+  LOGGED_STATUSES,
+  logDays,
+  logFor,
+  NOTES_MAX,
+  RACE_SESSION_ID,
+  type LoggedStatus,
+  type SessionLog,
+} from '../../domain/log'
 import {
   clock,
   clockInput,
@@ -30,12 +39,16 @@ import {
   type SpeedUnit,
 } from '../../domain/paces'
 import type { PainArea } from '../../domain/pain'
+import { sessionRpe } from '../../domain/live'
 import { describeSession } from '../../domain/program/describe'
+import { finishClock, parseFinish } from '../../domain/recap'
 import type { Session, Week } from '../../domain/program/types'
 import { outsideWeekLine } from '../coachCopy'
+import { FinishTimeField, validateFinish } from '../components/FinishTimeField'
 import { Icon } from '../components/Icons'
 import { answered, PainFields, type PainAnswer } from '../components/PainFields'
 import { Segmented } from '../components/Segmented'
+import { OverallRpe } from './liveUi'
 import { activitySummary, km, longDay, nb, shortWeekday, STATUS_LABEL, timeOfDay } from '../format'
 import { navigate, SCREEN_PATH, weekPath } from '../router'
 
@@ -105,9 +118,14 @@ export function LogAfter({
   const [minutes, setMinutes] = useState(existing?.minutes ?? activity?.minutes ?? session.minutes)
   /** The treadmill console's distance in its km or mi; NaN while empty. */
   const [distance, setDistance] = useState(consoleDistance(existing?.distanceMeters ?? null, unit))
-  const [rpe, setRpe] = useState<number | null>(existing?.rpe ?? null)
+  /** From the watch, Overall RPE starts on the Coach's guess, as Live's finish sheet does. */
+  const [predicted] = useState(() => (activity && !existing ? sessionRpe(session) : null))
+  const [rpe, setRpe] = useState<number | null>(existing?.rpe ?? predicted)
   const [notes, setNotes] = useState(existing?.notes ?? '')
-  const [time, setTime] = useState(existing?.resultSeconds ? clock(existing.resultSeconds) : '')
+  const isRace = session.id === RACE_SESSION_ID
+  const [time, setTime] = useState(
+    existing?.resultSeconds ? (isRace ? finishClock : clock)(existing.resultSeconds) : '',
+  )
   /** Null follows the month's default for the chosen day. */
   const [environment, setEnvironment] = useState<Environment | null>(existing?.environment ?? null)
   /** Unanswered gives no Pain report; the Coach goes on with the last one. */
@@ -117,15 +135,17 @@ export function LogAfter({
 
   const description = describeSession(session)
   const trained = status !== 'skipped'
-  /** Only a Done 5K test has a time: it resets the Training paces. */
+  /** A Done 5K test has a time, which resets the Training paces; the race has its finish, if it's known yet. */
   const result = session.type === '5k-test' && status === 'done'
+  const finish = isRace && status === 'done'
   const where = environment ?? (date ? defaultEnvironment(date) : 'outdoor')
 
   function submit(event: FormEvent) {
     event.preventDefault()
     if (!date) return
-    const resultSeconds = result ? parseClock(time) : null
+    const resultSeconds = result ? parseClock(time) : finish && time.trim() !== '' ? parseFinish(time) : null
     if (result && resultSeconds === null) return
+    if (finish && validateFinish(time)) return
     if (hurts === 'yes' && !answered(pain)) {
       setPainMissing(true)
       return
@@ -238,6 +258,15 @@ export function LogAfter({
           )}
         </RadioGroup>
 
+        {finish && (
+          <FinishTimeField
+            value={time}
+            onChange={setTime}
+            labelClassName={groupLabel}
+            hint="Off the results page, if it’s up: 12407 is 1:24:07."
+          />
+        )}
+
         {result && (
           <>
             <TextField
@@ -324,23 +353,7 @@ export function LogAfter({
               </NumberField>
             )}
 
-            <RadioGroup
-              value={rpe === null ? null : String(rpe)}
-              onChange={(v) => setRpe(Number(v))}
-              className="grid gap-2"
-            >
-              <Label className={groupLabel}>Overall RPE</Label>
-              <div className="grid grid-cols-5 gap-1.5">
-                {Array.from({ length: 10 }, (_, i) => String(i + 1)).map((v) => (
-                  <Radio key={v} value={v} className={toggleClass}>
-                    {v}
-                  </Radio>
-                ))}
-              </div>
-              <Text slot="description" className="text-body-quiet text-muted">
-                The whole Session. 7 is about three left; 10 is nothing left.
-              </Text>
-            </RadioGroup>
+            <OverallRpe value={rpe} missing={false} predicted={predicted} onChange={setRpe} />
           </>
         )}
 

@@ -1278,6 +1278,22 @@ describe('Activities', () => {
     expect(answered.bucket.find((e) => e.session.id === 'threshold')?.activity?.id).toBe(activity.id)
   })
 
+  it('offers to log a Session the athlete attached a workout to, until it is logged', () => {
+    const activity = run('2026-11-03T07:00:00-05:00', '2026-11-03T07:45:00-05:00')
+    const activityAnswers = [{ activityId: activity.id, week: 3, sessionId: 'threshold', updatedAt: '2026-11-04T13:00:00.000Z' }]
+    const answered = coach({ ...base, activities: [activity], activityAnswers })
+    expect(answered.activitiesAttached).toMatchObject([{ sessionId: 'threshold', by: 'athlete', logged: false }])
+    expect(answered.bucket.find((e) => e.session.id === 'threshold')?.state).not.toBe('done')
+    const logged = coach({ ...base, logs: [...base.logs, log(3, 'threshold', '2026-11-03')], activities: [activity], activityAnswers })
+    expect(logged.activitiesAttached).toEqual([])
+  })
+
+  it('says what it attached on its own today, logged or not', () => {
+    const activity = run('2026-11-04T07:00:00-05:00', '2026-11-04T07:45:00-05:00')
+    const day = coach({ ...base, logs: [...base.logs, log(3, 'speed', '2026-11-04')], activities: [activity] })
+    expect(day.activitiesAttached).toMatchObject([{ sessionId: 'speed', by: 'coach', logged: true }])
+  })
+
   it('stops asking about a workout a week old', () => {
     const activity = run('2026-11-02T07:00:00-05:00', '2026-11-02T07:45:00-05:00')
     expect(coach({ ...base, today: localDate('2026-11-08'), activities: [activity] }).activityQuestions).toHaveLength(1)

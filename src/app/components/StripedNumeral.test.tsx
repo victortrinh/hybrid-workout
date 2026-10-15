@@ -16,6 +16,12 @@ describe('StripedNumeral', () => {
     )
   })
 
+  it('keeps a clock’s colons solid too, so a finish time reads as one number', () => {
+    expect(renderToStaticMarkup(<StripedNumeral value="1:24:07" />)).toBe(
+      '<span class="stripe-num" style="--ems:4.555">1<span class="pt">:</span>24<span class="pt">:</span>07<i class="bl" aria-hidden="true"></i></span>',
+    )
+  })
+
   it('knows its own width in ems, so a 4-character value can be sized to fit', () => {
     expect(numeralEms('12.3')).toBe(2.665)
     expect(numeralEms('1000')).toBe(3.1)

@@ -44,7 +44,7 @@ export function liveLine(block: LiveBlock, run: LiveRun): string {
         : 'All-out, but even. Tap Finished when the watch says 5 km.'
     case 'round': {
       const last = !run.blocks.slice(run.block + 1).some((b) => b.kind === 'round')
-      if (block.round === 1) return 'Run, then the Stations. Technique before speed.'
+      if (block.round === 1) return 'Tap Finished at the end of every leg. Technique before speed.'
       return last ? 'Last round. Same technique, tired legs.' : `Round ${block.round}. Smooth beats fast.`
     }
     case 'station':

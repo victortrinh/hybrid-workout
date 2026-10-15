@@ -117,7 +117,7 @@ describe('increase', () => {
   })
 
   it('suggests +5 lb on squat and RDL and +5% on calves when every target rep was RPE 7 or easier', () => {
-    const { weights, suggestions } = state([CALIBRATION, easyWeek2])
+    const { weights, suggestions } = state([CALIBRATION, easyWeek2], [], '2026-11-05')
     expect(suggestions.map((s) => [s.id, s.lift, s.from.pounds, s.to.pounds, s.trigger.reason, s.decision])).toEqual([
       ['ww-back-squat-w2', 'back-squat', 185, 190, 'all-reps-easy', 'open'],
       ['ww-romanian-deadlift-w2', 'romanian-deadlift', 135, 140, 'all-reps-easy', 'open'],
@@ -129,7 +129,7 @@ describe('increase', () => {
   })
 
   it('moves the Working weight once Accepted, and not when Kept', () => {
-    const accepted = state([CALIBRATION, easyWeek2], [decide('ww-back-squat-w2', 'accepted')])
+    const accepted = state([CALIBRATION, easyWeek2], [decide('ww-back-squat-w2', 'accepted')], '2026-11-05')
     expect(accepted.weights['back-squat']).toBe(190)
     expect(accepted.suggestions[0]).toMatchObject({ decision: 'accepted', decidedOn: '2026-11-01' })
     expect(accepted.changes.at(-1)).toEqual({
@@ -164,8 +164,73 @@ describe('increase', () => {
 
   it('progresses from the accepted weight the next time', () => {
     const week3 = strength(3, { 'back-squat': three(190, 5, 7) })
-    const { suggestions } = state([CALIBRATION, easyWeek2, week3], [decide('ww-back-squat-w2', 'accepted')])
+    const { suggestions } = state([CALIBRATION, easyWeek2, week3], [decide('ww-back-squat-w2', 'accepted')], '2026-11-05')
     expect(suggestions.find((s) => s.lift === 'back-squat')).toMatchObject({ from: { pounds: 190 }, to: { pounds: 195 } })
+  })
+})
+
+describe('a lighter Week', () => {
+  // Week 4 (Mon 9 – Sun 15 Nov) is a Deload week; Week 5 starts Mon 16 Nov.
+  const easyWeek3 = strength(3, { 'back-squat': three(185, 5, 7), 'romanian-deadlift': three(135, 6, 6) })
+
+  it('offers an increase while the Week is full volume', () => {
+    const { suggestions, held } = state([CALIBRATION, easyWeek3], [], '2026-11-05')
+    expect(suggestions.map((s) => [s.lift, s.decision])).toEqual([
+      ['back-squat', 'open'],
+      ['romanian-deadlift', 'open'],
+    ])
+    expect(held).toEqual([])
+  })
+
+  it('holds an open increase through a Deload week, then applies it the Monday after', () => {
+    const deload = state([CALIBRATION, easyWeek3], [], '2026-11-10')
+    expect(deload.suggestions).toEqual([])
+    expect(deload.held.map((h) => [h.suggestion.id, h.suggestion.to.pounds, h.landsOn])).toEqual([
+      ['ww-back-squat-w3', 190, '2026-11-16'],
+      ['ww-romanian-deadlift-w3', 140, '2026-11-16'],
+    ])
+    expect(deload.weights).toEqual({ 'back-squat': 185, 'romanian-deadlift': 135, 'single-leg-calf-raise': 35 })
+
+    const after = state([CALIBRATION, easyWeek3], [], '2026-11-16')
+    expect(after.held).toEqual([])
+    expect(after.suggestions).toEqual([])
+    expect(after.weights).toMatchObject({ 'back-squat': 190, 'romanian-deadlift': 140 })
+    expect(after.changes.at(-1)).toEqual({
+      lift: 'romanian-deadlift',
+      week: 3,
+      date: '2026-11-16',
+      pounds: 140,
+      reason: 'all-reps-easy',
+    })
+  })
+
+  it('keeps a held increase through the lighter Week’s own Strength session', () => {
+    const deload = strength(4, { 'back-squat': [[160, 5, 5], [160, 5, 5]] })
+    expect(state([CALIBRATION, easyWeek3, deload], [], '2026-11-12').held).toHaveLength(2)
+    expect(state([CALIBRATION, easyWeek3, deload], [], '2026-11-17').weights['back-squat']).toBe(190)
+  })
+
+  it('leaves a decided increase alone: Kept stays kept, Accepted already moved', () => {
+    const decisions = [decide('ww-back-squat-w3', 'kept'), decide('ww-romanian-deadlift-w3', 'accepted')]
+    const { weights, held } = state([CALIBRATION, easyWeek3], decisions, '2026-11-10')
+    expect(held).toEqual([])
+    expect(weights).toMatchObject({ 'back-squat': 185, 'romanian-deadlift': 140 })
+    expect(state([CALIBRATION, easyWeek3], decisions, '2026-11-20').weights['back-squat']).toBe(185)
+  })
+
+  it('treats a Week made lighter by an accepted re-entry the same way', () => {
+    const easyWeek5 = strength(5, { 'back-squat': three(185, 5, 7) })
+    const lightened = (today: string) => strengthState(program, [CALIBRATION, easyWeek5], [], localDate(today), [6])
+    expect(lightened('2026-11-20').suggestions.map((s) => s.id)).toEqual(['ww-back-squat-w5'])
+    expect(lightened('2026-11-23').held.map((h) => h.landsOn)).toEqual(['2026-11-30'])
+    expect(lightened('2026-11-30').weights['back-squat']).toBe(190)
+  })
+
+  it('holds an increase earned during the lighter Week until the Week after', () => {
+    const easyWeek6 = strength(6, { 'back-squat': three(185, 5, 6) })
+    const { suggestions, held } = strengthState(program, [CALIBRATION, easyWeek6], [], localDate('2026-11-26'), [6])
+    expect(suggestions).toEqual([])
+    expect(held.map((h) => [h.suggestion.id, h.landsOn])).toEqual([['ww-back-squat-w6', '2026-11-30']])
   })
 })
 

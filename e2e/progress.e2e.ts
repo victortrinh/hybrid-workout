@@ -107,10 +107,11 @@ for (const colorScheme of ['light', 'dark'] as const) {
     await expect(recovery.locator('rect[fill="var(--alert)"]')).toHaveCount(2)
     await expect(recovery.getByText('Last night: 5 h 41 · 38 ms')).toBeVisible()
 
-    // HYROX stations: no Race simulation yet, so the first one's date, and Week 1's round.
+    // HYROX stations: no Race simulation yet, so the first one's date, and each sled's own split in Week 1's round.
     const stations = main.getByRole('region', { name: 'HYROX stations' })
     await expect(stations).toContainText('No Race simulation yet. The first is Week 18, the week of Mon 15 Feb.')
-    await expect(stations.getByRole('row', { name: /^Sled push/ })).toHaveText('Sled push10:00 W1')
+    await expect(stations.getByRole('row', { name: /^Sled push/ })).toHaveText('Sled push3:1025 m · W1')
+    await expect(stations.getByRole('row', { name: /^Sled pull/ })).toHaveText('Sled pull3:3025 m · W1')
     await expect(stations.getByRole('row', { name: /^SkiErg/ })).toHaveText('SkiErg–Not timed')
 
     // The charts draw at the full width of their panel.

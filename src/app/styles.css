@@ -92,6 +92,9 @@
      12.3 or 1000 shrink on a phone; two or three stay full size. The 4px is the
      stripes' 2px overhang each side. Inline, so --ems resolves on the numeral. */
   --text-numeral-live: min(clamp(120px, 40vw, 220px), calc((100cqi - 4px) / var(--ems, 2)));
+  /* The race's finish time on Today, after Race day: the countdown's numeral,
+     capped the same way, since h:mm:ss is seven characters wide. */
+  --text-numeral-finish: min(clamp(120px, 38vw, 170px), calc((100cqi - 4px) / var(--ems, 2)));
 
   --color-cobalt: var(--cobalt);
   --color-cobalt-hover: var(--cobalt-hover);
@@ -128,6 +131,9 @@
   --text-numeral-live--line-height: 0.88;
   --text-numeral-live--letter-spacing: -0.04em;
   --text-numeral-live--font-weight: 900;
+  --text-numeral-finish--line-height: 0.88;
+  --text-numeral-finish--letter-spacing: -0.04em;
+  --text-numeral-finish--font-weight: 900;
   --text-numeral-lift: clamp(84px, 26vw, 150px);
   --text-numeral-lift--line-height: 0.88;
   --text-numeral-lift--letter-spacing: -0.04em;

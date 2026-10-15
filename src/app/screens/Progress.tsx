@@ -27,7 +27,7 @@ import type { WorkingWeightChange } from '../../domain/weights'
 import { EmptyState } from '../components/EmptyState'
 import { LANES, LaneLegend } from '../components/LaneChip'
 import { completionLabel, WeekLanes } from '../components/WeekLanes'
-import { shortDay } from '../format'
+import { nb, shortDay } from '../format'
 import { weekPath } from '../router'
 import { DUR, lane } from '../motion'
 import { useWidth } from '../useWidth'
@@ -749,15 +749,15 @@ function lastChange({ last, before }: WorkingWeightRow): string {
 const RACE_ORDER = (Object.values(STATIONS) as Station[]).sort((a, b) => a.order - b.order)
 
 function StationsPanel({ times }: { times: StationTimes }) {
-  const { simulations, rounds, firstSimulation } = times
+  const { simulations, hyrox, firstSimulation } = times
   const first = firstSimulation
     ? `The first is Week ${firstSimulation.week}, the week of ${shortDay(firstSimulation.startDate)}.`
     : ''
-  const hasRounds = Object.keys(rounds).length > 0
+  const hasRounds = Object.keys(hyrox).length > 0
   const sub =
     simulations.length > 0
-      ? `Splits from ${simulations.length === 1 ? 'one Race simulation' : `${simulations.length} Race simulations`}${hasRounds ? ', and the latest HYROX round each Station was in, timed with its run' : ''}.`
-      : `No Race simulation yet.${first ? ` ${first}` : ''}${hasRounds ? ' Until then, the latest HYROX round each Station was in, timed with its run.' : ''}`
+      ? `Splits from ${simulations.length === 1 ? 'one Race simulation' : `${simulations.length} Race simulations`}${hasRounds ? ', and each Station’s latest split in a HYROX round' : ''}.`
+      : `No Race simulation yet.${first ? ` ${first}` : ''}${hasRounds ? ' Until then, each Station’s latest split in a HYROX round, at that round’s volume.' : ''}`
 
   if (simulations.length === 0 && !hasRounds) {
     return (
@@ -783,14 +783,14 @@ function StationsPanel({ times }: { times: StationTimes }) {
             ))}
             {hasRounds && (
               <th scope="col" className="py-1.5 pl-3 text-right">
-                HYROX round
+                HYROX
               </th>
             )}
           </tr>
         </thead>
         <tbody>
           {RACE_ORDER.map((station) => {
-            const round = rounds[station.id]
+            const split = hyrox[station.id]
             return (
               <tr key={station.id} className="border-b border-rule font-semibold">
                 <th scope="row" className="py-2.5 text-left font-semibold">
@@ -803,9 +803,12 @@ function StationsPanel({ times }: { times: StationTimes }) {
                 ))}
                 {hasRounds && (
                   <td className="py-2.5 pl-3 text-right">
-                    {round ? (
+                    {split ? (
                       <>
-                        {clock(round.seconds)} <span className="text-label text-muted">W{round.week}</span>
+                        {clock(split.seconds)}
+                        <span className="block text-label text-muted">
+                          {nb(`${split.reps !== null ? `${split.reps} reps` : `${split.meters} m`} · W${split.week}`)}
+                        </span>
                       </>
                     ) : (
                       <Time seconds={undefined} />

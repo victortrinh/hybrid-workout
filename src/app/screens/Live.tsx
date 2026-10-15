@@ -19,20 +19,24 @@ import {
   blockElapsed,
   blockLeft,
   canUndo,
+  currentLeg,
   distanceSeconds,
   end,
   goBack,
   heldUnanswered,
   isChecklist,
   isOver,
+  legElapsed,
   liveStatus,
   liveTarget,
   markDone,
   nextBlock,
   pause,
   predictedRpe,
+  quickSplits,
   redone,
   resume,
+  roundLegs,
   shortBlocks,
   tick,
   undo,
@@ -41,6 +45,8 @@ import {
   type LiveRun,
   type LiveStation,
   type LiveTarget,
+  type QuickSplit,
+  type SplitFix,
   type StationChange,
 } from '../../domain/live'
 import { nowMs } from '../../domain/clock'
@@ -50,6 +56,7 @@ import { clock, clockInput, KM_PER_MILE, parseClock, type RunContext } from '../
 import { poundsWords } from '../../domain/program/describe'
 import { stations } from '../../domain/program/program'
 import type { Lane } from '../../domain/program/types'
+import type { StationPart } from '../../domain/log'
 import type { WorkingWeightSuggestion } from '../../domain/suggestion'
 import { dropIn, LanePresence, play, riseIn, useEntrances, wipeIn } from '../motion'
 import { StripedNumeral } from '../components/StripedNumeral'
@@ -76,6 +83,8 @@ export interface LiveFinish {
   rpe: number
   distanceMeters: number | null
   resultSeconds: number | null
+  /** Splits too quick to be true, put right or left untimed. */
+  fixes: SplitFix[]
 }
 
 const LANE_BG: Record<Lane, string> = {
@@ -149,7 +158,8 @@ function Running({
   const over = isOver(run)
   const paused = run.pausedAt !== null
   const block: LiveBlock | undefined = run.blocks[run.block]
-  const target = block && targetFor(block, context)
+  const leg = currentLeg(run)
+  const target = block && targetFor(block, context, leg)
   const [backTo, setBackTo] = useState<number | null>(null)
 
   const runRef = useRef(run)
@@ -164,7 +174,8 @@ function Running({
     const current = runRef.current
     const left = blockLeft(current, now)
     const elapsed = blockElapsed(current, now)
-    if (timerRef.current) timerRef.current.textContent = timerText(left === null ? Math.floor(elapsed) : Math.ceil(left - 0.001))
+    // A HYROX round's clock is its current leg's.
+    if (timerRef.current) timerRef.current.textContent = timerText(left === null ? Math.floor(legElapsed(current, now)) : Math.ceil(left - 0.001))
     const seconds = current.blocks[current.block]?.seconds
     if (fillRef.current && seconds) fillRef.current.style.width = `${Math.min(100, (elapsed / seconds) * 100)}%`
   }, [])
@@ -286,11 +297,21 @@ function Running({
               <span
                 ref={timerRef}
                 role="timer"
-                aria-label={block.seconds === null ? `Time on the ${block.name}` : `Time left in ${block.name}`}
+                aria-label={
+                  leg !== null
+                    ? `Time on the ${legName(roundLegs(block)[leg])}`
+                    : block.seconds === null
+                      ? `Time on the ${block.name}`
+                      : `Time left in ${block.name}`
+                }
                 className="text-figure font-stretch-125%"
               />
             </div>
-            {block.stations.length > 0 && <StationList block={block} />}
+            {leg !== null ? (
+              <RoundLegs block={block} leg={leg} done={run.legs.filter((l) => l.block === run.block).map((l) => l.seconds)} />
+            ) : (
+              block.stations.length > 0 && <StationList block={block} />
+            )}
             {isChecklist(block) ? (
               <Checklist block={block} ticked={run.ticked} onTick={(row) => act((r, now) => tick(r, row, now))} />
             ) : block.detail.length > 0 && (
@@ -364,11 +385,15 @@ function Running({
               </Button>
             ) : (
               <>
-                <Button onPress={() => act(paused ? resume : pause)} className={`${primaryButton} desktop:max-w-60`}>
+                <Button onPress={() => act(paused ? resume : pause)} className={`${leg !== null && !paused ? lineButton : primaryButton} desktop:max-w-60`}>
                   {paused ? 'Resume' : 'Pause'}
                 </Button>
-                <Button onPress={() => act(nextBlock)} className={`${lineButton} desktop:max-w-60`}>
-                  {finishedLabel(block)}
+                {/* In a round the leg's tap is the one that matters, made from a few steps away: the big, filled one. */}
+                <Button
+                  onPress={() => act(nextBlock)}
+                  className={leg !== null && !paused ? `${primaryButton} min-h-18 flex-[2] desktop:max-w-90` : `${lineButton} desktop:max-w-60`}
+                >
+                  {finishedLabel(block, leg)}
                 </Button>
               </>
             )}
@@ -381,39 +406,50 @@ function Running({
 
 /**
  * The hero target: the exact speed or pace, the RPE before there are paces,
- * the distance of a 5 km or a HYROX round's run, or a Station's volume.
+ * the distance of a 5 km or a run, or a Station's volume. On a HYROX round,
+ * its current leg's: the run, then each Station.
  */
-function targetFor(block: LiveBlock, context: RunContext): LiveTarget | null {
+function targetFor(block: LiveBlock, context: RunContext, leg: number | null): LiveTarget | null {
   const none = { incline: null, pace: null }
-  if ((block.kind === 'distance' || block.kind === 'round') && block.meters) {
-    const unit = block.kind === 'round' ? ' run' : ''
+  const part = leg === null ? null : roundLegs(block)[leg]
+  const station = block.kind === 'station' ? block.stations[0] : block.stations.find((s) => s.station === part)
+  if ((block.kind === 'distance' || part === 'run') && block.meters) {
+    const unit = part === 'run' ? ' run' : ''
     return block.meters % 1000 === 0
       ? { ...none, value: String(block.meters / 1000), unit: `km${unit}`, words: km(block.meters) }
       : { ...none, value: String(block.meters), unit: `m${unit}`, words: km(block.meters) }
   }
-  if (block.kind === 'station') {
-    const [leg] = block.stations
-    if (leg.reps) return { ...none, value: String(leg.reps), unit: 'reps', words: volume(leg) }
+  if (station) {
+    // A round's Station says which, beside its number: "500 m SkiErg".
+    const name = part === null ? '' : ` ${stations[station.station].name}`
+    if (station.reps) return { ...none, value: String(station.reps), unit: `reps${name}`, words: volume(station) }
     // Four digits don't fit a phone: 1000 m reads as 1 km, like the runs.
-    const meters = leg.meters ?? 0
+    const meters = station.meters ?? 0
     return meters % 1000 === 0
-      ? { ...none, value: String(meters / 1000), unit: 'km', words: volume(leg) }
-      : { ...none, value: String(meters), unit: 'm', words: volume(leg) }
+      ? { ...none, value: String(meters / 1000), unit: `km${name}`, words: volume(station) }
+      : { ...none, value: String(meters), unit: `m${name}`, words: volume(station) }
   }
   return liveTarget(block, context)
 }
 
 /**
  * The tap that ends a Block early: Skip block on timed work, which makes the
- * log Partial; Done on anything else. Finished on a Block run to a distance or to the end of its work.
+ * log Partial; Done on anything else. Finished on a Block run to a distance or to the end of its work,
+ * and on each leg of a HYROX round.
  */
-function finishedLabel(block: LiveBlock): string {
+function finishedLabel(block: LiveBlock, leg: number | null): string {
   if (!block.work && (block.seconds !== null || isChecklist(block) || block.kind === 'setup')) return 'Done'
   if (block.seconds !== null) return 'Skip block'
-  if (block.kind === 'round') return `Finished round ${block.round}`
+  if (leg !== null) {
+    const part = roundLegs(block)[leg]
+    return `Finished ${part === 'run' ? km(block.meters ?? 0) : legName(part)}`
+  }
   if (block.kind === 'station') return `Finished ${block.name}`
   return `Finished ${km(block.meters ?? 0)}`
 }
+
+/** "Run", "Sled push" */
+const legName = (part: StationPart) => (part === 'run' || part === 'round' ? 'Run' : stations[part].name)
 
 /** A Station's distance or reps: "25 m", "20 reps". Nothing on Set up, where only the load matters. */
 const volume = (leg: LiveStation) => (leg.reps ? `${leg.reps} reps` : leg.meters ? km(leg.meters) : '')
@@ -440,6 +476,46 @@ function StationList({ block }: { block: LiveBlock }) {
         </li>
       ))}
     </ul>
+  )
+}
+
+/**
+ * A HYROX round's legs, one row each, read from the floor: those done struck
+ * through with their split, the load of the one on the clock (the hero names
+ * it), then what's left to get ready for.
+ */
+function RoundLegs({ block, leg, done }: { block: LiveBlock; leg: number; done: number[] }) {
+  return (
+    <ol aria-label="Legs" className="mt-3 grid gap-1.5">
+      {roundLegs(block).map((part, i) => {
+        const station = block.stations.find((s) => s.station === part)
+        const words = station ? stationWords(station) : km(block.meters ?? 0)
+        if (i === leg) {
+          // The hero says what and how far: the load is all that's left to say.
+          const load = station && poundsWords(stations[station.station], station.pounds)
+          return (
+            <li key={part} aria-current="step" className={load ? 'text-[22px] leading-tight font-bold' : 'sr-only'}>
+              <span className="sr-only">{legName(part)}, now{load ? ': ' : ''}</span>
+              {load && nb(load)}
+            </li>
+          )
+        }
+        const split = done[i]
+        return (
+          <li key={part} className="flex items-baseline justify-between gap-3 text-[17px] font-semibold">
+            <span className={split !== undefined ? 'line-through decoration-2' : undefined}>
+              {nb(`${legName(part)} · ${words}`)}
+            </span>
+            {split !== undefined && (
+              <span className="flex-none">
+                <span className="sr-only">, done in </span>
+                {clock(split)}
+              </span>
+            )}
+          </li>
+        )
+      })}
+    </ol>
   )
 }
 
@@ -627,7 +703,8 @@ function Lanes({
               <i
                 ref={current ? fillRef : undefined}
                 className={`lane-fill absolute inset-y-0 left-0 ${LANE_BG[b.lane]}`}
-                style={{ width: i < run.block ? '100%' : current ? undefined : '0%' }}
+                // A round's lane fills a share for each leg done; a timed Block's is painted by the clock.
+                style={{ width: i < run.block ? '100%' : current ? roundFill(run, b, i) : '0%' }}
               />
             </span>
           </li>
@@ -635,6 +712,13 @@ function Lanes({
       })}
     </ol>
   )
+}
+
+/** How much of a HYROX round's lane is filled: a share per leg done. Undefined for any other Block. */
+function roundFill(run: LiveRun, block: LiveBlock, i: number): string | undefined {
+  const legs = roundLegs(block).length
+  if (legs === 0) return undefined
+  return `${(run.legs.filter((l) => l.block === i).length / legs) * 100}%`
 }
 
 /** The Blocks that ask something once over: a rep, a HYROX round, a Race simulation's Station. */
@@ -866,6 +950,25 @@ function AmountField({
   )
 }
 
+const splitKey = ({ block, leg }: SplitFix) => `${block}-${leg ?? ''}`
+
+/** "800 m", "50 reps" */
+const splitAmount = (q: QuickSplit) => (q.reps !== null ? `${q.reps} reps` : km(q.meters ?? 0))
+
+/** "Run, round 1 · 800 m", "SkiErg · 1 km" */
+function splitName(run: LiveRun, q: QuickSplit): string {
+  const block = run.blocks[q.block]
+  return `${block.kind === 'round' ? `${legName(q.part)}, round ${q.round}` : block.name} · ${splitAmount(q)}`
+}
+
+/** Empty leaves it untimed; anything else has to be a time someone could have done. */
+function validateSplit(q: QuickSplit, text: string): string | null {
+  if (text.trim() === '') return null
+  const seconds = parseClock(text)
+  if (seconds === null) return 'A time like 3:30, or nothing.'
+  return seconds < q.fastest ? `${clock(seconds)} can’t be right. Put the real time, or clear it to leave it untimed.` : null
+}
+
 const paceOk = (pace: number | null) => pace !== null && pace >= PACE_SECONDS[0] && pace <= PACE_SECONDS[1]
 
 /** A treadmill speed in the chosen unit to seconds per km. */
@@ -905,6 +1008,9 @@ function FinishSheet({
   const [predicted] = useState(() => predictedRpe(run))
   const [rpe, setRpe] = useState<number | null>(predicted)
   const [missingRpe, setMissingRpe] = useState(false)
+  const quick = quickSplits(run)
+  const [fixes, setFixes] = useState<Record<string, string>>({})
+  const fixText = (q: QuickSplit) => fixes[splitKey(q)] ?? clock(q.seconds)
 
   function submit(event: FormEvent) {
     event.preventDefault()
@@ -914,12 +1020,43 @@ function FinishSheet({
     }
     const resultSeconds = result ? parseClock(time) : null
     if (result && (resultSeconds === null || validateTime(time))) return
+    if (quick.some((q) => validateSplit(q, fixText(q)))) return
     const meters = indoor && Number.isFinite(distance) ? Math.round(distance * (mile ? KM_PER_MILE * 1000 : 1000)) : null
-    onSave({ rpe, distanceMeters: meters, resultSeconds })
+    const fixed = quick.map(({ block, leg }, i) => ({ block, leg, seconds: parseClock(fixText(quick[i])) }))
+    onSave({ rpe, distanceMeters: meters, resultSeconds, fixes: fixed })
   }
 
   return (
     <Form onSubmit={submit} className="mt-4 flex flex-1 flex-col gap-6 border-t-2 border-ink pt-4">
+      {quick.length > 0 && (
+        <section aria-label="Too quick to be right" className="grid gap-4">
+          <h2 className={groupLabel}>Too quick to be right</h2>
+          {quick.map((q) => (
+            <TextField
+              key={splitKey(q)}
+              value={fixText(q)}
+              onChange={(text) => setFixes((all) => ({ ...all, [splitKey(q)]: clockInput(text) }))}
+              validate={(text) => validateSplit(q, text)}
+              inputMode="numeric"
+              className="grid gap-2"
+            >
+              {({ isInvalid }) => (
+                <>
+                  <Label className="text-body">{nb(splitName(run, q))}</Label>
+                  <Input placeholder="m:ss" autoComplete="off" className={inputClass} />
+                  {isInvalid ? (
+                    <FieldError className="text-body-quiet font-bold text-ink" />
+                  ) : (
+                    <Text slot="description" className="text-body-quiet text-muted">
+                      {nb(`${clock(q.seconds)} for ${splitAmount(q)} is a slipped thumb, not a split. Put the real time, or clear it to leave it untimed.`)}
+                    </Text>
+                  )}
+                </>
+              )}
+            </TextField>
+          ))}
+        </section>
+      )}
       <CutShort run={run} onMarkDone={onMarkDone} />
       {result && (
         <TextField

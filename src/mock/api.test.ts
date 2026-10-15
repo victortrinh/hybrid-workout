@@ -60,6 +60,20 @@ describe('the Worker in the browser', () => {
     expect((await state()).sessionLogs).toEqual([later])
   })
 
+  it('keeps the race’s finish time, past the hour a 5K test is held to', async () => {
+    const race = log({ id: 'log-race-0001', week: 27, sessionId: 'race', date: '2027-04-21' as SessionLog['date'], minutes: 85, rpe: null, resultSeconds: 5047, intervals: [] })
+    await sync({ sessionLogs: [race] })
+    expect((await state()).sessionLogs).toEqual([race])
+  })
+
+  it('refuses a result time on any Session but a 5K test and the race, or past what it can take', async () => {
+    const post = (sessionLogs: SessionLog[]) =>
+      api(new Request('http://localhost/api/sync', { method: 'POST', body: JSON.stringify({ sessionLogs }) }))
+    expect((await post([log({ resultSeconds: 1380 })])).status).toBe(400)
+    expect((await post([log({ sessionId: '5k-test', week: 2, intervals: [], resultSeconds: 5047 })])).status).toBe(400)
+    expect((await post([log({ week: 27, sessionId: 'race', intervals: [], resultSeconds: 600 })])).status).toBe(400)
+  })
+
   it('keeps the Starting point, a later edit winning, and refuses an unbelievable one', async () => {
     expect((await state()).startingPoint).toBeNull()
     const point = { fiveKSeconds: 1260, weights: { 'back-squat': 225 }, updatedAt: '2026-10-15T12:00:00.000Z' }

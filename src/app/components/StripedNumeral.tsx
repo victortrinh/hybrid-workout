@@ -7,7 +7,7 @@ import { useLayoutEffect, useRef, type CSSProperties } from 'react'
  * Stripes are phased so whole bands land on the glyph's top and on the
  * baseline: we measure the digits' real ascent with a canvas and the baseline
  * with a zero-size marker, then fit a whole number of stripe periods between.
- * The decimal point stays solid above the stripes.
+ * The decimal point, and a clock's colons, stay solid above the stripes.
  *
  * It also carries its own width in ems as `--ems`, so a size can be capped to
  * fit its column (see `--text-numeral-live`).
@@ -30,19 +30,22 @@ export function StripedNumeral({ value, className }: { value: string; className?
     }
   }, [value])
 
-  const [whole, decimals] = value.split('.')
+  // Points and colons stay solid: split on them, digits between.
+  const parts = value.split(/([.:])/)
   return (
     <span
       ref={ref}
       className={className ? `stripe-num ${className}` : 'stripe-num'}
       style={{ '--ems': numeralEms(value) } as CSSProperties}
     >
-      {whole}
-      {decimals !== undefined && (
-        <>
-          <span className="pt">.</span>
-          {decimals}
-        </>
+      {parts.map((part, i) =>
+        i % 2 === 1 ? (
+          <span key={i} className="pt">
+            {part}
+          </span>
+        ) : (
+          part
+        ),
       )}
       <i className="bl" aria-hidden="true" />
     </span>
@@ -51,11 +54,11 @@ export function StripedNumeral({ value, className }: { value: string; className?
 
 /**
  * How wide `value` sets, in ems: Archivo's tabular digits at 900, expanded and
- * tracked -0.04em, are 0.775em each and the point 0.34em.
+ * tracked -0.04em, are 0.775em each, the point and a colon 0.34em.
  */
 export function numeralEms(value: string): number {
   let ems = 0
-  for (const c of value) ems += c === '.' ? 0.34 : 0.775
+  for (const c of value) ems += c === '.' || c === ':' ? 0.34 : 0.775
   return Math.round(ems * 1000) / 1000
 }
 
@@ -71,7 +74,7 @@ function phaseStripes(el: HTMLElement) {
   if (!measure) return
   measure.font = `${style.fontWeight} ${fontSize}px ${style.fontFamily}`
   measure.fontStretch = 'expanded' // 125%, the numeral width
-  const digits = (el.textContent ?? '').replace('.', '')
+  const digits = (el.textContent ?? '').replace(/[.:]/g, '')
   const ascent = measure.measureText(digits).actualBoundingBoxAscent || fontSize * 0.72
 
   const baseline = baselineMarker.getBoundingClientRect().top - el.getBoundingClientRect().top
