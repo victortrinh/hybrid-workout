@@ -327,7 +327,7 @@ export function LogAfter({
                 ))}
               </div>
               <Text slot="description" className="text-body-quiet text-muted">
-                The whole Session. 7 is about three reps left in the tank; 10 is nothing left.
+                The whole Session. 7 is about three left; 10 is nothing left.
               </Text>
             </RadioGroup>
           </>
