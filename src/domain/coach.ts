@@ -34,7 +34,7 @@ import {
   type SuggestionDecision,
 } from './suggestion'
 import { startingWeights, type StartingPoint } from './startingPoint'
-import { strengthState, type WorkingWeightChange, type WorkingWeights } from './weights'
+import { strengthState, type HeldIncrease, type WorkingWeightChange, type WorkingWeights } from './weights'
 
 export interface CoachInput {
   program: Program
@@ -160,6 +160,11 @@ export interface CoachDay {
    * latest Working weight Suggestion.
    */
   suggestions: Suggestion[]
+  /**
+   * Increases earned but held while this lighter Week (a Deload week, or an
+   * accepted re-entry) is in force: not offered, they land the Monday after.
+   */
+  heldIncreases: HeldIncrease[]
   /** Each lift's Working weight; a lift without one is found in its next Strength session. */
   workingWeights: WorkingWeights
   /** The Starting point's estimates for lifts with no Working weight yet: where their calibration starts. */
@@ -208,7 +213,7 @@ export function coach({
   const shownWeek =
     position.kind === 'in-week' ? position.week : position.kind === 'before-start' ? 1 : null
   const planned = shownWeek === null ? null : findWeek(program, shownWeek)
-  const strength = strengthState(program, logs, decisions, today)
+  const strength = strengthState(program, logs, decisions, today, lightenedWeeks(program, logs, decisions, today))
   const suggestions = [
     ...(position.kind === 'in-week' && planned
       ? suggestionsFor(program, planned, logs, decisions, { reports: painReports, today })
@@ -274,6 +279,7 @@ export function coach({
     fiveKTest,
     paces: currentPaces(logs, today, startingPoint?.fiveKSeconds ?? null),
     suggestions,
+    heldIncreases: position.kind === 'in-week' ? strength.held : [],
     workingWeights: strength.weights,
     estimatedWeights: startingWeights(startingPoint, strength.weights),
     workingWeightChanges: strength.changes,
@@ -637,6 +643,15 @@ function recoveryFor(
   return session === upNext.session
     ? { ...unchanged, suggestion }
     : { upNext: { ...upNext, session }, suggestion, change: 'short-sleep', cut }
+}
+
+/** The Weeks begun by `today` that an accepted re-entry made lighter. */
+function lightenedWeeks(program: Program, logs: SessionLog[], decisions: SuggestionDecision[], today: LocalDate): number[] {
+  return program.phases
+    .flatMap((p) => p.weeks)
+    .filter((week) => daysBetween(week.startDate, today) >= 0)
+    .filter((week) => reEntryFor(program, week, logs, decisions)?.decision === 'accepted')
+    .map((week) => week.number)
 }
 
 const acceptedPain = (suggestions: Suggestion[]): PainLevel | null =>

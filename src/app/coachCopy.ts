@@ -116,7 +116,7 @@ function painChange(level: PainLevel): string {
 }
 
 /** "Speed", "Speed and HYROX", "Speed, Strength and HYROX" */
-function list(items: string[]): string {
+export function list(items: string[]): string {
   return items.length <= 1 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`
 }
 

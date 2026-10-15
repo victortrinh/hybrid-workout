@@ -6,10 +6,11 @@ import type { ActivityAttached, ActivityQuestion, BucketEntry, CoachDay, PhasePr
 import { isLive, type LiveSession } from '../../domain/lifts'
 import type { Environment, RunContext } from '../../domain/paces'
 import { painLevel, type PainArea } from '../../domain/pain'
-import { describeSession, SESSION_TYPES } from '../../domain/program/describe'
+import { describeSession, LIFT_NAME, SESSION_TYPES } from '../../domain/program/describe'
 import type { Session } from '../../domain/program/types'
 import type { Settings } from '../../domain/settings'
-import type { Decision, Suggestion } from '../../domain/suggestion'
+import type { Decision, Suggestion, WorkingWeightSuggestion } from '../../domain/suggestion'
+import { heldCopy, liftChange, liftsCopy, suggestionBlocks, VISIBLE_BLOCKS, type SuggestionBlock } from '../suggestionBlocks'
 import { outsideWeekLine, painLine, recoveryWhy, shortSleepLine, suggestionCopy, waitingLine } from '../coachCopy'
 import { FieldLane } from '../components/FieldLane'
 import { LaneChip } from '../components/LaneChip'
@@ -67,7 +68,7 @@ export function Today({
   /** Makes a Session of the Bucket today's Session instead of Up next. */
   onPick: (week: number, sessionId: string) => void
   /** Accepts, Keeps or (with 'open') undoes a Suggestion. */
-  onDecide: (suggestion: Suggestion, decision: Decision) => void
+  onDecide: (suggestions: Suggestion | Suggestion[], decision: Decision) => void
   /** How a Session's runs read today: exact speeds or paces once there is a 5K test. */
   runContext: (week: number, session: Session) => RunContext
   /** Overrides the month's Environment for one Session. */
@@ -220,7 +221,7 @@ function UpNext({
   weekCount: number
   pending: number
   error: string | null
-  onDecide: (suggestion: Suggestion, decision: Decision) => void
+  onDecide: (suggestions: Suggestion | Suggestion[], decision: Decision) => void
   runContext: (week: number, session: Session) => RunContext
   onEnvironment: (week: number, session: Session, environment: Environment) => void
   live: LiveSession | null
@@ -384,12 +385,7 @@ function UpNext({
           <p className="mt-3 text-body-quiet text-muted">{plural(pending, 'log')} on this phone, waiting to sync.</p>
         )}
       </div>
-      {day.suggestions
-        // Decided ones stay for the rest of the day, so Undo is one tap away.
-        .filter((s) => s.decision === 'open' || s.decidedOn === day.today)
-        .map((s) => (
-          <SuggestionNote key={s.id} suggestion={s} onDecide={(d) => onDecide(s, d)} />
-        ))}
+      <CoachSuggestions day={day} onDecide={onDecide} />
       {day.activitiesAttached.map((a) => (
         <AttachedNote
           key={a.activity.id}
@@ -502,6 +498,142 @@ function dependsOnEnvironment(session: Session, run: RunContext): boolean {
 
 /** The prototype's link buttons: Accept in link blue, underlined; Keep and Undo quiet, in ink. */
 const linkButton = `${buttonBase} text-link underline decoration-2 underline-offset-4 hover:decoration-[3px]`
+
+/**
+ * The Coach's Suggestions, most important first: at most two blocks before
+ * This Week, the rest one tap away. Lift increases held by a lighter Week get
+ * one line instead.
+ */
+function CoachSuggestions({
+  day,
+  onDecide,
+}: {
+  day: CoachDay
+  onDecide: (suggestions: Suggestion | Suggestion[], decision: Decision) => void
+}) {
+  const [more, setMore] = useState(false)
+  const blocks = suggestionBlocks(day.suggestions, day.today)
+  const folded = blocks.length - VISIBLE_BLOCKS
+  const block = (b: SuggestionBlock) =>
+    b.kind === 'one' ? (
+      <SuggestionNote key={b.suggestion.id} suggestion={b.suggestion} onDecide={(d) => onDecide(b.suggestion, d)} />
+    ) : (
+      <LiftsNote key="lifts" lifts={b.lifts} onDecide={onDecide} />
+    )
+  return (
+    <>
+      {blocks.slice(0, VISIBLE_BLOCKS).map(block)}
+      {folded > 0 &&
+        (more ? (
+          blocks.slice(VISIBLE_BLOCKS).map(block)
+        ) : (
+          <Button onPress={() => setMore(true)} aria-expanded={false} className={`mt-1 ${quietButton}`}>
+            {folded} more from the Coach
+          </Button>
+        ))}
+      {day.heldIncreases.length > 0 && <HeldNote day={day} />}
+    </>
+  )
+}
+
+/**
+ * Every Working weight change as one Suggestion: Accept all or Keep all in a
+ * tap, Undo in another, or open the list and decide lift by lift.
+ */
+function LiftsNote({
+  lifts,
+  onDecide,
+}: {
+  lifts: WorkingWeightSuggestion[]
+  onDecide: (suggestions: Suggestion[], decision: Decision) => void
+}) {
+  const [oneByOne, setOneByOne] = useState(false)
+  const open = lifts.filter((s) => s.decision === 'open')
+  const copy = liftsCopy(open.length > 0 ? open : lifts)
+  // Once nothing is open the one Undo says it all.
+  const listed = open.length > 0 && (oneByOne || open.length < lifts.length)
+  return (
+    <section
+      aria-label="Coach’s Suggestion: lifts"
+      aria-live="polite"
+      className="mt-[18px] border-t-2 border-t-ink py-3.5 desktop:border-b desktop:border-b-rule"
+    >
+      <p className="text-[17px] leading-[1.3] font-semibold">{open.length > 0 ? copy.line : liftsCopy(lifts).decided}</p>
+      {open.length > 0 && <p className="mt-1 text-[14px] text-muted">{nb(copy.why)}</p>}
+      <div className="mt-2.5 flex flex-wrap gap-x-5">
+        {open.length > 0 ? (
+          <>
+            <Button onPress={() => onDecide(open, 'accepted')} className={linkButton}>
+              Accept all
+            </Button>
+            <Button onPress={() => onDecide(open, 'kept')} className={quietButton}>
+              Keep all
+            </Button>
+            {!listed && (
+              <Button onPress={() => setOneByOne(true)} aria-expanded={false} className={quietButton}>
+                One by one
+              </Button>
+            )}
+          </>
+        ) : (
+          <Button onPress={() => onDecide(lifts, 'open')} className={quietButton}>
+            Undo
+          </Button>
+        )}
+      </div>
+      {listed && (
+        <ul aria-label="Each lift" className="mt-1.5 border-t border-t-rule">
+          {lifts.map((s) => (
+            <li key={s.id} className="grid grid-cols-[1fr_auto] items-center gap-x-4 border-b border-b-rule py-1">
+              <span className="text-[15px] leading-[1.3] tabular-nums">
+                <span className="font-semibold">
+                  {LIFT_NAME[s.lift]}{' '}
+                  <span className="whitespace-nowrap">
+                    {s.from.pounds} → {s.to.pounds} lb
+                  </span>
+                </span>
+                {s.decision !== 'open' && (
+                  <span className="text-muted"> · {s.decision === 'accepted' ? 'accepted' : 'kept'}</span>
+                )}
+              </span>
+              <span className="flex gap-5">
+                {s.decision === 'open' ? (
+                  <>
+                    <Button
+                      onPress={() => onDecide([s], 'accepted')}
+                      aria-label={`Accept ${liftChange(s)}`}
+                      className={linkButton}
+                    >
+                      Accept
+                    </Button>
+                    <Button onPress={() => onDecide([s], 'kept')} aria-label={`Keep ${s.from.pounds} lb`} className={quietButton}>
+                      Keep
+                    </Button>
+                  </>
+                ) : (
+                  <Button onPress={() => onDecide([s], 'open')} aria-label={`Undo ${liftChange(s)}`} className={quietButton}>
+                    Undo
+                  </Button>
+                )}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
+/** Increases earned while the Week is lighter: said once, applied the Monday after, nothing to decide. */
+function HeldNote({ day }: { day: CoachDay }) {
+  const copy = heldCopy(day.heldIncreases, day.today)
+  return (
+    <section aria-label="From the Coach" className="mt-[18px] border-t-2 border-t-ink py-3.5 desktop:border-b desktop:border-b-rule">
+      <p className="text-[17px] leading-[1.3] font-semibold">{copy.line}</p>
+      <p className="mt-1 text-[14px] text-muted">{nb(copy.why)}</p>
+    </section>
+  )
+}
 
 /** The Coach's Suggestion between ink rules: the line, the facts, then Accept and Keep (or Undo). */
 function SuggestionNote({ suggestion, onDecide }: { suggestion: Suggestion; onDecide: (d: Decision) => void }) {
