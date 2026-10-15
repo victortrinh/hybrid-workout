@@ -489,6 +489,17 @@ describe('Up next with Session logs', () => {
       expect(day.rest).toMatchObject({ kind: 'waiting', session: { id: 'race' }, date: '2027-04-21' })
     })
 
+    it('pins the race to Race day: it can’t be picked for another day', () => {
+      const pickRace = { date: localDate('2027-04-20'), week: 27, sessionId: 'race' }
+      const day = withLogs('2027-04-20', [], pickRace)
+      expect(day.upNext?.id).toBe('shakeout')
+      expect(day.bucket.map((e) => [e.session.id, e.pickable])).toEqual([
+        ['shakeout', true],
+        ['race', false],
+      ])
+      expect(on('2027-04-21').bucket.find((e) => e.session.id === 'race')?.pickable).toBe(true)
+    })
+
     it('is the race on Race day, whatever was done the day before', () => {
       const day = withLogs('2027-04-21', [log(27, 'shakeout', '2027-04-20')])
       expect(day.upNext?.id).toBe('race')
