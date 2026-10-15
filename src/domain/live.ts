@@ -898,10 +898,13 @@ const TYPICAL_RPE: Record<SessionType, number> = {
  * The Overall RPE the finish sheet starts on: the top of the hardest RPE the
  * Session's work asks for, else what its Session type usually feels like.
  */
-export function predictedRpe(run: LiveRun): number {
+export function predictedRpe(run: Pick<LiveRun, 'type' | 'blocks'>): number {
   const asked = run.blocks.filter((b) => b.work).flatMap((b) => (b.effort?.rpe ? [b.effort.rpe[1]] : []))
   return asked.length > 0 ? Math.max(...asked) : TYPICAL_RPE[run.type]
 }
+
+/** The same guess for a Session logged after, from the watch rather than Live. */
+export const sessionRpe = (session: Session) => predictedRpe({ type: session.type, blocks: liveBlocks(session) })
 
 /** The Session log a finished Live session saves. */
 export function liveLog(run: LiveRun, now: number, input: LiveLogInput): SessionLog {

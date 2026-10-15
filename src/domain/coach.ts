@@ -66,7 +66,7 @@ export interface PickedSession {
   sessionId: string
 }
 
-/** Where a Session of the Bucket stands: Planned and Next until something is logged. */
+/** Where a Session of the Bucket stands: Planned until something is logged; Next for Up next, a Skipped one too. */
 export type BucketState = 'planned' | 'next' | LoggedStatus
 
 export interface BucketEntry {
@@ -82,19 +82,30 @@ export interface BucketEntry {
   activity: Activity | null
   /** Whether it can be picked to do today: not a Session pinned to another day, like the race. */
   pickable: boolean
+  /** Still to do: nothing logged, or a required Session Skipped while its Week has days left. */
+  toDo: boolean
 }
 
 /** A workout more than one Session fits: Today asks which. */
 export type ActivityQuestion = Extract<ActivityOutcome, { state: 'ambiguous' }>
-export type ActivityAttached = Extract<ActivityOutcome, { state: 'attached' }> & { session: Session }
+export type ActivityAttached = Extract<ActivityOutcome, { state: 'attached' }> & {
+  session: Session
+  /** Whether the Session has a log yet: attaching a workout never logs it. */
+  logged: boolean
+}
 
 /** How far back Today still asks about a workout. */
 export const ACTIVITY_QUESTION_DAYS = 7
 
 /** Why there is no Up next today. */
 export type RestReason =
-  /** Every Session in the Bucket is logged. */
+  /** Every required Session is Done, Partial or Swapped, and the Optional session is logged. */
   | { kind: 'week-done' }
+  /**
+   * All that's left was Skipped today: it waits for tomorrow, or, on its last
+   * day, closes the Week as a miss.
+   */
+  | { kind: 'skipped-today'; sessions: Session[]; lastDay: boolean }
   /** A Hard session was done yesterday, or already today, and the Week has room to wait a day. */
   | { kind: 'hard-yesterday' | 'hard-today' }
   /** Only Speed is left, and Strength or HYROX was done yesterday or today. */
@@ -180,7 +191,11 @@ export interface CoachDay {
   recoveryCut: ShortSleepCut | null
   /** Workouts from the last week that fit more than one Session, oldest first. */
   activityQuestions: ActivityQuestion[]
-  /** Today's workouts the Coach attached on its own, oldest first: said once, so it's never silent. */
+  /**
+   * Workouts attached to a Session, oldest first: today's that the Coach
+   * attached on its own, said once so it's never silent, and any from the
+   * last week whose Session isn't logged yet, so logging it is one tap.
+   */
   activitiesAttached: ActivityAttached[]
 }
 
@@ -265,9 +280,10 @@ export function coach({
     week,
     bucket: logged.map((entry) => ({
       ...entry,
-      state: entry.log ? entry.log.status : entry === upNext ? 'next' : 'planned',
+      state: entry === upNext ? 'next' : entry.log ? entry.log.status : 'planned',
       activity: attached.get(`${entry.week}/${entry.session.id}`) ?? null,
       pickable: pickableOn(entry.session, today),
+      toDo: toDo(entry),
     })),
     upNext: upNext?.session ?? null,
     rest,
@@ -287,9 +303,12 @@ export function coach({
       .sort((a, b) => a.activity.startedAt.localeCompare(b.activity.startedAt)),
     activitiesAttached: matched
       .flatMap((o): ActivityAttached[] => {
-        if (o.state !== 'attached' || o.by !== 'coach' || o.activity.date !== today) return []
+        if (o.state !== 'attached' || o.activity.date > today) return []
+        const logged = logs.some((l) => l.week === o.week && l.sessionId === o.sessionId)
+        const said = o.by === 'coach' && o.activity.date === today
+        if (!said && (logged || daysBetween(o.activity.date, today) >= ACTIVITY_QUESTION_DAYS)) return []
         const session = findWeek(program, o.week)?.sessions.find((s) => s.id === o.sessionId)
-        return session ? [{ ...o, session }] : []
+        return session ? [{ ...o, session, logged }] : []
       })
       .sort((a, b) => a.activity.startedAt.localeCompare(b.activity.startedAt)),
   }
@@ -301,6 +320,14 @@ interface Logged {
   log: SessionLog | null
   carriedUntil: LocalDate | null
 }
+
+/**
+ * A Skipped log doesn't close a required Session: it can still be done while
+ * its Week (or a Key session's carry-over) has days left. The Bucket only
+ * holds Sessions with days left. Skipping the Optional session closes it.
+ */
+const toDo = ({ session, log }: Pick<Logged, 'session' | 'log'>) =>
+  !log || (log.status === 'skipped' && !session.optional)
 
 /** Week 1's Monday: Race week's Monday, counted back `weekCount - 1` Weeks. */
 export function programStart(program: Program): LocalDate {
@@ -394,10 +421,17 @@ function chooseUpNext({ program, logged, logs, today, picked, daysLeft }: UpNext
   upNext: Logged | null
   rest: RestReason | null
 } {
-  const open = logged.filter((entry) => !entry.log)
-  if (open.length === 0) return { upNext: null, rest: { kind: 'week-done' } }
+  // Untouched Sessions first; a Skipped one comes back after them, and not the day it was Skipped.
+  const skipped = logged.filter((e) => e.log && toDo(e))
+  const skippedToday = skipped.filter((e) => e.log!.date === today)
+  const open = [...logged.filter((e) => !e.log), ...skipped.filter((e) => e.log!.date !== today)]
+  if (open.length === 0) {
+    if (skippedToday.length === 0) return { upNext: null, rest: { kind: 'week-done' } }
+    const lastDay = skippedToday.every((e) => (e.carriedUntil ? e.carriedUntil === today : daysLeft === 1))
+    return { upNext: null, rest: { kind: 'skipped-today', sessions: skippedToday.map((e) => e.session), lastDay } }
+  }
 
-  const choice = pickedToday(open, picked, today)
+  const choice = pickedToday(logged, picked, today)
   if (choice) return { upNext: choice, rest: null }
 
   const pinnedToday = open.find((e) => e.session.date === today)
@@ -439,7 +473,7 @@ function pickedToday(logged: Logged[], picked: PickedSession | null, today: Loca
   if (!picked || picked.date !== today) return null
   return (
     logged.find(
-      (e) => !e.log && e.week === picked.week && e.session.id === picked.sessionId && pickableOn(e.session, today),
+      (e) => toDo(e) && e.week === picked.week && e.session.id === picked.sessionId && pickableOn(e.session, today),
     ) ?? null
   )
 }
@@ -488,8 +522,8 @@ export function keyDeadline(program: Program, week: Week): LocalDate {
 
 export interface WeekOutcome {
   /**
-   * Missed Sessions: logged Skipped by the athlete, or not done once the Week
-   * (or, for the Key session, its carry-over) is over. The Optional session
+   * Missed Sessions, once the Week (or, for the Key session, its carry-over)
+   * is over: logged Skipped by the athlete, or not done. The Optional session
    * is never a miss.
    */
   skipped: { session: Session; by: 'athlete' | 'coach' }[]
@@ -511,8 +545,10 @@ export function weekOutcome(program: Program, week: Week, logs: SessionLog[], to
     const until = session.key ? keyDeadline(program, week) : null
     const carrying = over && until !== null && daysBetween(today, until) >= 0
     if (log) {
-      if (log.status === 'skipped') outcome.skipped.push({ session, by: 'athlete' })
-      if (carrying && daysBetween(sunday, log.date) > 0) outcome.carried = { session, until }
+      const carriedLog = carrying && daysBetween(sunday, log.date) > 0
+      if (carriedLog) outcome.carried = { session, until }
+      // Skipped can still be done until the Week, or the carry-over, is over.
+      if (log.status === 'skipped' && over && !carriedLog) outcome.skipped.push({ session, by: 'athlete' })
       continue
     }
     if (!over) continue

@@ -39,7 +39,7 @@ export interface FiveKProgress {
   upcoming: { week: number; seconds: number | null }[]
 }
 
-/** Where one Session of a past or current Week stands. */
+/** Where one Session of a past or current Week stands. Skipped with days left is still open. */
 export type CompletionState = 'done' | 'partial' | 'swapped' | 'skipped' | 'missed' | 'open'
 
 export interface WeekCompletion {
@@ -48,7 +48,7 @@ export interface WeekCompletion {
   /** Required Sessions Done or Partial, and how many there are. The Optional session doesn't count. */
   done: number
   required: number
-  /** Sessions Skipped or missed. */
+  /** Required Sessions Skipped or missed once their Week is over. The Optional session is never a miss. */
   missed: number
 }
 
@@ -115,14 +115,17 @@ export function weeklyCompletion(program: Program, logs: SessionLog[], today: Lo
   return weeksSoFar(program, today).flatMap((number) => {
     const week = findWeek(program, number)
     if (!week) return []
-    const missed = new Set(
-      weekOutcome(program, week, logs, today)
-        .skipped.filter((s) => s.by === 'coach')
-        .map((s) => s.session.id),
-    )
+    // Misses as the Coach counts them: a Skipped Session isn't one while its Week has days left.
+    const missed = new Set(weekOutcome(program, week, logs, today).skipped.map((s) => s.session.id))
     const cells = week.sessions.map((session) => {
       const log = logFor(logs, number, session.id)
-      const state: CompletionState = log ? log.status : missed.has(session.id) ? 'missed' : 'open'
+      const state: CompletionState = !log
+        ? missed.has(session.id)
+          ? 'missed'
+          : 'open'
+        : log.status === 'skipped' && !session.optional && !missed.has(session.id)
+          ? 'open'
+          : log.status
       return { session, state }
     })
     const required = cells.filter((c) => !c.session.optional)
@@ -132,7 +135,7 @@ export function weeklyCompletion(program: Program, logs: SessionLog[], today: Lo
         cells,
         done: required.filter((c) => c.state === 'done' || c.state === 'partial').length,
         required: required.length,
-        missed: cells.filter((c) => c.state === 'skipped' || c.state === 'missed').length,
+        missed: required.filter((c) => c.state === 'skipped' || c.state === 'missed').length,
       },
     ]
   })

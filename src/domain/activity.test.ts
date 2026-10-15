@@ -215,6 +215,40 @@ describe('matchActivities', () => {
     expect(outcome.state === 'ambiguous' && outcome.candidates.map((c) => c.session.id)).toEqual(['speed', 'threshold', 'easy'])
   })
 
+  it('offers the likeliest Session first and marks it: half an hour at an easy heart rate is the Easy run', () => {
+    const activity = run('2026-11-04T07:00:00-05:00', { minutes: 30, averageHeartRate: 132, maxHeartRate: 150 })
+    const [outcome] = matchActivities(program, [activity], [], [])
+    expect(outcome.state === 'ambiguous' && outcome.candidates.map((c) => c.session.id)).toEqual(['easy', 'speed', 'threshold'])
+    expect(outcome.state === 'ambiguous' && outcome.guess?.session.id).toBe('easy')
+  })
+
+  it('goes by duration alone when the watch has no heart rate', () => {
+    const activity = run('2026-11-04T07:00:00-05:00', { minutes: 25, averageHeartRate: null, maxHeartRate: null })
+    const [outcome] = matchActivities(program, [activity], [], [])
+    expect(outcome.state === 'ambiguous' && outcome.guess?.session.id).toBe('easy')
+  })
+
+  it('orders a hard 45 minutes Threshold before Speed, but guesses nothing that close', () => {
+    const activity = run('2026-11-04T07:00:00-05:00', { minutes: 45, averageHeartRate: 160, maxHeartRate: 182 })
+    const [outcome] = matchActivities(program, [activity], [], [])
+    expect(outcome.state === 'ambiguous' && outcome.candidates.map((c) => c.session.id)).toEqual(['threshold', 'speed', 'easy'])
+    expect(outcome.state === 'ambiguous' && outcome.guess).toBeNull()
+  })
+
+  it('guesses nothing when nothing tells them apart, keeping the Bucket order', () => {
+    const activity = run('2026-11-04T07:00:00-05:00', { minutes: 45, averageHeartRate: null, maxHeartRate: null })
+    const [outcome] = matchActivities(program, [activity], [], [])
+    expect(outcome.state === 'ambiguous' && outcome.candidates.map((c) => c.session.id)).toEqual(['speed', 'threshold', 'easy'])
+    expect(outcome.state === 'ambiguous' && outcome.guess).toBeNull()
+  })
+
+  it('reads heart rate against the highest the watch has seen: 150 is easy for a heart that reaches 205', () => {
+    const activity = run('2026-11-04T07:00:00-05:00', { minutes: 35, averageHeartRate: 150, maxHeartRate: 160 })
+    const race = run('2026-10-31T09:00:00-04:00', { maxHeartRate: 205 })
+    const outcome = matchActivities(program, [race, activity], [], []).find((o) => o.activity.id === activity.id)!
+    expect(outcome.state === 'ambiguous' && outcome.guess?.session.id).toBe('easy')
+  })
+
   it('asks between two run Sessions both logged that day', () => {
     const activity = run('2026-11-04T07:00:00-05:00')
     const [outcome] = matchActivities(program, [activity], [log('speed', '2026-11-04'), log('easy', '2026-11-04')], [])

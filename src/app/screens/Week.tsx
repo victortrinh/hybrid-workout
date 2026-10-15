@@ -9,11 +9,12 @@ import { clock, type RunContext } from '../../domain/paces'
 import { describeExercise, describeSession, SESSION_TYPES } from '../../domain/program/describe'
 import type { Program, Session, Week } from '../../domain/program/types'
 import type { PainReport } from '../../domain/pain'
+import type { PainSuggestion } from '../../domain/suggestion'
 import type { WorkingWeights } from '../../domain/weights'
 import { outsideWeekLine } from '../coachCopy'
 import { lineAction, primaryAction } from '../components/actions'
 import { LaneChip } from '../components/LaneChip'
-import { asksPain, PAIN_FREE, PainStep, type PainAtStart } from '../components/PainStep'
+import { asksPain, PAIN_FREE, painSuggestionFor, PainStep, type PainAtStart } from '../components/PainStep'
 import { longDay, nb, shortDay, STATUS_LABEL, weekRange } from '../format'
 import { logPath, SCREEN_PATH, weekPath } from '../router'
 import { weekMark } from './Plan'
@@ -138,6 +139,7 @@ export function WeekScreen({
                 asking={asking === session.id}
                 refocus={dismissed === session.id}
                 standing={day.pain?.report ?? null}
+                painSuggestion={painSuggestionFor(day.suggestions, day.pain?.report ?? null)}
                 onAsk={(ask) => {
                   setAsking(ask ? session.id : null)
                   setDismissed(ask ? null : session.id)
@@ -188,6 +190,7 @@ function SessionActions({
   asking,
   refocus,
   standing,
+  painSuggestion,
   onAsk,
   onStart,
 }: {
@@ -204,13 +207,15 @@ function SessionActions({
   refocus: boolean
   /** The Pain report standing now: above 0, Start asks whether it still hurts. */
   standing: PainReport | null
+  /** Its pain Suggestion: once decided, Same starts with that. */
+  painSuggestion: PainSuggestion | null
   onAsk: (asking: boolean) => void
   onStart: (pain: PainAtStart) => void
 }) {
   if (asking && !live && standing) {
     return (
       <div className="mt-4 border-t-2 border-ink pt-3.5">
-        <PainStep standing={standing} onAnswer={onStart} onCancel={() => onAsk(false)} />
+        <PainStep standing={standing} suggestion={painSuggestion} onAnswer={onStart} onCancel={() => onAsk(false)} />
       </div>
     )
   }

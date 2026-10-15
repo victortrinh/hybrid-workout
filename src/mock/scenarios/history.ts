@@ -13,7 +13,7 @@ import type { IntervalLog, LoggedStatus, SessionLog, StationPart } from '../../d
 import type { PainArea, PainReport } from '../../domain/pain'
 import { latestFiveKTest, trainingPaces, type Environment } from '../../domain/paces'
 import { program } from '../../domain/program/program'
-import type { LiftId, Session, SessionType } from '../../domain/program/types'
+import type { LiftId, Session, SessionType, StationId } from '../../domain/program/types'
 import { DEFAULT_SETTINGS, environmentOn } from '../../domain/settings'
 import type { Decision, SuggestionDecision } from '../../domain/suggestion'
 import { strengthState } from '../../domain/weights'
@@ -33,6 +33,18 @@ const CALIBRATED: Record<LiftId, number> = {
   'seated-calf-raise': 70,
   'standing-calf-raise-machine': 140,
   'seated-calf-raise-machine': 90,
+}
+
+/** A Race simulation's Station splits at race volume: a 1:15 Men's Open athlete. Half volume takes half. */
+const STATION_SECONDS: Record<StationId, number> = {
+  skierg: 255,
+  'sled-push': 190,
+  'sled-pull': 230,
+  'burpee-broad-jumps': 280,
+  row: 260,
+  'farmers-carry': 110,
+  'sandbag-lunges': 270,
+  'wall-balls': 360,
 }
 
 /** What a Session of each type usually feels like overall. */
@@ -189,15 +201,16 @@ function build(
     const timed = blocks.map((b, i) => ({ b, i })).filter(({ b }) => b.round !== null)
     const rounds = Math.max(...timed.map(({ b }) => b.round!))
     const reached = partial ? Math.ceil(rounds * 0.6) : rounds
-    const seconds = (kind: string) =>
-      options.splitSeconds ?? (kind === 'round' ? 540 : kind === 'distance' ? 285 : 260)
+    const seconds = (b: LiveBlock) =>
+      options.splitSeconds ??
+      (b.kind === 'round' ? 540 : b.kind === 'distance' ? 285 : session.type === 'race-simulation' ? simulationSplit(b) : 260)
     const finished = timed.filter(({ b }) => b.round! <= reached)
     // A HYROX round is timed leg by leg; the round is what they add up to.
     const legs = finished.flatMap(({ b, i }) => roundLegs(b).map((part) => ({ block: i, seconds: legSeconds(b, part) })))
     const roundSeconds = (i: number) => legs.filter((l) => l.block === i).reduce((sum, l) => sum + l.seconds, 0)
     const splits = finished.map(({ b, i }) => ({
       block: i,
-      seconds: b.kind === 'round' && options.splitSeconds === undefined ? roundSeconds(i) : seconds(b.kind),
+      seconds: b.kind === 'round' && options.splitSeconds === undefined ? roundSeconds(i) : seconds(b),
     }))
     const live = { ...startRun({ week, session, date, environment }, 0), splits, legs }
     return { ...done, environment, stations: stationLogs(live) }
@@ -218,6 +231,15 @@ function build(
     intervals,
     resultSeconds: session.type === '5k-test' && status === 'done' ? (options.resultSeconds ?? FIVE_K[week] ?? 1380) : null,
   }
+}
+
+/** A Race simulation Station's split, by how much of race volume it asks for. */
+function simulationSplit(block: LiveBlock): number {
+  const station = block.stations[0]
+  if (!station) return 260
+  const race = program.stations[station.station].raceLoad
+  const share = race.meters && station.meters ? station.meters / race.meters : race.reps && station.reps ? station.reps / race.reps : 1
+  return Math.round(STATION_SECONDS[station.station] * share)
 }
 
 const paces = (logs: SessionLog[], date: LocalDate) => {

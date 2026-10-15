@@ -11,6 +11,7 @@ import {
   liftsStatus,
   logSet,
   predictedLiftsRpe,
+  rpeChoices,
   restLeft,
   setLoad,
   setReps,
@@ -46,8 +47,6 @@ export interface LiftsFinish {
   rpe: number
 }
 
-/** A set's RPE, one tap: easy enough for a ramp set, up to nothing left. */
-const SET_RPES = [5, 6, 7, 8, 9, 10]
 
 const stepClass =
   'grid size-11 cursor-pointer place-items-center rounded-sm shadow-[inset_0_0_0_2px_var(--edge)] hover:bg-sunk disabled:cursor-default disabled:opacity-40 data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-link'
@@ -395,7 +394,7 @@ function RestBar({
           }}
           className="mt-3 grid grid-cols-6 gap-1.5"
         >
-          {SET_RPES.map((v) => (
+          {rpeChoices(exercise.rpe, rpe).map((v) => (
             <Radio key={v} value={String(v)} autoFocus={v === rpe} className={fieldToggle}>
               {v}
             </Radio>
@@ -650,7 +649,7 @@ function SetFeel({
         <span aria-hidden="true" className="mr-0.5 text-[14px] font-bold text-muted">
           RPE
         </span>
-        {SET_RPES.map((v) => (
+        {rpeChoices(exercise.rpe, set.rpe).map((v) => (
           <Radio key={v} value={String(v)} className={toggleClass}>
             {v}
           </Radio>

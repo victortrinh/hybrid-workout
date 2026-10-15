@@ -30,12 +30,14 @@ import {
   type SpeedUnit,
 } from '../../domain/paces'
 import type { PainArea } from '../../domain/pain'
+import { sessionRpe } from '../../domain/live'
 import { describeSession } from '../../domain/program/describe'
 import type { Session, Week } from '../../domain/program/types'
 import { outsideWeekLine } from '../coachCopy'
 import { Icon } from '../components/Icons'
 import { answered, PainFields, type PainAnswer } from '../components/PainFields'
 import { Segmented } from '../components/Segmented'
+import { OverallRpe } from './liveUi'
 import { activitySummary, km, longDay, nb, shortWeekday, STATUS_LABEL, timeOfDay } from '../format'
 import { navigate, SCREEN_PATH, weekPath } from '../router'
 
@@ -105,7 +107,9 @@ export function LogAfter({
   const [minutes, setMinutes] = useState(existing?.minutes ?? activity?.minutes ?? session.minutes)
   /** The treadmill console's distance in its km or mi; NaN while empty. */
   const [distance, setDistance] = useState(consoleDistance(existing?.distanceMeters ?? null, unit))
-  const [rpe, setRpe] = useState<number | null>(existing?.rpe ?? null)
+  /** From the watch, Overall RPE starts on the Coach's guess, as Live's finish sheet does. */
+  const [predicted] = useState(() => (activity && !existing ? sessionRpe(session) : null))
+  const [rpe, setRpe] = useState<number | null>(existing?.rpe ?? predicted)
   const [notes, setNotes] = useState(existing?.notes ?? '')
   const [time, setTime] = useState(existing?.resultSeconds ? clock(existing.resultSeconds) : '')
   /** Null follows the month's default for the chosen day. */
@@ -324,23 +328,7 @@ export function LogAfter({
               </NumberField>
             )}
 
-            <RadioGroup
-              value={rpe === null ? null : String(rpe)}
-              onChange={(v) => setRpe(Number(v))}
-              className="grid gap-2"
-            >
-              <Label className={groupLabel}>Overall RPE</Label>
-              <div className="grid grid-cols-5 gap-1.5">
-                {Array.from({ length: 10 }, (_, i) => String(i + 1)).map((v) => (
-                  <Radio key={v} value={v} className={toggleClass}>
-                    {v}
-                  </Radio>
-                ))}
-              </div>
-              <Text slot="description" className="text-body-quiet text-muted">
-                The whole Session. 7 is about three left; 10 is nothing left.
-              </Text>
-            </RadioGroup>
+            <OverallRpe value={rpe} missing={false} predicted={predicted} onChange={setRpe} />
           </>
         )}
 

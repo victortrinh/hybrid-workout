@@ -26,6 +26,8 @@ import {
   nextBlock,
   parseLiveRun,
   pause,
+  predictedRpe,
+  sessionRpe,
   resume,
   startRun,
   stationLogs,
@@ -894,5 +896,12 @@ describe('parseLiveRun for HYROX', () => {
     const parsed = parseLiveRun(JSON.parse(JSON.stringify(old)))!
     expect(parsed.legs).toEqual([])
     expect(currentLeg(parsed)).toBe(0)
+  })
+})
+
+describe('sessionRpe', () => {
+  it('guesses a Session’s Overall RPE as Live’s finish sheet does, for every Session of a Week', () => {
+    for (const s of findWeek(program, 3)!.sessions) expect(sessionRpe(s)).toBe(predictedRpe(start(s)))
+    expect(sessionRpe(session(3, 'easy'))).toBeLessThan(sessionRpe(session(3, 'speed')))
   })
 })
