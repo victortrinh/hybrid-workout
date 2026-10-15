@@ -5,6 +5,8 @@ import type { LoggedStatus, SessionLog } from './log'
 import {
   clock,
   clockInput,
+  consoleDistance,
+  consoleMeters,
   currentPaces,
   formatPace,
   latestFiveKTest,
@@ -132,6 +134,15 @@ describe('units', () => {
     expect(speedFor(292, 'mph')).toBe(7.7)
     expect(speedFor(360, 'kmh')).toBe(10)
     expect(speedFor(360, 'mph')).toBe(6.2)
+  })
+
+  it('reads a console distance in the treadmill units and stores meters', () => {
+    expect(consoleMeters(5, 'kmh')).toBe(5000)
+    expect(consoleMeters(3.1, 'mph')).toBe(4989)
+    expect(consoleMeters(Number.NaN, 'mph')).toBeNull()
+    expect(consoleDistance(5000, 'kmh')).toBe(5)
+    expect(consoleDistance(4989, 'mph')).toBe(3.1)
+    expect(consoleDistance(null, 'mph')).toBeNaN()
   })
 
   it('reads and writes clock times', () => {

@@ -55,7 +55,7 @@ export type LiveBlockKind =
   | 'round'
   /** One Station of a Race simulation, timed on its own. */
   | 'station'
-  /** HYROX's Set up: every Station at its load, on a stopwatch that's never active time. */
+  /** HYROX's Set up: every Station with a load, at it, on a stopwatch that's never active time. */
   | 'setup'
 
 /** A Station as a round prescribes it, or as it was actually done once changed. */
@@ -111,7 +111,17 @@ export function liveBlocks(session: Session): LiveBlock[] {
 
     if (block.setup) {
       return [
-        { ...base, name: block.name, kind: 'setup', seconds: null, lane, stations: block.exercises.flatMap(liveStation), effort: null, work: false },
+        {
+          ...base,
+          name: block.name,
+          kind: 'setup',
+          seconds: null,
+          lane,
+          stations: block.exercises.flatMap(liveStation),
+          effort: null,
+          work: false,
+          detail: block.note ? [block.note] : [],
+        },
       ]
     }
 

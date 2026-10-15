@@ -18,7 +18,17 @@ import type { Activity } from '../../domain/activity'
 import { addDays, daysBetween, type LocalDate } from '../../domain/calendar'
 import { nowMs } from '../../domain/clock'
 import { DISTANCE_METERS, LOGGED_STATUSES, logDays, logFor, NOTES_MAX, type LoggedStatus, type SessionLog } from '../../domain/log'
-import { clock, clockInput, FIVE_K_SECONDS, parseClock, type Environment } from '../../domain/paces'
+import {
+  clock,
+  clockInput,
+  consoleDistance,
+  consoleMeters,
+  DISTANCE_UNIT,
+  FIVE_K_SECONDS,
+  parseClock,
+  type Environment,
+  type SpeedUnit,
+} from '../../domain/paces'
 import type { PainArea } from '../../domain/pain'
 import { describeSession } from '../../domain/program/describe'
 import type { Session, Week } from '../../domain/program/types'
@@ -61,6 +71,7 @@ export function LogAfter({
   onPain,
   activity,
   treadmill,
+  unit,
 }: {
   week: Week
   session: Session
@@ -77,6 +88,8 @@ export function LogAfter({
   activity: Activity | null
   /** Whether a run of the watch's was on a treadmill. */
   treadmill: (activity: Activity) => boolean
+  /** Settings → Treadmill units: the console reads km on km/h, mi on mph. */
+  unit: SpeedUnit
 }) {
   const existing = logFor(logs, week.number, session.id)
   const { days, outside, when } = logDays(week.startDate, loggableUntil, today)
@@ -90,8 +103,8 @@ export function LogAfter({
     activity && (days.includes(activity.date) || activity.date === outside) && daysBetween(activity.date, today) >= 0
   const [date, setDate] = useState<LocalDate | null>(existing?.date ?? (watchDay ? activity.date : today))
   const [minutes, setMinutes] = useState(existing?.minutes ?? activity?.minutes ?? session.minutes)
-  /** The treadmill console's distance in km; NaN while empty. */
-  const [consoleKm, setConsoleKm] = useState(existing?.distanceMeters ? existing.distanceMeters / 1000 : NaN)
+  /** The treadmill console's distance in its km or mi; NaN while empty. */
+  const [distance, setDistance] = useState(consoleDistance(existing?.distanceMeters ?? null, unit))
   const [rpe, setRpe] = useState<number | null>(existing?.rpe ?? null)
   const [notes, setNotes] = useState(existing?.notes ?? '')
   const [time, setTime] = useState(existing?.resultSeconds ? clock(existing.resultSeconds) : '')
@@ -134,9 +147,7 @@ export function LogAfter({
       distanceMeters: !trained
         ? null
         : onTreadmill
-          ? Number.isFinite(consoleKm)
-            ? Math.round(consoleKm * 1000)
-            : null
+          ? consoleMeters(distance, unit)
           : (existing?.distanceMeters ?? null),
       intervals: trained ? (existing?.intervals ?? []) : [],
       sets: trained ? (existing?.sets ?? []) : [],
@@ -294,15 +305,15 @@ export function LogAfter({
 
             {onTreadmill && (
               <NumberField
-                value={consoleKm}
-                onChange={setConsoleKm}
-                minValue={DISTANCE_METERS[0] / 1000}
-                maxValue={DISTANCE_METERS[1] / 1000}
+                value={distance}
+                onChange={setDistance}
+                minValue={Math.ceil(consoleDistance(DISTANCE_METERS[0], unit) * 10) / 10}
+                maxValue={Math.floor(consoleDistance(DISTANCE_METERS[1], unit))}
                 step={0.01}
                 formatOptions={{ maximumFractionDigits: 2 }}
                 className="grid gap-2"
               >
-                <Label className={groupLabel}>Console distance, km</Label>
+                <Label className={groupLabel}>Console distance, {DISTANCE_UNIT[unit]}</Label>
                 <Input
                   inputMode="decimal"
                   className="h-11 w-32 rounded-sm bg-paper px-3 text-center text-[17px] font-bold shadow-[inset_0_0_0_2px_var(--edge)] outline-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-link"

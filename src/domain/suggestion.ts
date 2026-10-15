@@ -9,6 +9,7 @@
 import { localDate, type LocalDate } from './calendar'
 import type { PainArea, PainLevel } from './pain'
 import type { LiftId, SessionType } from './program/types'
+import type { ShortSleepCut } from './recovery'
 
 export const DECISIONS = ['open', 'accepted', 'kept'] as const
 
@@ -80,6 +81,8 @@ export interface RecoverySuggestion {
   sessionId: string
   /** The morning: the change is for this day only. */
   date: LocalDate
+  /** What the short-sleep rule takes off the Session if the athlete keeps it; null when only RPE is capped. */
+  cut: ShortSleepCut | null
   trigger: {
     sleepMinutes: number
     hrvMs: number

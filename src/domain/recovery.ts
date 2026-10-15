@@ -2,13 +2,13 @@
  * Recovery data and the rules that read it (docs/training-plan.md, Rules, 3).
  *
  * One night per morning, sent by the iOS Shortcut from Apple Health,
- * filtered to the ring (ADR-0003). Sleep under 6 hours takes one rep off and
- * caps RPE for that day's Hard session; HRV at least 15% under its 7-day mean
+ * filtered to the ring (ADR-0003). Sleep under 6 hours takes a rep, set,
+ * round or Station off and caps RPE for that day's Hard session; HRV at least 15% under its 7-day mean
  * on top of that is a Suggestion to make the day easy. No night, no change:
  * the athlete is never asked to type it in.
  */
 import { addDays, localDate, localDateIn, type LocalDate } from './calendar'
-import type { Block, Exercise, Prescription, Range, RunEffort, Session } from './program/types'
+import type { Block, Prescription, Range, RunEffort, Session } from './program/types'
 
 export interface RecoveryNight {
   /** The morning the night ends on, in America/Toronto: the day it changes. */
@@ -24,7 +24,7 @@ export interface RecoveryNight {
   receivedAt: string
 }
 
-/** Sleep under this is short: one rep fewer and an RPE cap. */
+/** Sleep under this is short: a little less of the main Block and an RPE cap. */
 export const SHORT_SLEEP_MINUTES = 6 * 60
 /** The ceiling on a short-sleep day's Hard session. */
 export const SLEEP_RPE_CAP = 7
@@ -78,52 +78,112 @@ export function readout(nights: RecoveryNight[], date: LocalDate): Readout | nul
 // ---------------------------------------------------------------------------
 // What the rules do to a Session.
 
+/** What the short-sleep rule takes off, by Session type. */
+export type ShortSleepCut = 'rep' | 'set' | 'round' | 'station'
+
+/** How the Coach names a cut: "one round fewer". */
+export const CUT_NOUN: Record<ShortSleepCut, string> = { rep: 'rep', set: 'set', round: 'round', station: 'Station' }
+
 /**
- * The short-sleep rule: one rep fewer in the main Block and nothing past
- * RPE 7. A 5K test and anything pinned to a day (the race) stay as they
- * are: a capped test isn't a test.
+ * What the short-sleep rule takes off this Session: a rep of the intervals,
+ * a set of every main lift on a Strength day, the last round of a HYROX
+ * session, the last Run and Station of a Race simulation. Null when there is
+ * only one to begin with: then the RPE cap is the whole change.
+ */
+export function shortSleepCut(session: Session): ShortSleepCut | null {
+  const main = session.blocks.filter((b) => b.main)
+  const rxs = main.flatMap((b) => b.exercises).map((e) => e.prescription)
+  switch (session.type) {
+    case 'hyrox':
+      return main.length > 1 ? 'round' : null
+    case 'race-simulation':
+      return main.length > 1 ? 'station' : null
+    case 'strength':
+      return rxs.some((rx) => rx.kind === 'sets' && rx.sets > 1) ? 'set' : null
+    default:
+      return rxs.some((rx) => rx.kind === 'intervals' && rx.reps > 1) ? 'rep' : null
+  }
+}
+
+/**
+ * The short-sleep rule: the main Block loses what `shortSleepCut` names and
+ * nothing goes past RPE 7. A 5K test and anything pinned to a day (the race)
+ * stay as they are: a capped test isn't a test.
  */
 export function shortSleepAdapted(session: Session, night: RecoveryNight): Session {
   if (session.type === '5k-test' || session.date) return session
+  const cut = shortSleepCut(session)
+  const what = cut ? `one ${CUT_NOUN[cut]} fewer, nothing` : 'nothing'
+  const why = `Short sleep (${sleepText(night.sleepMinutes)}): ${what} past RPE ${SLEEP_RPE_CAP}.`
+  const note = session.note ? `${why} ${session.note}` : why
+  if (cut === 'round' || cut === 'station') return { ...lastMainDropped(session, cut), note }
+
   let saved = 0
   const blocks = session.blocks.map((block): Block => {
     if (!block.main) return block
     const intervals = block.exercises.find((e) => e.prescription.kind === 'intervals')?.prescription
     let minutes = block.minutes
-    if (intervals?.kind === 'intervals' && minutes !== undefined && intervals.reps > 1) {
+    if (cut === 'rep' && intervals?.kind === 'intervals' && minutes !== undefined && intervals.reps > 1) {
       minutes = Math.round((minutes * (intervals.reps - 1)) / intervals.reps)
       saved += block.minutes! - minutes
     }
-    return { ...block, minutes, exercises: block.exercises.map(oneRepFewer) }
+    return { ...block, minutes, exercises: block.exercises.map((e) => ({ ...e, prescription: capped(e.prescription, cut) })) }
   })
   const mainReps = session.blocks
     .filter((b) => b.main)
     .flatMap((b) => b.exercises)
     .map((e) => e.prescription)
     .find((rx) => rx.kind === 'intervals')?.reps
-  const why = `Short sleep (${sleepText(night.sleepMinutes)}): one rep fewer, nothing past RPE ${SLEEP_RPE_CAP}.`
   return {
     ...session,
     headline:
-      mainReps === undefined ? session.headline : session.headline.replace(/^\d+(?= × )/, String(Math.max(1, mainReps - 1))),
+      cut !== 'rep' || mainReps === undefined
+        ? session.headline
+        : session.headline.replace(/^\d+(?= × )/, String(Math.max(1, mainReps - 1))),
     minutes: session.minutes - saved,
-    note: session.note ? `${why} ${session.note}` : why,
+    note,
     blocks,
   }
 }
 
-function oneRepFewer(exercise: Exercise): Exercise {
-  return { ...exercise, prescription: capped(exercise.prescription) }
+/**
+ * HYROX and Race simulation: the last main Block goes, and its minutes with
+ * it. A Block the Program doesn't time takes its share of the main minutes.
+ * The Set up keeps only the Stations the rounds still use.
+ */
+function lastMainDropped(session: Session, cut: 'round' | 'station'): Session {
+  const main = session.blocks.filter((b) => b.main)
+  const dropped = main.at(-1)!
+  const mainMinutes = session.minutes - session.blocks.filter((b) => !b.main).reduce((sum, b) => sum + (b.minutes ?? 0), 0)
+  const saved = dropped.minutes ?? Math.round(mainMinutes / main.length)
+  const left = main.length - 1
+  const kept = session.blocks
+    .filter((b) => b !== dropped)
+    .map((b): Block => (b.main ? { ...b, exercises: b.exercises.map((e) => ({ ...e, prescription: capped(e.prescription, cut) })) } : b))
+  const used = new Set(
+    kept.filter((b) => b.main).flatMap((b) => b.exercises.flatMap((e) => (e.prescription.kind === 'station' ? [e.prescription.station] : []))),
+  )
+  const blocks = kept.map((b): Block =>
+    b.setup ? { ...b, exercises: b.exercises.filter((e) => e.prescription.kind !== 'station' || used.has(e.prescription.station)) } : b,
+  )
+  return {
+    ...session,
+    headline: /^\d+ rounds$/.test(session.headline) ? `${left} ${left === 1 ? 'round' : 'rounds'}` : session.headline,
+    minutes: session.minutes - saved,
+    blocks,
+  }
 }
 
-function capped(rx: Prescription): Prescription {
+/** One Prescription on a short night: capped at RPE 7, less a rep or a set where that is the cut. */
+function capped(rx: Prescription, cut: ShortSleepCut | null): Prescription {
   switch (rx.kind) {
     case 'intervals':
-      return { ...rx, reps: Math.max(1, rx.reps - 1), effort: cappedEffort(rx.effort) }
+      return { ...rx, reps: cut === 'rep' ? Math.max(1, rx.reps - 1) : rx.reps, effort: cappedEffort(rx.effort) }
     case 'sets':
       return {
         ...rx,
-        reps: typeof rx.reps === 'number' ? Math.max(1, rx.reps - 1) : fewer(rx.reps),
+        sets: cut === 'set' ? Math.max(1, rx.sets - 1) : rx.sets,
+        reps: cut === 'rep' ? (typeof rx.reps === 'number' ? Math.max(1, rx.reps - 1) : fewer(rx.reps)) : rx.reps,
         rpe: rx.rpe && cappedRange(rx.rpe),
         rpeCap: Math.min(rx.rpeCap ?? SLEEP_RPE_CAP, SLEEP_RPE_CAP),
       }

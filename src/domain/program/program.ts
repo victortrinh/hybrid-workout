@@ -574,19 +574,32 @@ const hyroxWarmUp: Block[] = [
 ]
 
 /**
- * Every Station the rounds use, once, in the order they come up, at the load
- * the first round asks for. They stay set up for the whole Session.
+ * Every Station the rounds load, once, in the order they come up, at the load
+ * the first round asks for. They stay set up for the whole Session. Stations
+ * with nothing to load (SkiErg, Row, Burpee broad jumps) are left out, and the
+ * note says so once.
  */
 function setUp(rounds: { stations: Exercise[] }[]): Block {
-  const seen = new Map<StationId, Exercise>()
+  const seen = new Map<StationId, Exercise | null>()
   for (const { prescription: rx } of rounds.flatMap((r) => r.stations)) {
     if (rx.kind !== 'station' || seen.has(rx.station)) continue
-    seen.set(rx.station, {
-      name: stations[rx.station].name,
-      prescription: { kind: 'station', station: rx.station, raceLoadPercent: rx.raceLoadPercent },
-    })
+    seen.set(
+      rx.station,
+      stations[rx.station].raceLoad.pounds === undefined
+        ? null
+        : {
+            name: stations[rx.station].name,
+            prescription: { kind: 'station', station: rx.station, raceLoadPercent: rx.raceLoadPercent },
+          },
+    )
   }
-  return { name: 'Set up', setup: true, exercises: [...seen.values()] }
+  const exercises = [...seen.values()].filter((e): e is Exercise => e !== null)
+  return {
+    name: 'Set up',
+    setup: true,
+    exercises,
+    ...(exercises.length < seen.size && { note: 'Nothing else to load.' }),
+  }
 }
 
 const hyroxCooldown: Block = {

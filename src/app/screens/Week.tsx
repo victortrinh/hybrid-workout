@@ -362,6 +362,7 @@ function SessionDetail({
                   </li>
                 ))}
               </ul>
+              {block.note && <p className="mt-3 text-body-quiet text-muted">{block.note}</p>}
               {[...users]
                 .filter(([, use]) => use.names.length > 1 && use.block === i)
                 .map(([sub, use]) => (

@@ -79,10 +79,12 @@ export interface Block {
   /** The Block that carries the Session's point (the intervals, the main lifts, the 5 km). */
   main?: boolean
   /**
-   * HYROX's Set up: every Station the Session uses, at its load, set up once
+   * HYROX's Set up: every Station the Session loads, at its load, set up once
    * before round 1. Untimed, and never in the Session's minutes or its Training load.
    */
   setup?: boolean
+  /** A line under the Block's Exercises: "Nothing else to load." */
+  note?: string
   exercises: Exercise[]
 }
 
