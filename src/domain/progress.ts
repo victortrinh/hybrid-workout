@@ -48,6 +48,8 @@ export interface WeekCompletion {
   /** Required Sessions Done or Partial, and how many there are. The Optional session doesn't count. */
   done: number
   required: number
+  /** Sessions Skipped or missed. */
+  missed: number
 }
 
 export interface WeekLoad {
@@ -130,6 +132,7 @@ export function weeklyCompletion(program: Program, logs: SessionLog[], today: Lo
         cells,
         done: required.filter((c) => c.state === 'done' || c.state === 'partial').length,
         required: required.length,
+        missed: cells.filter((c) => c.state === 'skipped' || c.state === 'missed').length,
       },
     ]
   })
