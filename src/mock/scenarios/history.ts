@@ -8,8 +8,8 @@ import { localDate, type LocalDate } from '../../domain/calendar'
 import { findWeek } from '../../domain/coach'
 import { DEFAULT_EQUIPMENT, equip, type Equipment } from '../../domain/equipment'
 import { startLifts } from '../../domain/lifts'
-import { liveBlocks, liveTarget, startRun, stationLogs, type LiveBlock } from '../../domain/live'
-import type { IntervalLog, LoggedStatus, SessionLog } from '../../domain/log'
+import { liveBlocks, liveTarget, roundLegs, startRun, stationLogs, type LiveBlock } from '../../domain/live'
+import type { IntervalLog, LoggedStatus, SessionLog, StationPart } from '../../domain/log'
 import type { PainArea, PainReport } from '../../domain/pain'
 import { latestFiveKTest, trainingPaces, type Environment } from '../../domain/paces'
 import { program } from '../../domain/program/program'
@@ -204,8 +204,15 @@ function build(
     const seconds = (b: LiveBlock) =>
       options.splitSeconds ??
       (b.kind === 'round' ? 540 : b.kind === 'distance' ? 285 : session.type === 'race-simulation' ? simulationSplit(b) : 260)
-    const splits = timed.filter(({ b }) => b.round! <= reached).map(({ b, i }) => ({ block: i, seconds: seconds(b) }))
-    const live = { ...startRun({ week, session, date, environment }, 0), splits }
+    const finished = timed.filter(({ b }) => b.round! <= reached)
+    // A HYROX round is timed leg by leg; the round is what they add up to.
+    const legs = finished.flatMap(({ b, i }) => roundLegs(b).map((part) => ({ block: i, seconds: legSeconds(b, part) })))
+    const roundSeconds = (i: number) => legs.filter((l) => l.block === i).reduce((sum, l) => sum + l.seconds, 0)
+    const splits = finished.map(({ b, i }) => ({
+      block: i,
+      seconds: b.kind === 'round' && options.splitSeconds === undefined ? roundSeconds(i) : seconds(b),
+    }))
+    const live = { ...startRun({ week, session, date, environment }, 0), splits, legs }
     return { ...done, environment, stations: stationLogs(live) }
   }
 
@@ -251,4 +258,25 @@ function acceptIncreases(so: History, log: SessionLog) {
 export function addDaysIso(date: string, days: number): string {
   const [y, m, d] = date.split('-').map(Number)
   return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10)
+}
+
+/** Seconds per metre, or per rep on the wall balls: an amateur's honest pace at each Station. */
+const LEG_PACE: Record<StationPart, number> = {
+  run: 0.3,
+  round: 0,
+  skierg: 0.25,
+  row: 0.24,
+  'sled-push': 3,
+  'sled-pull': 3.6,
+  'burpee-broad-jumps': 2.6,
+  'farmers-carry': 0.6,
+  'sandbag-lunges': 2.4,
+  'wall-balls': 2.7,
+}
+
+/** One leg of a HYROX round: its run at 5:00/km, or a Station at an amateur's pace. */
+function legSeconds(block: LiveBlock, part: StationPart): number {
+  const station = block.stations.find((s) => s.station === part)
+  const amount = part === 'run' ? (block.meters ?? 0) : (station?.reps ?? station?.meters ?? 0)
+  return Math.round(LEG_PACE[part] * amount)
 }
