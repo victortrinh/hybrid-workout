@@ -182,12 +182,14 @@ test('a full Strength session: a load change, RPEs, a missed rep, then the Coach
   ])
   expect(saved.at(-1)).toEqual({ exercise: 5, set: 2, lift: null, pounds: null, reps: 6, rpe: 7 })
 
-  // Every RDL rep at RPE 7: the Coach suggests +5 lb, and only Accept moves it.
-  const suggestion = page.getByRole('region', { name: 'Coach’s Suggestion' }).filter({ hasText: 'RDL' })
-  await expect(suggestion).toContainText('RDL: every rep, nothing harder than RPE 7. 135 lb was a warm-up. 140 lb next time.')
-  await expect(suggestion).toContainText('Week 3: 3 × 6 at 135 lb, top RPE 7 · +5 lb')
-  await suggestion.getByRole('button', { name: 'Accept' }).click()
-  await expect(suggestion).toContainText('RDL is 140 lb now. Same face, more plates.')
+  // Every RDL rep at RPE 7: +5 lb, in the one lift Suggestion, and only Accept moves it.
+  const lifts = page.getByRole('region', { name: 'Coach’s Suggestion: lifts' })
+  await expect(lifts).toContainText('Lifts: +5 lb on all four. Every rep, nothing past RPE 7.')
+  await expect(lifts).toContainText('Week 3: RDL, ')
+  await lifts.getByRole('button', { name: 'One by one' }).click()
+  await lifts.getByRole('button', { name: 'Accept RDL 135 → 140 lb' }).click()
+  await expect(lifts.getByRole('listitem').filter({ hasText: 'RDL' })).toContainText('RDL 135 → 140 lb · accepted')
+  await expect(lifts.getByRole('button', { name: 'Accept all' })).toBeVisible()
 })
 
 test('as prescribed, a Strength session is one tap per set plus three: Start, Finish, Save', async ({ page }) => {
