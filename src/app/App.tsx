@@ -9,7 +9,7 @@ import { liveLog, startRun } from '../domain/live'
 import { logDays, logFor, type SessionLog } from '../domain/log'
 import type { Environment, RunContext } from '../domain/paces'
 import type { PainArea, PainReport } from '../domain/pain'
-import { mergeDecisions, painId } from '../domain/suggestion'
+import { mergeDecisions, painId, type Decision, type Suggestion } from '../domain/suggestion'
 import type { Session } from '../domain/program/types'
 import { environmentOn } from '../domain/settings'
 import { program } from '../domain/program/program'
@@ -153,7 +153,7 @@ export function App() {
     const now = nowMs()
     setLive(
       started.type === 'strength'
-        ? startLifts({ week, session: started, date: today, weights: day.workingWeights }, now)
+        ? startLifts({ week, session: started, date: today, weights: day.workingWeights, suggestions: after.suggestions }, now)
         : startRun({ week, session: started, date: today, environment: runContext(week, session).environment }, now),
     )
     navigate(SCREEN_PATH.live)
@@ -165,6 +165,11 @@ export function App() {
     save({ ...make(existing?.id ?? crypto.randomUUID(), editedAt(existing?.updatedAt)), notes: existing?.notes ?? null })
     setLive(null)
     navigate(SCREEN_PATH.today)
+  }
+  /** Accept or Keep, on Today or at the start of a Live Strength session: the same decision. */
+  const decideSuggestion = (suggestion: Suggestion, decision: Decision) => {
+    const previous = decisions.find((d) => d.id === suggestion.id)
+    decide({ id: suggestion.id, decision, date: today, updatedAt: editedAt(previous?.updatedAt) })
   }
   const route = useRoute()
   /** The watch's workout attached to a Session, from the same matching Today shows. */
@@ -198,6 +203,7 @@ export function App() {
             onSaveLifts={(lifts, finish) =>
               saveLive((id, updatedAt) => liftsLog(lifts, nowMs(), { ...finish, id, updatedAt }))
             }
+            onDecide={decideSuggestion}
           />
         </main>
       </RouterProvider>
@@ -224,10 +230,7 @@ export function App() {
               pending={pending}
               error={error ?? decisionError ?? answerError}
               onPick={(weekNumber, sessionId) => pick(weekNumber, sessionId, today)}
-              onDecide={(suggestion, decision) => {
-                const previous = decisions.find((d) => d.id === suggestion.id)
-                decide({ id: suggestion.id, decision, date: today, updatedAt: editedAt(previous?.updatedAt) })
-              }}
+              onDecide={decideSuggestion}
               runContext={runContext}
               onEnvironment={setEnvironment}
               settings={settings}

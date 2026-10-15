@@ -4,6 +4,7 @@ import { findWeek } from './coach'
 import { DEFAULT_EQUIPMENT, equip } from './equipment'
 import {
   addSet,
+  answerPrompt,
   currentSet,
   endRest,
   finish,
@@ -21,6 +22,8 @@ import {
 } from './lifts'
 import { parseSessionLog } from './log'
 import { program } from './program/program'
+import type { Suggestion, WorkingWeightSuggestion } from './suggestion'
+import type { LiftId } from './program/types'
 import type { WorkingWeights } from './weights'
 
 const T0 = Date.parse('2026-11-04T17:00:00Z')
@@ -34,10 +37,26 @@ const WEIGHTS: WorkingWeights = {
   'seated-calf-raise': 65,
 }
 
-const start = (week: number, weights: WorkingWeights = WEIGHTS): LiveLifts => {
+const start = (week: number, weights: WorkingWeights = WEIGHTS, suggestions: Suggestion[] = []): LiveLifts => {
   const session = equip(findWeek(program, week)!.sessions.find((s) => s.id === 'strength')!, DEFAULT_EQUIPMENT)
-  return startLifts({ week, session, date: localDate('2026-11-04'), weights }, T0)
+  return startLifts({ week, session, date: localDate('2026-11-04'), weights, suggestions }, T0)
 }
+
+/** A Working weight Suggestion from last Week's Strength session. */
+const suggest = (lift: LiftId, from: number, to: number, decision: WorkingWeightSuggestion['decision'] = 'open') =>
+  ({
+    id: `ww-${lift}-w2`,
+    kind: 'working-weight',
+    week: 2,
+    sessionId: 'strength',
+    lift,
+    date: localDate('2026-10-29'),
+    from: { pounds: from },
+    to: { pounds: to },
+    trigger: { reason: 'all-reps-easy', weeks: [2], sets: 3, reps: 5, pounds: from, topRpe: 7 },
+    decision,
+    decidedOn: null,
+  }) satisfies WorkingWeightSuggestion
 
 /** Logs every set still open, in order, at the target. */
 function logAll(lifts: LiveLifts): LiveLifts {
@@ -95,6 +114,48 @@ describe('startLifts', () => {
       [2, '4', 'RPE 7–8'],
       [2, '4', 'RPE 7–8'],
     ])
+  })
+})
+
+describe('Working weight prompts', () => {
+  it('asks about each open Suggestion for a lift in the session', () => {
+    const squat = suggest('back-squat', 185, 190)
+    const rdl = suggest('romanian-deadlift', 135, 140)
+    expect(start(3, WEIGHTS, [squat, rdl]).prompts).toEqual([squat, rdl])
+  })
+
+  it('leaves out decided Suggestions and lifts not in the session', () => {
+    const decided = suggest('back-squat', 185, 190, 'kept')
+    const elsewhere = suggest('standing-calf-raise-machine', 45, 50)
+    expect(start(3, WEIGHTS, [decided, elsewhere]).prompts).toEqual([])
+  })
+
+  it('asks nothing during a calibration, a Deload or a Taper', () => {
+    const squat = suggest('back-squat', 185, 190)
+    expect(start(1, {}, [squat]).prompts).toEqual([])
+    expect(start(3, { 'romanian-deadlift': 135 }, [squat]).prompts).toEqual([])
+    expect(start(4, WEIGHTS, [squat]).prompts).toEqual([])
+    const taper = program.phases
+      .flatMap((p) => p.weeks)
+      .find((w) =>
+        w.sessions.some((s) => s.blocks.some((b) => b.exercises.some((e) => e.prescription.kind === 'sets' && e.prescription.load.kind === 'light'))),
+      )!.number
+    expect(start(taper, WEIGHTS, [squat]).prompts).toEqual([])
+  })
+
+  it('Accept moves every set of the lift to the new weight; Keep leaves them', () => {
+    const lifts = start(3, WEIGHTS, [suggest('back-squat', 185, 190), suggest('romanian-deadlift', 135, 140)])
+    const accepted = answerPrompt(lifts, 'ww-back-squat-w2', 'accepted')
+    expect(accepted.sets[0].map((s) => s.pounds)).toEqual([190, 190, 190])
+    expect(accepted.prompts.map((p) => p.id)).toEqual(['ww-romanian-deadlift-w2'])
+    const kept = answerPrompt(accepted, 'ww-romanian-deadlift-w2', 'kept')
+    expect(kept.sets[1].map((s) => s.pounds)).toEqual([135, 135, 135])
+    expect(kept.prompts).toEqual([])
+  })
+
+  it('never moves a set already logged', () => {
+    const lifts = logSet(start(3, WEIGHTS, [suggest('back-squat', 185, 190)]), 0, 0, at(0))
+    expect(answerPrompt(lifts, 'ww-back-squat-w2', 'accepted').sets[0].map((s) => s.pounds)).toEqual([185, 190, 190])
   })
 })
 
@@ -178,5 +239,10 @@ describe('parseLiveLifts', () => {
     expect(parseLiveLifts({ ...lifts, type: 'speed' })).toBeNull()
     expect(parseLiveLifts({ ...lifts, sets: [] })).toBeNull()
     expect(parseLiveLifts(null)).toBeNull()
+  })
+
+  it('reads a session stored before prompts as having none', () => {
+    const { prompts: _, ...stored } = start(3)
+    expect(parseLiveLifts(stored)?.prompts).toEqual([])
   })
 })
