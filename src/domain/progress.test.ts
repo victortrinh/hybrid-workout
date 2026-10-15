@@ -138,6 +138,30 @@ describe('weekly completion', () => {
     expect(three).toMatchObject({ done: 0, missed: 0 })
   })
 
+  it('agrees with Today: a Skipped Session is still open while its Week has days left', () => {
+    const logs = [
+      log(3, 'speed', '2026-11-02'),
+      log(3, 'strength', '2026-11-03', { status: 'partial' }),
+      log(3, 'hyrox', '2026-11-04', { status: 'skipped' }),
+      log(3, 'easy', '2026-11-04', { status: 'swapped' }),
+      log(3, 'threshold', '2026-11-05'),
+    ]
+    const during = weeklyCompletion(program, logs, localDate('2026-11-05')).at(-1)!
+    expect(during.cells.find((c) => c.session.id === 'hyrox')?.state).toBe('open')
+    expect(during).toMatchObject({ done: 3, required: 4, missed: 0 })
+
+    const after = weeklyCompletion(program, logs, localDate('2026-11-09')).find((w) => w.week === 3)!
+    expect(after.cells.find((c) => c.session.id === 'hyrox')?.state).toBe('skipped')
+    expect(after).toMatchObject({ done: 3, missed: 1 })
+  })
+
+  it('never counts the Optional session Skipped as a miss', () => {
+    const logs = [log(1, 'easy', '2026-10-20', { status: 'skipped' })]
+    const one = weeklyCompletion(program, logs, localDate('2026-11-04'))[0]
+    expect(one.cells.find((c) => c.session.id === 'easy')?.state).toBe('skipped')
+    expect(one.missed).toBe(4)
+  })
+
   it('is empty before Week 1 and stops at the last Week after the Program', () => {
     expect(weeklyCompletion(program, [], localDate('2026-10-13'))).toEqual([])
     expect(weeklyCompletion(program, [], localDate('2027-06-01')).at(-1)?.week).toBe(program.weekCount)

@@ -13,6 +13,7 @@ import estimates from './estimates'
 import firstLaunch from './firstLaunch'
 import hyroxBuild from './hyroxBuild'
 import midweekMixed from './midweekMixed'
+import raceMorning from './raceMorning'
 import raceWeek from './raceWeek'
 import rollover from './rollover'
 import type { Scenario } from './scenario'
@@ -33,6 +34,7 @@ export const SCENARIOS: readonly Scenario[] = [
   hyroxBuild,
   denseHistory,
   raceWeek,
+  raceMorning,
   afterRace,
   afterRaceUnlogged,
 ]

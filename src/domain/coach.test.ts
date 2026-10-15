@@ -275,7 +275,8 @@ describe('the Bucket', () => {
     const logs = [
       log(3, 'speed', '2026-11-02', 'done'),
       log(3, 'strength', '2026-11-02', 'partial'),
-      log(3, 'threshold', '2026-11-03', 'skipped'),
+      // Skipped today, so not offered again until tomorrow.
+      log(3, 'threshold', '2026-11-04', 'skipped'),
       log(3, 'hyrox', '2026-11-03', 'swapped'),
     ]
     const day = withLogs('2026-11-04', logs)
@@ -315,6 +316,76 @@ describe('Up next with Session logs', () => {
   it('moves past Skipped and Swapped Sessions too', () => {
     const logs = [log(3, 'speed', '2026-11-02', 'skipped'), log(3, 'strength', '2026-11-02', 'swapped')]
     expect(withLogs('2026-11-04', logs).upNext?.id).toBe('threshold')
+  })
+
+  describe('a Skipped Session while the Week has days left', () => {
+    const rest = [log(3, 'speed', '2026-11-02'), log(3, 'strength', '2026-11-03'), log(3, 'threshold', '2026-11-05')]
+
+    it('comes back as Up next once nothing untouched is left', () => {
+      const day = withLogs('2026-11-07', [...rest, log(3, 'hyrox', '2026-11-04', 'skipped')])
+      expect(day.upNext?.id).toBe('hyrox')
+      expect(day.rest).toBeNull()
+      expect(states(day).hyrox).toBe('next')
+    })
+
+    it('still counts as to do in the Bucket', () => {
+      const day = withLogs('2026-11-07', [...rest, log(3, 'hyrox', '2026-11-04', 'skipped')])
+      expect(day.bucket.filter((e) => e.toDo).map((e) => e.session.id)).toEqual(['hyrox', 'easy'])
+    })
+
+    it('waits behind Sessions not logged at all', () => {
+      const day = withLogs('2026-11-07', [rest[0], rest[1], log(3, 'threshold', '2026-11-04', 'skipped')])
+      expect(day.upNext?.id).toBe('hyrox')
+      const later = withLogs('2026-11-06', [rest[0], log(3, 'strength', '2026-11-03', 'skipped')])
+      expect(later.upNext?.id).toBe('threshold')
+    })
+
+    it('is not offered again the day it was Skipped', () => {
+      const logs = [...rest, log(3, 'easy', '2026-11-06'), log(3, 'hyrox', '2026-11-07', 'skipped')]
+      const day = withLogs('2026-11-07', logs)
+      expect(day.upNext).toBeNull()
+      expect(day.rest).toMatchObject({ kind: 'skipped-today', lastDay: false })
+      expect(withLogs('2026-11-08', logs).upNext?.id).toBe('hyrox')
+    })
+
+    it('closes the Week with a miss when Skipped on Sunday', () => {
+      const logs = [...rest, log(3, 'easy', '2026-11-06'), log(3, 'hyrox', '2026-11-08', 'skipped')]
+      const day = withLogs('2026-11-08', logs)
+      expect(day.rest).toMatchObject({ kind: 'skipped-today', lastDay: true })
+      expect(day.rest?.kind === 'skipped-today' && day.rest.sessions.map((s) => s.id)).toEqual(['hyrox'])
+    })
+
+    it('can be picked to do today', () => {
+      const day = withLogs('2026-11-07', [...rest, log(3, 'hyrox', '2026-11-07', 'skipped')], {
+        date: localDate('2026-11-07'),
+        week: 3,
+        sessionId: 'hyrox',
+      })
+      expect(day.upNext?.id).toBe('hyrox')
+    })
+
+    it('gives way to the Week done once it is made up', () => {
+      const logs = [
+        ...rest,
+        log(3, 'easy', '2026-11-06'),
+        log(3, 'hyrox', '2026-11-04', 'skipped', '2026-11-04T12:00:00.000Z'),
+        log(3, 'hyrox', '2026-11-07', 'done', '2026-11-07T12:00:00.000Z'),
+      ]
+      expect(withLogs('2026-11-07', logs).rest).toEqual({ kind: 'week-done' })
+    })
+  })
+
+  it('is never Week done while a required Session is Skipped', () => {
+    const logs = ['speed', 'strength', 'threshold', 'easy'].map((id) => log(3, id, '2026-11-02'))
+    const day = withLogs('2026-11-05', [...logs, log(3, 'hyrox', '2026-11-03', 'skipped')])
+    expect(day.rest).not.toEqual({ kind: 'week-done' })
+    expect(day.upNext?.id).toBe('hyrox')
+  })
+
+  it('is Week done with the Optional session Skipped: missing it is not a miss', () => {
+    const logs = ['speed', 'strength', 'threshold', 'hyrox'].map((id) => log(3, id, '2026-11-02'))
+    const day = withLogs('2026-11-05', [...logs, log(3, 'easy', '2026-11-03', 'skipped')])
+    expect(day.rest).toEqual({ kind: 'week-done' })
   })
 
   describe('no two Hard sessions on consecutive days when avoidable', () => {
@@ -599,15 +670,24 @@ describe('Sessions not done by Sunday', () => {
     expect(missed(outcome(3, '2026-11-20', [log(3, 'easy', '2026-11-03', 'skipped')]))).not.toContain('easy by athlete')
   })
 
-  it('count a Skipped log at once, and never Done, Partial or Swapped', () => {
+  it('count a Skipped log once the Week is over, and never Done, Partial or Swapped', () => {
     const logs = [
       log(3, 'speed', '2026-11-02', 'skipped'),
       log(3, 'strength', '2026-11-03', 'partial'),
       log(3, 'threshold', '2026-11-04', 'swapped'),
       log(3, 'hyrox', '2026-11-05', 'done'),
     ]
-    expect(missed(outcome(3, '2026-11-04', logs))).toEqual(['speed by athlete'])
+    // Until Sunday a Skipped Session can still be done: not a miss yet.
+    expect(missed(outcome(3, '2026-11-04', logs))).toEqual([])
+    expect(missed(outcome(3, '2026-11-08', logs))).toEqual([])
     expect(missed(outcome(3, '2026-11-20', logs))).toEqual(['speed by athlete'])
+  })
+
+  it('count a Key session Skipped in its carry-over only once the carry-over ends', () => {
+    const logs = [log(3, 'threshold', '2026-11-09', 'skipped')]
+    expect(missed(outcome(3, '2026-11-10', logs))).not.toContain('threshold by athlete')
+    expect(outcome(3, '2026-11-10', logs).carried?.session.id).toBe('threshold')
+    expect(missed(outcome(3, '2026-11-12', logs))).toContain('threshold by athlete')
   })
 
   it('leave a Deload week, with no Key session, nothing to carry', () => {
@@ -1196,6 +1276,22 @@ describe('Activities', () => {
     })
     expect(answered.activityQuestions).toEqual([])
     expect(answered.bucket.find((e) => e.session.id === 'threshold')?.activity?.id).toBe(activity.id)
+  })
+
+  it('offers to log a Session the athlete attached a workout to, until it is logged', () => {
+    const activity = run('2026-11-03T07:00:00-05:00', '2026-11-03T07:45:00-05:00')
+    const activityAnswers = [{ activityId: activity.id, week: 3, sessionId: 'threshold', updatedAt: '2026-11-04T13:00:00.000Z' }]
+    const answered = coach({ ...base, activities: [activity], activityAnswers })
+    expect(answered.activitiesAttached).toMatchObject([{ sessionId: 'threshold', by: 'athlete', logged: false }])
+    expect(answered.bucket.find((e) => e.session.id === 'threshold')?.state).not.toBe('done')
+    const logged = coach({ ...base, logs: [...base.logs, log(3, 'threshold', '2026-11-03')], activities: [activity], activityAnswers })
+    expect(logged.activitiesAttached).toEqual([])
+  })
+
+  it('says what it attached on its own today, logged or not', () => {
+    const activity = run('2026-11-04T07:00:00-05:00', '2026-11-04T07:45:00-05:00')
+    const day = coach({ ...base, logs: [...base.logs, log(3, 'speed', '2026-11-04')], activities: [activity] })
+    expect(day.activitiesAttached).toMatchObject([{ sessionId: 'speed', by: 'coach', logged: true }])
   })
 
   it('stops asking about a workout a week old', () => {

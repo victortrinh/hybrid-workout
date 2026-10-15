@@ -245,8 +245,11 @@ export interface Candidate {
 
 export type ActivityOutcome =
   | { activity: Activity; state: 'attached'; week: number; sessionId: string; by: 'coach' | 'athlete' }
-  /** More than one Session fits: Today asks "Which Session was this?". */
-  | { activity: Activity; state: 'ambiguous'; candidates: Candidate[] }
+  /**
+   * More than one Session fits: Today asks "Which Session was this?", the
+   * likeliest first. `guess` is that one when it stands clear of the rest.
+   */
+  | { activity: Activity; state: 'ambiguous'; candidates: Candidate[]; guess: Candidate | null }
   /** No Session of its type is open in its Week. */
   | { activity: Activity; state: 'unmatched' }
   /** The athlete said it was none of them. */
@@ -268,6 +271,7 @@ export function matchActivities(
   answers: ActivityAnswer[],
 ): ActivityOutcome[] {
   const claimed = new Set<string>()
+  const heartRateMax = Math.max(ASSUMED_MAX_HEART_RATE, ...activities.map((a) => a.maxHeartRate ?? 0))
   const outcomes = new Map<string, ActivityOutcome>()
   const ordered = [...activities].sort((a, b) => a.startedAt.localeCompare(b.startedAt))
 
@@ -310,12 +314,50 @@ export function matchActivities(
       claimed.add(`${number}/${session.id}`)
       outcomes.set(activity.id, { activity, state: 'attached', week: number, sessionId: session.id, by: 'coach' })
     } else if (candidates.length > 1) {
-      outcomes.set(activity.id, { activity, state: 'ambiguous', candidates })
+      const ranked = likeliest(activity, candidates, heartRateMax)
+      outcomes.set(activity.id, { activity, state: 'ambiguous', candidates: ranked.map((r) => r.candidate), guess: guessOf(ranked) })
     } else {
       outcomes.set(activity.id, { activity, state: 'unmatched' })
     }
   }
   return activities.map((a) => outcomes.get(a.id)!)
+}
+
+/** A heart rate maximum to read effort against until the watch has seen a higher one. */
+const ASSUMED_MAX_HEART_RATE = 190
+/** A workout's average heart rate as a share of maximum, warm-up and recoveries in, by Session type. */
+const TYPICAL_HEART_RATE: Record<SessionType, number> = {
+  easy: 0.72,
+  speed: 0.82,
+  threshold: 0.84,
+  '5k-test': 0.88,
+  strength: 0.6,
+  hyrox: 0.82,
+  'race-simulation': 0.86,
+}
+/** How far apart the likeliest and the next must score for the Coach to call it a guess. */
+const GUESS_MARGIN = 2.5
+
+/**
+ * The candidates, likeliest first: a point per percent of maximum heart rate
+ * away from what the Session type usually averages, plus ten per doubling of
+ * the Session's minutes. Ties keep the Bucket order.
+ */
+function likeliest(activity: Activity, candidates: Candidate[], heartRateMax: number) {
+  const share = activity.averageHeartRate === null ? null : activity.averageHeartRate / heartRateMax
+  return candidates
+    .map((candidate) => {
+      const { type, minutes } = candidate.session
+      const effort = share === null ? 0 : Math.abs(share - TYPICAL_HEART_RATE[type]) * 100
+      const duration = minutes > 0 ? Math.abs(Math.log2(activity.minutes / minutes)) * 10 : 0
+      return { candidate, score: effort + duration }
+    })
+    .sort((a, b) => a.score - b.score)
+}
+
+function guessOf(ranked: { candidate: Candidate; score: number }[]): Candidate | null {
+  const [first, second] = ranked
+  return second && second.score - first.score >= GUESS_MARGIN ? first.candidate : null
 }
 
 /**

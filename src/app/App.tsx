@@ -14,6 +14,7 @@ import type { Session } from '../domain/program/types'
 import { environmentOn } from '../domain/settings'
 import { startingFields } from '../domain/startingPoint'
 import { program } from '../domain/program/program'
+import { racePlan, showsRacePlan } from '../domain/racePlan'
 import { afterRace, finishLog, programRecap, raceResult } from '../domain/recap'
 import { DockContext } from './components/ActionBar'
 import { Icon } from './components/Icons'
@@ -265,7 +266,7 @@ export function App() {
           {screen === 'today' && (
             <Today
               day={day}
-              race={
+              afterRace={
                 afterRace(program, today)
                   ? {
                       result: race,
@@ -281,6 +282,7 @@ export function App() {
                   : null
               }
               weekCount={program.weekCount}
+              race={showsRacePlan(day.daysToRace) ? { plan: racePlan(program, logs, today), program } : null}
               pending={pending}
               error={error ?? decisionError ?? answerError}
               onPick={(weekNumber, sessionId) => pick(weekNumber, sessionId, today)}
