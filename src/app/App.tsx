@@ -297,6 +297,7 @@ export function App() {
               onPain={(score, area) => report(painReport(score, area, week.number, logged.id))}
               activity={attachedTo(week.number, logged.id)}
               treadmill={treadmill}
+              unit={settings.unit}
             />
           )}
           {screen === 'plan' && <Plan program={program} day={day} />}

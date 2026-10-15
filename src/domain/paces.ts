@@ -147,6 +147,21 @@ export function speedFor(secondsPerKm: number, unit: SpeedUnit): number {
 
 export const UNIT_LABEL: Record<SpeedUnit, string> = { kmh: 'km/h', mph: 'mph' }
 
+/** A treadmill console's distance unit: km on a km/h treadmill, mi on an mph one. */
+export const DISTANCE_UNIT: Record<SpeedUnit, string> = { kmh: 'km', mph: 'mi' }
+
+/** A console distance as typed in `unit`'s km or mi, to meters; null while empty. 3.1 mi → 4989. */
+export function consoleMeters(distance: number, unit: SpeedUnit): number | null {
+  if (!Number.isFinite(distance)) return null
+  return Math.round(distance * (unit === 'kmh' ? 1000 : KM_PER_MILE * 1000))
+}
+
+/** Stored meters back to the console's km or mi, to the 0.01 it shows; NaN when there are none. */
+export function consoleDistance(meters: number | null, unit: SpeedUnit): number {
+  if (!meters) return Number.NaN
+  return Math.round((meters / (unit === 'kmh' ? 1000 : KM_PER_MILE * 1000)) * 100) / 100
+}
+
 /** 292 → "4:52" */
 export function clock(seconds: number): string {
   const s = Math.round(seconds)
