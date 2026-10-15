@@ -10,7 +10,7 @@ import { localDateIn } from '../domain/calendar'
 import { nowDate } from '../domain/clock'
 import { findWeek } from '../domain/coach'
 import { isCircuit, isLiveRun } from '../domain/live'
-import { parseSessionLog, type SessionLog, type StationPart, type SyncState } from '../domain/log'
+import { parseSessionLog, RACE_SESSION_ID, resultRange, type SessionLog, type StationPart, type SyncState } from '../domain/log'
 import { parsePainReport, type PainReport } from '../domain/pain'
 import { program } from '../domain/program/program'
 import { parseRecoveryNight, type RecoveryNight } from '../domain/recovery'
@@ -77,12 +77,13 @@ app.post('/sync', async (c) => {
   if (logs.length > 0) {
     const upsert = c.env.DB.prepare(
       `insert into session_logs
-         (id, week, session_id, date, status, minutes, rpe, notes, result_seconds, environment, distance_meters, updated_at)
-       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         (id, week, session_id, date, status, minutes, rpe, notes, result_seconds, finish_seconds, environment,
+          distance_meters, updated_at)
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        on conflict (id) do update set
          week = excluded.week, session_id = excluded.session_id, date = excluded.date,
          status = excluded.status, minutes = excluded.minutes, rpe = excluded.rpe,
-         notes = excluded.notes, result_seconds = excluded.result_seconds,
+         notes = excluded.notes, result_seconds = excluded.result_seconds, finish_seconds = excluded.finish_seconds,
          environment = excluded.environment, distance_meters = excluded.distance_meters,
          updated_at = excluded.updated_at
        where excluded.updated_at > session_logs.updated_at`,
@@ -119,8 +120,11 @@ app.post('/sync', async (c) => {
     await c.env.DB.batch(
       logs.flatMap((l) => [
         upsert.bind(
-          l.id, l.week, l.sessionId, l.date, l.status, l.minutes, l.rpe, l.notes, l.resultSeconds, l.environment,
-          l.distanceMeters, l.updatedAt,
+          l.id, l.week, l.sessionId, l.date, l.status, l.minutes, l.rpe, l.notes,
+          // The race's finish has a column of its own: result_seconds holds a 5K test's time.
+          l.sessionId === RACE_SESSION_ID ? null : l.resultSeconds,
+          l.sessionId === RACE_SESSION_ID ? l.resultSeconds : null,
+          l.environment, l.distanceMeters, l.updatedAt,
         ),
         clearReps.bind(l.id, l.updatedAt),
         ...l.intervals.map((i) =>
@@ -333,8 +337,12 @@ function parseLogs(raw: unknown): SessionLog[] {
       const log = parseSessionLog(value)
       const session = findWeek(program, log.week)?.sessions.find((s) => s.id === log.sessionId)
       if (!session) throw new Error(`Week ${log.week} has no Session "${log.sessionId}"`)
-      if (log.resultSeconds !== null && session.type !== '5k-test') {
-        throw new Error('Only a 5K test has a result time')
+      if (log.resultSeconds !== null) {
+        const range = resultRange(log.sessionId)
+        if (!range) throw new Error('Only a 5K test and the race have a result time')
+        if (log.resultSeconds < range[0] || log.resultSeconds > range[1]) {
+          throw new Error(`resultSeconds must be between ${range[0]} and ${range[1]}`)
+        }
       }
       if (log.intervals.length > 0 && !isLiveRun(session)) throw new Error('Only a run Session has reps to log')
       if (log.stations.length > 0 && !isCircuit(session)) {
@@ -358,6 +366,8 @@ interface SessionLogRow {
   rpe: number | null
   notes: string | null
   result_seconds: number | null
+  /** The race's finish time; null on every other Session log, and before migration 0011. */
+  finish_seconds?: number | null
   environment: string | null
   distance_meters: number | null
   updated_at: string
@@ -554,7 +564,7 @@ async function readState(db: D1Database): Promise<SyncState> {
         minutes: row.minutes,
         rpe: row.rpe,
         notes: row.notes,
-        resultSeconds: row.result_seconds,
+        resultSeconds: row.result_seconds ?? row.finish_seconds ?? null,
         environment: row.environment,
         distanceMeters: row.distance_meters,
         intervals: (reps.get(row.id) ?? []).map((rep) => ({

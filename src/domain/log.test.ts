@@ -87,6 +87,7 @@ describe('parseSessionLog', () => {
     ['notes that are too long', { notes: 'x'.repeat(2001) }],
     ['a 5K time under 12 minutes', { resultSeconds: 600 }],
     ['a 5K time that is not whole seconds', { resultSeconds: 1380.5 }],
+    ['a result past a 4-hour race', { resultSeconds: 14401 }],
     ['an Environment that is neither', { environment: 'pool' }],
     ['a console distance under 100 m', { distanceMeters: 50 }],
     ['reps that are not a list', { intervals: 'held' }],

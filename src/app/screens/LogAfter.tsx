@@ -17,7 +17,16 @@ import {
 import type { Activity } from '../../domain/activity'
 import { addDays, daysBetween, type LocalDate } from '../../domain/calendar'
 import { nowMs } from '../../domain/clock'
-import { DISTANCE_METERS, LOGGED_STATUSES, logDays, logFor, NOTES_MAX, type LoggedStatus, type SessionLog } from '../../domain/log'
+import {
+  DISTANCE_METERS,
+  LOGGED_STATUSES,
+  logDays,
+  logFor,
+  NOTES_MAX,
+  RACE_SESSION_ID,
+  type LoggedStatus,
+  type SessionLog,
+} from '../../domain/log'
 import {
   clock,
   clockInput,
@@ -32,8 +41,10 @@ import {
 import type { PainArea } from '../../domain/pain'
 import { sessionRpe } from '../../domain/live'
 import { describeSession } from '../../domain/program/describe'
+import { finishClock, parseFinish } from '../../domain/recap'
 import type { Session, Week } from '../../domain/program/types'
 import { outsideWeekLine } from '../coachCopy'
+import { FinishTimeField, validateFinish } from '../components/FinishTimeField'
 import { Icon } from '../components/Icons'
 import { answered, PainFields, type PainAnswer } from '../components/PainFields'
 import { Segmented } from '../components/Segmented'
@@ -111,7 +122,10 @@ export function LogAfter({
   const [predicted] = useState(() => (activity && !existing ? sessionRpe(session) : null))
   const [rpe, setRpe] = useState<number | null>(existing?.rpe ?? predicted)
   const [notes, setNotes] = useState(existing?.notes ?? '')
-  const [time, setTime] = useState(existing?.resultSeconds ? clock(existing.resultSeconds) : '')
+  const isRace = session.id === RACE_SESSION_ID
+  const [time, setTime] = useState(
+    existing?.resultSeconds ? (isRace ? finishClock : clock)(existing.resultSeconds) : '',
+  )
   /** Null follows the month's default for the chosen day. */
   const [environment, setEnvironment] = useState<Environment | null>(existing?.environment ?? null)
   /** Unanswered gives no Pain report; the Coach goes on with the last one. */
@@ -121,15 +135,17 @@ export function LogAfter({
 
   const description = describeSession(session)
   const trained = status !== 'skipped'
-  /** Only a Done 5K test has a time: it resets the Training paces. */
+  /** A Done 5K test has a time, which resets the Training paces; the race has its finish, if it's known yet. */
   const result = session.type === '5k-test' && status === 'done'
+  const finish = isRace && status === 'done'
   const where = environment ?? (date ? defaultEnvironment(date) : 'outdoor')
 
   function submit(event: FormEvent) {
     event.preventDefault()
     if (!date) return
-    const resultSeconds = result ? parseClock(time) : null
+    const resultSeconds = result ? parseClock(time) : finish && time.trim() !== '' ? parseFinish(time) : null
     if (result && resultSeconds === null) return
+    if (finish && validateFinish(time)) return
     if (hurts === 'yes' && !answered(pain)) {
       setPainMissing(true)
       return
@@ -241,6 +257,15 @@ export function LogAfter({
             </div>
           )}
         </RadioGroup>
+
+        {finish && (
+          <FinishTimeField
+            value={time}
+            onChange={setTime}
+            labelClassName={groupLabel}
+            hint="Off the results page, if it’s up: 12407 is 1:24:07."
+          />
+        )}
 
         {result && (
           <>

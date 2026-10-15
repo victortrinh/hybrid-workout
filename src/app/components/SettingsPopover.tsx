@@ -168,7 +168,7 @@ export function SettingsPopover({
  * A download link; in mock mode, where Mock Service Worker doesn't see a
  * download navigation, a fetch saved as a file instead (src/mock/browser.ts).
  */
-function exportLink(href: string) {
+export function exportLink(href: string) {
   if (import.meta.env.VITE_API !== 'mock') return { href, download: true }
   return { onPress: () => void import('virtual:compromised-mock').then((mock) => mock.saveDownload(href)) }
 }
