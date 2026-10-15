@@ -7,6 +7,7 @@ import { isLive, type LiveSession } from '../../domain/lifts'
 import type { Environment, RunContext } from '../../domain/paces'
 import { painLevel, type PainArea } from '../../domain/pain'
 import { describeSession, SESSION_TYPES } from '../../domain/program/describe'
+import { finishClock } from '../../domain/recap'
 import type { Session } from '../../domain/program/types'
 import type { Settings } from '../../domain/settings'
 import type { Decision, Suggestion } from '../../domain/suggestion'
@@ -33,6 +34,7 @@ import {
   weekRange,
 } from '../format'
 import { logPath, SCREEN_PATH, weekPath } from '../router'
+import { ProgramRecapPanel, RaceLead, WhatsNext, type AfterRace } from './AfterRace'
 
 
 /**
@@ -57,9 +59,12 @@ export function Today({
   onSomethingHurts,
   treadmill,
   onAnswer,
+  race,
 }: {
   day: CoachDay
   weekCount: number
+  /** From the day after Race day: the result and the Program recap, in place of Up next and the Week. */
+  race: AfterRace | null
   /** Logs saved on this device that the server hasn't taken yet. */
   pending: number
   /** A log the server refused or the device couldn't store, said once under Up next. */
@@ -90,7 +95,7 @@ export function Today({
   return (
     <section
       aria-labelledby="today-heading"
-      className="desktop:grid desktop:grid-cols-2 desktop:gap-x-12 desktop:px-gutter"
+      className={`desktop:grid desktop:grid-cols-2 desktop:gap-x-12 desktop:px-gutter ${race ? 'desktop:grid-rows-[auto_auto_1fr]' : ''}`}
     >
       <FieldBand
         day={day}
@@ -98,22 +103,37 @@ export function Today({
         settings={settings}
         onSettings={onSettings}
         startingPoint={startingPoint}
+        finish={race?.result.state === 'finished' ? race.result.seconds : null}
+        after={race !== null}
       />
-      <UpNext
-        day={day}
-        weekCount={weekCount}
-        pending={pending}
-        error={error}
-        onDecide={onDecide}
-        runContext={runContext}
-        onEnvironment={onEnvironment}
-        live={live}
-        onStart={onStart}
-        onSomethingHurts={onSomethingHurts}
-        treadmill={treadmill}
-        onAnswer={onAnswer}
-      />
-      <ThisWeek day={day} onPick={onPick} treadmill={treadmill} />
+      {race ? (
+        <>
+          <RaceLead race={race}>
+            <SomethingHurts previous={day.pain?.report.score ?? null} onReport={onSomethingHurts} />
+            <SyncLine pending={pending} error={error} />
+          </RaceLead>
+          <ProgramRecapPanel recap={race.recap} />
+          <WhatsNext />
+        </>
+      ) : (
+        <>
+          <UpNext
+            day={day}
+            weekCount={weekCount}
+            pending={pending}
+            error={error}
+            onDecide={onDecide}
+            runContext={runContext}
+            onEnvironment={onEnvironment}
+            live={live}
+            onStart={onStart}
+            onSomethingHurts={onSomethingHurts}
+            treadmill={treadmill}
+            onAnswer={onAnswer}
+          />
+          <ThisWeek day={day} onPick={onPick} treadmill={treadmill} />
+        </>
+      )}
     </section>
   )
 }
@@ -124,36 +144,61 @@ function FieldBand({
   settings,
   onSettings,
   startingPoint,
+  finish,
+  after,
 }: {
   day: CoachDay
   weekCount: number
   settings: Settings
   onSettings: (patch: Partial<Settings>) => void
   startingPoint: StartingPointEdit
+  /** The race's finish time once it's logged: it takes the countdown's place, the one number the Program was for. */
+  finish: number | null
+  /** Past Race day: the footer counts the Weeks done, not the Week. */
+  after: boolean
 }) {
   const { position } = day
   return (
-    <header className="on-field bg-cobalt px-pad pt-4 pb-5 text-on-cobalt desktop:col-span-full desktop:-mx-gutter desktop:grid desktop:grid-cols-[auto_minmax(0,1fr)] desktop:items-end desktop:gap-x-14 desktop:gap-y-2 desktop:px-gutter desktop:py-7">
+    <header
+      className={`on-field bg-cobalt px-pad pt-4 pb-5 text-on-cobalt desktop:col-span-full desktop:-mx-gutter desktop:grid desktop:items-end desktop:gap-x-14 desktop:gap-y-2 desktop:px-gutter desktop:py-7 ${
+        // The finish time sizes itself to its column, so that column needs a width of its own.
+        finish !== null ? 'desktop:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]' : 'desktop:grid-cols-[auto_minmax(0,1fr)]'
+      }`}
+    >
       <div className="flex items-center justify-between gap-3 desktop:col-span-full desktop:justify-end">
         <span className="text-brand uppercase font-stretch-125% desktop:hidden">Compromised</span>
         {/* The athlete's initial opens Settings. */}
         <SettingsPopover settings={settings} onChange={onSettings} startingPoint={startingPoint} />
       </div>
 
-      <p className="mt-3 desktop:mt-0">
-        {/* The wrapper carries the numeral's size so its line box matches the prototype's. */}
-        <span className="block text-numeral leading-[normal]">
-          <StripedNumeral value={String(Math.abs(day.daysToRace))} />
-        </span>
-        <span className="mt-2.5 block text-[18px] font-semibold">
-          {countdownLabel(day.daysToRace)} · {longDay(day.raceDay)}
-        </span>
-      </p>
+      {finish !== null ? (
+        // Seven characters: the numeral sizes itself to its column (a container).
+        <p className="@container mt-3 desktop:mt-0">
+          <StripedNumeral value={finishClock(finish)} className="text-numeral-finish" />
+          <span className="mt-2.5 block text-[18px] font-semibold">HYROX finish · {longDay(day.raceDay)}</span>
+        </p>
+      ) : (
+        <p className="mt-3 desktop:mt-0">
+          {/* The wrapper carries the numeral's size so its line box matches the prototype's. */}
+          <span className="block text-numeral leading-[normal]">
+            <StripedNumeral value={String(Math.abs(day.daysToRace))} />
+          </span>
+          <span className="mt-2.5 block text-[18px] font-semibold">
+            {countdownLabel(day.daysToRace)} · {longDay(day.raceDay)}
+          </span>
+        </p>
+      )}
 
       <div>
         <PhaseLanes phases={day.phases} />
         <p className="mt-3 flex justify-between gap-3 text-[15px] font-semibold">
-          {position.kind === 'in-week' && (
+          {after ? (
+            <>
+              <span>All {weekCount} Weeks done</span>
+              {/* Without the finish time the numeral already counts the days. */}
+              {finish !== null && <span>{plural(-day.daysToRace, 'day')} since the race</span>}
+            </>
+          ) : position.kind === 'in-week' && (
             <>
               <span>
                 Week {position.week} of {weekCount} · {day.phases.find((p) => p.current)?.name}
@@ -167,7 +212,7 @@ function FieldBand({
               <span>{plural(position.daysToStart, 'day')} to go</span>
             </>
           )}
-          {position.kind === 'finished' && <span>All {weekCount} Weeks done</span>}
+          {!after && position.kind === 'finished' && <span>All {weekCount} Weeks done</span>}
         </p>
       </div>
     </header>
@@ -378,12 +423,7 @@ function UpNext({
         )
       )}
       {!asking && <SomethingHurts previous={previousPain} onReport={onSomethingHurts} />}
-      <div aria-live="polite">
-        {error && <p className="mt-3 text-body">{error}</p>}
-        {pending > 0 && (
-          <p className="mt-3 text-body-quiet text-muted">{plural(pending, 'log')} on this phone, waiting to sync.</p>
-        )}
-      </div>
+      <SyncLine pending={pending} error={error} />
       {day.suggestions
         // Decided ones stay for the rest of the day, so Undo is one tap away.
         .filter((s) => s.decision === 'open' || s.decidedOn === day.today)
@@ -411,6 +451,18 @@ function UpNext({
         .map((e) => (
           <ConsoleDistance key={e.activity!.id} entry={e} />
         ))}
+    </div>
+  )
+}
+
+/** A log the server refused, said once, and how many are still on this phone. */
+function SyncLine({ pending, error }: { pending: number; error: string | null }) {
+  return (
+    <div aria-live="polite">
+      {error && <p className="mt-3 text-body">{error}</p>}
+      {pending > 0 && (
+        <p className="mt-3 text-body-quiet text-muted">{plural(pending, 'log')} on this phone, waiting to sync.</p>
+      )}
     </div>
   )
 }

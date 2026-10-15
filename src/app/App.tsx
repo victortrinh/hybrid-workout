@@ -14,6 +14,7 @@ import type { Session } from '../domain/program/types'
 import { environmentOn } from '../domain/settings'
 import { startingFields } from '../domain/startingPoint'
 import { program } from '../domain/program/program'
+import { afterRace, finishLog, programRecap, raceResult } from '../domain/recap'
 import { DockContext } from './components/ActionBar'
 import { Icon } from './components/Icons'
 import { StripedNumeral } from './components/StripedNumeral'
@@ -96,6 +97,8 @@ export function App() {
       }),
     [today, logs, picked, decisions, equipment, painReports, recoveryNights, activities, activityAnswers, startingPoint],
   )
+  /** The race's log and finish time, which Today leads with after Race day. */
+  const race = useMemo(() => raceResult(program, logs, today), [logs, today])
   /** Whether a run of the watch's was on a treadmill: its own flag, else the month's Environment. */
   const treadmill = (activity: Activity) => isTreadmill(activity, (date) => environmentOn(date, settings))
   /** How a Session's runs read: the Training paces, in this Session's Environment and the chosen units. */
@@ -262,6 +265,21 @@ export function App() {
           {screen === 'today' && (
             <Today
               day={day}
+              race={
+                afterRace(program, today)
+                  ? {
+                      result: race,
+                      recap: programRecap(program, logs, day.workingWeightChanges, today),
+                      onFinish: (seconds) =>
+                        save(
+                          finishLog(program, race.log, seconds, {
+                            id: crypto.randomUUID(),
+                            updatedAt: editedAt(race.log?.updatedAt),
+                          }),
+                        ),
+                    }
+                  : null
+              }
               weekCount={program.weekCount}
               pending={pending}
               error={error ?? decisionError ?? answerError}

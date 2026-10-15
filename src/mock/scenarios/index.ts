@@ -5,6 +5,7 @@
 import activitiesPending from './activitiesPending'
 import afterBaseline from './afterBaseline'
 import afterRace from './afterRace'
+import afterRaceUnlogged from './afterRaceUnlogged'
 import beforeProgram from './beforeProgram'
 import deload from './deload'
 import denseHistory from './denseHistory'
@@ -33,6 +34,7 @@ export const SCENARIOS: readonly Scenario[] = [
   denseHistory,
   raceWeek,
   afterRace,
+  afterRaceUnlogged,
 ]
 
 /** What mock mode loads when no scenario is chosen. */

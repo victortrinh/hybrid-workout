@@ -9,7 +9,7 @@ import { findWeek } from '../../domain/coach'
 import { DEFAULT_EQUIPMENT, equip, type Equipment } from '../../domain/equipment'
 import { startLifts } from '../../domain/lifts'
 import { liveBlocks, liveTarget, startRun, stationLogs } from '../../domain/live'
-import type { IntervalLog, LoggedStatus, SessionLog } from '../../domain/log'
+import { RACE_SESSION_ID, type IntervalLog, type LoggedStatus, type SessionLog } from '../../domain/log'
 import type { PainArea, PainReport } from '../../domain/pain'
 import { latestFiveKTest, trainingPaces, type Environment } from '../../domain/paces'
 import { program } from '../../domain/program/program'
@@ -50,7 +50,7 @@ export interface LogOptions {
   minutes?: number
   rpe?: number
   notes?: string
-  /** A 5K test's time. */
+  /** A 5K test's time, or the race's finish time. */
   resultSeconds?: number
   environment?: Environment
   /** Strength: each set's RPE. 7, the default, moves a Working weight up; 8 holds it; 9 counts toward a reduction. */
@@ -193,7 +193,8 @@ function build(
       options.splitSeconds ?? (kind === 'round' ? 540 : kind === 'distance' ? 285 : 260)
     const splits = timed.filter(({ b }) => b.round! <= reached).map(({ b, i }) => ({ block: i, seconds: seconds(b.kind) }))
     const live = { ...startRun({ week, session, date, environment }, 0), splits }
-    return { ...done, environment, stations: stationLogs(live) }
+    const finish = session.id === RACE_SESSION_ID && !partial ? (options.resultSeconds ?? null) : null
+    return { ...done, environment, stations: stationLogs(live), resultSeconds: finish }
   }
 
   const context = { paces: paces(so.logs, date), environment, unit: 'kmh' as const }

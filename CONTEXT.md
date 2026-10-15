@@ -11,6 +11,13 @@ _Avoid_: schedule, training plan (when meaning the whole thing)
 **Race day**:
 Wednesday 21 April 2027, the HYROX race every Week is counted back from.
 
+**Finish time**:
+The race's result, h:mm:ss, kept on the race's Session log. From the day after Race day, Today leads with it, and asks for it in one step until it is logged.
+_Avoid_: race time, result (alone)
+
+**Program recap**:
+The whole Program in four numbers, shown on Today after Race day: the 5K tests first to last, the Working weights first to now, Sessions done, and the total Training load.
+
 **Phase**:
 A run of Weeks sharing one emphasis: Foundation, 5K development, HYROX build, Race specific, Taper.
 

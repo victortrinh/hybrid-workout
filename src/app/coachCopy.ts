@@ -4,9 +4,12 @@
  */
 import { daysBetween, type LocalDate } from '../domain/calendar'
 import { PAIN_AREA_LABEL, PAIN_REPS_PERCENT, type PainLevel } from '../domain/pain'
+import { clock } from '../domain/paces'
 import { describeSession, LIFT_NAME, SESSION_TYPES } from '../domain/program/describe'
+import { program } from '../domain/program/program'
 import type { Session } from '../domain/program/types'
 import { CUT_NOUN, EASY_DAY_MINUTES, SLEEP_RPE_CAP, sleepText, type ShortSleepCut } from '../domain/recovery'
+import { finishClock, type ProgramRecap, type RaceResult } from '../domain/recap'
 import type { Suggestion } from '../domain/suggestion'
 import { plural, shortDay, weekday } from './format'
 
@@ -132,4 +135,42 @@ export function waitingLine(session: Session, date: LocalDate, today: LocalDate)
   const what = session.id === 'race' ? 'The race' : describeSession(session).heading
   const when = daysBetween(today, date) === 1 ? 'tomorrow' : weekday(date)
   return `${what} is ${when}. Save it for that.`
+}
+
+/**
+ * Today after Race day: the ask while the finish time is missing, then the
+ * Program's verdict in one line, with its numbers (PRODUCT.md, Coach voice).
+ */
+export function raceCopy(result: RaceResult, recap: ProgramRecap): { heading: string; target: string } {
+  if (result.state === 'ask') {
+    return {
+      heading: 'Race done. How fast?',
+      target: 'The finish time off the results page. One number, then the recap.',
+    }
+  }
+  if (result.state === 'skipped') {
+    return {
+      heading: 'Program done.',
+      target: `Race Skipped. The ${program.weekCount} Weeks still happened, and these are their numbers.`,
+    }
+  }
+  const finish = finishClock(result.seconds)
+  const { fiveK } = recap
+  if (fiveK?.sub20) {
+    return {
+      heading: 'Program done.',
+      target: `Sub-20 on the 5K, ${finish} at HYROX. Both goals, one Program. Now sit down for a week.`,
+    }
+  }
+  if (fiveK && fiveK.last.seconds < fiveK.first.seconds) {
+    const off = clock(fiveK.first.seconds - fiveK.last.seconds)
+    return {
+      heading: 'Program done.',
+      target: `${finish} at HYROX, and ${off} off the 5K to ${clock(fiveK.last.seconds)}. Not sub-20. Not nothing either.`,
+    }
+  }
+  return {
+    heading: 'Program done.',
+    target: `${finish} at HYROX, on ${plural(recap.sessions.done, 'Session')}. Now sit down for a week.`,
+  }
 }

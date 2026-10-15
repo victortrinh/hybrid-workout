@@ -44,7 +44,7 @@ async function day(name: string): Promise<CoachDay & { state: SyncState; scenari
 const byId = <T extends { id: string }>(rows: T[]) => [...rows].sort((a, b) => a.id.localeCompare(b.id))
 
 describe('scenarios', () => {
-  it('are the thirteen the specs list, each named once, with the default among them', () => {
+  it('are the fourteen the specs list, each named once, with the default among them', () => {
     expect(SCENARIOS.map((s) => s.name)).toEqual([
       'before-program',
       'first-launch',
@@ -59,6 +59,7 @@ describe('scenarios', () => {
       'dense-history',
       'race-week',
       'after-race',
+      'after-race-unlogged',
     ])
     expect(findScenario(DEFAULT_SCENARIO)).not.toBeNull()
   })
@@ -211,7 +212,17 @@ describe('each scenario falls where its name says', () => {
     expect(d.today).toBe('2027-04-22')
     expect(d.daysToRace).toBe(-1)
     expect(d.upNext).toBeNull()
-    expect(d.state.sessionLogs.find((l) => l.sessionId === 'race')).toMatchObject({ status: 'done', date: '2027-04-21' })
+    expect(d.state.sessionLogs.find((l) => l.sessionId === 'race')).toMatchObject({
+      status: 'done',
+      date: '2027-04-21',
+      resultSeconds: 5047,
+    })
+  })
+
+  it('after-race-unlogged: the day after Race day, the race not logged', async () => {
+    const d = await day('after-race-unlogged')
+    expect(d.daysToRace).toBe(-1)
+    expect(d.state.sessionLogs.find((l) => l.sessionId === 'race')).toBeUndefined()
   })
 })
 
