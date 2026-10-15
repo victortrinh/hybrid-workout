@@ -54,13 +54,38 @@ export function liveLine(block: LiveBlock, run: LiveRun): string {
 export const finishLine = (status: 'done' | 'partial') =>
   status === 'done' ? 'All of it. Now say how it felt.' : 'Cut short. It logs as Partial, which still counts.'
 
+const WORDS = ['nothing', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']
+
+/** Reps in reserve ≈ 10 − RPE, in words: "three left", "three to five left", "nothing left". */
+export function tankWords(rpeLow: number, rpeHigh: number = rpeLow): string {
+  const most = Math.round(10 - Math.min(rpeLow, rpeHigh))
+  const least = Math.round(10 - Math.max(rpeLow, rpeHigh))
+  const word = (n: number) => WORDS[Math.max(0, Math.min(9, n))]
+  if (most <= 0) return 'nothing left'
+  if (least === most) return `${word(most)} left`
+  return `${least === 0 ? 'none' : word(least)} to ${word(most)} left`
+}
+
+/** "RPE 5–7: three to five left in the tank": the target's own words. */
+export function tankLine(rpeLow: number, rpeHigh: number = rpeLow): string {
+  const rpe = rpeLow === rpeHigh ? `${rpeLow}` : `${Math.min(rpeLow, rpeHigh)}–${Math.max(rpeLow, rpeHigh)}`
+  const words = tankWords(rpeLow, rpeHigh)
+  return `RPE ${rpe}: ${words.endsWith('nothing left') ? words : `${words} in the tank`}`
+}
+
+/** The RPE or range an exercise's words name ("RPE 7–8", "ramp to RPE 7"), else its default RPE. */
+function targetTank(exercise: LiveLifts['exercises'][number]): string {
+  const m = exercise.calibrate ? null : /^RPE (\d+)(?:–(\d+))?$/.exec(exercise.rpeWords ?? '')
+  return m ? tankLine(Number(m[1]), Number(m[2] ?? m[1])) : tankLine(exercise.rpe)
+}
+
 /** The Coach's opening line for a Live Strength session. */
 export function liftsStartLine(lifts: LiveLifts): string {
   const first = lifts.exercises[0]
   if (!first) return 'Nothing to lift. Suspicious.'
-  if (first.calibrate) return 'Calibration. Ramp up. Stop when a set feels like RPE 7: three left in the tank.'
+  if (first.calibrate) return `Calibration. Ramp up. Stop when a set feels like ${targetTank(first)}.`
   if (first.rpeWords?.startsWith('RPE ≤')) return 'Deload. Lighter on purpose. Leave the ego in the car.'
-  return `${first.name} first. RPE 7 means three left in the tank.`
+  return `${first.name} first. ${targetTank(first)}.`
 }
 
 /** After a set is logged at its default RPE. */
