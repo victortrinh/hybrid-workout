@@ -158,6 +158,27 @@ test('a full Threshold Session from Start to logged', async ({ page }) => {
   })
 })
 
+test('the target speed fits its column on a phone', async ({ page }) => {
+  await serveHistory(page, [...WEEK_2])
+  await page.clock.install({ time: WEEK_3 })
+  await page.goto('/')
+  await page.getByRole('list').filter({ hasText: 'Strength' }).getByRole('button', { name: /^Threshold/ }).click()
+  await page.getByRole('button', { name: /^Start / }).click()
+  const s = live(page)
+  await s.skip.click()
+  await expect(s.target).toHaveText('12.3')
+
+  // Four characters at arm's length: the last digit is never cut off.
+  for (const width of [320, 375, 430]) {
+    await page.setViewportSize({ width, height: 800 })
+    const fit = await s.target.evaluate((el) => {
+      const column = el.parentElement!
+      return { scroll: column.scrollWidth, client: column.clientWidth }
+    })
+    expect(fit.scroll, `at ${width} px`).toBeLessThanOrEqual(fit.client)
+  }
+})
+
 test('a 5K test Live session records the time and updates the Training paces', async ({ page }) => {
   // Thursday of Week 2, Week 1 done in full: the baseline 5K test is Up next, and runs are RPE only.
   const thursday = new Date('2026-10-29T12:00:00-04:00')

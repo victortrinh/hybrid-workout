@@ -10,7 +10,7 @@ import { describeSession, SESSION_TYPES } from '../../domain/program/describe'
 import type { Session } from '../../domain/program/types'
 import type { Settings } from '../../domain/settings'
 import type { Decision, Suggestion } from '../../domain/suggestion'
-import { outsideWeekLine, painLine, recoveryWhy, shortSleepLine, suggestionCopy } from '../coachCopy'
+import { outsideWeekLine, painLine, recoveryWhy, shortSleepLine, suggestionCopy, waitingLine } from '../coachCopy'
 import { FieldLane } from '../components/FieldLane'
 import { LaneChip } from '../components/LaneChip'
 import { buttonBase, lineAction, primaryAction, quietButton } from '../components/actions'
@@ -271,7 +271,7 @@ function UpNext({
     target = `${plural(position.daysToStart, 'day')} of nothing. Enjoy them.`
     meta = `${longDay(position.startsOn)} · Week 1’s Sessions are below`
   } else if (position.kind === 'in-week' && day.rest) {
-    ;({ heading, target, meta } = restCopy(day.rest, position.week, position.endDate, weekCount))
+    ;({ heading, target, meta } = restCopy(day.rest, day.today, position.week, position.endDate, weekCount))
   } else if (position.kind === 'in-week') {
     heading = `Week ${position.week} isn’t in the app yet.`
     target = 'Train from the plan document until it is.'
@@ -558,7 +558,7 @@ function SomethingHurts({
             setNoted(null)
           }}
           aria-expanded={false}
-          className={quietButton}
+          className={linkButton}
         >
           Something hurts
         </Button>
@@ -604,6 +604,7 @@ function SomethingHurts({
 /** Blunt, with the reason first (PRODUCT.md, Coach voice). */
 function restCopy(
   rest: RestReason,
+  today: CoachDay['today'],
   week: number,
   weekEnd: CoachDay['today'],
   weekCount: number,
@@ -636,7 +637,7 @@ function restCopy(
     case 'waiting':
       return {
         heading: 'Rest.',
-        target: `${describeSession(rest.session).heading} is ${weekday(rest.date)}. Save it for that.`,
+        target: waitingLine(rest.session, rest.date, today),
         meta: longDay(rest.date),
       }
   }
@@ -658,6 +659,8 @@ function ThisWeek({
   // Before the Program, Week 1's Sessions can be picked to do early.
   const interactive = inWeek || position.kind === 'before-start'
   const left = bucket.filter((e) => !e.session.optional && !e.log).length
+  // Rows that can still be made today's: not logged, not already Next, not pinned to another day.
+  const pickable = bucket.some((e) => e.pickable && !e.log && e.state !== 'next')
   const aside = inWeek
     ? `${plural(left, 'Session')} left · ${plural(position.daysLeft, 'day')}`
     : `from ${shortDay(week.startDate)}`
@@ -673,13 +676,13 @@ function ThisWeek({
           <BucketRow
             key={`${entry.week}/${entry.session.id}`}
             entry={entry}
-            interactive={interactive}
+            interactive={interactive && entry.pickable}
             onPick={() => onPick(entry.week, entry.session.id)}
             treadmill={treadmill}
           />
         ))}
       </ul>
-      {interactive && left > 0 && (
+      {interactive && pickable && (
         <p className="mt-2.5 text-[14px] text-muted">
           {inWeek ? 'Tap any Session to do it today instead.' : 'Tap any Session to do it today, early.'}
         </p>
