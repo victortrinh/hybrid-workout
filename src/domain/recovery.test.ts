@@ -1,6 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import { localDate } from './calendar'
-import { hrvMean, isLowHrv, lastNight, mergeNights, parseRecoveryNight, sleepText, type RecoveryNight } from './recovery'
+import { findWeek } from './coach'
+import { program } from './program/program'
+import type { Session } from './program/types'
+import {
+  hrvMean,
+  isLowHrv,
+  lastNight,
+  mergeNights,
+  parseRecoveryNight,
+  shortSleepAdapted,
+  shortSleepCut,
+  sleepText,
+  type RecoveryNight,
+} from './recovery'
 
 const AT = '2026-11-04T12:00:00.000Z'
 const body = { date: '2026-11-04', sleepMinutes: 341, hrvMs: 38, restingHeartRate: 52, source: 'Ultrahuman' }
@@ -165,5 +178,74 @@ describe('lastNight', () => {
       sleepMinutes: 480,
     })
     expect(() => parseRecoveryNight({ sleep: '', source: 'Ultrahuman' }, NOW)).toThrow(/No sleep/)
+  })
+})
+
+describe('the short-sleep rule on each Session type', () => {
+  const short = { ...body, sleepMinutes: 320, receivedAt: AT } as RecoveryNight
+  const sessions = Array.from({ length: program.weekCount }, (_, i) => findWeek(program, i + 1)!.sessions).flat()
+  const first = (type: Session['type'], headline?: string) =>
+    sessions.find((s) => s.type === type && !s.date && (headline === undefined || s.headline === headline))!
+  const mainBlocks = (s: Session) => s.blocks.filter((b) => b.main)
+
+  it('takes a rep off intervals', () => {
+    const written = first('speed', '5 × 3′')
+    expect(shortSleepCut(written)).toBe('rep')
+    const after = shortSleepAdapted(written, short)
+    expect(after.headline).toBe('4 × 3′')
+    expect(after.note).toMatch(/^Short sleep \(5 h 20\): one rep fewer, nothing past RPE 7\./)
+  })
+
+  it('takes the last round off a HYROX session, and its minutes with it', () => {
+    const written = first('hyrox', '3 rounds')
+    expect(shortSleepCut(written)).toBe('round')
+    const after = shortSleepAdapted(written, short)
+    expect(mainBlocks(after).map((b) => b.name)).toEqual(['Round 1', 'Round 2'])
+    expect(after.headline).toBe('2 rounds')
+    expect(after.minutes).toBe(written.minutes - mainBlocks(written)[2].minutes!)
+    expect(after.note).toMatch(/^Short sleep \(5 h 20\): one round fewer, nothing past RPE 7\./)
+    // Every Station still in a round is still set up.
+    const used = new Set(mainBlocks(after).flatMap((b) => b.exercises.flatMap((e) => (e.prescription.kind === 'station' ? [e.prescription.station] : []))))
+    const setUp = after.blocks.find((b) => b.setup)!.exercises.map((e) => e.prescription.kind === 'station' && e.prescription.station)
+    expect(new Set(setUp)).toEqual(used)
+  })
+
+  it('takes the last Run and Station off a Race simulation and caps its runs at RPE 7', () => {
+    const written = first('race-simulation')
+    expect(shortSleepCut(written)).toBe('station')
+    const after = shortSleepAdapted(written, short)
+    expect(mainBlocks(after)).toHaveLength(mainBlocks(written).length - 1)
+    expect(mainBlocks(after).map((b) => b.name)).toEqual(mainBlocks(written).slice(0, -1).map((b) => b.name))
+    expect(after.minutes).toBeLessThan(written.minutes)
+    for (const e of mainBlocks(after).flatMap((b) => b.exercises)) {
+      if (e.prescription.kind === 'run') expect(e.prescription.effort?.rpe?.[1]).toBeLessThanOrEqual(7)
+    }
+    expect(after.note).toMatch(/^Short sleep \(5 h 20\): one Station fewer, nothing past RPE 7\./)
+  })
+
+  it('takes a set off every main lift on a Strength day, reps as written', () => {
+    const written = first('strength')
+    expect(shortSleepCut(written)).toBe('set')
+    const after = shortSleepAdapted(written, short)
+    const sets = (s: Session) => mainBlocks(s).flatMap((b) => b.exercises.map((e) => e.prescription)).filter((rx) => rx.kind === 'sets')
+    const before = sets(written)
+    expect(before.length).toBeGreaterThan(0)
+    sets(after).forEach((rx, i) => {
+      const was = before[i]
+      if (rx.kind !== 'sets' || was.kind !== 'sets') throw new Error('not sets')
+      expect(rx.sets).toBe(Math.max(1, was.sets - 1))
+      expect(rx.reps).toEqual(was.reps)
+      expect(rx.rpeCap).toBeLessThanOrEqual(7)
+    })
+    expect(after.note).toMatch(/^Short sleep \(5 h 20\): one set fewer, nothing past RPE 7\./)
+  })
+
+  it('cuts nothing from a single round, and says only the cap', () => {
+    const written = first('hyrox', '3 rounds')
+    const oneRound = { ...written, blocks: written.blocks.filter((b) => !b.main || b.name === 'Round 1') }
+    expect(shortSleepCut(oneRound)).toBeNull()
+    const after = shortSleepAdapted(oneRound, short)
+    expect(mainBlocks(after)).toHaveLength(1)
+    expect(after.note).toMatch(/^Short sleep \(5 h 20\): nothing past RPE 7\./)
   })
 })

@@ -302,7 +302,7 @@ function UpNext({
       )}
       {day.recovery && day.recoveryChange === 'short-sleep' && (
         <p className="mt-3 text-body">
-          {shortSleepLine(day.recovery.night.sleepMinutes)}
+          {shortSleepLine(day.recovery.night.sleepMinutes, day.recoveryCut)}
           {/* With low HRV too, the Suggestion below carries the numbers. */}
           {!day.recovery.easyDay && (
             <span className="text-muted">
