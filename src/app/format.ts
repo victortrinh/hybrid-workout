@@ -26,10 +26,11 @@ export function weekRange(start: LocalDate, end: LocalDate): string {
   return `${from} – ${shortDay(end)}`
 }
 
-/** Keeps "5 × 2′" and "4 accelerations" on one line, and never starts a line with a "·" separator. */
+/** Keeps "5 × 2′", "185 → 190" and "4 accelerations" on one line, and never starts a line with a "·" separator. */
 export const nb = (text: string) =>
   text
     .replaceAll(' × ', '\u00a0×\u00a0')
+    .replaceAll(' → ', '\u00a0→\u00a0')
     .replaceAll(' · ', '\u00a0· ')
     .replace(/(\d) (?=\p{L})/gu, '$1\u00a0')
 
