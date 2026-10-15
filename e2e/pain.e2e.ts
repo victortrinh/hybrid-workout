@@ -159,3 +159,52 @@ test('Log after asks too, and links the report to the Session', async ({ page })
   await expect(page).toHaveURL('/')
   await expect.poll(() => reports.at(-1)).toMatchObject({ score: 2, area: 'shin', week: 3, sessionId: 'strength' })
 })
+
+/** Achilles 4 from Monday: its pain Suggestion stands for the rest of Week 3. */
+const ACHILLES_4 = { ...SHIN_2, id: 'seed-achilles-4', score: 4, area: 'achilles-calf' }
+
+test('with the pain Suggestion open, the step asks it once, in its own words: two taps to the Live session', async ({
+  page,
+}) => {
+  const reports: Record<string, unknown>[] = [ACHILLES_4]
+  await serveHistory(page, [...WEEK_2], reports)
+  await page.clock.setFixedTime(WEEK_3)
+  await page.goto('/')
+
+  const line = 'Pain 4. No jumps, fewer reps. Your tendons will thank you.'
+  const suggestion = page.getByRole('region', { name: 'Coach’s Suggestion' }).filter({ hasText: line })
+  await expect(suggestion).toBeVisible()
+  await page.getByRole('button', { name: /^Start / }).click()
+
+  // The step carries the Suggestion now: not asked twice.
+  await expect(suggestion).toHaveCount(0)
+  const step = page.getByRole('region', { name: 'Up next' })
+  await step.getByRole('button', { name: 'Same' }).click()
+  await expect(step).toContainText(line)
+  await step.getByRole('button', { name: 'Start with that' }).click()
+
+  await expect(page).toHaveURL('/live')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Speed, 4 × 3′')
+})
+
+test('with the pain Suggestion already accepted, Same starts the Session with it', async ({ page }) => {
+  const reports: Record<string, unknown>[] = [ACHILLES_4]
+  const suggestionDecisions: Record<string, unknown>[] = [
+    { id: 'pain-seed-achilles-4', decision: 'accepted', date: '2026-11-04', updatedAt: '2026-11-04T11:00:00.000Z' },
+  ]
+  await serveHistory(page, [...WEEK_2], reports, { suggestionDecisions })
+  await page.clock.setFixedTime(WEEK_3)
+  await page.goto('/')
+
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Speed, 4 × 3′')
+  await page.getByRole('button', { name: /^Start / }).click()
+  await page.getByRole('region', { name: 'Up next' }).getByRole('button', { name: 'Same' }).click()
+
+  await expect(page).toHaveURL('/live')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Speed, 4 × 3′')
+  // Same is a new report for this Session, and the decision carries over to it.
+  await expect.poll(() => reports.at(-1)).toMatchObject({ score: 4, area: 'achilles-calf', week: 3, sessionId: 'speed' })
+  await expect
+    .poll(() => suggestionDecisions.find((d) => d.id === `pain-${reports.at(-1)!.id}`))
+    .toMatchObject({ decision: 'accepted' })
+})

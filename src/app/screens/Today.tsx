@@ -26,7 +26,7 @@ import { LaneChip } from '../components/LaneChip'
 import { buttonBase, lineAction, primaryAction, quietButton } from '../components/actions'
 import { answered, PainFields, type PainAnswer } from '../components/PainFields'
 import { ActionBar } from '../components/ActionBar'
-import { asksPain, PAIN_FREE, PainStep, type PainAtStart } from '../components/PainStep'
+import { asksPain, PAIN_FREE, painSuggestionFor, PainStep, type PainAtStart } from '../components/PainStep'
 import { Segmented } from '../components/Segmented'
 import { SettingsPopover, type StartingPointEdit } from '../components/SettingsPopover'
 import { StripedNumeral } from '../components/StripedNumeral'
@@ -297,6 +297,7 @@ function UpNext({
   const [refocus, setRefocus] = useState(false)
   const { position, upNext } = day
   const standing = day.pain?.report ?? null
+  const painSuggestion = painSuggestionFor(day.suggestions, standing)
   const previousPain = standing?.score ?? null
   const upNextEntry = day.bucket.find((e) => e.state === 'next')
   const upNextWeek = upNextEntry?.week
@@ -417,6 +418,7 @@ function UpNext({
         <ActionBar label="Up next">
           <PainStep
             standing={standing}
+            suggestion={painSuggestion}
             onAnswer={(pain) => {
               setAsking(false)
               onStart(upNextWeek, upNext, pain)
@@ -453,7 +455,8 @@ function UpNext({
       <SyncLine pending={pending} error={error} />
       {day.suggestions
         // Decided ones stay for the rest of the day, so Undo is one tap away.
-        .filter((s) => s.decision === 'open' || s.decidedOn === day.today)
+        // While the pain step asks, it carries the pain Suggestion: asked once, not twice.
+        .filter((s) => (s.decision === 'open' || s.decidedOn === day.today) && !(asking && s === painSuggestion))
         .map((s) => (
           <SuggestionNote key={s.id} suggestion={s} onDecide={(d) => onDecide(s, d)} />
         ))}
