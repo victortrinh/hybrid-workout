@@ -14,6 +14,7 @@ import {
   logSet,
   parseLiveLifts,
   restLeft,
+  rpeChoices,
   setLoad,
   setReps,
   setRpe,
@@ -268,5 +269,23 @@ describe('parseLiveLifts', () => {
   it('reads a session stored before prompts as having none', () => {
     const { prompts: _, ...stored } = start(3)
     expect(parseLiveLifts(stored)?.prompts).toEqual([])
+  })
+})
+
+describe('rpeChoices', () => {
+  it('offers six RPEs starting two below the target', () => {
+    expect(rpeChoices(7)).toEqual([5, 6, 7, 8, 9, 10])
+    expect(rpeChoices(6)).toEqual([4, 5, 6, 7, 8, 9])
+  })
+
+  it('never goes below 1 or above 10', () => {
+    expect(rpeChoices(2)).toEqual([1, 2, 3, 4, 5, 6])
+    expect(rpeChoices(9)).toEqual([5, 6, 7, 8, 9, 10])
+  })
+
+  it('slides to keep an RPE already logged outside the window', () => {
+    expect(rpeChoices(6, 10)).toEqual([5, 6, 7, 8, 9, 10])
+    expect(rpeChoices(7, 3)).toEqual([3, 4, 5, 6, 7, 8])
+    expect(rpeChoices(7, 6)).toEqual([5, 6, 7, 8, 9, 10])
   })
 })

@@ -246,6 +246,21 @@ export function logSet(lifts: LiveLifts, exercise: number, set: number, now: num
   }
 }
 
+/** How many RPEs a set offers, one tap each. */
+const RPE_CHOICES = 6
+
+/**
+ * The RPEs a set offers: six, from two below its target (never below 1 or
+ * past 10), slid to keep an RPE already logged outside them.
+ */
+export function rpeChoices(target: number, logged?: number): number[] {
+  let start = Math.min(Math.max(1, target - 2), 10 - RPE_CHOICES + 1)
+  if (logged !== undefined && logged >= 1 && logged <= 10) {
+    start = Math.min(Math.max(start, logged - RPE_CHOICES + 1), logged)
+  }
+  return Array.from({ length: RPE_CHOICES }, (_, i) => start + i)
+}
+
 export function setRpe(lifts: LiveLifts, exercise: number, set: number, rpe: number): LiveLifts {
   if (!lifts.sets[exercise]?.[set] || !Number.isInteger(rpe) || rpe < 1 || rpe > 10) return lifts
   return updateSets(lifts, exercise, (sets) => sets.map((s, i) => (i === set ? { ...s, rpe } : s)))
