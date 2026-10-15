@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Button, Link } from 'react-aria-components'
-import { addDays } from '../../domain/calendar'
+import { addDays, daysBetween } from '../../domain/calendar'
 import type { Activity } from '../../domain/activity'
 import type { ActivityAttached, ActivityQuestion, BucketEntry, CoachDay, PhaseProgress, RestReason } from '../../domain/coach'
 import { isLive, type LiveSession } from '../../domain/lifts'
@@ -10,7 +10,15 @@ import { describeSession, SESSION_TYPES } from '../../domain/program/describe'
 import type { Session } from '../../domain/program/types'
 import type { Settings } from '../../domain/settings'
 import type { Decision, Suggestion } from '../../domain/suggestion'
-import { outsideWeekLine, painLine, recoveryWhy, shortSleepLine, suggestionCopy, waitingLine } from '../coachCopy'
+import {
+  outsideWeekLine,
+  painLine,
+  recoveryWhy,
+  shortSleepLine,
+  skippedTodayLine,
+  suggestionCopy,
+  waitingLine,
+} from '../coachCopy'
 import { FieldLane } from '../components/FieldLane'
 import { LaneChip } from '../components/LaneChip'
 import { buttonBase, lineAction, primaryAction, quietButton } from '../components/actions'
@@ -235,10 +243,11 @@ function UpNext({
   const { position, upNext } = day
   const standing = day.pain?.report ?? null
   const previousPain = standing?.score ?? null
-  const upNextWeek = day.bucket.find((e) => e.state === 'next')?.week
+  const upNextEntry = day.bucket.find((e) => e.state === 'next')
+  const upNextWeek = upNextEntry?.week
   const run = upNext && upNextWeek ? runContext(upNextWeek, upNext) : undefined
-  /** Where to start a Session early: Week 1 before the Program, the next Week once this one is all logged. */
-  const weekDone = day.bucket.length > 0 && day.bucket.every((e) => e.log !== null)
+  /** Where to start a Session early: Week 1 before the Program, the next Week once nothing in this one is left to do. */
+  const weekDone = day.bucket.length > 0 && day.bucket.every((e) => !e.toDo)
   const ahead = upNext
     ? null
     : position.kind === 'before-start'
@@ -259,7 +268,11 @@ function UpNext({
     // Paces from the Starting point read as estimates wherever they set a run's target.
     const estimated =
       run?.paces?.estimate && describeSession(upNext, { ...run, paces: null }, day.workingWeights).target !== target
-    meta = [description.meta, estimated && 'Estimated paces'].filter(Boolean).join(' · ')
+    // Skipped earlier and back as Up next: say so, or it reads like the Coach forgot.
+    const skippedOn = upNextEntry?.log?.status === 'skipped' ? upNextEntry.log.date : null
+    meta = [skippedOn && `Skipped ${weekday(skippedOn)}, still counts`, description.meta, estimated && 'Estimated paces']
+      .filter(Boolean)
+      .join(' · ')
   } else if (position.kind === 'before-start') {
     const when =
       position.daysToStart === 1
@@ -634,6 +647,16 @@ function restCopy(
         target: 'Speed on legs that just lifted or pushed a sled? No. It waits a day.',
         meta: 'Tap Speed below to do it anyway',
       }
+    case 'skipped-today':
+      return {
+        heading: today === weekEnd ? 'Week over.' : 'Skipped.',
+        target: skippedTodayLine(rest.sessions, rest.lastDay, daysBetween(today, weekEnd)),
+        meta: rest.lastDay
+          ? today === weekEnd && week < weekCount
+            ? `Week ${week + 1} starts ${shortDay(addDays(weekEnd, 1))}`
+            : ''
+          : `Tap ${rest.sessions.length === 1 ? 'it' : 'one'} below to do it today anyway`,
+      }
     case 'waiting':
       return {
         heading: 'Rest.',
@@ -658,9 +681,9 @@ function ThisWeek({
   const inWeek = position.kind === 'in-week'
   // Before the Program, Week 1's Sessions can be picked to do early.
   const interactive = inWeek || position.kind === 'before-start'
-  const left = bucket.filter((e) => !e.session.optional && !e.log).length
-  // Rows that can still be made today's: not logged, not already Next, not pinned to another day.
-  const pickable = bucket.some((e) => e.pickable && !e.log && e.state !== 'next')
+  const left = bucket.filter((e) => !e.session.optional && e.toDo).length
+  // Rows that can still be made today's: still to do, not already Next, not pinned to another day.
+  const pickable = bucket.some((e) => e.pickable && e.toDo && e.state !== 'next')
   const aside = inWeek
     ? `${plural(left, 'Session')} left · ${plural(position.daysLeft, 'day')}`
     : `from ${shortDay(week.startDate)}`
@@ -694,8 +717,9 @@ function ThisWeek({
 const rowClass = 'grid w-full grid-cols-[36px_1fr_auto] items-center gap-3 py-3.5 text-left'
 
 /**
- * One Session of the Bucket. Planned rows are buttons that make the Session
- * today's; logged rows link to their log; Up next is plain, it's already today's.
+ * One Session of the Bucket. Rows still to do (Planned, or Skipped with days
+ * left) are buttons that make the Session today's; other logged rows link to
+ * their log; Up next is plain, it's already today's.
  */
 function BucketRow({
   entry,
@@ -757,7 +781,7 @@ function BucketRow({
     <li className="border-b border-rule">
       {!interactive || state === 'next' ? (
         <div className={rowClass}>{content}</div>
-      ) : log ? (
+      ) : log && !entry.toDo ? (
         <Link href={logPath(week, session.id)} className={`group ${rowClass} text-ink no-underline`}>
           {content}
         </Link>

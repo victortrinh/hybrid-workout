@@ -127,6 +127,16 @@ export function outsideWeekLine(when: 'early' | 'late', week: number, startDate:
     : `Late. Week ${week} closed ${shortDay(sunday)}. Better late than Skipped: anything done today counts for Week ${week}.`
 }
 
+/**
+ * Today's line once all that's left was Skipped today: it waits for tomorrow,
+ * or it was its last day and the Week closes with the miss.
+ */
+export function skippedTodayLine(sessions: Session[], lastDay: boolean, daysAfter: number): string {
+  const names = list(sessions.map((s) => SESSION_TYPES[s.type].name))
+  if (lastDay) return `${names} skipped. It happens.`
+  return `${names} ${sessions.length === 1 ? 'waits' : 'wait'} for tomorrow. ${plural(daysAfter, 'day')} left to fit ${sessions.length === 1 ? 'it' : 'them'} in.`
+}
+
 /** Today's rest line while all that's left is pinned to a later day: "The race is tomorrow. Save it for that." */
 export function waitingLine(session: Session, date: LocalDate, today: LocalDate): string {
   const what = session.id === 'race' ? 'The race' : describeSession(session).heading
