@@ -412,7 +412,7 @@ function StationList({ block }: { block: LiveBlock }) {
       {block.stations.map((leg) => (
         <li key={leg.station} className="text-[22px] leading-tight font-bold">
           {stations[leg.station].name}{' '}
-          <span className="block text-[17px] font-semibold">{nb(stationWords(leg) || 'Nothing to load')}</span>
+          <span className="block text-[17px] font-semibold">{nb(stationWords(leg))}</span>
         </li>
       ))}
     </ul>

@@ -307,6 +307,7 @@ function SessionDetail({
               )
             })}
           </ul>
+          {block.note && <p className="mt-3 text-body-quiet text-muted">{block.note}</p>}
         </div>
       ))}
     </section>
