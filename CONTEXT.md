@@ -89,7 +89,14 @@ An all-out 5 km time trial that replaces that Week's Speed session and resets th
 _Avoid_: benchmark, TT
 
 **Training paces**:
-The 5K, Threshold and Easy paces derived from the latest 5K test.
+The 5K, Threshold and Easy paces derived from the latest 5K test, or, before the first one, Estimated Training paces.
+
+**Starting point**:
+The estimates the athlete gives once, at first launch: an estimated 5K time and estimated Working weights for the main lifts, each optional. Editable in Settings until a real result replaces each; a real result always wins.
+_Avoid_: onboarding, baseline (the baseline is the first 5K test)
+
+**Estimated Training paces**:
+Training paces from the Starting point's estimated 5K time, worked out as for a 5K test of that time and shown as estimates until the first 5K test replaces them.
 
 **Goal pace**:
 4:00 per km, the pace of a sub-20 5K.
@@ -98,7 +105,7 @@ The 5K, Threshold and Easy paces derived from the latest 5K test.
 Whether a run happens Indoors on a treadmill or Outdoors; Indoor Prescriptions are expressed as speed and incline.
 
 **Working weight**:
-The current load for a lift's main sets, first found in a calibration session and then progressed from logged reps and RPE.
+The current load for a lift's main sets, first found in a calibration session and then progressed from logged reps and RPE. A calibration ramps from the empty bar, or from about 70% of the Starting point's estimate, rounded down to 5 lb.
 
 **Station**:
 One of the eight HYROX race stations: SkiErg, sled push, sled pull, burpee broad jumps, row, farmers carry, sandbag lunges, wall balls.

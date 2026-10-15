@@ -458,7 +458,7 @@ function PacesPanel({
   unit: SpeedUnit
   firstTestWeek: number | null
 }) {
-  if (!paces || !fiveKTest) {
+  if (!paces || (!fiveKTest && !paces.estimate)) {
     return (
       <Panel title="Training paces" sub="Runs go by RPE until the baseline 5K test." span={4}>
         <EmptyState title="No paces yet.">
@@ -475,7 +475,15 @@ function PacesPanel({
     ['Easy', `${clock(paces.easy[0])}–${clock(paces.easy[1])}`, `${speed(paces.easy[1])}–${speed(paces.easy[0])}`],
   ]
   return (
-    <Panel title="Training paces" sub={fromTest(fiveKTest.week, fiveKTest.date, paces.fromSeconds)} span={4}>
+    <Panel
+      title="Training paces"
+      sub={
+        fiveKTest
+          ? fromTest(fiveKTest.week, fiveKTest.date, paces.fromSeconds)
+          : `Estimated from your ${clock(paces.fromSeconds)} 5K estimate. ${firstTestWeek ? `The Week ${firstTestWeek} test` : 'The first 5K test'} replaces them.`
+      }
+      span={4}
+    >
       <table className="mt-2.5 w-full border-collapse text-[16px]">
         <thead>
           <tr className="border-b border-rule text-left text-label text-muted">

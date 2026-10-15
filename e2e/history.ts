@@ -18,8 +18,9 @@ export async function seedLogs(request: APIRequestContext, project: string, logs
 
 /**
  * Answers /api/state and /api/sync with this history, plus whatever the page
- * syncs, without touching the shared database. Returns the logs the page
- * sends, latest last, for tests that check what was saved.
+ * syncs (the Starting point too, the last one sent), without touching the
+ * shared database. Returns the logs the page sends, latest last, for tests
+ * that check what was saved.
  */
 export async function serveHistory(
   page: Page,
@@ -30,14 +31,16 @@ export async function serveHistory(
 ): Promise<Record<string, unknown>[]> {
   const sent: Record<string, unknown>[] = []
   const history = logs.map((l) => toLog(l, 'e2e-served'))
+  let startingPoint: unknown = null
   await page.route(/\/api\/(state|sync)$/, (route) => {
     if (route.request().method() === 'POST') {
       const body = route.request().postDataJSON()
       sent.push(...(body.sessionLogs ?? []))
       painReports.push(...(body.painReports ?? []))
+      startingPoint = body.startingPoint ?? startingPoint
     }
     return route.fulfill({
-      json: { sessionLogs: [...history, ...sent], suggestionDecisions, painReports, recoveryNights },
+      json: { sessionLogs: [...history, ...sent], suggestionDecisions, painReports, recoveryNights, startingPoint },
     })
   })
   return sent

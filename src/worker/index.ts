@@ -14,6 +14,7 @@ import { parseSessionLog, type SessionLog, type StationPart, type SyncState } fr
 import { parsePainReport, type PainReport } from '../domain/pain'
 import { program } from '../domain/program/program'
 import { parseRecoveryNight, type RecoveryNight } from '../domain/recovery'
+import { parseStartingPoint, type StartingPoint } from '../domain/startingPoint'
 import { parseDecision, type SuggestionDecision } from '../domain/suggestion'
 import { EXPORT_TABLES, readTables, toCsv, zip } from './export'
 
@@ -66,8 +67,9 @@ app.post('/sync', async (c) => {
   let decisions: SuggestionDecision[]
   let reports: PainReport[]
   let answers: ActivityAnswer[]
+  let startingPoint: StartingPoint | null
   try {
-    ;({ logs, decisions, reports, answers } = parseSyncRequest(await c.req.json()))
+    ;({ logs, decisions, reports, answers, startingPoint } = parseSyncRequest(await c.req.json()))
   } catch (error) {
     return c.json({ error: error instanceof Error ? error.message : 'Invalid request' }, 400)
   }
@@ -162,6 +164,19 @@ app.post('/sync', async (c) => {
     )
     await c.env.DB.batch(answers.map((a) => upsert.bind(a.activityId, a.week, a.sessionId, a.updatedAt)))
   }
+  if (startingPoint) {
+    const { fiveKSeconds, weights, updatedAt } = startingPoint
+    await c.env.DB.prepare(
+      `insert into starting_point (id, five_k_seconds, back_squat_pounds, romanian_deadlift_pounds, updated_at)
+       values (1, ?, ?, ?, ?)
+       on conflict (id) do update set
+         five_k_seconds = excluded.five_k_seconds, back_squat_pounds = excluded.back_squat_pounds,
+         romanian_deadlift_pounds = excluded.romanian_deadlift_pounds, updated_at = excluded.updated_at
+       where excluded.updated_at > starting_point.updated_at`,
+    )
+      .bind(fiveKSeconds, weights['back-squat'] ?? null, weights['romanian-deadlift'] ?? null, updatedAt)
+      .run()
+  }
   return c.json(await readState(c.env.DB))
 })
 
@@ -233,23 +248,36 @@ app.notFound((c) => c.json({ error: 'Not found' }, 404))
 
 const exportName = (now: Date) => `compromised-${localDateIn(now)}`
 
-/** Any list may be left out; whatever is there must all be valid. */
+/** Any list, and the Starting point, may be left out; whatever is there must all be valid. */
 function parseSyncRequest(body: unknown): {
   logs: SessionLog[]
   decisions: SuggestionDecision[]
   reports: PainReport[]
   answers: ActivityAnswer[]
+  startingPoint: StartingPoint | null
 } {
   if (typeof body !== 'object' || body === null) throw new Error('The body must be an object')
-  const { sessionLogs = [], suggestionDecisions = [], painReports = [], activityAnswers = [] } = body as Record<
-    string,
-    unknown
-  >
+  const {
+    sessionLogs = [],
+    suggestionDecisions = [],
+    painReports = [],
+    activityAnswers = [],
+    startingPoint = null,
+  } = body as Record<string, unknown>
   return {
     logs: parseLogs(sessionLogs),
     decisions: parseDecisions(suggestionDecisions),
     reports: parseReports(painReports),
     answers: parseAnswers(activityAnswers),
+    startingPoint: startingPoint === null ? null : parseStarting(startingPoint),
+  }
+}
+
+function parseStarting(raw: unknown): StartingPoint {
+  try {
+    return parseStartingPoint(raw)
+  } catch (error) {
+    throw new Error(`startingPoint: ${error instanceof Error ? error.message : 'invalid'}`)
   }
 }
 
@@ -401,6 +429,13 @@ interface AnswerRow {
   updated_at: string
 }
 
+interface StartingRow {
+  five_k_seconds: number | null
+  back_squat_pounds: number | null
+  romanian_deadlift_pounds: number | null
+  updated_at: string
+}
+
 interface DecisionRow {
   id: string
   decision: string
@@ -408,10 +443,20 @@ interface DecisionRow {
   updated_at: string
 }
 
+type StateRow =
+  | SessionLogRow
+  | DecisionRow
+  | IntervalRow
+  | StationRow
+  | SetRow
+  | PainRow
+  | RecoveryRow
+  | ActivityRow
+  | AnswerRow
+  | StartingRow
+
 async function readState(db: D1Database): Promise<SyncState> {
-  const [{ results }, decisions, intervals, stationRows, setRows, pain, nights, activityRows, answerRows] = (await db.batch<
-    SessionLogRow | DecisionRow | IntervalRow | StationRow | SetRow | PainRow | RecoveryRow | ActivityRow | AnswerRow
-  >([
+  const [{ results }, decisions, intervals, stationRows, setRows, pain, nights, activityRows, answerRows, starting] = (await db.batch<StateRow>([
     db.prepare('select * from session_logs order by date, updated_at'),
     db.prepare('select * from suggestion_decisions order by updated_at'),
     db.prepare('select * from interval_logs order by session_log_id, block'),
@@ -421,6 +466,7 @@ async function readState(db: D1Database): Promise<SyncState> {
     db.prepare('select * from recovery_nights order by date'),
     db.prepare('select * from activities order by id'),
     db.prepare('select * from activity_answers order by updated_at'),
+    db.prepare('select * from starting_point'),
   ])) as [
     D1Result<SessionLogRow>,
     D1Result<DecisionRow>,
@@ -431,6 +477,7 @@ async function readState(db: D1Database): Promise<SyncState> {
     D1Result<RecoveryRow>,
     D1Result<ActivityRow>,
     D1Result<AnswerRow>,
+    D1Result<StartingRow>,
   ]
   const reps = new Map<string, IntervalRow[]>()
   for (const row of intervals.results) reps.set(row.session_log_id, [...(reps.get(row.session_log_id) ?? []), row])
@@ -440,7 +487,15 @@ async function readState(db: D1Database): Promise<SyncState> {
   }
   const sets = new Map<string, SetRow[]>()
   for (const row of setRows.results) sets.set(row.session_log_id, [...(sets.get(row.session_log_id) ?? []), row])
+  const point = starting.results[0]
   return {
+    startingPoint: point
+      ? parseStartingPoint({
+          fiveKSeconds: point.five_k_seconds,
+          weights: { 'back-squat': point.back_squat_pounds, 'romanian-deadlift': point.romanian_deadlift_pounds },
+          updatedAt: point.updated_at,
+        })
+      : null,
     activities: activityRows.results.map((row) =>
       parseActivity(
         {

@@ -12,6 +12,7 @@ import type { PainArea, PainReport } from '../domain/pain'
 import { mergeDecisions, painId } from '../domain/suggestion'
 import type { Session } from '../domain/program/types'
 import { environmentOn } from '../domain/settings'
+import { startingFields } from '../domain/startingPoint'
 import { program } from '../domain/program/program'
 import { DockContext } from './components/ActionBar'
 import { Icon } from './components/Icons'
@@ -22,6 +23,7 @@ import { NotFound } from './screens/NotFound'
 import { Plan } from './screens/Plan'
 import { Progress } from './screens/Progress'
 import { Shortcut } from './screens/Shortcut'
+import { StartingPoint } from './screens/StartingPoint'
 import { Workouts } from './screens/Workouts'
 import { unlockSound } from './liveCues'
 import { Live } from './screens/Live'
@@ -35,6 +37,7 @@ import { editedAt, useDecisions } from './useDecisions'
 import { usePainReports } from './usePainReports'
 import { useRecovery } from './useRecovery'
 import { useSessionLogs } from './useSessionLogs'
+import { useStartingPoint } from './useStartingPoint'
 import { environmentKey, useSettings } from './useSettings'
 import { useLiveRun } from './useLiveRun'
 import { useToday } from './useToday'
@@ -74,11 +77,24 @@ export function App() {
   const recoveryNights = useRecovery()
   const { activities, answers: activityAnswers, answer, error: answerError } = useActivities()
   const { settings, change, overrides, override } = useSettings()
+  const { point: startingPoint, answered, save: saveStartingPoint } = useStartingPoint()
   const { equipment } = settings
   const day = useMemo(
     () =>
-      coach({ program, today, logs, picked, decisions, equipment, painReports, recoveryNights, activities, activityAnswers }),
-    [today, logs, picked, decisions, equipment, painReports, recoveryNights, activities, activityAnswers],
+      coach({
+        program,
+        today,
+        logs,
+        picked,
+        decisions,
+        equipment,
+        painReports,
+        recoveryNights,
+        activities,
+        activityAnswers,
+        startingPoint,
+      }),
+    [today, logs, picked, decisions, equipment, painReports, recoveryNights, activities, activityAnswers, startingPoint],
   )
   /** Whether a run of the watch's was on a treadmill: its own flag, else the month's Environment. */
   const treadmill = (activity: Activity) => isTreadmill(activity, (date) => environmentOn(date, settings))
@@ -137,6 +153,7 @@ export function App() {
       recoveryNights,
       activities,
       activityAnswers,
+      startingPoint,
     })
     // Early or late, the Session isn't in the Bucket: its own Week, with the same pain rules.
     // Before the Program the Bucket is Week 1 without them, so it goes the same way.
@@ -153,7 +170,10 @@ export function App() {
     const now = nowMs()
     setLive(
       started.type === 'strength'
-        ? startLifts({ week, session: started, date: today, weights: day.workingWeights }, now)
+        ? startLifts(
+            { week, session: started, date: today, weights: day.workingWeights, estimates: day.estimatedWeights },
+            now,
+          )
         : startRun({ week, session: started, date: today, environment: runContext(week, session).environment }, now),
     )
     navigate(SCREEN_PATH.live)
@@ -204,6 +224,15 @@ export function App() {
     )
   }
 
+  if (answered === false) {
+    // First launch: the Starting point, once, before anything else.
+    return (
+      <main id="main">
+        <StartingPoint onSave={saveStartingPoint} />
+      </main>
+    )
+  }
+
   return (
     <RouterProvider navigate={navigate}>
       <a
@@ -232,6 +261,10 @@ export function App() {
               onEnvironment={setEnvironment}
               settings={settings}
               onSettings={change}
+              startingPoint={{
+                fields: startingFields(startingPoint, day.fiveKTest, day.workingWeights),
+                onSave: saveStartingPoint,
+              }}
               live={live}
               onStart={startLive}
               onSomethingHurts={(score, area) => report(painReport(score, area, null, null))}

@@ -29,6 +29,9 @@ const START_POUNDS: Record<LiftId, number> = {
   'seated-calf-raise-machine': 45,
 }
 
+/** A calibration from the Starting point's estimate starts here, as a share of it. */
+export const ESTIMATE_START_PERCENT = 70
+
 /** Rest where the Program doesn't say: longer after the main lifts. */
 const REST_MAIN = 90
 const REST_OTHER = 60
@@ -90,13 +93,15 @@ export interface LiftsStart {
   session: Session
   date: LocalDate
   weights: WorkingWeights
+  /** The Starting point's estimated Working weights, for lifts with none yet. */
+  estimates?: WorkingWeights
 }
 
-export function startLifts({ week, session, date, weights }: LiftsStart, now: number): LiveLifts {
+export function startLifts({ week, session, date, weights, estimates = {} }: LiftsStart, now: number): LiveLifts {
   const lifts = session.blocks.flatMap((block) =>
     block.exercises.flatMap(({ name, note, prescription: rx }) =>
       rx.kind === 'sets'
-        ? [{ exercise: liveExercise(name, note ?? null, rx, block, weights), pounds: startingPounds(rx, weights) }]
+        ? [{ exercise: liveExercise(name, note ?? null, rx, block, weights), pounds: startingPounds(rx, weights, estimates) }]
         : [],
     ),
   )
@@ -144,9 +149,21 @@ function liveExercise(name: string, note: string | null, rx: Sets, block: Block,
 }
 
 /** The Working weight (or its Deload or light share), or a calibration's starting load. */
-function startingPounds(rx: Sets, weights: WorkingWeights): number | null {
+function startingPounds(rx: Sets, weights: WorkingWeights, estimates: WorkingWeights): number | null {
   if (!('lift' in rx.load)) return null
-  return prescribedPounds(rx, weights) ?? START_POUNDS[rx.load.lift]
+  return prescribedPounds(rx, weights) ?? calibrationStart(rx.load.lift, weights, estimates)
+}
+
+/**
+ * Where a calibration ramps from: about 70% of the estimate, to the 5 lb
+ * below so the ramp starts on the light side, while the lift has no real
+ * Working weight; otherwise the empty bar or a light dumbbell.
+ */
+function calibrationStart(lift: LiftId, weights: WorkingWeights, estimates: WorkingWeights): number {
+  const estimate = weights[lift] === undefined ? estimates[lift] : undefined
+  if (estimate === undefined) return START_POUNDS[lift]
+  const share = Math.floor((estimate * ESTIMATE_START_PERCENT) / 100 / LOAD_STEP) * LOAD_STEP
+  return Math.max(START_POUNDS[lift], share)
 }
 
 const range = ([low, high]: Range) => (low === high ? `${low}` : `${low}–${high}`)

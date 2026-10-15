@@ -5,6 +5,7 @@ import type { LoggedStatus, SessionLog } from './log'
 import {
   clock,
   clockInput,
+  currentPaces,
   formatPace,
   latestFiveKTest,
   paceFor,
@@ -63,6 +64,45 @@ describe('Training paces', () => {
       expect(p.threshold).toBeLessThan(p.easy[0])
       expect(p.easy[0]).toBeLessThan(p.easy[1])
     }
+  })
+})
+
+describe('estimated Training paces', () => {
+  const today = localDate('2026-11-04')
+  const test = (resultSeconds: number, date = '2026-10-28'): SessionLog =>
+    ({
+      id: `t-${date}`,
+      week: 2,
+      sessionId: '5k-test',
+      date: localDate(date),
+      status: 'done',
+      resultSeconds,
+      updatedAt: `${date}T20:00:00.000Z`,
+    }) as SessionLog
+
+  it('come from the Starting point’s estimated 5K time when no 5K test is logged, marked as an estimate', () => {
+    const estimated = currentPaces([], today, 21 * 60)
+    const logged = currentPaces([test(21 * 60)], today, null)
+    expect(estimated).toEqual({ ...logged, estimate: true })
+    expect(logged?.estimate).toBe(false)
+  })
+
+  it('give way to the first real 5K test', () => {
+    expect(currentPaces([test(23 * 60)], today, 21 * 60)).toEqual(trainingPaces(23 * 60))
+    // A test logged after today doesn't count yet: the estimate stands.
+    expect(currentPaces([test(23 * 60, '2026-11-11')], today, 21 * 60)?.fromSeconds).toBe(21 * 60)
+  })
+
+  it('stay null with neither, so runs go by RPE', () => {
+    expect(currentPaces([], today, null)).toBeNull()
+  })
+
+  it('reach the Coach, which shows them for the runs', () => {
+    const week2 = localDate('2026-10-27')
+    const day = coach({ program, today: week2, startingPoint: { fiveKSeconds: 21 * 60, weights: {}, updatedAt: 'x' } })
+    expect(day.paces).toEqual({ ...trainingPaces(21 * 60), estimate: true })
+    expect(day.fiveKTest).toBeNull()
+    expect(coach({ program, today: week2 }).paces).toBeNull()
   })
 })
 

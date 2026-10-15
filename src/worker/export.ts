@@ -1,7 +1,7 @@
 /**
  * Data export: every table as it is stored, so the athlete owns the data
  * whatever happens to the app. One JSON file with all of it, or one CSV per
- * table in a zip, since a browser won't take nine downloads from one tap.
+ * table in a zip, since a browser won't take ten downloads from one tap.
  */
 
 /** Every table the app writes, parents before children. */
@@ -15,6 +15,7 @@ export const EXPORT_TABLES = [
   'recovery_nights',
   'activities',
   'activity_answers',
+  'starting_point',
 ] as const
 
 export type ExportTable = (typeof EXPORT_TABLES)[number]

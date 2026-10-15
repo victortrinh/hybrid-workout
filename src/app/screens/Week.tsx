@@ -79,7 +79,9 @@ export function WeekScreen({
       <p className="mt-1.5 text-body-quiet text-muted">
         {day.fiveKTest?.resultSeconds
           ? `Paces from the ${clock(day.fiveKTest.resultSeconds)} 5K test on ${shortDay(day.fiveKTest.date)}`
-          : 'Runs go by RPE until the baseline 5K test sets the Training paces'}
+          : day.paces?.estimate
+            ? `Estimated paces from your ${clock(day.paces.fromSeconds)} 5K estimate, until the first 5K test`
+            : 'Runs go by RPE until the baseline 5K test sets the Training paces'}
       </p>
 
       {week.notes && (

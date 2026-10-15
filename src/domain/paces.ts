@@ -4,7 +4,8 @@
  * The latest 5K test gives a VDOT (Daniels and Gilbert's oxygen-cost and
  * time-to-exhaustion equations, the ones behind Daniels' tables), and each
  * Training pace is the speed that costs a fixed share of it. Before the
- * baseline test there are no paces and run Prescriptions stay RPE only.
+ * baseline test the Starting point's estimated 5K time stands in, marked as
+ * an estimate; with neither, run Prescriptions stay RPE only.
  *
  * Paces are seconds per km. Indoor runs read as treadmill speed and incline,
  * Outdoor runs as pace per km.
@@ -36,11 +37,13 @@ export interface TrainingPaces {
   threshold: number
   /** Easy is a range: the faster end first. */
   easy: Range
+  /** From the Starting point's estimated 5K time, not a 5K test. */
+  estimate: boolean
 }
 
 /** What a run Prescription is resolved against. */
 export interface RunContext {
-  /** Null until the baseline 5K test: then every run is RPE only. */
+  /** Null with no 5K test and no estimated 5K time: then every run is RPE only. */
   paces: TrainingPaces | null
   environment: Environment
   unit: SpeedUnit
@@ -77,7 +80,7 @@ export function vdot(fiveKSeconds: number): number {
 
 const secondsPerKm = (metresPerMinute: number) => Math.round(60_000 / metresPerMinute)
 
-export function trainingPaces(fiveKSeconds: number): TrainingPaces {
+export function trainingPaces(fiveKSeconds: number, { estimate = false } = {}): TrainingPaces {
   const v = vdot(fiveKSeconds)
   const at = (share: number) => secondsPerKm(speedAtCost(v * share))
   return {
@@ -86,6 +89,7 @@ export function trainingPaces(fiveKSeconds: number): TrainingPaces {
     fiveK: Math.round(fiveKSeconds / 5),
     threshold: at(THRESHOLD_SHARE),
     easy: [at(EASY_SHARES[0]), at(EASY_SHARES[1])],
+    estimate,
   }
 }
 
@@ -106,6 +110,16 @@ export function latestFiveKTest(logs: SessionLog[], today: LocalDate): SessionLo
     }
   }
   return latest
+}
+
+/**
+ * The Training paces on `today`: from the latest 5K test, or else from the
+ * Starting point's estimated 5K time, or none.
+ */
+export function currentPaces(logs: SessionLog[], today: LocalDate, estimatedSeconds: number | null): TrainingPaces | null {
+  const test = latestFiveKTest(logs, today)
+  if (test?.resultSeconds) return trainingPaces(test.resultSeconds)
+  return estimatedSeconds === null ? null : trainingPaces(estimatedSeconds, { estimate: true })
 }
 
 /** The pace range a run effort asks for, in seconds per km, or null where it goes by feel. */

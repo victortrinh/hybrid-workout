@@ -10,6 +10,7 @@ import { ENVIRONMENTS, FIVE_K_SECONDS, type Environment } from './paces'
 import type { Activity, ActivityAnswer } from './activity'
 import type { PainReport } from './pain'
 import type { RecoveryNight } from './recovery'
+import type { StartingPoint } from './startingPoint'
 import { LIFTS, type LiftId } from './program/types'
 import { stations } from './program/program'
 import type { StationId } from './program/types'
@@ -112,6 +113,8 @@ export interface SyncState {
   activities?: Activity[]
   /** The athlete's answers to "Which Session was this?". */
   activityAnswers?: ActivityAnswer[]
+  /** Null until the athlete answers the Starting point; older servers and stand-ins may leave it out. */
+  startingPoint?: StartingPoint | null
 }
 
 export const NOTES_MAX = 2000

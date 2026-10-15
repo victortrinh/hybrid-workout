@@ -60,6 +60,23 @@ describe('the Worker in the browser', () => {
     expect((await state()).sessionLogs).toEqual([later])
   })
 
+  it('keeps the Starting point, a later edit winning, and refuses an unbelievable one', async () => {
+    expect((await state()).startingPoint).toBeNull()
+    const point = { fiveKSeconds: 1260, weights: { 'back-squat': 225 }, updatedAt: '2026-10-15T12:00:00.000Z' }
+    expect((await sync({ startingPoint: point })).startingPoint).toEqual(point)
+    const later = { fiveKSeconds: null, weights: { 'romanian-deadlift': 185 }, updatedAt: '2026-10-16T12:00:00.000Z' }
+    await sync({ startingPoint: later })
+    await sync({ startingPoint: point })
+    expect((await state()).startingPoint).toEqual(later)
+    const refused = await api(
+      new Request('http://localhost/api/sync', {
+        method: 'POST',
+        body: JSON.stringify({ startingPoint: { ...point, fiveKSeconds: 60 } }),
+      }),
+    )
+    expect(refused.status).toBe(400)
+  })
+
   it('lets the Shortcut in with the mock service token, and nobody else', async () => {
     const night = { date: '2026-11-04', sleepMinutes: 420, hrvMs: 60, restingHeartRate: 50, source: 'Ring' }
     const post = (headers: Record<string, string>) =>
@@ -80,6 +97,7 @@ describe('the Worker in the browser', () => {
     const { tables } = (await response.json()) as { tables: Record<string, unknown[]> }
     expect(tables.session_logs).toHaveLength(1)
     expect(tables.interval_logs).toHaveLength(1)
+    expect(tables.starting_point).toEqual([])
     const zip = await api(new Request('http://localhost/api/export.zip'))
     expect(zip.headers.get('content-type')).toBe('application/zip')
   })
