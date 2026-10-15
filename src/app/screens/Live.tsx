@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
 import {
   Button,
+  Checkbox,
   FieldError,
   Form,
   Input,
@@ -16,16 +17,25 @@ import {
   answerStations,
   blockElapsed,
   blockLeft,
+  canUndo,
   distanceSeconds,
   end,
+  goBack,
   heldUnanswered,
+  isChecklist,
   isOver,
   liveStatus,
   liveTarget,
+  markDone,
   nextBlock,
   pause,
   predictedRpe,
+  redone,
   resume,
+  shortBlocks,
+  tick,
+  undo,
+  UNDO_MS,
   type LiveBlock,
   type LiveRun,
   type LiveStation,
@@ -79,8 +89,9 @@ const LANE_BG: Record<Lane, string> = {
  * A Live session: sets at the rack (LiveLifts.tsx), or a run against the clock.
  *
  * A Live run session: the cobalt field with the Block, its target speed huge
- * and striped, and the time left; a lane per Block below; Pause and Skip
- * block pinned to the bottom where a thumb finds them.
+ * and striped, and the time left; a lane per Block below, an earlier one a
+ * tap to go back to; Pause and Skip block (or Done) pinned to the bottom
+ * where a thumb finds them, and Start alone while the clock holds on Ready.
  *
  * The clock never re-renders the page. A tick writes the timer and the
  * current lane's fill straight into the DOM, and the run state only changes
@@ -136,6 +147,7 @@ function Running({
   const paused = run.pausedAt !== null
   const block: LiveBlock | undefined = run.blocks[run.block]
   const target = block && targetFor(block, context)
+  const [backTo, setBackTo] = useState<number | null>(null)
 
   const runRef = useRef(run)
   runRef.current = run
@@ -230,7 +242,7 @@ function Running({
         ) : (
           <>
             <p className="mt-3.5 text-[20px] font-bold">
-              {nb(`${block.name} · ${blockLength(block)}`)}
+              {nb(run.ready ? readyWords(block, target) : `${block.name} · ${blockLength(block)}`)}
             </p>
             {target ? (
               <p className="mt-1.5 flex flex-wrap items-baseline gap-x-2">
@@ -259,7 +271,9 @@ function Running({
               />
             </div>
             {block.stations.length > 0 && <StationList block={block} />}
-            {block.detail.length > 0 && (
+            {isChecklist(block) ? (
+              <Checklist block={block} ticked={run.ticked} onTick={(row) => act((r, now) => tick(r, row, now))} />
+            ) : block.detail.length > 0 && (
               <ul className="mt-3 text-body">
                 {block.detail.map((d) => (
                   <li key={d}>{nb(d)}</li>
@@ -267,7 +281,7 @@ function Running({
               </ul>
             )}
             <p aria-live="polite" className="mt-3.5 min-h-6 text-[18px] font-semibold">
-              {liveLine(block, run)}
+              {run.ready ? 'The clock waits. Tap Start when you’re set.' : liveLine(block, run)}
             </p>
           </>
         )}
@@ -282,24 +296,59 @@ function Running({
           onStations={(b, change) => act((r) => answerStations(r, b, change))}
         />
         {over ? (
-          <FinishSheet run={run} context={context} onKeepGoing={() => act(resume)} onSave={(f) => onSave(heldUnanswered(run, context), f)} onDiscard={() => {
+          <FinishSheet
+            run={run}
+            context={context}
+            onKeepGoing={() => act(resume)}
+            onMarkDone={(done) => act((r) => markDone(r, done))}
+            onSave={(f) => onSave(heldUnanswered(run, context), f)}
+            onDiscard={() => {
               onChange(null)
               navigate(SCREEN_PATH.today)
             }}
           />
         ) : (
-          <Lanes run={run} context={context} fillRef={fillRef} />
+          <>
+            {backTo !== null && backTo < run.block && (
+              <GoBackCheck
+                run={run}
+                block={backTo}
+                onBack={() => {
+                  setBackTo(null)
+                  act((r, now) => goBack(r, backTo, now))
+                }}
+                onCancel={() => setBackTo(null)}
+              />
+            )}
+            <Lanes
+              run={run}
+              context={context}
+              fillRef={fillRef}
+              onBack={(b) => (redone(run, b).length > 0 ? setBackTo(b) : act((r, now) => goBack(r, b, now)))}
+            />
+          </>
         )}
       </div>
 
       {!over && block && (
-        <div className="sticky bottom-0 flex gap-2.5 border-t-2 border-ink bg-paper px-pad pt-3 pb-[calc(12px+env(safe-area-inset-bottom))] desktop:px-gutter">
-          <Button onPress={() => act(paused ? resume : pause)} className={`${primaryButton} desktop:max-w-60`}>
-            {paused ? 'Resume' : 'Pause'}
-          </Button>
-          <Button onPress={() => act(nextBlock)} className={`${lineButton} desktop:max-w-60`}>
-            {finishedLabel(block)}
-          </Button>
+        <div className="sticky bottom-0 border-t-2 border-ink bg-paper px-pad pt-3 pb-[calc(12px+env(safe-area-inset-bottom))] desktop:px-gutter">
+          <UndoToast run={run} onUndo={() => act(undo)} />
+          <div className="flex gap-2.5">
+            {run.ready ? (
+              <Button onPress={() => act(resume)} className={`${primaryButton} desktop:max-w-60`}>
+                Start
+              </Button>
+            ) : (
+              <>
+                <Button onPress={() => act(paused ? resume : pause)} className={`${primaryButton} desktop:max-w-60`}>
+                  {paused ? 'Resume' : 'Pause'}
+                </Button>
+                <Button onPress={() => act(nextBlock)} className={`${lineButton} desktop:max-w-60`}>
+                  {finishedLabel(block)}
+                </Button>
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -330,8 +379,12 @@ function targetFor(block: LiveBlock, context: RunContext): LiveTarget | null {
   return liveTarget(block, context)
 }
 
-/** The tap that ends a Block run to a distance or to the end of its work; Skip block on a timed one. */
+/**
+ * The tap that ends a Block early: Skip block on timed work, which makes the
+ * log Partial; Done on anything else. Finished on a Block run to a distance or to the end of its work.
+ */
 function finishedLabel(block: LiveBlock): string {
+  if (!block.work && (block.seconds !== null || isChecklist(block))) return 'Done'
   if (block.seconds !== null) return 'Skip block'
   if (block.kind === 'round') return `Finished round ${block.round}`
   if (block.kind === 'station') return `Finished ${block.name}`
@@ -384,8 +437,15 @@ function blockLength(block: LiveBlock): string {
     return `${km(block.meters ?? 0)} + ${n} ${n === 1 ? 'Station' : 'Stations'}`
   }
   if (block.kind === 'station') return volume(block.stations[0])
+  if (isChecklist(block)) return `${block.checklist.length} sets`
   if (block.seconds === null) return km(block.meters ?? 0)
   return block.seconds % 60 === 0 ? `${block.seconds / 60} min` : `${block.seconds} s`
+}
+
+/** "Ready? Up next: Rep 1 of 5 · 15.1 km/h", "Ready? Up next: 5 km" */
+function readyWords(block: LiveBlock, target: LiveTarget | null): string {
+  const what = target ? targetShort(target) : blockLength(block)
+  return `Ready? Up next: ${what === block.name ? block.name : `${block.name} · ${what}`}`
 }
 
 /** "12.3 km/h", "4:52/km", "RPE 6–7" */
@@ -399,14 +459,110 @@ const km = (meters: number) => (meters % 1000 === 0 ? `${meters / 1000} km` : `$
 /** 300 → "05:00", 4000 → "66:40" */
 const timerText = (seconds: number) => clock(seconds).padStart(5, '0')
 
+/**
+ * A checklist Block's sets, each a tap to tick, big enough to hit between
+ * jumps. The last tick ends the Block. Never logged.
+ */
+function Checklist({ block, ticked, onTick }: { block: LiveBlock; ticked: number[]; onTick: (row: number) => void }) {
+  return (
+    <ul aria-label="Sets" className="mt-3 grid gap-1">
+      {block.checklist.map((row, i) => (
+        <li key={row}>
+          <Checkbox
+            isSelected={ticked.includes(i)}
+            onChange={() => onTick(i)}
+            className="group flex min-h-11 cursor-pointer items-center gap-3 text-[19px] font-bold data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-current data-selected:line-through"
+          >
+            <span
+              aria-hidden="true"
+              className="grid size-7 flex-none place-items-center rounded-sm shadow-[inset_0_0_0_2px_currentColor] group-data-selected:bg-current"
+            >
+              <svg viewBox="0 0 16 16" className="hidden size-4 text-cobalt group-data-selected:block">
+                <path d="M3 8.5 6.5 12 13 4.5" fill="none" stroke="currentColor" strokeWidth="2.5" />
+              </svg>
+            </span>
+            {nb(row)}
+          </Checkbox>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/**
+ * For a few seconds after Skip block or Done: the Block back, as it was, its
+ * clock still running. Gone on its own; the run keeps the snapshot until the next tap.
+ */
+function UndoToast({ run, onUndo }: { run: LiveRun; onUndo: () => void }) {
+  const at = run.undo?.at ?? null
+  const [expired, setExpired] = useState<number | null>(null)
+  useEffect(() => {
+    if (at === null) return
+    const timer = window.setTimeout(() => setExpired(at), Math.max(0, UNDO_MS - (nowMs() - at)))
+    return () => window.clearTimeout(timer)
+  }, [at])
+  if (!run.undo || expired === at || !canUndo(run, nowMs())) return null
+  const left = run.undo.run.blocks[run.undo.run.block]
+  return (
+    <div role="status" className="mb-3 flex items-center justify-between gap-3">
+      <p className="text-body font-semibold">{nb(`${left.name}: ${left.work ? 'skipped' : 'done'}.`)}</p>
+      <Button onPress={onUndo} className={linkButton}>
+        Undo
+      </Button>
+    </div>
+  )
+}
+
+/** "Rep 2", "Reps 2–4", "Round 2 to Cooldown": the Blocks going back will run again. */
+function redoneWords(run: LiveRun, from: number): string {
+  const to = Math.min(run.block, run.blocks.length - 1)
+  const range = run.blocks.slice(from, to + 1)
+  const reps = range.filter((b) => b.work).map((b) => b.rep)
+  if (reps.length > 0 && reps.every((r) => r !== null)) {
+    return reps.length === 1 ? `Rep ${reps[0]}` : `Reps ${reps[0]}–${reps.at(-1)}`
+  }
+  return from === to ? range[0].name : `${range[0].name} to ${range.at(-1)!.name}`
+}
+
+/** Asks before going back drops what was recorded since. */
+function GoBackCheck({
+  run,
+  block,
+  onBack,
+  onCancel,
+}: {
+  run: LiveRun
+  block: number
+  onBack: () => void
+  onCancel: () => void
+}) {
+  const name = run.blocks[block].name
+  return (
+    <section aria-label={`Go back to ${name}?`} className="mt-4 border-t-2 border-ink pt-3 pb-1">
+      <p className="text-body">{nb(`Go back to ${name}? ${redoneWords(run, block)} will be redone.`)}</p>
+      <div className="mt-1 flex gap-5">
+        <Button onPress={onBack} className={linkButton}>
+          Go back
+        </Button>
+        <Button onPress={onCancel} className={quietButton}>
+          Cancel
+        </Button>
+      </div>
+    </section>
+  )
+}
+
 function Lanes({
   run,
   context,
   fillRef,
+  onBack,
 }: {
   run: LiveRun
   context: RunContext
   fillRef: React.RefObject<HTMLElement | null>
+  /** An earlier Block tapped: back to it. */
+  onBack: (block: number) => void
 }) {
   return (
     <ol aria-label="Blocks" className="mt-5 grid gap-3">
@@ -420,10 +576,18 @@ function Lanes({
             aria-current={current ? 'step' : undefined}
             className={`grid grid-cols-[1fr_auto] gap-x-2.5 gap-y-1.5 ${current ? 'text-[17px] font-extrabold' : 'text-[15px] font-semibold'}`}
           >
-            <span>
-              {b.name}
-              {i < run.block && <span className="sr-only">{run.skipped.includes(i) ? ', skipped' : ', done'}</span>}
-            </span>
+            {i < run.block ? (
+              <Button
+                onPress={() => onBack(i)}
+                aria-label={`${b.name}${run.skipped.includes(i) ? ', skipped' : ', done'}`}
+                className="cursor-pointer justify-self-start text-left hover:underline hover:decoration-2 hover:underline-offset-4 data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-link"
+              >
+                {b.name}
+                <span className="sr-only">{run.skipped.includes(i) ? ', skipped' : ', done'}</span>
+              </Button>
+            ) : (
+              <span>{b.name}</span>
+            )}
             <span className="text-muted">
               {target ? targetShort(target) : blockLength(b)}
               {split && ` · ${clock(split.seconds)}`}
@@ -605,6 +769,39 @@ function StationCheck({ block, onAnswer }: { block: LiveBlock; onAnswer: (change
   )
 }
 
+/**
+ * What made the log Partial, Block by Block: "Rep 3: 2:50 of 3:00". If none
+ * of it mattered, one tap logs it as Done.
+ */
+function CutShort({ run, onMarkDone }: { run: LiveRun; onMarkDone: (done: boolean) => void }) {
+  const short = shortBlocks(run)
+  if (short.length === 0) return null
+  const words = ({ block, seconds }: { block: number; seconds: number | null }) => {
+    const b = run.blocks[block]
+    if (seconds === null) return `${b.name}: not run`
+    return b.seconds === null ? `${b.name}: ${clock(seconds)}, not finished` : `${b.name}: ${clock(seconds)} of ${clock(b.seconds)}`
+  }
+  return (
+    <section aria-label="Cut short" className="grid gap-2">
+      <h2 className={groupLabel}>Cut short</h2>
+      <ul className="text-body">
+        {short.map((s) => (
+          <li key={s.block}>{nb(words(s))}</li>
+        ))}
+      </ul>
+      {run.markedDone ? (
+        <Button onPress={() => onMarkDone(false)} className={`justify-self-start ${quietButton}`}>
+          Log it as Partial after all
+        </Button>
+      ) : (
+        <Button onPress={() => onMarkDone(true)} className={`justify-self-start ${linkButton}`}>
+          Close enough: log it as Done
+        </Button>
+      )}
+    </section>
+  )
+}
+
 function AmountField({
   label,
   value,
@@ -654,12 +851,15 @@ function FinishSheet({
   run,
   context,
   onKeepGoing,
+  onMarkDone,
   onSave,
   onDiscard,
 }: {
   run: LiveRun
   context: RunContext
   onKeepGoing: () => void
+  /** Partial flipped to Done, or back. */
+  onMarkDone: (done: boolean) => void
   onSave: (finish: LiveFinish) => void
   onDiscard: () => void
 }) {
@@ -689,6 +889,7 @@ function FinishSheet({
 
   return (
     <Form onSubmit={submit} className="mt-4 flex flex-1 flex-col gap-6 border-t-2 border-ink pt-4">
+      <CutShort run={run} onMarkDone={onMarkDone} />
       {result && (
         <TextField
           value={time}

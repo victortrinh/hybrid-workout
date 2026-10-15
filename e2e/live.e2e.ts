@@ -23,7 +23,10 @@ const live = (page: Page) => {
     timer: page.getByRole('timer'),
     line: band.locator('[aria-live]'),
     pause: page.getByRole('button', { name: /^(Pause|Resume)$/ }),
-    skip: page.getByRole('button', { name: /^(Skip block|Finished 5 km)$/ }),
+    skip: page.getByRole('button', { name: /^(Skip block|Done|Finished 5 km)$/ }),
+    /** Start, on the Ready screen before work. */
+    start: page.getByRole('button', { name: 'Start', exact: true }),
+    undo: page.getByRole('status').getByRole('button', { name: 'Undo' }),
   }
 }
 
@@ -77,8 +80,15 @@ test('a full Threshold Session from Start to logged', async ({ page }) => {
   await s.pause.click()
   await expect(s.pause).toHaveText('Pause')
 
-  // Rep 1: the target speed huge, the incline and the time left.
+  // The warm-up is over; Rep 1 waits on Ready, and the wait counts nowhere.
   await page.clock.runFor('05:00')
+  await expect(s.block).toHaveText('Ready? Up next: Rep 1 of 2 · 12.3 km/h')
+  await expect(s.pause).toHaveCount(0)
+  await page.clock.runFor('01:00')
+  await expect(s.timer).toHaveText('12:00')
+  await s.start.click()
+
+  // Rep 1: the target speed huge, the incline and the time left.
   await expect(s.block).toHaveText('Rep 1 of 2 · 12 min')
   await expect(s.target).toHaveText('12.3')
   await expect(page.locator('header').getByText('km/h', { exact: true })).toBeVisible()
@@ -86,8 +96,8 @@ test('a full Threshold Session from Start to logged', async ({ page }) => {
   await expect(s.timer).toHaveText('12:00')
   await expect(s.line).toHaveText('Rep 1. Threshold. Do not race it.')
   await expect(blocks.nth(1)).toHaveAttribute('aria-current', 'step')
-  // Rep 1 started 12 minutes in (two of them paused); the scan ends 30 seconds into it.
-  await scan(page, minutes(start, 12.5))
+  // Rep 1 started 13 minutes in (three of them paused or waiting); the scan ends 30 seconds into it.
+  await scan(page, minutes(start, 13.5))
   await expect(s.timer).toHaveText('11:30')
 
   // The rep is over: it asks, and saying nothing means it was held.
@@ -136,7 +146,7 @@ test('a full Threshold Session from Start to logged', async ({ page }) => {
     sessionId: 'threshold',
     date: '2026-11-04',
     status: 'done',
-    // Two minutes paused don't count.
+    // Two minutes paused and one on Ready don't count.
     minutes: 45,
     rpe: 7,
     environment: 'indoor',
@@ -162,8 +172,10 @@ test('a 5K test Live session records the time and updates the Training paces', a
   await expect(s.block).toHaveText('Warm-up · 12 min')
   await expect(page.locator('header').getByText('Strides 4 × 15″')).toBeVisible()
 
-  // Warm-up cut short; the 5 km runs to the distance, its clock counting up.
+  // Warm-up ended with Done; the 5 km waits for Start, then runs to the distance, its clock counting up.
   await s.skip.click()
+  await expect(s.block).toHaveText('Ready? Up next: 5 km')
+  await s.start.click()
   await expect(s.block).toHaveText('5 km · 5 km')
   await expect(s.target).toHaveText('5')
   await expect(s.timer).toHaveText('00:00')
@@ -197,4 +209,96 @@ test('a 5K test Live session records the time and updates the Training paces', a
   const bucket = page.getByRole('list').filter({ hasText: 'Strength' })
   await bucket.getByRole('button', { name: /^Threshold/ }).click()
   await expect(page.getByRole('heading', { level: 1 }).locator('xpath=following-sibling::p[1]')).toHaveText(/^4:46\/km/)
+})
+
+test('Speed: Done, the checklists, Start, Undo, going back, and a Partial flipped to Done', async ({ page }) => {
+  const sent = await serveHistory(page, [...WEEK_2])
+  const start = new Date(WEEK_3.getTime() + 1000)
+  await page.clock.install({ time: WEEK_3 })
+  await page.goto('/')
+  await page.clock.pauseAt(start)
+
+  // Speed is Up next.
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Speed, 5 × 3′')
+  await page.getByRole('button', { name: 'Start Speed' }).click()
+  await expect(page).toHaveURL('/live')
+  const s = live(page)
+  const blocks = page.getByRole('list', { name: 'Blocks' })
+
+  // Done on the warm-up three minutes in, then Undo: back on it with its clock still running.
+  await expect(s.block).toHaveText('Warm-up · 10 min')
+  await page.clock.runFor('03:00')
+  await expect(s.skip).toHaveText('Done')
+  await s.skip.click()
+  await expect(s.block).toHaveText('Plyometrics · 5 sets')
+  await expect(page.getByRole('status')).toContainText('Warm-up: done.')
+  await page.clock.runFor('00:02')
+  await s.undo.click()
+  await expect(s.block).toHaveText('Warm-up · 10 min')
+  await expect(s.timer).toHaveText('06:58')
+  await s.skip.click()
+
+  // Plyometrics count up; ticking the last set ends the Block.
+  await expect(s.timer).toHaveText('00:00')
+  await expect(s.line).toHaveText('Quality contacts. Full reset between jumps.')
+  await page.clock.runFor('01:30')
+  await expect(s.timer).toHaveText('01:30')
+  const sets = page.getByRole('list', { name: 'Sets' }).getByRole('checkbox')
+  await expect(sets).toHaveCount(5)
+  await page.getByRole('checkbox', { name: 'Pogo jumps · set 1 of 2' }).check({ force: true })
+  await expect(page.getByRole('checkbox', { name: 'Pogo jumps · set 1 of 2' })).toBeChecked()
+  await scan(page, new Date(start.getTime() + 5 * 60_000))
+  for (const name of ['Pogo jumps · set 2 of 2', 'Broad jumps · set 1 of 3', 'Broad jumps · set 2 of 3', 'Broad jumps · set 3 of 3']) {
+    await page.getByRole('checkbox', { name }).click({ force: true })
+  }
+  await expect(s.block).toHaveText('Accelerations · 4 sets')
+  await expect(page.getByRole('checkbox', { name: 'Accelerations · 1 of 4' })).toBeVisible()
+
+  // Done on Accelerations: Rep 1 waits for Start.
+  await s.skip.click()
+  await expect(s.block).toHaveText('Ready? Up next: Rep 1 of 5 · 3 min')
+  await page.clock.runFor('01:00')
+  await expect(s.timer).toHaveText('03:00')
+  await s.start.click()
+
+  // Rep 1 skipped by mistake, two minutes in: Undo, and the seconds since count toward it.
+  await page.clock.runFor('02:00')
+  await s.skip.click()
+  await expect(s.block).toHaveText('Jog · 90 s')
+  await expect(page.getByRole('status')).toContainText('Rep 1 of 5: skipped.')
+  await page.clock.runFor('00:05')
+  await s.undo.click()
+  await expect(s.block).toHaveText('Rep 1 of 5 · 3 min')
+  await expect(s.timer).toHaveText('00:55')
+
+  // Skipped again, and left: Undo goes after about 8 s.
+  await s.skip.click()
+  await page.clock.runFor('00:09')
+  await expect(s.undo).toHaveCount(0)
+
+  // Back to Rep 1 from the lane list: it asks first, then resumes where it was left.
+  await blocks.getByRole('button', { name: 'Rep 1 of 5, skipped' }).click()
+  const back = page.getByRole('region', { name: 'Go back to Rep 1 of 5?' })
+  await expect(back).toContainText('Go back to Rep 1 of 5? Rep 1 will be redone.')
+  await back.getByRole('button', { name: 'Go back' }).click()
+  await expect(s.block).toHaveText('Rep 1 of 5 · 3 min')
+  await expect(s.timer).toHaveText('00:55')
+
+  // Ended in Rep 1: the finish sheet lists what was cut short, and one tap logs it Done.
+  await page.getByRole('button', { name: 'End' }).click()
+  const cut = page.getByRole('region', { name: 'Cut short' })
+  await expect(cut.getByRole('listitem')).toHaveText([
+    'Rep 1 of 5: 2:05 of 3:00',
+    'Rep 2 of 5: not run',
+    'Rep 3 of 5: not run',
+    'Rep 4 of 5: not run',
+    'Rep 5 of 5: not run',
+  ])
+  await expect(page.getByText('Cut short. It logs as Partial, which still counts.')).toBeVisible()
+  await cut.getByRole('button', { name: 'Close enough: log it as Done' }).click()
+  await expect(page.getByText('All of it. Now say how it felt.')).toBeVisible()
+  await page.getByRole('button', { name: 'Save log' }).click()
+
+  await expect(page).toHaveURL('/')
+  await expect.poll(() => sent.at(-1)).toMatchObject({ week: 3, sessionId: 'speed', status: 'done' })
 })
