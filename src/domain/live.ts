@@ -21,7 +21,7 @@ import {
   type Environment,
   type RunContext,
 } from './paces'
-import { SESSION_TYPES, stationPounds } from './program/describe'
+import { drillAmount, SESSION_TYPES, stationPounds } from './program/describe'
 import { stations } from './program/program'
 import type { Block, Exercise, Lane, RunEffort, Session, SessionType, StationId } from './program/types'
 
@@ -55,6 +55,8 @@ export type LiveBlockKind =
   | 'round'
   /** One Station of a Race simulation, timed on its own. */
   | 'station'
+  /** HYROX's Set up: every Station at its load, on a stopwatch that's never active time. */
+  | 'setup'
 
 /** A Station as a round prescribes it, or as it was actually done once changed. */
 export interface LiveStation {
@@ -77,13 +79,13 @@ export interface LiveBlock {
   rep: number | null
   /** A HYROX round's number, or the place of a Race simulation's run and its Station. */
   round: number | null
-  /** A round's Stations, or a Race simulation Station's one. Empty for everything else. */
+  /** A round's Stations, a Race simulation Station's one, or every Station to set up. Empty for everything else. */
   stations: LiveStation[]
   /** Null where the Block isn't a run at a target: drills, plyometrics. */
   effort: RunEffort | null
   /** What the Session is for: a rep, the 5 km, the Easy run. Cutting it short makes the log Partial. */
   work: boolean
-  /** Everything else the Block asks for: "Leg swings, skips, drills", "Strides 4 × 15″". */
+  /** Everything else the Block asks for: "Station prep", "Pogo jumps 2 × 15". */
   detail: string[]
   /**
    * A checklist Block's sets, one row each to tick: "Pogo jumps · set 1 of 2".
@@ -106,6 +108,12 @@ export function liveBlocks(session: Session): LiveBlock[] {
   return session.blocks.flatMap((block): LiveBlock[] => {
     const kind = blockKind(block)
     const base = { meters: null, rep: null, round: null, stations: [] as LiveStation[], detail: [] as string[], checklist: [] as string[] }
+
+    if (block.setup) {
+      return [
+        { ...base, name: block.name, kind: 'setup', seconds: null, lane, stations: block.exercises.flatMap(liveStation), effort: null, work: false },
+      ]
+    }
 
     if (isRound(block)) {
       round += 1
@@ -226,7 +234,7 @@ export function liveBlocks(session: Session): LiveBlock[] {
 
 /**
  * A row per set to tick, when every Exercise is counted in sets: "Pogo jumps ·
- * set 1 of 2", "Accelerations · 1 of 4". Empty when one isn't, so the Block
+ * set 1 of 2", "Accelerations · 1 of 4", "A-skips 20 m · 1 of 2". Empty when one isn't, so the Block
  * stays on the clock.
  */
 export function checklistRows(exercises: Exercise[]): string[] {
@@ -237,6 +245,10 @@ export function checklistRows(exercises: Exercise[]): string[] {
       case 'accelerations':
       case 'strides':
         return Array.from({ length: rx.reps }, (_, i) => `${name} · ${i + 1} of ${rx.reps}`)
+      case 'drill': {
+        const what = `${name} ${drillAmount(rx)}`.trim()
+        return rx.sets === 1 ? [what] : Array.from({ length: rx.sets }, (_, i) => `${what} · ${i + 1} of ${rx.sets}`)
+      }
       default:
         return null
     }
@@ -248,7 +260,7 @@ export function checklistRows(exercises: Exercise[]): string[] {
 export const isChecklist = (block: LiveBlock) => block.checklist.length > 0
 
 /** A Block of a run and Stations: a HYROX round, or a Race simulation's run and its Station. */
-const isRound = (block: Block) => block.exercises.some((e) => e.prescription.kind === 'station')
+const isRound = (block: Block) => !block.setup && block.exercises.some((e) => e.prescription.kind === 'station')
 
 /** A Station Exercise at its share of Race load, in pounds. */
 function liveStation({ prescription: rx }: Exercise): LiveStation[] {
@@ -277,6 +289,8 @@ function exerciseWords({ name, prescription: rx }: Exercise): string {
       return `${name} ${rx.sets} × ${typeof rx.reps === 'number' ? rx.reps : range(rx.reps)}`
     case 'strides':
       return `${name} ${rx.reps} × ${rx.seconds}″`
+    case 'drill':
+      return `${name} ${rx.sets > 1 ? `${rx.sets} × ` : ''}${drillAmount(rx)}`.trim()
     case 'accelerations':
       return `${name} ${rx.reps} × ${rx.meters} m at ${range(rx.percentOfMax)}%`
     case 'sprints':
@@ -503,7 +517,7 @@ export function resume(run: LiveRun, now: number): LiveRun {
 
 /**
  * Skip block on a timed work Block, which makes the log Partial; Done on
- * warm-up, drills, a checklist or the cooldown, which doesn't. On a Block run
+ * warm-up, drills, a checklist, Set up or the cooldown, which doesn't. On a Block run
  * to a distance, a HYROX round or a Station, the tap that says it's covered,
  * which records its split. Paused stays paused, on the next Block.
  */
@@ -518,7 +532,7 @@ function finishBlock(current: LiveRun, now: number, before: LiveRun): LiveRun {
   const at = current.pausedAt ?? now
   const block = current.blocks[current.block]
   const seconds = Math.round(blockElapsed(current, now))
-  if (block.seconds === null && !isChecklist(block)) {
+  if (block.seconds === null && !isChecklist(block) && block.kind !== 'setup') {
     return moveOn({ ...current, splits: [...current.splits, { block: current.block, seconds }] }, at, null)
   }
   const next = moveOn(current, at, { skipped: block.work, seconds })
@@ -695,10 +709,17 @@ export function stationLogs(run: LiveRun): StationLog[] {
 /** Three hours: a split longer than that is a phone left running. */
 const SPLIT_MAX = 3 * 3600
 
-/** Seconds actually run: from Start to the end, pauses left out. */
+/** Seconds actually run: from Start to the end, pauses and Set up left out. */
 export function activeSeconds(run: LiveRun, now: number): number {
   const endAt = run.finishedAt ?? run.pausedAt ?? now
-  return Math.max(0, (endAt - run.startedAt - run.pausedMs) / 1000)
+  return Math.max(0, (endAt - run.startedAt - run.pausedMs) / 1000 - setUpSeconds(run, now))
+}
+
+/** Time spent on Set up: the Set up Blocks ended, and the current one if that's where the clock is. */
+function setUpSeconds(run: LiveRun, now: number): number {
+  const ended = run.cutShort.filter((c) => c.block !== run.block && run.blocks[c.block]?.kind === 'setup')
+  const current = run.blocks[run.block]?.kind === 'setup' ? blockElapsed(run, now) : 0
+  return ended.reduce((sum, c) => sum + c.seconds, 0) + current
 }
 
 /** The time of the Block run to a distance, if it was covered: a 5K test's result. */

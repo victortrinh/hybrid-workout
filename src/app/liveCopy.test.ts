@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { tankLine, tankWords } from './liveCopy'
+import { localDate } from '../domain/calendar'
+import { findWeek } from '../domain/coach'
+import { startRun } from '../domain/live'
+import { program } from '../domain/program/program'
+import { liveLine, tankLine, tankWords } from './liveCopy'
 
 describe('tankWords', () => {
   it('reads reps in reserve as 10 minus RPE', () => {
@@ -22,5 +26,23 @@ describe('tankLine', () => {
     expect(tankLine(8)).toBe('RPE 8: two left in the tank')
     expect(tankLine(7)).toBe('RPE 7: three left in the tank')
     expect(tankLine(10)).toBe('RPE 10: nothing left')
+  })
+})
+
+describe('liveLine', () => {
+  const lines = (week: number, id: string) => {
+    const session = findWeek(program, week)!.sessions.find((s) => s.id === id)!
+    const run = startRun({ week, session, date: localDate('2026-11-04'), environment: 'indoor' }, 0)
+    return run.blocks.slice(0, 3).map((b) => liveLine(b, run))
+  }
+
+  it('has a line for each part of a split warm-up, and for Set up', () => {
+    expect(lines(3, 'speed').slice(0, 2)).toEqual(['Warm-up. Easy. Nobody is watching.', 'Drills. Sharp, not tired.'])
+    expect(lines(2, '5k-test')[1]).toBe('Quick and relaxed. Not a sprint.')
+    expect(lines(3, 'hyrox')).toEqual([
+      'Warm-up. Easy. Nobody is watching.',
+      'Lunges. Wake the legs up, don’t tire them.',
+      'Load every Station now. This clock isn’t training. Tap Done when it’s all set.',
+    ])
   })
 })

@@ -55,13 +55,24 @@ export function describeSession(session: Session, run?: RunContext, weights?: Wo
     summary: summary(session, main),
     target: target(session, main, run, weights),
     meta: [
-      `${session.minutes} min`,
+      hasSetUp(session) ? `${session.minutes} min + ~${SETUP_MINUTES}′ setup` : `${session.minutes} min`,
       session.key && 'Key session this Week',
       session.optional && 'Optional',
     ]
       .filter(Boolean)
       .join(' · '),
   }
+}
+
+/** About how long HYROX's Set up takes: shown beside the minutes, never in them. */
+export const SETUP_MINUTES = 5
+
+export const hasSetUp = (session: Session) => session.blocks.some((b) => b.setup)
+
+/** "20 m", "10 / leg", "10" */
+export function drillAmount(rx: Extract<Prescription, { kind: 'drill' }>): string {
+  if (rx.meters) return km(rx.meters)
+  return rx.reps ? `${rx.reps}${rx.perLeg ? ' / leg' : ''}` : ''
 }
 
 function summary(session: Session, main: Block[]): string {
@@ -362,6 +373,8 @@ function prescriptionWords(
       const share = rx.raceLoadPercent !== undefined && rx.raceLoadPercent < 100 ? `${rx.raceLoadPercent}% of Race load` : ''
       return [volume, load, share].filter(Boolean).join(' · ')
     }
+    case 'drill':
+      return rx.sets > 1 ? `${rx.sets} × ${drillAmount(rx)}` : drillAmount(rx)
     case 'sprints':
       return [rx.meters && `${range(rx.meters)} m`, rx.seconds && `${range(rx.seconds)}″`, rx.light && 'light']
         .filter(Boolean)

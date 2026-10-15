@@ -167,6 +167,82 @@ describe('the plan’s marked Weeks', () => {
   })
 })
 
+describe('warm-ups', () => {
+  const all = weeks.flatMap((w) => w.sessions)
+  /** The first `n` Blocks, as "name minutes′: exercise, exercise". */
+  const warmUp = (s: Session, n = 2) =>
+    s.blocks
+      .slice(0, n)
+      .map((b) => `${b.name} ${b.minutes}′: ${b.exercises.map((e) => describeExercise(e, program.stations)).map((l) => `${l.name} ${l.detail}`.trim()).join(', ')}`)
+
+  it('splits every Speed warm-up, Deload and Taper too, into a 7′ jog and 3′ of Drills to tick', () => {
+    const speeds = all.filter((s) => s.type === 'speed')
+    expect(speeds.map((s) => s.minutes)).toEqual(expect.arrayContaining([45, 35, 40]))
+    for (const s of speeds) {
+      expect(warmUp(s)).toEqual([
+        'Warm-up 7′: Easy jog 7 min · Easy, RPE 2–4',
+        'Drills 3′: Leg swings 10 / leg, A-skips 2 × 20 m, B-skips 2 × 20 m, High knees 20 m, Butt kicks 20 m',
+      ])
+    }
+  })
+
+  it('splits the 5K test warm-up into a 10′ jog and 2′ of Strides', () => {
+    for (const s of all.filter((s) => s.type === '5k-test')) {
+      expect(warmUp(s)).toEqual(['Warm-up 10′: Easy jog 10 min · Easy, RPE 2–4', 'Strides 2′: Strides 4 × 15″'])
+    }
+  })
+
+  it('splits the HYROX warm-up into a 5′ jog and 2′ of Lunges, with nothing left in a note', () => {
+    const circuits = all.filter((s) => s.id === 'hyrox')
+    expect(circuits).toHaveLength(22)
+    for (const s of circuits) {
+      expect(warmUp(s)).toEqual(['Warm-up 5′: Easy jog 5 min · Easy, RPE 2–4', 'Lunges 2′: Lunges 2 × 10'])
+    }
+  })
+
+  it('leaves Threshold, the Easy run and the Race simulation as they were', () => {
+    expect(warmUp(session(3, 'threshold'), 1)).toEqual(['Warm-up 10′: Easy jog 10 min · Easy, RPE 2–4'])
+    expect(session(3, 'easy').blocks.map((b) => b.name)).toEqual(['Easy run'])
+    expect(warmUp(session(18, 'race-simulation'), 1)).toEqual(['Warm-up 10′: Easy jog 7 min · Easy, RPE 2–4, Station prep'])
+  })
+})
+
+describe('HYROX Set up', () => {
+  const setUp = (n: number) => session(n, 'hyrox').blocks.find((b) => b.setup)!
+  const loads = (n: number) => setUp(n).exercises.map((e) => describeExercise(e, program.stations)).map((l) => `${l.name}: ${l.detail}`)
+
+  it('comes right before round 1, untimed, so it’s in neither the minutes nor the Training load', () => {
+    const blocks = session(1, 'hyrox').blocks
+    expect(blocks.map((b) => [b.name, b.minutes])).toEqual([
+      ['Warm-up', 5],
+      ['Lunges', 2],
+      ['Set up', undefined],
+      ['Round 1', 11],
+      ['Round 2', 11],
+      ['Round 3', 11],
+      ['Cooldown', 5],
+    ])
+    expect(session(1, 'hyrox').minutes).toBe(45)
+  })
+
+  it('lists every Station the Session uses once, in the order they come up, with its load', () => {
+    expect(loads(1)).toEqual([
+      'Sled push: 200 lb plates · 60% of Race load',
+      'Sled pull: 135 lb plates · 60% of Race load',
+      'Farmers carry: 2 × 30 lb · 60% of Race load',
+      'Sandbag lunges: 25 lb · 60% of Race load',
+    ])
+    expect(loads(2)).toEqual(['SkiErg: ', 'Burpee broad jumps: ', 'Row: ', 'Wall balls: 13 lb ball'])
+    expect(loads(23)).toEqual(['Sled push: 335 lb plates', 'Sled pull: 225 lb plates', 'Sandbag lunges: 45 lb'])
+  })
+
+  it('is in every HYROX circuit, and in no other Session', () => {
+    const all = weeks.flatMap((w) => w.sessions)
+    expect(all.filter((s) => s.blocks.some((b) => b.setup)).every((s) => s.id === 'hyrox')).toBe(true)
+    expect(all.filter((s) => s.id === 'hyrox').every((s) => s.blocks.some((b) => b.setup))).toBe(true)
+  })
+})
+
 describe('Race loads and Substitutions', () => {
   it('holds the Men’s Open Race loads in pounds, with sled loads as plate weight', () => {
     const { stations } = program
@@ -201,9 +277,9 @@ describe('describeExercise', () => {
     describeExercise(exercises(session(n, id)).filter((e) => e.name === name)[nth], program.stations)
 
   it('reads Stations with distance and pounds', () => {
-    expect(line(1, 'hyrox', 'Sled push').detail).toBe('25 m · 200 lb plates · 60% of Race load')
+    expect(line(1, 'hyrox', 'Sled push', 1).detail).toBe('25 m · 200 lb plates · 60% of Race load')
     expect(line(21, 'race-simulation', 'Farmers carry').detail).toBe('200 m · 2 × 55 lb')
-    expect(line(2, 'hyrox', 'Wall balls').detail).toBe('20 reps · 13 lb ball')
+    expect(line(2, 'hyrox', 'Wall balls', 1).detail).toBe('20 reps · 13 lb ball')
   })
 
   it('reads lifts, Deload lifts and Substitutions', () => {

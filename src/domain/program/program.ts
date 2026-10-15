@@ -76,6 +76,27 @@ const walk = (minutes: number | undefined, name: string, note?: string): Exercis
   note,
 })
 
+const drill = (name: string, sets: number, amount: { reps?: number; meters?: number; perLeg?: boolean }): Exercise => ({
+  name,
+  prescription: { kind: 'drill', sets, ...amount },
+})
+
+/** Speed's warm-up: a jog, then the drills ticked off one by one. Same 10 minutes as ever. */
+const speedWarmUp: Block[] = [
+  { name: 'Warm-up', minutes: 7, exercises: [easyJog(7)] },
+  {
+    name: 'Drills',
+    minutes: 3,
+    exercises: [
+      drill('Leg swings', 1, { reps: 10, perLeg: true }),
+      drill('A-skips', 2, { meters: 20 }),
+      drill('B-skips', 2, { meters: 20 }),
+      drill('High knees', 1, { meters: 20 }),
+      drill('Butt kicks', 1, { meters: 20 }),
+    ],
+  },
+]
+
 /** No floor space, or Readiness says no jumps: sprint on the sled or the bike instead. */
 const floorSubstitution: Substitution = {
   when: ['no-floor-space', 'readiness'],
@@ -131,11 +152,7 @@ function speed(intervals: Intervals, accels: number, week: number, key = false):
     optional: false,
     note: 'Finish fresh enough for the next Hard session.',
     blocks: [
-      {
-        name: 'Warm-up',
-        minutes: 10,
-        exercises: [easyJog(10), { name: 'Leg swings, skips, drills', prescription: { kind: 'note' } }],
-      },
+      ...speedWarmUp,
       { name: 'Plyometrics', minutes: 5, exercises: [pogo(2, 15), broadJumps(3, 3)] },
       {
         name: 'Accelerations',
@@ -166,11 +183,7 @@ const speedDeload: Session = {
   key: false,
   optional: false,
   blocks: [
-    {
-      name: 'Warm-up',
-      minutes: 10,
-      exercises: [easyJog(10), { name: 'Leg swings, skips, drills', prescription: { kind: 'note' } }],
-    },
+    ...speedWarmUp,
     { name: 'Plyometrics', minutes: 3, exercises: [pogo(1, 15), broadJumps(2, 2)] },
     {
       name: 'Accelerations',
@@ -209,11 +222,7 @@ const speedTaper: Session = {
   optional: false,
   note: 'Last speed before the race. No max sprinting, no broad jumps.',
   blocks: [
-    {
-      name: 'Warm-up',
-      minutes: 10,
-      exercises: [easyJog(10), { name: 'Leg swings, skips, drills', prescription: { kind: 'note' } }],
-    },
+    ...speedWarmUp,
     { name: 'Plyometrics', minutes: 2, exercises: [pogo(1, 10)] },
     {
       name: 'Intervals',
@@ -241,11 +250,8 @@ function fiveKTest(week: keyof typeof FIVE_K_TEST_NAMES): Session {
     key: true,
     optional: false,
     blocks: [
-      {
-        name: 'Warm-up',
-        minutes: 12,
-        exercises: [easyJog(12), { name: 'Strides', prescription: { kind: 'strides', reps: 4, seconds: 15 } }],
-      },
+      { name: 'Warm-up', minutes: 10, exercises: [easyJog(10)] },
+      { name: 'Strides', minutes: 2, exercises: [{ name: 'Strides', prescription: { kind: 'strides', reps: 4, seconds: 15 } }] },
       {
         name: '5 km',
         main: true,
@@ -561,13 +567,26 @@ const ROUNDS: Record<'foundation' | 'development' | 'build', Record<Rotation, St
 
 const PHASE_RUN = { foundation: 600, development: 700, build: 800 } as const
 
-const hyroxWarmUp: Block = {
-  name: 'Warm-up',
-  minutes: 7,
-  exercises: [
-    easyJog(7),
-    { name: 'Lunges and Station prep', prescription: { kind: 'note' }, note: 'Check the sled and erg setup.' },
-  ],
+/** A jog, then lunges ticked off: the same 7 minutes. Station prep is the Set up's. */
+const hyroxWarmUp: Block[] = [
+  { name: 'Warm-up', minutes: 5, exercises: [easyJog(5)] },
+  { name: 'Lunges', minutes: 2, exercises: [drill('Lunges', 2, { reps: 10 })] },
+]
+
+/**
+ * Every Station the rounds use, once, in the order they come up, at the load
+ * the first round asks for. They stay set up for the whole Session.
+ */
+function setUp(rounds: { stations: Exercise[] }[]): Block {
+  const seen = new Map<StationId, Exercise>()
+  for (const { prescription: rx } of rounds.flatMap((r) => r.stations)) {
+    if (rx.kind !== 'station' || seen.has(rx.station)) continue
+    seen.set(rx.station, {
+      name: stations[rx.station].name,
+      prescription: { kind: 'station', station: rx.station, raceLoadPercent: rx.raceLoadPercent },
+    })
+  }
+  return { name: 'Set up', setup: true, exercises: [...seen.values()] }
 }
 
 const hyroxCooldown: Block = {
@@ -590,7 +609,8 @@ function circuit(
     optional: false,
     note,
     blocks: [
-      hyroxWarmUp,
+      ...hyroxWarmUp,
+      setUp(rounds),
       ...rounds.map((round, i) => ({
         name: `Round ${i + 1}`,
         minutes: roundMinutes,

@@ -169,10 +169,14 @@ test('a 5K test Live session records the time and updates the Training paces', a
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('5K test, baseline')
   await page.getByRole('button', { name: /^Start / }).click()
   const s = live(page)
-  await expect(s.block).toHaveText('Warm-up · 12 min')
-  await expect(page.locator('header').getByText('Strides 4 × 15″')).toBeVisible()
+  await expect(s.block).toHaveText('Warm-up · 10 min')
 
-  // Warm-up ended with Done; the 5 km waits for Start, then runs to the distance, its clock counting up.
+  // Warm-up ended with Done, then the strides, a tick each; the 5 km waits for Start, then runs to the distance, its clock counting up.
+  await s.skip.click()
+  await expect(s.block).toHaveText('Strides · 4 sets')
+  await expect(s.line).toHaveText('Quick and relaxed. Not a sprint.')
+  await expect(page.getByRole('list', { name: 'Sets' }).getByRole('checkbox')).toHaveCount(4)
+  await page.getByRole('checkbox', { name: 'Strides · 1 of 4' }).click({ force: true })
   await s.skip.click()
   await expect(s.block).toHaveText('Ready? Up next: 5 km')
   await s.start.click()
@@ -226,17 +230,33 @@ test('Speed: Done, the checklists, Start, Undo, going back, and a Partial flippe
   const blocks = page.getByRole('list', { name: 'Blocks' })
 
   // Done on the warm-up three minutes in, then Undo: back on it with its clock still running.
-  await expect(s.block).toHaveText('Warm-up · 10 min')
+  await expect(s.block).toHaveText('Warm-up · 7 min')
   await page.clock.runFor('03:00')
   await expect(s.skip).toHaveText('Done')
   await s.skip.click()
-  await expect(s.block).toHaveText('Plyometrics · 5 sets')
+  await expect(s.block).toHaveText('Drills · 7 sets')
   await expect(page.getByRole('status')).toContainText('Warm-up: done.')
   await page.clock.runFor('00:02')
   await s.undo.click()
-  await expect(s.block).toHaveText('Warm-up · 10 min')
-  await expect(s.timer).toHaveText('06:58')
+  await expect(s.block).toHaveText('Warm-up · 7 min')
+  await expect(s.timer).toHaveText('03:58')
   await s.skip.click()
+
+  // The drills, a tick each; Done leaves the rest.
+  await expect(s.block).toHaveText('Drills · 7 sets')
+  await expect(s.line).toHaveText('Drills. Sharp, not tired.')
+  await expect(page.getByRole('list', { name: 'Sets' }).getByRole('listitem')).toHaveText([
+    'Leg swings 10 / leg',
+    'A-skips 20 m · 1 of 2',
+    'A-skips 20 m · 2 of 2',
+    'B-skips 20 m · 1 of 2',
+    'B-skips 20 m · 2 of 2',
+    'High knees 20 m',
+    'Butt kicks 20 m',
+  ])
+  await page.getByRole('checkbox', { name: 'Leg swings 10 / leg' }).click({ force: true })
+  await s.skip.click()
+  await expect(s.block).toHaveText('Plyometrics · 5 sets')
 
   // Plyometrics count up; ticking the last set ends the Block.
   await expect(s.timer).toHaveText('00:00')

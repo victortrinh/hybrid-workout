@@ -78,6 +78,11 @@ export interface Block {
   minutes?: number
   /** The Block that carries the Session's point (the intervals, the main lifts, the 5 km). */
   main?: boolean
+  /**
+   * HYROX's Set up: every Station the Session uses, at its load, set up once
+   * before round 1. Untimed, and never in the Session's minutes or its Training load.
+   */
+  setup?: boolean
   exercises: Exercise[]
 }
 
@@ -122,6 +127,8 @@ export type Prescription =
     }
   /** `raceLoadPercent` only where the Station carries a load that scales (not SkiErg, row, burpees or wall balls). */
   | { kind: 'station'; station: StationId; meters?: number; reps?: number; raceLoadPercent?: number }
+  /** A warm-up drill, counted rather than timed: "A-skips 2 × 20 m", "Leg swings 10 / leg". */
+  | { kind: 'drill'; sets: number; reps?: number; meters?: number; perLeg?: boolean }
   /** Sprints on a bike or a sled, as many as the Exercise they replace. */
   | { kind: 'sprints'; seconds?: Range; meters?: Range; light?: boolean }
   /** Anything done by instruction rather than by number: drills, movement prep, a walk. */
