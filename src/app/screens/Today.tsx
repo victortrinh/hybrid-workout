@@ -7,7 +7,8 @@ import { isLive, type LiveSession } from '../../domain/lifts'
 import type { Environment, RunContext } from '../../domain/paces'
 import { painLevel, type PainArea } from '../../domain/pain'
 import { describeSession, SESSION_TYPES } from '../../domain/program/describe'
-import type { Session } from '../../domain/program/types'
+import type { Program, Session } from '../../domain/program/types'
+import type { RacePlan } from '../../domain/racePlan'
 import type { Settings } from '../../domain/settings'
 import type { Decision, Suggestion } from '../../domain/suggestion'
 import { outsideWeekLine, painLine, recoveryWhy, shortSleepLine, suggestionCopy, waitingLine } from '../coachCopy'
@@ -33,6 +34,7 @@ import {
   weekRange,
 } from '../format'
 import { logPath, SCREEN_PATH, weekPath } from '../router'
+import { RaceCard } from './RaceCard'
 
 
 /**
@@ -57,9 +59,12 @@ export function Today({
   onSomethingHurts,
   treadmill,
   onAnswer,
+  race,
 }: {
   day: CoachDay
   weekCount: number
+  /** The race card, the day before Race day and on it: it leads, and Up next follows it. */
+  race: { plan: RacePlan; program: Program } | null
   /** Logs saved on this device that the server hasn't taken yet. */
   pending: number
   /** A log the server refused or the device couldn't store, said once under Up next. */
@@ -99,8 +104,10 @@ export function Today({
         onSettings={onSettings}
         startingPoint={startingPoint}
       />
+      {race && <RaceCard plan={race.plan} program={race.program} raceDay={day.daysToRace === 0} />}
       <UpNext
         day={day}
+        lead={!race}
         weekCount={weekCount}
         pending={pending}
         error={error}
@@ -215,8 +222,11 @@ function UpNext({
   onSomethingHurts,
   treadmill,
   onAnswer,
+  lead,
 }: {
   day: CoachDay
+  /** Up next leads Today unless the race card does; then its heading steps down a level. */
+  lead: boolean
   weekCount: number
   pending: number
   error: string | null
@@ -281,10 +291,14 @@ function UpNext({
   }
 
   return (
-    <div className="px-pad pt-5 desktop:px-0 desktop:pt-7">
-      <h1 id="today-heading" tabIndex={-1} className="text-headline">
-        {nb(heading)}
-      </h1>
+    <div className={lead ? 'px-pad pt-5 desktop:px-0 desktop:pt-7' : 'mt-section px-pad desktop:px-0'}>
+      {lead ? (
+        <h1 id="today-heading" tabIndex={-1} className="text-headline">
+          {nb(heading)}
+        </h1>
+      ) : (
+        <h2 className="border-t-2 border-ink pt-3.5 text-title">{nb(heading)}</h2>
+      )}
       <p className="mt-2 text-prescription">{nb(target)}</p>
       {meta && <p className="mt-1 text-body-quiet text-muted">{meta}</p>}
       {upNext && position.kind === 'before-start' && (
