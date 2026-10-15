@@ -4,6 +4,14 @@ import { findWeek } from './coach'
 import {
   advance,
   answer,
+  blockElapsed,
+  canUndo,
+  goBack,
+  markDone,
+  redone,
+  shortBlocks,
+  tick,
+  undo,
   answerStations,
   blockLeft,
   end,
@@ -12,6 +20,7 @@ import {
   isLiveRun,
   isOver,
   liveBlocks,
+  liveStatus,
   liveLog,
   liveTarget,
   nextBlock,
@@ -44,6 +53,11 @@ const indoor: RunContext = { paces, environment: 'indoor', unit: 'kmh' }
 const start = (s: Session, environment: 'indoor' | 'outdoor' = 'indoor'): LiveRun =>
   startRun({ week: 3, session: s, date: localDate('2026-11-04'), environment }, T0)
 
+/** The clock caught up to `now`, and Start tapped at once if it holds on a Ready screen. */
+const go = (run: LiveRun, now: number) => resume(advance(run, now), now)
+/** Skip block, Done or Finished, then Start at once if the next Block holds on Ready. */
+const tap = (run: LiveRun, now: number) => resume(nextBlock(run, now), now)
+
 describe('liveBlocks', () => {
   it('lays Threshold out as warm-up, reps with jogs between, then the cooldown', () => {
     const blocks = liveBlocks(session(3, 'threshold'))
@@ -67,7 +81,7 @@ describe('liveBlocks', () => {
       'Cooldown',
     ])
     expect(blocks[0].detail).toEqual(['Leg swings, skips, drills'])
-    expect(blocks[1]).toMatchObject({ kind: 'drills', seconds: 300, effort: null, detail: ['Pogo jumps 2 × 15', 'Broad jumps 3 × 3'] })
+    expect(blocks[1]).toMatchObject({ kind: 'drills', seconds: null, effort: null, detail: ['Pogo jumps 2 × 15', 'Broad jumps 3 × 3'] })
     expect(blocks[2].detail).toEqual(['Accelerations 4 × 15 m at 80–90%'])
     expect(blocks[3]).toMatchObject({ seconds: 180, lane: 'speed' })
     expect(blocks[4]).toMatchObject({ seconds: 90, kind: 'recovery' })
@@ -138,7 +152,7 @@ describe('the Live run clock', () => {
     expect(advance(run, at(9.9))).toBe(run)
     expect(blockLeft(run, at(9.5))).toBe(30)
 
-    run = advance(run, at(10))
+    run = go(run, at(10))
     expect(run.block).toBe(1)
     expect(blockLeft(run, at(10))).toBe(720)
 
@@ -148,7 +162,7 @@ describe('the Live run clock', () => {
   })
 
   it('catches up on everything that happened while the phone was locked', () => {
-    const run = advance(start(session(3, 'threshold')), at(40))
+    const run = advance(go(start(session(3, 'threshold')), at(10)), at(40))
     expect(run).toMatchObject({ block: 4, asks: [1, 3] })
     expect(blockLeft(run, at(40))).toBe(5 * 60)
 
@@ -165,24 +179,30 @@ describe('the Live run clock', () => {
 
     run = resume(run, at(30))
     expect(blockLeft(run, at(30))).toBe(300)
-    run = advance(run, at(35))
+    run = go(run, at(35))
     expect(run.block).toBe(1)
-    expect(run.blockStartedAt).toBe(at(35))
+    expect(blockLeft(run, at(36))).toBe(660)
   })
 
-  it('skips a Block at once, paused or not, and remembers it was cut short', () => {
-    let run = nextBlock(start(session(3, 'threshold')), at(2))
-    expect(run).toMatchObject({ block: 1, skipped: [0] })
-    expect(blockLeft(run, at(3))).toBe(660)
+  it('skips a work Block at once, paused or not, and remembers it was cut short', () => {
+    let run = go(start(session(3, 'threshold')), at(10))
+    run = nextBlock(run, at(12))
+    expect(run).toMatchObject({ block: 2, skipped: [1], asks: [1], cutShort: [{ block: 1, seconds: 120 }] })
+    expect(blockLeft(run, at(13))).toBe(60)
 
-    run = nextBlock(pause(run, at(3)), at(4))
-    expect(run).toMatchObject({ block: 2, skipped: [0, 1], asks: [1], pausedAt: at(3) })
-    run = resume(run, at(4))
-    expect(blockLeft(run, at(5))).toBe(60)
+    run = nextBlock(pause(go(run, at(14)), at(14)), at(15))
+    expect(run).toMatchObject({ block: 4, skipped: [1, 3], pausedAt: at(14) })
+  })
+
+  it('ends a Block that isn’t work with Done: not skipped, so the log stays Done', () => {
+    let run = nextBlock(start(session(3, 'threshold')), at(6))
+    expect(run).toMatchObject({ block: 1, skipped: [], cutShort: [{ block: 0, seconds: 360 }] })
+    run = advance(go(run, at(6)), at(60))
+    expect(liveStatus(run)).toBe('done')
   })
 
   it('times a 5K test’s 5 km from its start to the tap that says it’s covered', () => {
-    let run = advance(start(session(2, '5k-test')), at(12))
+    let run = go(start(session(2, '5k-test')), at(12))
     expect(run.block).toBe(1)
     expect(blockLeft(run, at(30))).toBeNull()
     expect(advance(run, at(60))).toBe(run)
@@ -192,7 +212,7 @@ describe('the Live run clock', () => {
   })
 
   it('ends on the finish sheet, and Keep going goes back to the clock', () => {
-    const run = end(advance(start(session(3, 'threshold')), at(15)), at(15))
+    const run = end(advance(go(start(session(3, 'threshold')), at(10)), at(15)), at(15))
     expect(run).toMatchObject({ ending: true, pausedAt: at(15), block: 1 })
     expect(isOver(run)).toBe(true)
 
@@ -202,7 +222,7 @@ describe('the Live run clock', () => {
   })
 
   it('records Held it and Changed once per rep', () => {
-    let run = advance(start(session(3, 'threshold')), at(40))
+    let run = advance(go(start(session(3, 'threshold')), at(10)), at(40))
     run = answer(run, 3, 292, 298)
     run = answer(run, 1, 292, null)
     expect(answer(run, 1, 292, null)).toBe(run)
@@ -214,7 +234,7 @@ describe('the Live run clock', () => {
   })
 
   it('takes silence as Held it, except for a rep cut short', () => {
-    let quiet = advance(start(session(3, 'threshold')), at(45))
+    let quiet = advance(go(start(session(3, 'threshold')), at(10)), at(45))
     quiet = heldUnanswered(answer(quiet, 3, 292, 298), indoor)
     expect(quiet.asks).toEqual([])
     expect(quiet.intervals.map((i) => [i.block, i.held])).toEqual([
@@ -222,9 +242,195 @@ describe('the Live run clock', () => {
       [3, false],
     ])
 
-    let cut = advance(start(session(3, 'threshold')), at(15))
+    let cut = advance(go(start(session(3, 'threshold')), at(10)), at(15))
     cut = heldUnanswered(nextBlock(cut, at(15)), indoor)
     expect(cut.intervals).toEqual([])
+  })
+})
+
+describe('checklist Blocks', () => {
+  const speed = () => start(session(3, 'speed'))
+  /** On Plyometrics, 4 minutes in: the warm-up ran its 10. */
+  const plyometrics = () => advance(speed(), at(10))
+
+  it('lays Plyometrics and Accelerations out as a set to tick at a time, on a clock that counts up', () => {
+    const [warmUp, plyo, accels] = liveBlocks(session(3, 'speed'))
+    expect(warmUp.checklist).toEqual([])
+    expect(plyo).toMatchObject({ seconds: null, work: false })
+    expect(plyo.checklist).toEqual([
+      'Pogo jumps · set 1 of 2',
+      'Pogo jumps · set 2 of 2',
+      'Broad jumps · set 1 of 3',
+      'Broad jumps · set 2 of 3',
+      'Broad jumps · set 3 of 3',
+    ])
+    expect(accels.checklist).toEqual(['Accelerations · 1 of 4', 'Accelerations · 2 of 4', 'Accelerations · 3 of 4', 'Accelerations · 4 of 4'])
+    const run = plyometrics()
+    expect(blockLeft(run, at(12))).toBeNull()
+    expect(blockElapsed(run, at(12))).toBe(120)
+    expect(advance(run, at(40))).toBe(run)
+  })
+
+  it('ticks and unticks sets, and ends the Block on the last one', () => {
+    let run = plyometrics()
+    run = tick(run, 0, at(11))
+    run = tick(run, 1, at(11))
+    run = tick(run, 1, at(11.5))
+    expect(run.ticked).toEqual([0])
+    for (const row of [1, 2, 3]) run = tick(run, row, at(12))
+    expect(run.block).toBe(1)
+    run = tick(run, 4, at(13))
+    // On to Accelerations, its sets unticked; the ticks were never a log.
+    expect(run).toMatchObject({ block: 2, ticked: [], skipped: [], splits: [], cutShort: [{ block: 1, seconds: 180 }] })
+    expect(canUndo(run, at(13))).toBe(true)
+  })
+
+  it('ends with Done before every set is ticked, still not skipped', () => {
+    const run = nextBlock(tick(plyometrics(), 0, at(11)), at(12))
+    expect(run).toMatchObject({ block: 2, skipped: [], splits: [], cutShort: [{ block: 1, seconds: 120 }] })
+    expect(liveStatus(advance(tap(run, at(13)), at(40)))).toBe('done')
+  })
+})
+
+describe('the Ready screen', () => {
+  it('holds the first rep after the warm-up until Start, and the wait isn’t active time', () => {
+    let run = advance(start(session(3, 'threshold')), at(12))
+    expect(run).toMatchObject({ block: 1, ready: true, pausedAt: at(10) })
+    expect(blockLeft(run, at(13))).toBe(720)
+    expect(advance(run, at(30))).toBe(run)
+
+    run = resume(run, at(13))
+    expect(run).toMatchObject({ ready: false, pausedAt: null })
+    expect(blockLeft(run, at(14))).toBe(660)
+    run = advance(run, at(60))
+    expect(liveLog(run, at(60), { id: 'x', rpe: 7, distanceMeters: null, resultSeconds: null, updatedAt: '' }).minutes).toBe(45)
+  })
+
+  it('shows after Done or Skip block too, and stays on Ready through End and Keep going', () => {
+    let run = nextBlock(start(session(3, 'threshold')), at(4))
+    expect(run).toMatchObject({ block: 1, ready: true, pausedAt: at(4) })
+    run = resume(end(run, at(5)), at(6))
+    expect(run).toMatchObject({ ending: false, ready: true, pausedAt: at(4) })
+  })
+
+  it('never holds between reps and recoveries', () => {
+    const run = advance(go(start(session(3, 'speed')), at(10)), at(10))
+    // Warm-up, then the checklist Blocks tapped through: Rep 1 holds, then the set flows.
+    let r = go(nextBlock(nextBlock(run, at(12)), at(14)), at(14))
+    expect(r.block).toBe(3)
+    r = advance(r, at(14 + 3 + 1.5 + 1))
+    expect(r).toMatchObject({ block: 5, ready: false, pausedAt: null })
+  })
+
+  it('holds before each HYROX round, and only before the first run of a Race simulation', () => {
+    let hyrox = startRun({ week: 1, session: session(1, 'hyrox'), date: localDate('2026-10-21'), environment: 'indoor' }, T0)
+    hyrox = advance(hyrox, at(7))
+    expect(hyrox).toMatchObject({ block: 1, ready: true })
+    hyrox = nextBlock(resume(hyrox, at(8)), at(18))
+    expect(hyrox).toMatchObject({ block: 2, ready: true, pausedAt: at(18) })
+
+    let sim = startRun({ week: 18, session: session(18, 'race-simulation'), date: localDate('2027-02-17'), environment: 'indoor' }, T0)
+    sim = advance(sim, at(10))
+    expect(sim).toMatchObject({ block: 1, ready: true })
+    sim = nextBlock(resume(sim, at(10)), at(14))
+    expect(sim).toMatchObject({ block: 2, ready: false, pausedAt: null })
+  })
+})
+
+describe('Undo', () => {
+  it('restores the Block skipped, its clock still running from where it was', () => {
+    const before = go(start(session(3, 'threshold')), at(10))
+    const skipped = nextBlock(before, at(12))
+    expect(canUndo(skipped, at(12.1))).toBe(true)
+    const back = undo(skipped, at(12.1))
+    expect(back).toMatchObject({ block: 1, skipped: [], asks: [], cutShort: [], undo: null })
+    // The seconds since the tap count toward Rep 1.
+    expect(blockElapsed(back, at(12.1))).toBe(126)
+  })
+
+  it('restores a Block ended with Done, from the Ready screen or after Start', () => {
+    const done = nextBlock(start(session(3, 'threshold')), at(5))
+    const started = resume(done, at(5.05))
+    for (const run of [done, started]) {
+      const back = undo(run, at(5.1))
+      expect(back).toMatchObject({ block: 0, ready: false, pausedAt: null })
+      expect(blockElapsed(back, at(5.1))).toBe(306)
+    }
+  })
+
+  it('lasts about 8 seconds, and goes once something else is recorded', () => {
+    const skipped = nextBlock(go(start(session(3, 'threshold')), at(10)), at(12))
+    expect(canUndo(skipped, at(12) + 7_900)).toBe(true)
+    expect(canUndo(skipped, at(12) + 8_100)).toBe(false)
+    expect(undo(skipped, at(12) + 8_100)).toBe(skipped)
+    expect(canUndo(answer(skipped, 1, 292, null), at(12))).toBe(false)
+  })
+})
+
+describe('going back to an earlier Block', () => {
+  /** Threshold on Rep 2, 30 s in: Rep 1 skipped at 11 of 12 minutes. */
+  const onRep2 = () => {
+    let run = go(start(session(3, 'threshold')), at(10))
+    run = nextBlock(run, at(21))
+    run = advance(run, at(23.5))
+    return run
+  }
+
+  it('resumes a Block cut short where it was left, and drops what was recorded from it on', () => {
+    const run = onRep2()
+    expect(run.block).toBe(3)
+    expect(redone(run, 1)).toEqual([1])
+    const back = goBack(run, 1, at(24))
+    expect(back).toMatchObject({ block: 1, skipped: [], asks: [], cutShort: [], intervals: [], ready: false })
+    expect(blockElapsed(back, at(24))).toBe(660)
+    // Every minute since Start that wasn't paused still counts.
+    expect(liveLog(back, at(24), { id: 'x', rpe: 7, distanceMeters: null, resultSeconds: null, updatedAt: '' }).minutes).toBe(24)
+  })
+
+  it('restarts a timed Block that ran its time, and keeps what earlier Blocks recorded', () => {
+    let run = advance(go(start(session(3, 'threshold')), at(10)), at(36))
+    run = answer(run, 1, 292, null)
+    expect(run.block).toBe(4)
+    expect(redone(run, 2)).toEqual([3])
+    const back = goBack(run, 2, at(36))
+    expect(back).toMatchObject({ block: 2, intervals: [{ block: 1 }], asks: [] })
+    expect(blockElapsed(back, at(36))).toBe(0)
+    expect(redone(run, 0)).toEqual([1, 3])
+  })
+
+  it('picks a Block run to a distance up from its split', () => {
+    const run = nextBlock(go(start(session(2, '5k-test')), at(12)), at(34.5))
+    const back = goBack(run, 1, at(35))
+    expect(back).toMatchObject({ block: 1, splits: [] })
+    expect(blockElapsed(back, at(35))).toBe(22 * 60 + 30)
+  })
+
+  it('needs nothing confirmed when nothing recorded would be lost', () => {
+    const run = advance(start(session(3, 'threshold')), at(10))
+    expect(redone(run, 0)).toEqual([])
+    expect(goBack(run, 0, at(11))).toMatchObject({ block: 0, pausedAt: null })
+    expect(goBack(run, 1, at(11))).toBe(run)
+  })
+})
+
+describe('the finish sheet', () => {
+  it('lists the work cut short, and one tap flips the log to Done', () => {
+    let run = go(start(session(3, 'threshold')), at(10))
+    run = nextBlock(run, at(21.5))
+    run = end(advance(run, at(36)), at(36))
+    expect(liveStatus(run)).toBe('partial')
+    expect(shortBlocks(run)).toEqual([{ block: 1, seconds: 690 }])
+    const flipped = markDone(run, true)
+    expect(liveStatus(flipped)).toBe('done')
+    expect(liveStatus(markDone(flipped, false))).toBe('partial')
+  })
+
+  it('lists the work never reached, and the time run on the Block it ended in', () => {
+    const run = end(advance(go(start(session(3, 'threshold')), at(10)), at(15)), at(15))
+    expect(shortBlocks(run)).toEqual([
+      { block: 1, seconds: 300 },
+      { block: 3, seconds: null },
+    ])
   })
 })
 
@@ -233,7 +439,7 @@ describe('liveLog', () => {
 
   it('logs a Session run to the end as Done, with its time, Environment, distance and reps', () => {
     let run = pause(advance(start(session(3, 'threshold')), at(5)), at(5))
-    run = advance(resume(run, at(7)), at(60))
+    run = advance(go(resume(run, at(7)), at(12)), at(60))
     run = answer(run, 1, 292, null)
     expect(liveLog(run, at(60), input)).toEqual({
       id: 'live-1234',
@@ -255,16 +461,16 @@ describe('liveLog', () => {
   })
 
   it('is Partial when a rep was skipped or the Session ended before the reps were done', () => {
-    const skipped = advance(nextBlock(advance(start(session(3, 'threshold')), at(10)), at(11)), at(60))
+    const skipped = advance(go(nextBlock(go(start(session(3, 'threshold')), at(10)), at(11)), at(11)), at(60))
     expect(liveLog(skipped, at(60), input).status).toBe('partial')
-    const ended = end(advance(start(session(3, 'threshold')), at(20)), at(20))
+    const ended = end(advance(go(start(session(3, 'threshold')), at(10)), at(20)), at(20))
     expect(liveLog(ended, at(25), input)).toMatchObject({ status: 'partial', minutes: 20 })
-    const inCooldown = end(advance(start(session(3, 'threshold')), at(40)), at(40))
+    const inCooldown = end(advance(go(start(session(3, 'threshold')), at(10)), at(40)), at(40))
     expect(liveLog(inCooldown, at(40), input).status).toBe('done')
   })
 
   it('keeps a 5K test’s time only when the 5 km was covered, and the console distance only indoors', () => {
-    const covered = nextBlock(advance(start(session(2, '5k-test'), 'outdoor'), at(12)), at(34.5))
+    const covered = nextBlock(go(start(session(2, '5k-test'), 'outdoor'), at(12)), at(34.5))
     expect(liveLog(end(covered, at(36)), at(36), { ...input, resultSeconds: 1350 })).toMatchObject({
       sessionId: '5k-test',
       status: 'done',
@@ -285,6 +491,17 @@ describe('parseLiveRun', () => {
     expect(parseLiveRun({ ...run, blocks: [] })).toBeNull()
     expect(parseLiveRun({ ...run, type: 'strength' })).toBeNull()
     expect(parseLiveRun({ ...run, startedAt: 'yesterday' })).toBeNull()
+  })
+
+  it('keeps an Undo, and takes back a run stored before Done, Ready and Undo', () => {
+    const skipped = nextBlock(go(start(session(3, 'threshold')), at(10)), at(12))
+    expect(parseLiveRun(JSON.parse(JSON.stringify(skipped)))).toEqual(skipped)
+
+    const { ready: _r, cutShort: _c, ticked: _t, undo: _u, markedDone: _m, ...old } = advance(start(session(3, 'threshold')), at(5))
+    const blocks = old.blocks.map(({ checklist: _, ...b }) => b)
+    const parsed = parseLiveRun(JSON.parse(JSON.stringify({ ...old, blocks })))!
+    expect(parsed).toMatchObject({ block: 0, ready: false, cutShort: [], ticked: [], undo: null, markedDone: false })
+    expect(parsed.blocks[0].checklist).toEqual([])
   })
 })
 
@@ -353,11 +570,11 @@ describe('HYROX', () => {
 
   it('times each round from the tap that ends it, and logs the round, its run and its Stations', () => {
     let run = startRun({ week: 1, session: session(1, 'hyrox'), date: localDate('2026-10-21'), environment: 'indoor' }, T0)
-    run = advance(run, at(7))
+    run = go(run, at(7))
     expect(run.blocks[run.block].name).toBe('Round 1 of 3')
     expect(blockLeft(run, at(9))).toBeNull()
 
-    run = nextBlock(run, at(17))
+    run = tap(run, at(17))
     expect(run.asks).toEqual([1])
     // Round 1 was heavy: the sled push went down to 180 lb and the run was 500 m.
     const [push, pull] = run.blocks[1].stations
@@ -366,9 +583,9 @@ describe('HYROX', () => {
     // The lighter sled push carries on to round 3; round 2 has no sled push.
     expect(run.blocks[3].stations[0]).toEqual({ station: 'sled-push', meters: 25, reps: null, pounds: 180 })
 
-    run = nextBlock(run, at(28.5))
+    run = tap(run, at(28.5))
     // Round 2 is never answered: it logs as written.
-    run = nextBlock(run, at(39))
+    run = tap(run, at(39))
     run = advance(run, at(44))
     expect(isOver(run)).toBe(true)
 
@@ -392,7 +609,7 @@ describe('HYROX', () => {
 
   it('logs only the rounds finished, Partial, when it ends early', () => {
     let run = startRun({ week: 1, session: session(1, 'hyrox'), date: localDate('2026-10-21'), environment: 'outdoor' }, T0)
-    run = end(nextBlock(advance(run, at(7)), at(18)), at(25))
+    run = end(nextBlock(go(run, at(7)), at(18)), at(25))
     expect(stationLogs(run).filter((l) => l.part === 'round')).toEqual([
       { round: 1, part: 'round', pounds: null, meters: null, reps: null, seconds: 660 },
     ])
@@ -450,7 +667,7 @@ describe('Race simulations', () => {
 
   it('logs a split on every run and Station in race order', () => {
     let run = startRun({ week: 18, session: session(18, 'race-simulation'), date: localDate('2027-02-17'), environment: 'indoor' }, T0)
-    run = advance(run, at(10))
+    run = go(run, at(10))
     // 1 km in 4:30, SkiErg in 4:15, and so on: a tap at the end of each.
     const taps = [4.5, 4.25, 4.75, 3, 4.75, 3.5, 5, 6]
     let now = 10
@@ -476,7 +693,7 @@ describe('Race simulations', () => {
 
 describe('parseLiveRun for HYROX', () => {
   it('takes back a HYROX session in progress', () => {
-    const run = nextBlock(advance(startRun({ week: 1, session: session(1, 'hyrox'), date: localDate('2026-10-21'), environment: 'indoor' }, T0), at(7)), at(17))
+    const run = nextBlock(go(startRun({ week: 1, session: session(1, 'hyrox'), date: localDate('2026-10-21'), environment: 'indoor' }, T0), at(7)), at(17))
     expect(parseLiveRun(JSON.parse(JSON.stringify(run)))).toEqual(run)
   })
 })

@@ -85,6 +85,11 @@ export interface LiveBlock {
   work: boolean
   /** Everything else the Block asks for: "Leg swings, skips, drills", "Strides 4 × 15″". */
   detail: string[]
+  /**
+   * A checklist Block's sets, one row each to tick: "Pogo jumps · set 1 of 2".
+   * Its clock counts up, and it ends on the last tick or Done. Empty for every other Block.
+   */
+  checklist: string[]
 }
 
 const RECOVERY_EFFORT: RunEffort = { pace: 'easy' }
@@ -100,7 +105,7 @@ export function liveBlocks(session: Session): LiveBlock[] {
   let round = 0
   return session.blocks.flatMap((block): LiveBlock[] => {
     const kind = blockKind(block)
-    const base = { meters: null, rep: null, round: null, stations: [] as LiveStation[], detail: [] as string[] }
+    const base = { meters: null, rep: null, round: null, stations: [] as LiveStation[], detail: [] as string[], checklist: [] as string[] }
 
     if (isRound(block)) {
       round += 1
@@ -202,20 +207,45 @@ export function liveBlocks(session: Session): LiveBlock[] {
 
     // No run to target: drills, or a walk to warm up or cool down.
     const walk = kind === 'warm-up' || kind === 'cooldown'
+    const checklist = walk ? [] : checklistRows(block.exercises)
     return [
       {
         ...base,
         name: block.name,
         kind: walk ? kind : 'drills',
-        seconds: block.minutes === undefined ? null : Math.round(block.minutes * 60),
+        seconds: block.minutes === undefined || checklist.length > 0 ? null : Math.round(block.minutes * 60),
         lane: walk ? 'easy' : lane,
         effort: null,
         work: false,
         detail,
+        checklist,
       },
     ]
   })
 }
+
+/**
+ * A row per set to tick, when every Exercise is counted in sets: "Pogo jumps ·
+ * set 1 of 2", "Accelerations · 1 of 4". Empty when one isn't, so the Block
+ * stays on the clock.
+ */
+export function checklistRows(exercises: Exercise[]): string[] {
+  const rows = exercises.map(({ name, prescription: rx }): string[] | null => {
+    switch (rx.kind) {
+      case 'sets':
+        return Array.from({ length: rx.sets }, (_, i) => `${name} · set ${i + 1} of ${rx.sets}`)
+      case 'accelerations':
+      case 'strides':
+        return Array.from({ length: rx.reps }, (_, i) => `${name} · ${i + 1} of ${rx.reps}`)
+      default:
+        return null
+    }
+  })
+  return rows.length > 0 && rows.every((r) => r !== null) ? rows.flat() as string[] : []
+}
+
+/** A Block of sets to tick rather than a clock to run down. */
+export const isChecklist = (block: LiveBlock) => block.checklist.length > 0
 
 /** A Block of a run and Stations: a HYROX round, or a Race simulation's run and its Station. */
 const isRound = (block: Block) => block.exercises.some((e) => e.prescription.kind === 'station')
@@ -313,8 +343,18 @@ export interface LiveRun {
   /** Time paused in the current Block, and in the whole Session, not counting a pause still open. */
   blockPausedMs: number
   pausedMs: number
-  /** Blocks cut short with Skip block. */
+  /** Work Blocks cut short with Skip block. */
   skipped: number[]
+  /** Blocks ended with Skip block or Done, or the last tick, with the seconds they had run. */
+  cutShort: { block: number; seconds: number }[]
+  /**
+   * The clock holds on the Ready screen before the current Block: a work
+   * Block after one that isn't, or a HYROX round. It's a pause, so the wait
+   * counts nowhere; Start is `resume`.
+   */
+  ready: boolean
+  /** The current checklist Block's sets ticked. Only a guide: never logged. */
+  ticked: number[]
   /** Blocks run to a distance, with the seconds they took. */
   splits: { block: number; seconds: number }[]
   /**
@@ -328,6 +368,10 @@ export interface LiveRun {
   ending: boolean
   /** When the last Block ended; null until then. */
   finishedAt: number | null
+  /** The run as it was before Skip block or Done, and when that was tapped: Undo for a few seconds. */
+  undo: { run: LiveRun; at: number } | null
+  /** Partial flipped to Done on the finish sheet: what was cut short didn't matter. */
+  markedDone: boolean
 }
 
 export interface LiveStart {
@@ -353,11 +397,16 @@ export function startRun({ week, session, date, environment }: LiveStart, now: n
     blockPausedMs: 0,
     pausedMs: 0,
     skipped: [],
+    cutShort: [],
+    ready: false,
+    ticked: [],
     splits: [],
     asks: [],
     intervals: [],
     ending: false,
     finishedAt: null,
+    undo: null,
+    markedDone: false,
   }
 }
 
@@ -389,7 +438,8 @@ export function advance(run: LiveRun, now: number): LiveRun {
     if (seconds === null) break
     const endsAt = next.blockStartedAt + next.blockPausedMs + seconds * 1000
     if (now < endsAt) break
-    next = moveOn(next, endsAt, false)
+    next = moveOn(next, endsAt, null)
+    if (next.pausedAt !== null) break
   }
   return next
 }
@@ -397,16 +447,35 @@ export function advance(run: LiveRun, now: number): LiveRun {
 /** The Blocks that ask something once over: a rep, a HYROX round, a Race simulation's Station. */
 const asks = (block: LiveBlock) => block.rep !== null || block.kind === 'round' || block.kind === 'station'
 
-function moveOn(run: LiveRun, at: number, skipped: boolean): LiveRun {
+/**
+ * Whether the clock holds on Ready before Block `i`: a work Block after
+ * warm-up, drills or anything else that isn't work, or a HYROX round. Never
+ * between a rep and its recovery, nor between a Race simulation's runs and Stations.
+ */
+function holdsBefore(blocks: LiveBlock[], i: number): boolean {
+  const block = blocks[i]
+  const before = blocks[i - 1]
+  if (!block || !before || !block.work) return false
+  return block.kind === 'round' || (!before.work && before.kind !== 'recovery')
+}
+
+/** On to the next Block. `cut` is the tap that ended this one early, with its seconds run. */
+function moveOn(run: LiveRun, at: number, cut: { skipped: boolean; seconds: number } | null): LiveRun {
   const block = run.block + 1
+  const ready = holdsBefore(run.blocks, block)
   return {
     ...run,
     asks: asks(run.blocks[run.block]) ? [...run.asks, run.block] : run.asks,
-    skipped: skipped ? [...run.skipped, run.block] : run.skipped,
+    skipped: cut?.skipped ? [...run.skipped, run.block] : run.skipped,
+    cutShort: cut ? [...run.cutShort, { block: run.block, seconds: cut.seconds }] : run.cutShort,
     block,
     blockStartedAt: at,
     blockPausedMs: 0,
+    pausedAt: ready ? (run.pausedAt ?? at) : run.pausedAt,
+    ready,
+    ticked: [],
     finishedAt: block >= run.blocks.length ? at : null,
+    undo: null,
   }
 }
 
@@ -416,37 +485,129 @@ export function pause(run: LiveRun, now: number): LiveRun {
   return { ...current, pausedAt: now }
 }
 
+/** Resume, Start on the Ready screen, or Keep going on the finish sheet (back to Ready, if that's where it ended). */
 export function resume(run: LiveRun, now: number): LiveRun {
   if (run.pausedAt === null) return run
+  if (run.ending && run.ready) return { ...run, ending: false, markedDone: false }
   const paused = Math.max(0, now - run.pausedAt)
   return {
     ...run,
     pausedAt: null,
     blockPausedMs: run.blockPausedMs + paused,
     pausedMs: run.pausedMs + paused,
+    ready: false,
     ending: false,
+    markedDone: false,
   }
 }
 
 /**
- * Skip block on a timed Block; on a Block run to a distance, the tap that
- * says it's covered, which records its time. Paused stays paused, on the next Block.
+ * Skip block on a timed work Block, which makes the log Partial; Done on
+ * warm-up, drills, a checklist or the cooldown, which doesn't. On a Block run
+ * to a distance, a HYROX round or a Station, the tap that says it's covered,
+ * which records its split. Paused stays paused, on the next Block.
  */
 export function nextBlock(run: LiveRun, now: number): LiveRun {
   const current = advance(run, now)
+  return finishBlock(current, now, current)
+}
+
+/** Ends the current Block on a tap; Skip block and Done can be undone back to `before`. */
+function finishBlock(current: LiveRun, now: number, before: LiveRun): LiveRun {
   if (current.block >= current.blocks.length) return current
   const at = current.pausedAt ?? now
-  if (current.blocks[current.block].seconds === null) {
-    const seconds = Math.round(blockElapsed(current, now))
-    return moveOn({ ...current, splits: [...current.splits, { block: current.block, seconds }] }, at, false)
+  const block = current.blocks[current.block]
+  const seconds = Math.round(blockElapsed(current, now))
+  if (block.seconds === null && !isChecklist(block)) {
+    return moveOn({ ...current, splits: [...current.splits, { block: current.block, seconds }] }, at, null)
   }
-  return moveOn(current, at, true)
+  const next = moveOn(current, at, { skipped: block.work, seconds })
+  return { ...next, undo: { run: { ...before, undo: null }, at: now } }
 }
+
+/** Ticks a checklist Block's set, or unticks it. The last one ticked ends the Block. */
+export function tick(run: LiveRun, row: number, now: number): LiveRun {
+  const current = advance(run, now)
+  const block = current.blocks[current.block]
+  if (!block || row < 0 || row >= block.checklist.length) return current
+  const ticked = current.ticked.includes(row) ? current.ticked.filter((r) => r !== row) : [...current.ticked, row].sort((a, b) => a - b)
+  const next = { ...current, ticked }
+  return ticked.length === block.checklist.length ? finishBlock(next, now, current) : next
+}
+
+/** How long Undo stays offered after Skip block or Done. */
+export const UNDO_MS = 8_000
+
+export const canUndo = (run: LiveRun, now: number) => run.undo !== null && now - run.undo.at < UNDO_MS
+
+/**
+ * Back to the Block before Skip block or Done, exactly as it was. Its clock
+ * kept running, so the seconds since the tap count toward it.
+ */
+export function undo(run: LiveRun, now: number): LiveRun {
+  return canUndo(run, now) ? { ...run.undo!.run, undo: null } : run
+}
+
+/** The Blocks from `block` on with something recorded that going back to it drops: skips, splits, answers. */
+export function redone(run: LiveRun, block: number): number[] {
+  const recorded = new Set([...run.skipped, ...run.splits.map((s) => s.block), ...run.asks, ...run.intervals.map((i) => i.block)])
+  return [...recorded].filter((b) => b >= block).sort((a, b) => a - b)
+}
+
+/**
+ * Back to an earlier Block, tapped in the lane list. One cut short resumes
+ * where it was left; one run to a distance, a round or a Station picks up
+ * its stopwatch from its split; a timed one that ran its time starts again.
+ * The gap is paused for the Block, but the time stays in the Session's.
+ * Everything recorded from that Block on is dropped, to be done again.
+ */
+export function goBack(run: LiveRun, block: number, now: number): LiveRun {
+  if (block < 0 || block >= Math.min(run.block, run.blocks.length)) return run
+  const paused = run.pausedAt === null ? 0 : Math.max(0, now - run.pausedAt)
+  const from =
+    run.cutShort.find((c) => c.block === block)?.seconds ?? run.splits.find((s) => s.block === block)?.seconds ?? 0
+  const before = (b: number) => b < block
+  return {
+    ...run,
+    block,
+    blockStartedAt: now - from * 1000,
+    blockPausedMs: 0,
+    pausedAt: null,
+    pausedMs: run.pausedMs + paused,
+    skipped: run.skipped.filter(before),
+    cutShort: run.cutShort.filter((c) => before(c.block)),
+    splits: run.splits.filter((s) => before(s.block)),
+    asks: run.asks.filter(before),
+    intervals: run.intervals.filter((i) => before(i.block)),
+    ready: false,
+    ticked: [],
+    ending: false,
+    finishedAt: null,
+    undo: null,
+    markedDone: false,
+  }
+}
+
+/**
+ * The work cut short, for the finish sheet: each Block skipped or ended in,
+ * with the seconds it ran, and each never reached (seconds null).
+ */
+export function shortBlocks(run: LiveRun): { block: number; seconds: number | null }[] {
+  return run.blocks.flatMap((b, i) => {
+    if (!b.work) return []
+    if (run.skipped.includes(i)) return [{ block: i, seconds: run.cutShort.find((c) => c.block === i)?.seconds ?? null }]
+    if (i === run.block && !run.ready) return [{ block: i, seconds: Math.round(blockElapsed(run, run.pausedAt ?? run.blockStartedAt)) }]
+    return i >= run.block ? [{ block: i, seconds: null }] : []
+  })
+}
+
+/** The finish sheet's flip: Partial logged as Done after all, or back. */
+export const markDone = (run: LiveRun, done: boolean): LiveRun => ({ ...run, markedDone: done })
 
 /** End: pauses and opens the finish sheet. Keep going is `resume`. */
 export function end(run: LiveRun, now: number): LiveRun {
   const paused = pause(run, now)
-  return paused.block >= paused.blocks.length ? paused : { ...paused, ending: true }
+  return paused.block >= paused.blocks.length ? paused : { ...paused, ending: true, undo: null }
 }
 
 /** Held it (`actualPace` null) or Changed, for a rep that's over. */
@@ -455,6 +616,7 @@ export function answer(run: LiveRun, block: number, targetPace: number | null, a
   if (rep === null || rep === undefined || !run.asks.includes(block)) return run
   return {
     ...run,
+    undo: null,
     asks: run.asks.filter((b) => b !== block),
     intervals: [
       ...run.intervals,
@@ -490,7 +652,7 @@ export function answerStations(run: LiveRun, block: number, change: StationChang
   if (!run.asks.includes(block) || !(run.blocks[block]?.kind === 'round' || run.blocks[block]?.kind === 'station')) {
     return run
   }
-  const answered = { ...run, asks: run.asks.filter((b) => b !== block) }
+  const answered = { ...run, asks: run.asks.filter((b) => b !== block), undo: null }
   if (!change) return answered
   const loads = new Map(change.stations.map((s) => [s.station, s.pounds]))
   return {
@@ -544,8 +706,12 @@ export function distanceSeconds(run: LiveRun): number | null {
   return run.splits.find((s) => run.blocks[s.block]?.kind === 'distance')?.seconds ?? null
 }
 
-/** Done when every work Block ran its course; Partial when one was skipped or never reached. */
+/**
+ * Done when every work Block ran its course; Partial when one was skipped or
+ * never reached, however little was missing, unless flipped to Done on the finish sheet.
+ */
 export function liveStatus(run: LiveRun): 'done' | 'partial' {
+  if (run.markedDone) return 'done'
   return run.blocks.every((b, i) => !b.work || (i < run.block && !run.skipped.includes(i))) ? 'done' : 'partial'
 }
 
@@ -616,7 +782,23 @@ export function parseLiveRun(value: unknown): LiveRun | null {
   if (!lists.every(Array.isArray) || v.blocks!.length === 0) return null
   if (v.pausedAt !== null && typeof v.pausedAt !== 'number') return null
   if (v.finishedAt !== null && typeof v.finishedAt !== 'number') return null
-  // Blocks stored before HYROX ran live have no round or Stations.
-  const blocks = v.blocks!.map((b: LiveBlock) => ({ ...b, round: b.round ?? null, stations: b.stations ?? [] }))
-  return { ...v, blocks, ending: v.ending === true } as LiveRun
+  // Blocks stored before HYROX ran live have no round or Stations; before checklists, no checklist.
+  const blocks = v.blocks!.map((b: LiveBlock) => ({
+    ...b,
+    round: b.round ?? null,
+    stations: b.stations ?? [],
+    checklist: Array.isArray(b.checklist) ? b.checklist : [],
+  }))
+  // Runs stored before Done, Ready and Undo have none of them.
+  const before = v.undo && typeof v.undo === 'object' && typeof v.undo.at === 'number' ? parseLiveRun(v.undo.run) : null
+  return {
+    ...v,
+    blocks,
+    ending: v.ending === true,
+    cutShort: Array.isArray(v.cutShort) ? v.cutShort : [],
+    ready: v.ready === true,
+    ticked: Array.isArray(v.ticked) ? v.ticked : [],
+    undo: before ? { run: before, at: v.undo!.at } : null,
+    markedDone: v.markedDone === true,
+  } as LiveRun
 }

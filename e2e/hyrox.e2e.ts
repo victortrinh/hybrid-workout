@@ -17,7 +17,9 @@ const live = (page: Page) => {
     timer: page.getByRole('timer'),
     line: band.locator('[aria-live]'),
     stations: band.getByRole('list', { name: 'Stations' }).getByRole('listitem'),
-    finished: page.getByRole('button', { name: /^(Skip block|Finished .+)$/ }),
+    finished: page.getByRole('button', { name: /^(Skip block|Done|Finished .+)$/ }),
+    /** Start, on the Ready screen before a round or the first run. */
+    start: page.getByRole('button', { name: 'Start', exact: true }),
   }
 }
 
@@ -55,8 +57,10 @@ test('a three-round HYROX session, with a lighter sled from round 1 on', async (
     /^Cooldown\s*5 min$/,
   ])
 
-  // Round 1: the run and both sleds at 60% of Race load, plates only. The clock counts up.
+  // Round 1 holds on Ready until Start: the run and both sleds at 60% of Race load, plates only. The clock counts up.
   await page.clock.runFor('07:00')
+  await expect(s.block).toHaveText('Ready? Up next: Round 1 of 3 · 600 m run')
+  await s.start.click()
   await expect(s.block).toHaveText('Round 1 of 3 · 600 m + 2 Stations')
   await expect(s.target).toHaveText('600')
   await expect(page.locator('header').getByText('m run', { exact: true })).toBeVisible()
@@ -67,6 +71,7 @@ test('a three-round HYROX session, with a lighter sled from round 1 on', async (
   await page.clock.runFor('09:30')
   await expect(s.timer).toHaveText('10:00')
   await s.finished.click()
+  await s.start.click()
   await expect(s.finished).toHaveText('Finished round 2')
 
   // Round 1 was heavy: the sled push went down to 180 lb.
@@ -82,6 +87,7 @@ test('a three-round HYROX session, with a lighter sled from round 1 on', async (
   // Round 2 goes unanswered: it logs as written. Round 3's sled push follows the change.
   await page.clock.runFor('11:00')
   await s.finished.click()
+  await s.start.click()
   await expect(s.stations).toHaveText(['Sled push 25 m · 180 lb plates', 'Sled pull 25 m · 135 lb plates'])
   await expect(s.line).toHaveText('Last round. Same technique, tired legs.')
   await page.clock.runFor('10:30')
@@ -147,6 +153,8 @@ test('half simulation A logs a split for every run and Station, in race order', 
   const s = live(page)
   await expect(s.block).toHaveText('Warm-up · 10 min')
   await s.finished.click()
+  await expect(s.block).toHaveText('Ready? Up next: Run 1 · 1 km')
+  await s.start.click()
 
   await expect(s.block).toHaveText('Run 1 · 1 km')
   await expect(s.target).toHaveText('1')
