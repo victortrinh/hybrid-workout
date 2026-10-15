@@ -291,6 +291,7 @@ export function App() {
                   : null
               }
               weekCount={program.weekCount}
+              stations={program.stations}
               race={showsRacePlan(day.daysToRace) ? { plan: racePlan(program, logs, today), program } : null}
               pending={pending}
               error={error ?? decisionError ?? answerError}

@@ -310,10 +310,10 @@ Vertical rhythm is tight within a group and generous between groups: 4–6px ins
 
 ## Elevation & Depth
 
-Flat. Depth is conveyed by the cobalt field (a colour plane, not a raised surface), by the `sunk` tonal layer, and by 2px ink rules. The only shadow in the system is the settings popover, which floats over the field and is also bordered in 2px ink.
+Flat. Depth is conveyed by the cobalt field (a colour plane, not a raised surface), by the `sunk` tonal layer, and by 2px ink rules. The only shadows in the system are the settings popover, which floats over the field and is also bordered in 2px ink, and the Session sheet's dialog on desktop.
 
 ### Shadow Vocabulary
-- **Popover lift** (`box-shadow: 0 10px 30px rgba(0,0,0,.18)`): the floating settings popover only.
+- **Popover lift** (`box-shadow: 0 10px 30px rgba(0,0,0,.18)`): the floating settings popover and the Session sheet on desktop.
 
 Inset 2px box-shadows on toggles, steppers, line buttons and Plan cells are strokes, not elevation.
 
@@ -346,6 +346,7 @@ Blunt, full-height and wide.
 - **Panels:** no background, no radius; 2px ink top rule, 14px top padding, 24px bottom.
 - **Empty state:** `sunk` block with 4px corners and 18px padding; the one filled container on paper.
 - **Popover:** paper, 2px ink border, 4px corners, 14px padding, 264px wide, popover lift shadow.
+- **Session sheet:** a Session's Prescription over Today, on a 40% black scrim. On the phone it sits on the bottom edge with a 2px ink top rule, up to 92% of the screen, its action pinned under another 2px ink rule; on desktop it is a centred dialog up to 560px wide, 2px ink border, 4px corners, popover lift shadow.
 
 ### Navigation
 - **Side rail (≥960px):** cobalt column, uppercase wordmark, 17px/700 white items with 24px stroked icons; hover is 12% white wash; active item inverts to white fill with cobalt text. A 56px striped countdown sits at the foot except on Today.
@@ -382,7 +383,7 @@ Motion is a lane being run: things come in from the left or fill from the start 
 - **Wipe in:** a screen, a new Block's name, a Coach line after Accept or Undo, a just-logged set: opacity and 8px from the left. Screens wipe in on arrival only; the one leaving goes at once, so a tap never waits.
 - **Fill:** field lanes, Week lane cells (once, as they scroll into view) and Progress chart data, which a clip sweeps in left to right the first time the chart is seen. Axes and the goal line are there from the start.
 - **Drop:** the Live field band unrolls from the top as a session opens; the Settings popover drops 6px out of the avatar.
-- **Rise:** strips and toasts at the foot (rest timer, Undo) rise 8px into place and drop away.
+- **Rise:** strips and toasts at the foot (rest timer, Undo) rise 8px into place and drop away; the Session sheet rises 8px over a scrim fading in, and closes at once.
 - **Marker:** the selected segment's ink block and the side rail's white block slide to the new choice.
 - **Press:** a pressed button sits 1px lower; colour, stroke and underline ease over 120ms.
 - **Countdown:** the race countdown wipes on left to right on the day's first look at Today, and stands still after that.
@@ -406,7 +407,7 @@ Motion is a lane being run: things come in from the left or fill from the start 
 
 ### Don't:
 - **Don't** use progress rings, donut charts or pill-shaped progress bars.
-- **Don't** put content in bordered or shadowed cards; the popover is the only floating, shadowed surface.
+- **Don't** put content in bordered or shadowed cards; the popover and the Session sheet are the only floating surfaces.
 - **Don't** reuse a Session-type colour for anything other than its Session type.
 - **Don't** add a second accent hue to the shell, or gradients to the field.
 - **Don't** stripe body figures, timers or table values; they stay solid.

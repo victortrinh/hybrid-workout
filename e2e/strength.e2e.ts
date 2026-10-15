@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { expectNoAxeViolations, WEEK_3 } from './axe'
 import { serveHistory, weekDone, type SeedLog } from './history'
+import { aMinuteBefore, doToday } from './today'
 
 /**
  * Live Strength sessions under a controlled clock, against a served history:
@@ -58,13 +59,13 @@ async function scan(page: Page) {
 
 test('a full Strength session: a load change, RPEs, a missed rep, then the Coach’s Suggestion', async ({ page }) => {
   const sent = await serveHistory(page, HISTORY)
-  await page.clock.install({ time: WEEK_3 })
+  await page.clock.install({ time: aMinuteBefore(WEEK_3) })
   await page.goto('/')
+  await doToday(page, page.getByRole('list').filter({ hasText: 'Threshold' }).getByRole('button', { name: /^Strength/ }))
   await page.clock.pauseAt(new Date(WEEK_3.getTime() + 1000))
 
   // Today shows the loads in pounds from the Working weights.
   const bucket = page.getByRole('list').filter({ hasText: 'Threshold' })
-  await bucket.getByRole('button', { name: /^Strength/ }).click()
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Strength, squat 3 × 5')
   await expect(page.getByRole('heading', { level: 1 }).locator('xpath=following-sibling::p[1]')).toHaveText(
     'Squat 3 × 5 at 185 lb, RDL 3 × 6 at 135 lb · RPE 7',
@@ -194,10 +195,10 @@ test('a full Strength session: a load change, RPEs, a missed rep, then the Coach
 
 test('as prescribed, a Strength session is one tap per set plus three: Start, Finish, Save', async ({ page }) => {
   const sent = await serveHistory(page, HISTORY)
-  await page.clock.install({ time: WEEK_3 })
+  await page.clock.install({ time: aMinuteBefore(WEEK_3) })
   await page.goto('/')
+  await doToday(page, page.getByRole('list').filter({ hasText: 'Threshold' }).getByRole('button', { name: /^Strength/ }))
   await page.clock.pauseAt(new Date(WEEK_3.getTime() + 1000))
-  await page.getByRole('list').filter({ hasText: 'Threshold' }).getByRole('button', { name: /^Strength/ }).click()
 
   let taps = 0
   const tap = async (button: ReturnType<Page['getByRole']>) => {
@@ -218,12 +219,11 @@ test('as prescribed, a Strength session is one tap per set plus three: Start, Fi
 test('Week 1 calibrates: ramp to RPE 7, and that load is the Working weight', async ({ page }) => {
   const wednesday = new Date('2026-10-21T12:00:00-04:00')
   const sent = await serveHistory(page, [])
-  await page.clock.install({ time: wednesday })
+  await page.clock.install({ time: aMinuteBefore(wednesday) })
   await page.goto('/')
+  await doToday(page, page.getByRole('list').filter({ hasText: 'Threshold' }).getByRole('button', { name: /^Strength/ }))
   await page.clock.pauseAt(new Date(wednesday.getTime() + 1000))
 
-  const bucket = page.getByRole('list').filter({ hasText: 'Threshold' })
-  await bucket.getByRole('button', { name: /^Strength/ }).click()
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Strength, find Working weights')
   await page.getByRole('button', { name: /^Start / }).click()
 
@@ -314,11 +314,11 @@ test('a pending Working weight is asked before set 1: Accept moves every squat s
 }) => {
   const decisions: Record<string, unknown>[] = []
   await serveHistory(page, EASY_SQUAT, [], { suggestionDecisions: decisions })
-  await page.clock.install({ time: WEEK_3 })
+  await page.clock.install({ time: aMinuteBefore(WEEK_3) })
   await page.goto('/')
+  await doToday(page, page.getByRole('list').filter({ hasText: 'Threshold' }).getByRole('button', { name: /^Strength/ }))
   await page.clock.pauseAt(new Date(WEEK_3.getTime() + 1000))
 
-  await page.getByRole('list').filter({ hasText: 'Threshold' }).getByRole('button', { name: /^Strength/ }).click()
   await page.getByRole('button', { name: /^Start / }).click()
   await expect(page).toHaveURL('/live')
 
@@ -351,10 +351,10 @@ test('a pending Working weight is asked before set 1: Accept moves every squat s
 test('Keep leaves the loads where they are', async ({ page }) => {
   const decisions: Record<string, unknown>[] = []
   await serveHistory(page, EASY_SQUAT, [], { suggestionDecisions: decisions })
-  await page.clock.install({ time: WEEK_3 })
+  await page.clock.install({ time: aMinuteBefore(WEEK_3) })
   await page.goto('/')
+  await doToday(page, page.getByRole('list').filter({ hasText: 'Threshold' }).getByRole('button', { name: /^Strength/ }))
   await page.clock.pauseAt(new Date(WEEK_3.getTime() + 1000))
-  await page.getByRole('list').filter({ hasText: 'Threshold' }).getByRole('button', { name: /^Strength/ }).click()
   await page.getByRole('button', { name: /^Start / }).click()
 
   await page.getByRole('button', { name: 'Keep 185 lb' }).click()
@@ -365,10 +365,10 @@ test('Keep leaves the loads where they are', async ({ page }) => {
 
 test('tapping a load selects it, so typing 225 replaces it in one go', async ({ page }) => {
   await serveHistory(page, HISTORY)
-  await page.clock.install({ time: WEEK_3 })
+  await page.clock.install({ time: aMinuteBefore(WEEK_3) })
   await page.goto('/')
+  await doToday(page, page.getByRole('list').filter({ hasText: 'Threshold' }).getByRole('button', { name: /^Strength/ }))
   await page.clock.pauseAt(new Date(WEEK_3.getTime() + 1000))
-  await page.getByRole('list').filter({ hasText: 'Threshold' }).getByRole('button', { name: /^Strength/ }).click()
   await page.getByRole('button', { name: /^Start / }).click()
 
   const squat = page.getByRole('region', { name: 'Back squat' })

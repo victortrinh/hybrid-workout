@@ -312,6 +312,14 @@
     animation: drop-in var(--dur-tap) ease-in reverse;
   }
 
+  /* A Session's sheet rises 8px into place over a fading scrim; closing it is instant. */
+  .sheet-overlay[data-entering] {
+    animation: fade-in var(--dur-ui) var(--ease-lane);
+  }
+  .sheet-rise[data-entering] {
+    animation: rise-in var(--dur-enter) var(--ease-lane);
+  }
+
   /* Field lane: a flat bar with hard ends that fills left to right. */
   .lane-fill {
     transition: width 0.9s var(--ease-lane);
@@ -322,6 +330,19 @@
   from {
     opacity: 0;
     transform: translateY(-6px);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
   }
 }
 
