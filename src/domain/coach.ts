@@ -88,7 +88,11 @@ export interface BucketEntry {
 
 /** A workout more than one Session fits: Today asks which. */
 export type ActivityQuestion = Extract<ActivityOutcome, { state: 'ambiguous' }>
-export type ActivityAttached = Extract<ActivityOutcome, { state: 'attached' }> & { session: Session }
+export type ActivityAttached = Extract<ActivityOutcome, { state: 'attached' }> & {
+  session: Session
+  /** Whether the Session has a log yet: attaching a workout never logs it. */
+  logged: boolean
+}
 
 /** How far back Today still asks about a workout. */
 export const ACTIVITY_QUESTION_DAYS = 7
@@ -187,7 +191,11 @@ export interface CoachDay {
   recoveryCut: ShortSleepCut | null
   /** Workouts from the last week that fit more than one Session, oldest first. */
   activityQuestions: ActivityQuestion[]
-  /** Today's workouts the Coach attached on its own, oldest first: said once, so it's never silent. */
+  /**
+   * Workouts attached to a Session, oldest first: today's that the Coach
+   * attached on its own, said once so it's never silent, and any from the
+   * last week whose Session isn't logged yet, so logging it is one tap.
+   */
   activitiesAttached: ActivityAttached[]
 }
 
@@ -295,9 +303,12 @@ export function coach({
       .sort((a, b) => a.activity.startedAt.localeCompare(b.activity.startedAt)),
     activitiesAttached: matched
       .flatMap((o): ActivityAttached[] => {
-        if (o.state !== 'attached' || o.by !== 'coach' || o.activity.date !== today) return []
+        if (o.state !== 'attached' || o.activity.date > today) return []
+        const logged = logs.some((l) => l.week === o.week && l.sessionId === o.sessionId)
+        const said = o.by === 'coach' && o.activity.date === today
+        if (!said && (logged || daysBetween(o.activity.date, today) >= ACTIVITY_QUESTION_DAYS)) return []
         const session = findWeek(program, o.week)?.sessions.find((s) => s.id === o.sessionId)
-        return session ? [{ ...o, session }] : []
+        return session ? [{ ...o, session, logged }] : []
       })
       .sort((a, b) => a.activity.startedAt.localeCompare(b.activity.startedAt)),
   }

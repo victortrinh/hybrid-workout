@@ -434,7 +434,8 @@ function UpNext({
         />
       ))}
       {day.bucket
-        .filter((e) => e.activity && treadmill(e.activity) && e.log?.status !== 'skipped' && e.log?.distanceMeters == null)
+        // Not logged yet, the note's Log it asks for the console's distance itself.
+        .filter((e) => e.activity && treadmill(e.activity) && e.log && e.log.status !== 'skipped' && e.log.distanceMeters == null)
         .map((e) => (
           <ConsoleDistance key={e.activity!.id} entry={e} />
         ))}
@@ -442,7 +443,11 @@ function UpNext({
   )
 }
 
-/** A workout the Coach attached on its own: said in one line, undone in one tap. */
+/**
+ * A workout attached to a Session: said in one line, undone in one tap, and,
+ * while the Session isn't logged, logged in one more (Log after, filled in
+ * from the watch).
+ */
 function AttachedNote({
   attached,
   treadmill,
@@ -452,18 +457,33 @@ function AttachedNote({
   treadmill: boolean
   onDetach: () => void
 }) {
-  const { activity, session } = attached
+  const { activity, session, week, by, logged } = attached
+  const name = SESSION_TYPES[session.type].name
   return (
-    <section aria-label="From the watch" className="mt-[18px] border-t-2 border-t-ink py-3.5 desktop:border-b desktop:border-b-rule">
+    <section
+      aria-label="From the watch"
+      aria-live="polite"
+      className="mt-[18px] border-t-2 border-t-ink py-3.5 desktop:border-b desktop:border-b-rule"
+    >
       <p className="text-[17px] leading-[1.3] font-semibold">
-        {nb(`The watch’s ${activity.workoutType.toLowerCase()} went to ${SESSION_TYPES[session.type].name}.`)}
+        {by === 'coach'
+          ? nb(`The watch’s ${activity.workoutType.toLowerCase()} went to ${name}.`)
+          : nb(`${name} it was. Not logged yet.`)}
       </p>
       <p className="mt-1 text-[14px] text-muted">
-        {nb(`${timeOfDay(activity.startedAt)} · ${activitySummary(activity, treadmill)}`)}
+        {nb(`${shortWeekday(activity.date)} ${timeOfDay(activity.startedAt)} · ${activitySummary(activity, treadmill)}`)}
+        {!logged && (treadmill ? nb(' · Bring the console’s distance.') : nb(' · The watch filled in the rest.'))}
       </p>
-      <Button onPress={onDetach} className={`mt-1 ${quietButton}`}>
-        Not that Session
-      </Button>
+      <div className="mt-1 flex flex-wrap gap-x-5">
+        {!logged && (
+          <Link href={logPath(week, session.id)} className={linkButton}>
+            Log it
+          </Link>
+        )}
+        <Button onPress={onDetach} className={quietButton}>
+          Not that Session
+        </Button>
+      </div>
     </section>
   )
 }
@@ -478,7 +498,7 @@ function WhichSession({
   treadmill: boolean
   onAnswer: (week: number | null, sessionId: string | null) => void
 }) {
-  const { activity, candidates } = question
+  const { activity, candidates, guess } = question
   return (
     <section
       aria-label="Which Session was this?"
@@ -488,9 +508,15 @@ function WhichSession({
       <p className="mt-1 text-[14px] text-muted">
         {nb(`${activity.workoutType} from the watch, ${shortWeekday(activity.date)} ${timeOfDay(activity.startedAt)} · ${activitySummary(activity, treadmill)}`)}
       </p>
+      {guess && <p className="mt-1 text-[14px] text-ink">{nb(guessLine(question, guess))}</p>}
       <div className="mt-2.5 flex flex-wrap gap-x-5">
         {candidates.map((c) => (
-          <Button key={`${c.week}/${c.session.id}`} onPress={() => onAnswer(c.week, c.session.id)} className={linkButton}>
+          <Button
+            key={`${c.week}/${c.session.id}`}
+            onPress={() => onAnswer(c.week, c.session.id)}
+            // With a guess, it leads in link blue and the others step back to ink.
+            className={!guess || c === guess ? linkButton : `${quietButton} underline decoration-1 underline-offset-4`}
+          >
             {SESSION_TYPES[c.session.type].name}
           </Button>
         ))}
@@ -500,6 +526,15 @@ function WhichSession({
       </div>
     </section>
   )
+}
+
+/** Why the Coach guessed what it did: the heart rate when the watch has one, else the minutes. */
+function guessLine({ activity, candidates }: ActivityQuestion, guess: ActivityQuestion['candidates'][number]): string {
+  const name = SESSION_TYPES[guess.session.type].name
+  const next = candidates.find((c) => c !== guess)!
+  return activity.averageHeartRate !== null
+    ? `The Coach’s guess: ${name}. ${activity.minutes} min at ${activity.averageHeartRate} bpm is no ${SESSION_TYPES[next.session.type].name}.`
+    : `The Coach’s guess: ${name}. ${activity.minutes} min is closest to its ${guess.session.minutes}.`
 }
 
 /** A treadmill run attached to a Session: the watch's distance is a guess, so ask for the console's. */
