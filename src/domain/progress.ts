@@ -229,32 +229,34 @@ export interface RaceSimulationTimes {
   stations: Partial<Record<StationId, number>>
 }
 
-export interface HyroxRoundTime {
+/** A Station's own split in a HYROX round, with what it was split over: rounds change volume Week to Week. */
+export interface HyroxSplit {
   week: number
   date: LocalDate
   round: number
-  /** The round's run and its Stations, timed as one. */
   seconds: number
+  meters: number | null
+  reps: number | null
 }
 
 export interface StationTimes {
   /** Every Race simulation trained with a Station timed, oldest first. */
   simulations: RaceSimulationTimes[]
-  /** Each Station's latest HYROX round, where one included it. */
-  rounds: Partial<Record<StationId, HyroxRoundTime>>
+  /** Each Station's latest split in a HYROX round, where one was timed. */
+  hyrox: Partial<Record<StationId, HyroxSplit>>
   /** The first Race simulation Week, and the day it starts; null when the Program has none. */
   firstSimulation: { week: number; startDate: LocalDate } | null
 }
 
 /**
  * Station times from what was trained by today: each Race simulation's
- * splits, and from HYROX sessions, the time of the latest round each Station
- * was in. A HYROX round is timed as a whole, run included, so it is never
- * passed off as a Station split.
+ * splits, and from HYROX sessions, each Station's latest split. A round
+ * logged before its legs were timed has only the round's time, run included,
+ * so it is never passed off as a Station split.
  */
 export function stationTimes(program: Program, logs: SessionLog[], today: LocalDate): StationTimes {
   const simulations: RaceSimulationTimes[] = []
-  const rounds: Partial<Record<StationId, HyroxRoundTime>> = {}
+  const hyrox: Partial<Record<StationId, HyroxSplit>> = {}
   const standing = logs
     .filter((log) => logFor(logs, log.week, log.sessionId) === log)
     .filter((log) => trained(log) && log.stations.length > 0 && daysBetween(log.date, today) >= 0)
@@ -270,15 +272,12 @@ export function stationTimes(program: Program, logs: SessionLog[], today: LocalD
       if (Object.keys(times).length > 0) simulations.push({ week: log.week, date: log.date, stations: times })
     } else if (type === 'hyrox') {
       for (const line of log.stations) {
-        if (line.part !== 'round' || line.seconds === null) continue
-        const time = { week: log.week, date: log.date, round: line.round, seconds: line.seconds }
-        for (const other of log.stations) {
-          if (other.round === line.round && other.part !== 'run' && other.part !== 'round') rounds[other.part] = time
-        }
+        if (line.part === 'run' || line.part === 'round' || line.seconds === null) continue
+        hyrox[line.part] = { week: log.week, date: log.date, round: line.round, seconds: line.seconds, meters: line.meters, reps: line.reps }
       }
     }
   }
 
   const first = program.phases.flatMap((p) => p.weeks).find((w) => w.raceSimulation)
-  return { simulations, rounds, firstSimulation: first ? { week: first.number, startDate: first.startDate } : null }
+  return { simulations, hyrox, firstSimulation: first ? { week: first.number, startDate: first.startDate } : null }
 }

@@ -1,8 +1,9 @@
 /**
  * A Live session of running: the resolved Prescription laid out as Blocks to
  * run one after the other, and the clock that walks through them. HYROX runs
- * on the same clock, a Block per round; a Race simulation, a Block per run
- * and per Station, so each gets its split.
+ * on the same clock, a Block per round with a tap at the end of each leg; a
+ * Race simulation, a Block per run and per Station. Either way every run and
+ * every Station gets its split.
  *
  * Pure like the Coach: no timers, no storage. Every step takes `now` (epoch
  * milliseconds) from the caller. The state is timestamps rather than counters,
@@ -10,7 +11,7 @@
  * there when the page looks again, and `advance` catches up in one go.
  */
 import type { LocalDate } from './calendar'
-import type { IntervalLog, SessionLog, StationLog } from './log'
+import type { IntervalLog, SessionLog, StationLog, StationPart } from './log'
 import {
   clock,
   DEFAULT_INCLINE,
@@ -51,7 +52,7 @@ export type LiveBlockKind =
   | 'run'
   | 'distance'
   | 'cooldown'
-  /** A HYROX round: its run and its Stations, timed as one. */
+  /** A HYROX round: its run, then its Stations, with a tap at the end of each leg. */
   | 'round'
   /** One Station of a Race simulation, timed on its own. */
   | 'station'
@@ -379,8 +380,10 @@ export interface LiveRun {
   ready: boolean
   /** The current checklist Block's sets ticked. Only a guide: never logged. */
   ticked: number[]
-  /** Blocks run to a distance, with the seconds they took. */
+  /** Blocks run to a distance, with the seconds they took; a HYROX round's is the whole round. */
   splits: { block: number; seconds: number }[]
+  /** Each HYROX round leg finished, with its own seconds, in the order of `roundLegs`. */
+  legs: { block: number; seconds: number }[]
   /**
    * Blocks that are over and still waiting for an answer, oldest first: reps
    * for Held it or Changed, HYROX rounds and Race simulation Stations for As
@@ -425,6 +428,7 @@ export function startRun({ week, session, date, environment }: LiveStart, now: n
     ready: false,
     ticked: [],
     splits: [],
+    legs: [],
     asks: [],
     intervals: [],
     ending: false,
@@ -528,12 +532,48 @@ export function resume(run: LiveRun, now: number): LiveRun {
 /**
  * Skip block on a timed work Block, which makes the log Partial; Done on
  * warm-up, drills, a checklist, Set up or the cooldown, which doesn't. On a Block run
- * to a distance, a HYROX round or a Station, the tap that says it's covered,
- * which records its split. Paused stays paused, on the next Block.
+ * to a distance or a Station, the tap that says it's covered, which records
+ * its split. On a HYROX round, the tap that ends a leg: the round moves on
+ * only after its last. Paused stays paused, on the next Block.
  */
 export function nextBlock(run: LiveRun, now: number): LiveRun {
   const current = advance(run, now)
-  return finishBlock(current, now, current)
+  const leg = currentLeg(current)
+  if (leg === null) return finishBlock(current, now, current)
+  // A second tap a moment after the first is a bounce, not a leg done.
+  if (legElapsed(current, now) < LEG_BOUNCE_SECONDS) return current
+  const block = current.block
+  const last = leg === roundLegs(current.blocks[block]).length - 1
+  // The last leg is what's left of the round's time, so the legs always add up to it.
+  const before = legsDone(current, block).reduce((sum, s) => sum + s, 0)
+  const seconds = last ? Math.round(blockElapsed(current, now)) - before : Math.round(legElapsed(current, now))
+  const next = { ...current, legs: [...current.legs, { block, seconds: Math.max(0, seconds) }] }
+  return last ? finishBlock(next, now, next) : next
+}
+
+/** Under this long, a leg's tap is the same thumb landing twice. */
+const LEG_BOUNCE_SECONDS = 2
+
+/** A HYROX round's legs, in order: its run, if it has one, then each Station. */
+export function roundLegs(block: LiveBlock): StationPart[] {
+  if (block.kind !== 'round') return []
+  return [...(block.meters !== null ? (['run'] as const) : []), ...block.stations.map((s) => s.station)]
+}
+
+/** The seconds of each leg finished in a round. */
+const legsDone = (run: LiveRun, block: number) => run.legs.filter((l) => l.block === block).map((l) => l.seconds)
+
+/** The leg of the HYROX round the clock is on, from 0; null on any other Block. */
+export function currentLeg(run: LiveRun): number | null {
+  const block = run.blocks[run.block]
+  if (!block || block.kind !== 'round') return null
+  return Math.min(legsDone(run, run.block).length, roundLegs(block).length - 1)
+}
+
+/** Seconds on the current leg of a HYROX round, or on the whole Block anywhere else. */
+export function legElapsed(run: LiveRun, now: number): number {
+  const elapsed = blockElapsed(run, now)
+  return currentLeg(run) === null ? elapsed : Math.max(0, elapsed - legsDone(run, run.block).reduce((sum, s) => sum + s, 0))
 }
 
 /** Ends the current Block on a tap; Skip block and Done can be undone back to `before`. */
@@ -581,7 +621,7 @@ export function redone(run: LiveRun, block: number): number[] {
 /**
  * Back to an earlier Block, tapped in the lane list. One cut short resumes
  * where it was left; one run to a distance, a round or a Station picks up
- * its stopwatch from its split; a timed one that ran its time starts again.
+ * its stopwatch from its split, a round on its last leg; a timed one that ran its time starts again.
  * The gap is paused for the Block, but the time stays in the Session's.
  * Everything recorded from that Block on is dropped, to be done again.
  */
@@ -601,6 +641,8 @@ export function goBack(run: LiveRun, block: number, now: number): LiveRun {
     skipped: run.skipped.filter(before),
     cutShort: run.cutShort.filter((c) => before(c.block)),
     splits: run.splits.filter((s) => before(s.block)),
+    // The round gone back to keeps every leg but its last, which runs on.
+    legs: [...run.legs.filter((l) => before(l.block)), ...run.legs.filter((l) => l.block === block).slice(0, -1)],
     asks: run.asks.filter(before),
     intervals: run.intervals.filter((i) => before(i.block)),
     ready: false,
@@ -692,27 +734,110 @@ export function answerStations(run: LiveRun, block: number, change: StationChang
 }
 
 /**
- * The Station logs of the rounds and Stations finished: a HYROX round's
- * time, run and Stations; a Race simulation's split on every run and Station.
+ * A split put right on the finish sheet: a HYROX round's leg (from 0) or a
+ * Race simulation's run or Station (`leg` null). Null seconds leaves it untimed.
  */
-export function stationLogs(run: LiveRun): StationLog[] {
+export interface SplitFix {
+  block: number
+  leg: number | null
+  seconds: number | null
+}
+
+/**
+ * The Station logs of the rounds and Stations finished: a HYROX round's
+ * time, then its run and each Station with its own split; a Race
+ * simulation's split on every run and Station. A round finished before legs
+ * were timed logs only the round's time. `fixes` replace the splits they name.
+ */
+export function stationLogs(run: LiveRun, fixes: SplitFix[] = []): StationLog[] {
+  const fixed = (block: number, leg: number | null, seconds: number | null) => {
+    const fix = fixes.find((f) => f.block === block && f.leg === leg)
+    const time = fix ? fix.seconds : seconds
+    return time === null ? null : Math.min(SPLIT_MAX, time)
+  }
   return run.blocks.flatMap((b, i): StationLog[] => {
     const split = run.splits.find((s) => s.block === i)
     if (b.round === null || !split) return []
     const round = b.round
-    const seconds = Math.min(SPLIT_MAX, split.seconds)
-    const done = b.stations.map(
-      (s): StationLog => ({ round, part: s.station, pounds: s.pounds, meters: s.meters, reps: s.reps, seconds: null }),
-    )
     const runLog = (time: number | null): StationLog => ({ round, part: 'run', pounds: null, meters: b.meters, reps: null, seconds: time })
+    const stationLog = (s: LiveStation, time: number | null): StationLog => ({
+      round,
+      part: s.station,
+      pounds: s.pounds,
+      meters: s.meters,
+      reps: s.reps,
+      seconds: time,
+    })
     switch (b.kind) {
-      case 'round':
-        return [{ round, part: 'round', pounds: null, meters: null, reps: null, seconds }, runLog(null), ...done]
+      case 'round': {
+        const legs = legsDone(run, i)
+        const timed = legs.length === roundLegs(b).length
+        const leg = (n: number) => (timed ? fixed(i, n, legs[n]) : null)
+        const ran = b.meters !== null ? 1 : 0
+        return [
+          { round, part: 'round', pounds: null, meters: null, reps: null, seconds: Math.min(SPLIT_MAX, split.seconds) },
+          ...(ran ? [runLog(leg(0))] : []),
+          ...b.stations.map((s, n) => stationLog(s, leg(n + ran))),
+        ]
+      }
       case 'distance':
-        return [runLog(seconds)]
+        return [runLog(fixed(i, null, split.seconds))]
       default:
-        return done.map((d) => ({ ...d, seconds }))
+        return b.stations.map((s) => stationLog(s, fixed(i, null, split.seconds)))
     }
+  })
+}
+
+/** A run or Station split too quick to be true: a tap that slipped. */
+export interface QuickSplit extends SplitFix {
+  seconds: number
+  part: StationPart
+  /** The round, or the place of a Race simulation's run and its Station. */
+  round: number
+  meters: number | null
+  reps: number | null
+  /** The quickest it could possibly have been. */
+  fastest: number
+}
+
+/**
+ * The seconds per metre (or per rep, on the wall balls) no one goes under,
+ * well past the fastest in the world: a 2:00 km, a 1:15 500 m on the rower.
+ */
+const FASTEST: Record<StationPart, number> = {
+  run: 0.12,
+  round: 0,
+  skierg: 0.15,
+  row: 0.15,
+  'sled-push': 0.4,
+  'sled-pull': 0.4,
+  'burpee-broad-jumps': 1,
+  'farmers-carry': 0.25,
+  'sandbag-lunges': 1,
+  'wall-balls': 1,
+}
+
+/** The quickest a run or Station of this distance or rep count could possibly go. */
+export function fastestSplit(part: StationPart, meters: number | null, reps: number | null): number {
+  return Math.ceil(FASTEST[part] * (reps ?? meters ?? 0))
+}
+
+/** Every split of a HYROX round or a Race simulation faster than it could possibly have been: asked about before saving. */
+export function quickSplits(run: LiveRun): QuickSplit[] {
+  return run.blocks.flatMap((b, i): QuickSplit[] => {
+    const split = run.splits.find((s) => s.block === i)
+    if (b.round === null || !split) return []
+    const lengths = new Map<StationPart, LiveStation>(b.stations.map((s) => [s.station, s]))
+    const timed: { leg: number | null; part: StationPart; seconds: number }[] =
+      b.kind === 'round'
+        ? legsDone(run, i).map((seconds, leg) => ({ leg, part: roundLegs(b)[leg], seconds }))
+        : [{ leg: null, part: b.kind === 'distance' ? 'run' : b.stations[0].station, seconds: split.seconds }]
+    return timed.flatMap(({ leg, part, seconds }): QuickSplit[] => {
+      const meters = part === 'run' ? b.meters : (lengths.get(part)?.meters ?? null)
+      const reps = part === 'run' ? null : (lengths.get(part)?.reps ?? null)
+      const fastest = fastestSplit(part, meters, reps)
+      return seconds < fastest ? [{ block: i, leg, seconds, part, round: b.round!, meters, reps, fastest }] : []
+    })
   })
 }
 
@@ -753,6 +878,8 @@ export interface LiveLogInput {
   distanceMeters: number | null
   /** A 5K test's time; only kept on a Done 5K test. */
   resultSeconds: number | null
+  /** Splits too quick to be true, put right or left untimed on the finish sheet. */
+  fixes?: SplitFix[]
   updatedAt: string
 }
 
@@ -794,7 +921,7 @@ export function liveLog(run: LiveRun, now: number, input: LiveLogInput): Session
     // A circuit's runs are logged one by one, not as a console total.
     distanceMeters: run.environment === 'indoor' && !circuit ? input.distanceMeters : null,
     intervals: run.intervals,
-    stations: stationLogs(run),
+    stations: stationLogs(run, input.fixes),
     sets: [],
     updatedAt: input.updatedAt,
   }
@@ -827,6 +954,8 @@ export function parseLiveRun(value: unknown): LiveRun | null {
     blocks,
     ending: v.ending === true,
     cutShort: Array.isArray(v.cutShort) ? v.cutShort : [],
+    // Runs stored before HYROX rounds were timed leg by leg have none.
+    legs: Array.isArray(v.legs) ? v.legs : [],
     ready: v.ready === true,
     ticked: Array.isArray(v.ticked) ? v.ticked : [],
     undo: before ? { run: before, at: v.undo!.at } : null,

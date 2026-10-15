@@ -249,26 +249,37 @@ describe('HYROX Station times', () => {
   it('names the first Race simulation before there is one', () => {
     const times = stationTimes(program, [], localDate('2026-11-04'))
     expect(times.simulations).toEqual([])
-    expect(times.rounds).toEqual({})
+    expect(times.hyrox).toEqual({})
     expect(times.firstSimulation).toEqual({ week: 18, startDate: '2027-02-15' })
   })
 
-  it("takes each Race simulation's Station splits, and each Station's latest HYROX round", () => {
-    const hyrox = (week: number, date: string, seconds: number) =>
+  it("takes each Race simulation's Station splits, and each Station's latest split in a HYROX round", () => {
+    const hyrox = (week: number, date: string, push: number) =>
       log(week, 'hyrox', date, {
-        stations: [line(1, 'round', seconds), line(1, 'run', null), line(1, 'sled-push', null), line(1, 'sled-pull', null)],
+        stations: [
+          line(1, 'round', 600),
+          line(1, 'run', 200),
+          { ...line(1, 'sled-push', push), meters: 25, pounds: 200 },
+          { ...line(1, 'sled-pull', 600 - 200 - push), meters: 25, pounds: 135 },
+        ],
       })
+    // Before legs were timed: only the round's time, which is no Station's.
+    const roundOnly = log(7, 'hyrox', '2026-12-05', {
+      stations: [line(1, 'round', 560), line(1, 'run', null), line(1, 'sled-push', null), line(1, 'farmers-carry', null)],
+    })
     const simulation = log(18, 'race-simulation', '2027-02-20', {
       stations: [line(1, 'run', 300), line(1, 'skierg', 260), line(2, 'run', 310), line(2, 'sled-push', 190)],
     })
     const times = stationTimes(
       program,
-      [hyrox(3, '2026-11-07', 600), hyrox(5, '2026-11-21', 560), simulation],
+      [hyrox(3, '2026-11-07', 240), hyrox(5, '2026-11-21', 210), roundOnly, simulation],
       localDate('2027-02-21'),
     )
     expect(times.simulations).toEqual([{ week: 18, date: '2027-02-20', stations: { skierg: 260, 'sled-push': 190 } }])
-    expect(times.rounds['sled-push']).toEqual({ week: 5, date: '2026-11-21', round: 1, seconds: 560 })
-    expect(times.rounds.skierg).toBeUndefined()
+    expect(times.hyrox['sled-push']).toEqual({ week: 5, date: '2026-11-21', round: 1, seconds: 210, meters: 25, reps: null })
+    expect(times.hyrox['sled-pull']).toMatchObject({ week: 5, seconds: 190 })
+    expect(times.hyrox['farmers-carry']).toBeUndefined()
+    expect(times.hyrox.skierg).toBeUndefined()
   })
 
   it('leaves out what was skipped or is still ahead', () => {
