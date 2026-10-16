@@ -180,10 +180,11 @@
 
   --shadow-popover: 0 10px 30px rgba(0, 0, 0, 0.18);
   --ease-lane: cubic-bezier(0.16, 1, 0.3, 1);
-  /* Motion (DESIGN.md): a press, a UI change, a screen or block arriving. Lane fills take 0.9s. */
+  /* Motion (DESIGN.md): a press, a UI change, a screen or block arriving, a sheet sliding up. Lane fills take 0.9s. */
   --dur-tap: 120ms;
   --dur-ui: 180ms;
   --dur-enter: 240ms;
+  --dur-sheet: 360ms;
   --default-transition-timing-function: var(--ease-lane);
 }
 
@@ -312,12 +313,21 @@
     animation: drop-in var(--dur-tap) ease-in reverse;
   }
 
-  /* A Session's sheet rises 8px into place over a fading scrim; closing it is instant. */
+  /*
+   * A Session's sheet slides up from the bottom edge on the phone, over the
+   * longer travel a beat longer than a block arriving; on desktop the dialog
+   * rises 8px. The scrim fades in; closing is instant.
+   */
   .sheet-overlay[data-entering] {
     animation: fade-in var(--dur-ui) var(--ease-lane);
   }
   .sheet-rise[data-entering] {
-    animation: rise-in var(--dur-enter) var(--ease-lane);
+    animation: sheet-up var(--dur-sheet) var(--ease-lane);
+  }
+  @media (width >= 60rem) {
+    .sheet-rise[data-entering] {
+      animation: rise-in var(--dur-enter) var(--ease-lane);
+    }
   }
 
   /* Field lane: a flat bar with hard ends that fills left to right. */
@@ -336,6 +346,12 @@
 @keyframes fade-in {
   from {
     opacity: 0;
+  }
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
   }
 }
 

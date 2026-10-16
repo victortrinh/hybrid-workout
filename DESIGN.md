@@ -379,11 +379,11 @@ SVG on paper: 12px/600 muted axis text, `rule` gridlines, Session-type stacked b
 
 Motion is a lane being run: things come in from the left or fill from the start line, fast, hard-ended, on one easing (`--ease-lane`, `cubic-bezier(.16,1,.3,1)`). Built with Motion (`motion/react`) and CSS; the tokens live in `src/app/motion.tsx` and `styles.css`.
 
-- **Durations:** press 120ms (`--dur-tap`), UI change 180ms (`--dur-ui`), a screen or block arriving 240ms (`--dur-enter`), a lane or chart filling 0.9s.
+- **Durations:** press 120ms (`--dur-tap`), UI change 180ms (`--dur-ui`), a screen or block arriving 240ms (`--dur-enter`), the Session sheet sliding up 360ms (`--dur-sheet`), a lane or chart filling 0.9s.
 - **Wipe in:** a screen, a new Block's name, a Coach line after Accept or Undo, a just-logged set: opacity and 8px from the left. Screens wipe in on arrival only; the one leaving goes at once, so a tap never waits.
 - **Fill:** field lanes, Week lane cells (once, as they scroll into view) and Progress chart data, which a clip sweeps in left to right the first time the chart is seen. Axes and the goal line are there from the start.
 - **Drop:** the Live field band unrolls from the top as a session opens; the Settings popover drops 6px out of the avatar.
-- **Rise:** strips and toasts at the foot (rest timer, Undo) rise 8px into place and drop away; the Session sheet rises 8px over a scrim fading in, and closes at once.
+- **Rise:** strips and toasts at the foot (rest timer, Undo) rise 8px into place and drop away; the Session sheet slides up from the bottom edge on the phone (on desktop its dialog rises 8px) over a scrim fading in, and closes at once.
 - **Marker:** the selected segment's ink block and the side rail's white block slide to the new choice.
 - **Press:** a pressed button sits 1px lower; colour, stroke and underline ease over 120ms.
 - **Countdown:** the race countdown wipes on left to right on the day's first look at Today, and stands still after that.
