@@ -6,12 +6,12 @@ import { painSuggestionFor, whenSame } from './PainStep'
 
 const ACHILLES_3: PainReport = {
   id: 'r1',
-  date: localDate('2026-10-14'),
+  date: localDate('2026-10-21'),
   score: 3,
   area: 'achilles-calf',
   week: null,
   sessionId: null,
-  updatedAt: '2026-10-14T12:00:00.000Z',
+  updatedAt: '2026-10-21T12:00:00.000Z',
 }
 
 const suggestion = (decision: PainSuggestion['decision']): PainSuggestion => ({
@@ -23,7 +23,7 @@ const suggestion = (decision: PainSuggestion['decision']): PainSuggestion => ({
   level: 'ease',
   trigger: { score: 3, area: 'achilles-calf', risingFrom: 2 },
   decision,
-  decidedOn: decision === 'open' ? null : localDate('2026-10-15'),
+  decidedOn: decision === 'open' ? null : localDate('2026-10-22'),
 })
 
 describe('whenSame', () => {

@@ -11,8 +11,8 @@ import { aMinuteBefore, doToday } from './today'
 
 /** Week 2 done, with a 23:00 5K test on the treadmill: Threshold is 12.3 km/h. */
 const WEEK_2 = [
-  { week: 2, sessionId: '5k-test', date: '2026-10-27', status: 'done', resultSeconds: 23 * 60, environment: 'indoor' },
-  ...weekDone(2, ['strength', 'threshold', 'hyrox'], '2026-10-28'),
+  { week: 2, sessionId: '5k-test', date: '2026-11-03', status: 'done', resultSeconds: 23 * 60, environment: 'indoor' },
+  ...weekDone(2, ['strength', 'threshold', 'hyrox'], '2026-11-04'),
 ] as const
 
 const live = (page: Page) => {
@@ -145,7 +145,7 @@ test('a full Threshold Session from Start to logged', async ({ page }) => {
   await expect.poll(() => sent.at(-1)).toMatchObject({
     week: 3,
     sessionId: 'threshold',
-    date: '2026-11-04',
+    date: '2026-11-11',
     status: 'done',
     // Two minutes paused and one on Ready don't count.
     minutes: 45,
@@ -183,8 +183,12 @@ test('the target speed fits its column on a phone', async ({ page }) => {
 
 test('a 5K test Live session records the time and updates the Training paces', async ({ page }) => {
   // Thursday of Week 2, Week 1 done in full: the baseline 5K test is Up next, and runs are RPE only.
-  const thursday = new Date('2026-10-29T12:00:00-04:00')
-  const sent = await serveHistory(page, weekDone(1, ['speed', 'strength', 'threshold', 'hyrox'], '2026-10-20'))
+  const thursday = new Date('2026-11-05T12:00:00-05:00')
+  const sent = await serveHistory(page, weekDone(1, ['speed', 'strength', 'threshold', 'hyrox'], '2026-10-27'))
+  // November is a treadmill month by default: this Week's 5K test and Threshold are set Outdoors.
+  await page.addInitScript(() =>
+    localStorage.setItem('compromised:environment', JSON.stringify({ '2/5k-test': 'outdoor', '2/threshold': 'outdoor' })),
+  )
   await page.clock.install({ time: thursday })
   await page.goto('/')
   await page.clock.pauseAt(new Date(thursday.getTime() + 1000))
@@ -216,7 +220,7 @@ test('a 5K test Live session records the time and updates the Training paces', a
   await page.getByRole('button', { name: 'End' }).click()
   await expect(page.getByText('Ended early')).toBeVisible()
   await expect(page.getByRole('textbox', { name: '5 km time' })).toHaveValue('22:30')
-  // Outdoors in October: no console to read.
+  // Outdoors: no console to read.
   await expect(page.getByRole('textbox', { name: /Console distance/ })).toHaveCount(0)
   await page.getByRole('radio', { name: '9', exact: true }).check({ force: true })
   await page.getByRole('button', { name: 'Save log' }).click()

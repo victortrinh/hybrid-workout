@@ -23,7 +23,7 @@ describe('race card copy', () => {
   })
 
   it('puts the first 1 km 10 s slower than the Race simulation pace', () => {
-    const plan = { ...none, run: { secondsPerKm: 285, week: 24 } }
+    const plan = { ...none, run: { secondsPerKm: 285, week: 23 } }
     expect(raceNotes(plan, false, stations['sled-push'])[0]).toMatch(/^First 1 km at 4:55, not 4:45\./)
     expect(raceNotes(none, false, stations['sled-push'])[0]).toMatch(/^First 1 km slower than you want to\./)
   })
@@ -35,10 +35,10 @@ describe('race card copy', () => {
 
   it('names the Race simulations the splits came from, or that there are none', () => {
     expect(sourceLine(none)).toBe('No Race simulation logged, so no splits to go on. Race loads only.')
-    expect(sourceLine({ ...none, simulations: [24] })).toBe('Splits from the Race simulation in Week 24.')
-    const scaled = { ...none, legs: [{ station: 'skierg' as const, split: { seconds: 240, week: 24, scaled: true } }] }
-    expect(sourceLine({ ...scaled, simulations: [18, 21, 24] })).toBe(
-      'Splits from the Race simulations in Weeks 18, 21 and 24. Half-volume Stations doubled.',
+    expect(sourceLine({ ...none, simulations: [23] })).toBe('Splits from the Race simulation in Week 23.')
+    const scaled = { ...none, legs: [{ station: 'skierg' as const, split: { seconds: 240, week: 23, scaled: true } }] }
+    expect(sourceLine({ ...scaled, simulations: [17, 20, 23] })).toBe(
+      'Splits from the Race simulations in Weeks 17, 20 and 23. Half-volume Stations doubled.',
     )
   })
 

@@ -1,11 +1,11 @@
 # Compromised
 
-A personal coach for one athlete's 27-week program toward a sub-20 5K and a HYROX Men's Open race on 21 April 2027. It turns the program into today's session and adapts it to what has been logged.
+A personal coach for one athlete's 26-week program toward a sub-20 5K and a HYROX Men's Open race on 21 April 2027. It turns the program into today's session and adapts it to what has been logged.
 
 ## Program
 
 **Program**:
-The full 27-week plan, from week 1 (19 October 2026) to Race day.
+The full 26-week plan, from week 1 (26 October 2026) to Race day.
 _Avoid_: schedule, training plan (when meaning the whole thing)
 
 **Race day**:
@@ -36,7 +36,7 @@ A Week whose Prescriptions are reduced by roughly a third to let fatigue clear.
 The reduced-volume Week before Race week, defined by the race-week rules rather than the normal pattern.
 
 **Race week**:
-Week 27, holding Race day and the few easy days around it.
+Week 26, holding Race day and the few easy days around it.
 
 ## Sessions
 

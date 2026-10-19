@@ -97,13 +97,13 @@ test('a real 5K test and calibration replace the estimates, which Settings then 
     {
       week: 1,
       sessionId: 'strength',
-      date: '2026-10-20',
+      date: '2026-10-27',
       status: 'done',
       sets: [{ exercise: 0, set: 1, lift: 'back-squat', pounds: 185, reps: 5, rpe: 7 }],
     },
-    { week: 2, sessionId: '5k-test', date: '2026-10-28', status: 'done', resultSeconds: 23 * 60, environment: 'indoor' },
+    { week: 2, sessionId: '5k-test', date: '2026-11-04', status: 'done', resultSeconds: 23 * 60, environment: 'indoor' },
   ])
-  await later.clock.setFixedTime(new Date('2026-11-04T12:00:00-05:00'))
+  await later.clock.setFixedTime(new Date('2026-11-11T12:00:00-05:00'))
   await later.goto('/plan/week/3')
   await expect(later.getByText(/^Paces from the 23:00 5K test/)).toBeVisible()
 

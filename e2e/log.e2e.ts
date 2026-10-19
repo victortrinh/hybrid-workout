@@ -4,19 +4,20 @@ import { seedLogs, weekDone } from './history'
 
 /**
  * These tests write Session logs to the shared e2e database, so each project
- * gets Weeks no other test reads: the phone logs in Week 5, desktop in Week 7,
- * each after a Week done in full (4 and 6), so nothing carries over.
+ * gets Weeks no other test reads: the phone logs in Week 4, desktop in Week 6,
+ * each after a Week done in full (3 and 5), so nothing carries over. Week 3 is
+ * done on its Saturday, after the clock of every test that reads Week 3.
  */
 const SCENARIO = {
   phone: {
-    week: 5,
-    before: weekDone(4, ['speed', 'strength', 'easy-deload', 'hyrox'], '2026-11-09'),
+    week: 4,
+    before: weekDone(3, ['speed', 'strength', 'threshold', 'hyrox'], '2026-11-14'),
     wednesday: new Date('2026-11-18T12:00:00-05:00'),
     days: { wed: 'Wed 18 November', thu: 'Thu 19 November' },
   },
   desktop: {
-    week: 7,
-    before: weekDone(6, ['speed', 'strength', 'threshold', 'hyrox'], '2026-11-23'),
+    week: 6,
+    before: weekDone(5, ['speed', 'strength', 'threshold', 'hyrox'], '2026-11-23'),
     wednesday: new Date('2026-12-02T12:00:00-05:00'),
     days: { wed: 'Wed 2 December', thu: 'Thu 3 December' },
   },
@@ -88,10 +89,10 @@ test('logging Threshold as Done strikes it through on Today and changes Up next'
 })
 
 test.describe('the sync endpoint', () => {
-  /** Week 20 is read by no screen test; ids carry the project so the two runs don't collide. */
+  /** Week 19 is read by no screen test; ids carry the project so the two runs don't collide. */
   const entry = (project: string, change: Record<string, unknown> = {}) => ({
     id: `e2e-sync-${project}`,
-    week: 20,
+    week: 19,
     sessionId: project === 'phone' ? 'speed' : 'strength',
     date: '2027-03-08',
     status: 'done',
@@ -209,7 +210,7 @@ test.describe('the sync endpoint', () => {
       [entry(project, { status: 'planned' })],
       [entry(project, { rpe: 12 })],
       [entry(project, { sessionId: 'yoga' })],
-      [entry(project, { week: 28 })],
+      [entry(project, { week: 27 })],
       // Only a 5K test has a result time.
       [entry(project, { resultSeconds: 1380 })],
       // Only a run Session has reps.

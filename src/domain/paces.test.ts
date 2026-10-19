@@ -70,8 +70,8 @@ describe('Training paces', () => {
 })
 
 describe('estimated Training paces', () => {
-  const today = localDate('2026-11-04')
-  const test = (resultSeconds: number, date = '2026-10-28'): SessionLog =>
+  const today = localDate('2026-11-11')
+  const test = (resultSeconds: number, date = '2026-11-04'): SessionLog =>
     ({
       id: `t-${date}`,
       week: 2,
@@ -92,7 +92,7 @@ describe('estimated Training paces', () => {
   it('give way to the first real 5K test', () => {
     expect(currentPaces([test(23 * 60)], today, 21 * 60)).toEqual(trainingPaces(23 * 60))
     // A test logged after today doesn't count yet: the estimate stands.
-    expect(currentPaces([test(23 * 60, '2026-11-11')], today, 21 * 60)?.fromSeconds).toBe(21 * 60)
+    expect(currentPaces([test(23 * 60, '2026-11-18')], today, 21 * 60)?.fromSeconds).toBe(21 * 60)
   })
 
   it('stay null with neither, so runs go by RPE', () => {
@@ -100,7 +100,7 @@ describe('estimated Training paces', () => {
   })
 
   it('reach the Coach, which shows them for the runs', () => {
-    const week2 = localDate('2026-10-27')
+    const week2 = localDate('2026-11-03')
     const day = coach({ program, today: week2, startingPoint: { fiveKSeconds: 21 * 60, weights: {}, updatedAt: 'x' } })
     expect(day.paces).toEqual({ ...trainingPaces(21 * 60), estimate: true })
     expect(day.fiveKTest).toBeNull()
@@ -206,7 +206,7 @@ function log(week: number, sessionId: string, date: string, change: Partial<Sess
     intervals: [],
     sets: [],
     stations: [],
-    updatedAt: '2026-11-01T12:00:00.000Z',
+    updatedAt: '2026-11-08T12:00:00.000Z',
     ...change,
   }
 }
@@ -216,11 +216,11 @@ const indoor = (minutes: number): RunContext => ({ paces: trainingPaces(minutes 
 const outdoor = (minutes: number): RunContext => ({ ...indoor(minutes), environment: 'outdoor' })
 
 describe('the latest 5K test', () => {
-  const baseline = log(2, '5k-test', '2026-10-28', { resultSeconds: 1380, environment: 'indoor' })
-  const second = log(9, '5k-test', '2026-12-16', { resultSeconds: 1320, environment: 'indoor' })
+  const baseline = log(2, '5k-test', '2026-11-04', { resultSeconds: 1380, environment: 'indoor' })
+  const second = log(8, '5k-test', '2026-12-16', { resultSeconds: 1320, environment: 'indoor' })
 
   it('sets no paces before the baseline test', () => {
-    const day = coach({ program, today: localDate('2026-10-27'), logs: [] })
+    const day = coach({ program, today: localDate('2026-11-03'), logs: [] })
     expect(day.paces).toBeNull()
     expect(describeSession(session(1, 'threshold'), { paces: day.paces, environment: 'indoor', unit: 'kmh' }).target).toBe(
       'Threshold effort, RPE 6–7 · 2′ jog',
@@ -228,7 +228,7 @@ describe('the latest 5K test', () => {
   })
 
   it('sets the paces from the baseline test on', () => {
-    const day = coach({ program, today: localDate('2026-10-28'), logs: [baseline] })
+    const day = coach({ program, today: localDate('2026-11-04'), logs: [baseline] })
     expect(day.fiveKTest).toBe(baseline)
     expect(day.paces?.fromSeconds).toBe(1380)
   })
@@ -239,8 +239,8 @@ describe('the latest 5K test', () => {
   })
 
   it('counts only a Done test with a time', () => {
-    const partial = log(9, '5k-test', '2026-12-16', { status: 'partial', resultSeconds: 1320 })
-    const noTime = log(9, '5k-test', '2026-12-17')
+    const partial = log(8, '5k-test', '2026-12-16', { status: 'partial', resultSeconds: 1320 })
+    const noTime = log(8, '5k-test', '2026-12-17')
     expect(latestFiveKTest([baseline, partial, noTime], localDate('2026-12-20'))).toBe(baseline)
   })
 
@@ -260,8 +260,8 @@ describe('run Prescriptions with Training paces', () => {
   })
 
   it('give 5K-pace intervals the 5K pace, and faster-than reps the faster pace', () => {
-    expect(describeSession(session(5, 'speed'), outdoor(23)).target).toBe('4:36/km · 90″ jog · 4 accelerations first')
-    expect(describeSession(session(14, 'speed'), outdoor(23)).target).toMatch(/^4:31\/km · /)
+    expect(describeSession(session(4, 'speed'), outdoor(23)).target).toBe('4:36/km · 90″ jog · 4 accelerations first')
+    expect(describeSession(session(13, 'speed'), outdoor(23)).target).toMatch(/^4:31\/km · /)
   })
 
   it('give the Easy run an easy range', () => {
@@ -270,7 +270,7 @@ describe('run Prescriptions with Training paces', () => {
 
   it('leave efforts by feel as they are', () => {
     expect(describeSession(session(3, 'speed'), indoor(23)).target).toMatch(/^Hard, by feel/)
-    expect(describeSession(session(9, '5k-test'), indoor(23)).target).toBe('5 km all-out · 4 strides first')
+    expect(describeSession(session(8, '5k-test'), indoor(23)).target).toBe('5 km all-out · 4 strides first')
   })
 
   it('reach every run in a Week’s Session list, warm-ups included', () => {
@@ -281,9 +281,9 @@ describe('run Prescriptions with Training paces', () => {
 
 describe('Deload weeks', () => {
   it('run Speed as the Program specifies: 4 × 2′ at Threshold pace, not 5 × 3′ at 5K pace', () => {
-    const normal = session(5, 'speed')
-    const deload = session(8, 'speed')
-    expect(findWeek(program, 8)!.deload).toBe(true)
+    const normal = session(4, 'speed')
+    const deload = session(7, 'speed')
+    expect(findWeek(program, 7)!.deload).toBe(true)
     expect(describeSession(normal, indoor(23)).summary).toBe('5 × 3′ at 5K pace / 90″ jog')
     expect(describeSession(deload, indoor(23)).summary).toBe('4 × 2′ controlled / 2′ jog')
     expect(describeSession(deload, indoor(23)).target).toBe('12.3 km/h · 1% incline · 2′ jog · 2 accelerations first')
@@ -295,12 +295,12 @@ describe('Deload weeks', () => {
         .filter((b) => b.main)
         .flatMap((b) => b.exercises)
         .reduce((sum, e) => (e.prescription.kind === 'intervals' ? sum + e.prescription.reps * e.prescription.workSeconds : sum), 0)
-    // Week 7 (Speed 4 × 4′, the Week before) against Deload Week 8 (4 × 2′).
-    const ratio = runSeconds(session(8, 'speed')) / runSeconds(session(7, 'speed'))
+    // Week 6 (Speed 4 × 4′, the Week before) against Deload Week 7 (4 × 2′).
+    const ratio = runSeconds(session(7, 'speed')) / runSeconds(session(6, 'speed'))
     expect(ratio).toBeLessThanOrEqual(2 / 3)
   })
 
   it('replace Threshold with an easy run at Easy pace', () => {
-    expect(describeSession(session(8, 'easy-deload'), outdoor(23)).target).toBe('5:51–6:26/km · RPE 2–4')
+    expect(describeSession(session(7, 'easy-deload'), outdoor(23)).target).toBe('5:51–6:26/km · RPE 2–4')
   })
 })

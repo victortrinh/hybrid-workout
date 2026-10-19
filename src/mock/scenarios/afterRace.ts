@@ -2,8 +2,8 @@ import { history } from './history'
 import { nights, scenario } from './scenario'
 
 const h = history()
-for (let week = 1; week <= 26; week++) h.week(week, { optional: week % 2 === 0 })
-h.log(27, 'shakeout', '2027-04-19').log(27, 'race', '2027-04-21', 'done', {
+for (let week = 1; week <= 25; week++) h.week(week, { optional: week % 2 === 0 })
+h.log(26, 'shakeout', '2027-04-19').log(26, 'race', '2027-04-21', 'done', {
   minutes: 84,
   rpe: 10,
   splitSeconds: 270,
@@ -11,7 +11,7 @@ h.log(27, 'shakeout', '2027-04-19').log(27, 'race', '2027-04-21', 'done', {
 })
 
 /**
- * Thursday 22 April 2027, the day after Race day: all 27 Weeks trained and
+ * Thursday 22 April 2027, the day after Race day: all 26 Weeks trained and
  * the race logged with its finish time, with only the tail of Race week left
  * on the calendar. Today's result and Program recap; the Plan and Progress
  * past the end of the Program.

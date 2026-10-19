@@ -4,7 +4,7 @@ import { serveHistory, weekDone } from './history'
 
 test.beforeEach(async ({ page }) => {
   // Week 2 done in full, so Today opens on Week 3's own Up next.
-  await serveHistory(page, weekDone(2, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-10-26'))
+  await serveHistory(page, weekDone(2, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-11-02'))
   await page.clock.setFixedTime(WEEK_3)
 })
 

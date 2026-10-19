@@ -5,8 +5,8 @@ import { E2E_SERVICE_TOKEN, serviceTokenHeaders } from './serviceToken'
 
 /**
  * Recovery data from the morning Shortcut, through the real Worker and D1.
- * Weeks 22 and 23 are read by no other test: Week 22 is done in full, so
- * Wednesday of Week 23 has Speed, 4 × 3′ Up next. Both projects send the
+ * Weeks 21 and 22 are read by no other test: Week 21 is done in full, so
+ * Wednesday of Week 22 has Speed, 4 × 3′ Up next. Both projects send the
  * same nights, which the endpoint takes idempotently, and neither decides
  * the Suggestion, so they can run side by side.
  */
@@ -43,7 +43,7 @@ test('the recovery endpoint only takes the Access service token', async ({ reque
 })
 
 test('a short night with low HRV, sent by the Shortcut, shows on Today with its numbers', async ({ page, request }, testInfo) => {
-  await seedLogs(request, testInfo.project.name, weekDone(22, ['speed', 'strength', 'easy-deload', 'hyrox'], '2027-03-20'))
+  await seedLogs(request, testInfo.project.name, weekDone(21, ['speed', 'strength', 'easy-deload', 'hyrox'], '2027-03-20'))
   for (const night of NIGHTS) {
     const response = await request.post('/api/recovery', { data: night, headers: serviceTokenHeaders() })
     expect(response.status(), await response.text()).toBe(200)

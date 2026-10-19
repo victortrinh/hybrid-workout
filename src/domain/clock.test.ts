@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { localDate, localDateIn } from './calendar'
 import { nowDate, nowMs, pinClock, unpinClock } from './clock'
 
-const REAL = Date.parse('2026-10-14T16:00:00.000Z')
+const REAL = Date.parse('2026-10-21T16:00:00.000Z')
 
 beforeEach(() => {
   vi.useFakeTimers()
@@ -17,7 +17,7 @@ afterEach(() => {
 describe('the real clock', () => {
   it('reads Date, so Playwright and fake timers can move it', () => {
     expect(nowMs()).toBe(REAL)
-    expect(nowDate().toISOString()).toBe('2026-10-14T16:00:00.000Z')
+    expect(nowDate().toISOString()).toBe('2026-10-21T16:00:00.000Z')
     vi.advanceTimersByTime(90_000)
     expect(nowMs()).toBe(REAL + 90_000)
   })

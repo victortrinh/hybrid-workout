@@ -11,7 +11,7 @@ import { longDay, shortDay } from '../format'
 import { weekPath } from '../router'
 
 /**
- * Plan: all 27 Weeks as five-lane rows, grouped by Phase. Each cell is one
+ * Plan: all 26 Weeks as five-lane rows, grouped by Phase. Each cell is one
  * Session of the Bucket in its Session type's colour; Key sessions stand
  * taller. Weeks so far fill in from the logs, the same as Weekly completion
  * on Progress; Weeks ahead stay outlined. Tapping a Week opens its Sessions.

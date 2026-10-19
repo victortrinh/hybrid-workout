@@ -16,7 +16,7 @@ One user: Victor, an amateur hybrid athlete in Montréal training for a sub-20 5
 
 ## Product Purpose
 
-Turn a fixed 27-week Program (`docs/training-plan.md`) into "what do I do today, and at what targets", then adapt the following Sessions to what was actually logged and how recovered he is. Success: every Week's Bucket gets done, the 5K tests trend toward 20:00, and he reaches race day healthy and race-ready without ever opening a spreadsheet.
+Turn a fixed 26-week Program (`docs/training-plan.md`) into "what do I do today, and at what targets", then adapt the following Sessions to what was actually logged and how recovered he is. Success: every Week's Bucket gets done, the 5K tests trend toward 20:00, and he reaches race day healthy and race-ready without ever opening a spreadsheet.
 
 ## Positioning
 
@@ -47,7 +47,7 @@ A coach for exactly one Program and one athlete. It knows the plan, the race dat
 
 ## Evidence on Hand
 
-- `docs/training-plan.md`: the approved 27-week Program with every Session, Phase, deload and Race load.
+- `docs/training-plan.md`: the approved 26-week Program with every Session, Phase, deload and Race load.
 - `CONTEXT.md`: the domain glossary.
 - No logged data exists yet; prototypes may use realistic sample values but must not present them as real history.
 

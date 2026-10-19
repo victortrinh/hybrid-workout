@@ -60,25 +60,25 @@ const station = (part: string, seconds: number | null, done: { meters?: number; 
 
 /**
  * Week 1 mostly done and a 23:00 treadmill baseline in Week 2, with Week 2's
- * Strength session on Thursday 29 October. Week 1 calibrated the squat at
+ * Strength session on Thursday 5 November. Week 1 calibrated the squat at
  * 185 lb and the RDL at 135 lb; Week 2's easy squats moved it to 190 lb,
  * accepted (`BASELINE_DECISIONS`). The `after-baseline` scenario and
  * e2e/progress.e2e.ts both start from it.
  */
 export const BASELINE_HISTORY: SeedLog[] = [
-  { week: 1, sessionId: 'speed', date: '2026-10-19', status: 'done', rpe: 7 },
+  { week: 1, sessionId: 'speed', date: '2026-10-26', status: 'done', rpe: 7 },
   {
     week: 1,
     sessionId: 'strength',
-    date: '2026-10-20',
+    date: '2026-10-27',
     status: 'done',
     sets: [...sets(0, 'back-squat', [[165, 5, 6], [185, 5, 7]]), ...sets(1, 'romanian-deadlift', [[135, 6, 7]])],
   },
-  { week: 1, sessionId: 'threshold', date: '2026-10-22', status: 'partial' },
+  { week: 1, sessionId: 'threshold', date: '2026-10-29', status: 'partial' },
   {
     week: 1,
     sessionId: 'hyrox',
-    date: '2026-10-24',
+    date: '2026-10-31',
     status: 'done',
     minutes: 60,
     rpe: 7,
@@ -90,11 +90,11 @@ export const BASELINE_HISTORY: SeedLog[] = [
       station('sled-pull', 210, { meters: 25, pounds: 135 }),
     ],
   },
-  { week: 2, sessionId: '5k-test', date: '2026-10-28', status: 'done', rpe: 9, resultSeconds: 1380, environment: 'indoor' },
+  { week: 2, sessionId: '5k-test', date: '2026-11-04', status: 'done', rpe: 9, resultSeconds: 1380, environment: 'indoor' },
   {
     week: 2,
     sessionId: 'strength',
-    date: '2026-10-29',
+    date: '2026-11-05',
     status: 'done',
     sets: [
       ...sets(0, 'back-squat', [[185, 5, 7], [185, 5, 7], [185, 5, 7]]),
@@ -105,5 +105,5 @@ export const BASELINE_HISTORY: SeedLog[] = [
 
 /** The squat's move to 190 lb after Week 2, accepted. */
 export const BASELINE_DECISIONS = [
-  { id: 'ww-back-squat-w2', decision: 'accepted', date: '2026-10-29', updatedAt: '2026-10-29T21:00:00.000Z' },
+  { id: 'ww-back-squat-w2', decision: 'accepted', date: '2026-11-05', updatedAt: '2026-11-05T21:00:00.000Z' },
 ]

@@ -27,7 +27,7 @@ import type { Suggestion, WorkingWeightSuggestion } from './suggestion'
 import type { LiftId } from './program/types'
 import type { WorkingWeights } from './weights'
 
-const T0 = Date.parse('2026-11-04T17:00:00Z')
+const T0 = Date.parse('2026-11-11T17:00:00Z')
 const at = (seconds: number) => T0 + seconds * 1000
 
 const WEIGHTS: WorkingWeights = {
@@ -45,7 +45,7 @@ const start = (
   estimates: WorkingWeights = {},
 ): LiveLifts => {
   const session = equip(findWeek(program, week)!.sessions.find((s) => s.id === 'strength')!, DEFAULT_EQUIPMENT)
-  return startLifts({ week, session, date: localDate('2026-11-04'), weights, suggestions, estimates }, T0)
+  return startLifts({ week, session, date: localDate('2026-11-11'), weights, suggestions, estimates }, T0)
 }
 
 /** A Working weight Suggestion from last Week's Strength session. */
@@ -56,7 +56,7 @@ const suggest = (lift: LiftId, from: number, to: number, decision: WorkingWeight
     week: 2,
     sessionId: 'strength',
     lift,
-    date: localDate('2026-10-29'),
+    date: localDate('2026-11-05'),
     from: { pounds: from },
     to: { pounds: to },
     trigger: { reason: 'all-reps-easy', weeks: [2], sets: 3, reps: 5, pounds: from, topRpe: 7 },
@@ -125,7 +125,7 @@ describe('startLifts', () => {
   })
 
   it('follows the Deload pattern: two sets of the main lifts at about 85–90%, RPE 6 at most', () => {
-    const lifts = start(4)
+    const lifts = start(7)
     expect(lifts.exercises.slice(0, 2).map((e) => [e.sets, e.rpeWords])).toEqual([
       [2, 'RPE ≤ 6'],
       [2, 'RPE ≤ 6'],
@@ -133,8 +133,8 @@ describe('startLifts', () => {
     expect(lifts.sets[0][0]).toMatchObject({ pounds: 160, rpe: 6 })
   })
 
-  it('follows the maintenance pattern from Week 15: 2 × 4 at RPE 7–8', () => {
-    const lifts = start(15)
+  it('follows the maintenance pattern from Week 14: 2 × 4 at RPE 7–8', () => {
+    const lifts = start(14)
     expect(lifts.exercises.slice(0, 2).map((e) => [e.sets, e.repsWords, e.rpeWords])).toEqual([
       [2, '4', 'RPE 7–8'],
       [2, '4', 'RPE 7–8'],
@@ -159,7 +159,7 @@ describe('Working weight prompts', () => {
     const squat = suggest('back-squat', 185, 190)
     expect(start(1, {}, [squat]).prompts).toEqual([])
     expect(start(3, { 'romanian-deadlift': 135 }, [squat]).prompts).toEqual([])
-    expect(start(4, WEIGHTS, [squat]).prompts).toEqual([])
+    expect(start(7, WEIGHTS, [squat]).prompts).toEqual([])
     const taper = program.phases
       .flatMap((p) => p.weeks)
       .find((w) =>
@@ -233,7 +233,7 @@ describe('logging sets', () => {
 })
 
 describe('liftsLog', () => {
-  const input = { id: 'lift-1234', rpe: 7, updatedAt: '2026-11-04T18:00:00.000Z' }
+  const input = { id: 'lift-1234', rpe: 7, updatedAt: '2026-11-11T18:00:00.000Z' }
 
   it('logs every set, Done when every prescribed set is in', () => {
     let lifts = logSet(start(3), 0, 0, at(0))

@@ -96,8 +96,8 @@ describe('scenarios', () => {
 describe('each scenario falls where its name says', () => {
   it('before-program: five days before Week 1, nothing logged', async () => {
     const d = await day('before-program')
-    expect(d.today).toBe('2026-10-14')
-    expect(d.position).toEqual({ kind: 'before-start', startsOn: '2026-10-19', daysToStart: 5 })
+    expect(d.today).toBe('2026-10-21')
+    expect(d.position).toEqual({ kind: 'before-start', startsOn: '2026-10-26', daysToStart: 5 })
     expect(d.state.sessionLogs).toEqual([])
     expect(d.bucket.every((b) => b.state === 'planned')).toBe(true)
   })
@@ -134,25 +134,25 @@ describe('each scenario falls where its name says', () => {
     const d = await day('after-baseline')
     expect(d.position).toMatchObject({ kind: 'in-week', week: 2 })
     expect(d.paces?.fromSeconds).toBe(23 * 60)
-    expect(parseSettings(d.scenario.device.settings).environmentByMonth[9]).toBe('outdoor')
-    expect(d.scenario.device.environment).toEqual({ '2/threshold': 'indoor' })
+    expect(parseSettings(d.scenario.device.settings).environmentByMonth[10]).toBe('indoor')
+    expect(d.scenario.device.environment).toEqual({ '2/easy': 'outdoor' })
     expect(parseSettings(d.scenario.device.settings).unit).toBe('mph')
   })
 
-  it('midweek-mixed: Thursday of Week 5 with every Session status and Hard sessions back to back', async () => {
+  it('midweek-mixed: Thursday of Week 4 with every Session status and Hard sessions back to back', async () => {
     const d = await day('midweek-mixed')
-    expect(d.position).toMatchObject({ kind: 'in-week', week: 5 })
+    expect(d.position).toMatchObject({ kind: 'in-week', week: 4 })
     expect(isoWeekday(d.today)).toBe(4)
     expect(new Set(d.bucket.map((b) => b.state))).toEqual(new Set(['done', 'partial', 'skipped', 'swapped', 'next']))
     expect(d.upNext?.key).toBe(true)
-    const hard = d.state.sessionLogs.filter((l) => l.week === 5 && ['done', 'partial'].includes(l.status))
+    const hard = d.state.sessionLogs.filter((l) => l.week === 4 && ['done', 'partial'].includes(l.status))
     expect(hard.map((l) => l.date).sort()).toEqual(['2026-11-16', '2026-11-17'])
   })
 
   it('rollover: the Monday after a Week with misses, its Key session carried and Up next, Suggestions open', async () => {
     const d = await day('rollover')
-    expect(d.position).toMatchObject({ kind: 'in-week', week: 7, daysLeft: 7 })
-    expect(d.bucket[0]).toMatchObject({ week: 6, state: 'next', carriedUntil: '2026-12-02' })
+    expect(d.position).toMatchObject({ kind: 'in-week', week: 6, daysLeft: 7 })
+    expect(d.bucket[0]).toMatchObject({ week: 5, state: 'next', carriedUntil: '2026-12-02' })
     expect(d.bucket[0].session.key).toBe(true)
     const open = d.suggestions.filter((s) => s.decision === 'open').map((s) => s.kind)
     expect(open).toEqual(expect.arrayContaining(['re-entry', 'working-weight']))
@@ -172,13 +172,13 @@ describe('each scenario falls where its name says', () => {
         logs: d.state.sessionLogs,
         decisions: [
           ...d.state.suggestionDecisions,
-          { id: 're-entry-w7', decision, date: d.today, updatedAt: '2026-11-30T12:00:00.000Z' },
+          { id: 're-entry-w6', decision, date: d.today, updatedAt: '2026-11-30T12:00:00.000Z' },
         ],
       })
     const lighter = decided('accepted')
     expect(lighter.suggestions.filter((s) => s.kind === 'working-weight')).toEqual([])
     expect(lighter.heldIncreases.map((h) => h.suggestion.id)).toEqual(lifts)
-    // Week 8 is a Deload week: they land after it, on Week 9's Monday.
+    // Week 7 is a Deload week: they land after it, on Week 8's Monday.
     expect(new Set(lighter.heldIncreases.map((h) => h.landsOn))).toEqual(new Set(['2026-12-14']))
     const full = decided('kept')
     expect(full.suggestions.filter((s) => s.kind === 'working-weight').map((s) => s.id)).toEqual(lifts)
@@ -191,7 +191,7 @@ describe('each scenario falls where its name says', () => {
     expect(d.workingWeights['back-squat']).toBeGreaterThan(0)
     const storage = deviceStorage(d.scenario, Date.parse('2026-12-09T23:20:00Z'))
     const live = parseLiveSession(JSON.parse(storage['compromised:live']))
-    expect(live && isLifts(live) && live.week).toBe(8)
+    expect(live && isLifts(live) && live.week).toBe(7)
     if (!live || !isLifts(live)) return
     expect(live.sets[0].filter((s) => s.done)).toHaveLength(2)
     expect(live.sets[0][0].pounds).toBeLessThan(d.workingWeights[live.exercises[0].lift!]!)
@@ -199,13 +199,13 @@ describe('each scenario falls where its name says', () => {
 
   it('activities-pending: mid-Program, two watch workouts asking which Session they were', async () => {
     const d = await day('activities-pending')
-    expect(d.position).toMatchObject({ kind: 'in-week', week: 11 })
+    expect(d.position).toMatchObject({ kind: 'in-week', week: 10 })
     expect(d.activityQuestions.map((q) => q.activity.workoutType)).toEqual(['Running', 'Functional Strength Training'])
   })
 
   it('hyrox-build: the HYROX build, with Working weights, Station logs, pain and low Readiness', async () => {
     const d = await day('hyrox-build')
-    expect(d.position).toMatchObject({ kind: 'in-week', week: 19, phase: 'hyrox-build' })
+    expect(d.position).toMatchObject({ kind: 'in-week', week: 18, phase: 'hyrox-build' })
     expect(Object.keys(d.workingWeights).length).toBeGreaterThanOrEqual(3)
     expect(d.state.sessionLogs.filter((l) => l.stations.length > 0).length).toBeGreaterThan(10)
     expect(d.pain?.level).toBe('ease')
@@ -213,9 +213,9 @@ describe('each scenario falls where its name says', () => {
     expect(d.suggestions.map((s) => s.kind)).toEqual(expect.arrayContaining(['pain', 'recovery']))
   })
 
-  it('dense-history: Week 20, almost every Session of nineteen Weeks logged', async () => {
+  it('dense-history: Week 19, almost every Session of nineteen Weeks logged', async () => {
     const d = await day('dense-history')
-    expect(d.position).toMatchObject({ kind: 'in-week', week: 20 })
+    expect(d.position).toMatchObject({ kind: 'in-week', week: 19 })
     const required = program.phases
       .flatMap((p) => p.weeks)
       .filter((w) => w.number < 20)
@@ -227,7 +227,7 @@ describe('each scenario falls where its name says', () => {
 
   it('race-week: Race week, the day before Race day', async () => {
     const d = await day('race-week')
-    expect(d.position).toMatchObject({ kind: 'in-week', week: 27 })
+    expect(d.position).toMatchObject({ kind: 'in-week', week: 26 })
     expect(d.week?.race).toBe(true)
     expect(d.daysToRace).toBe(1)
   })
@@ -282,7 +282,7 @@ describe('deviceStorage', () => {
   it('writes whole settings, and only what the scenario sets', () => {
     const storage = deviceStorage(findScenario('after-baseline')!, 0)
     expect(JSON.parse(storage['compromised:settings'])).toEqual(parseSettings({ unit: 'mph' }))
-    expect(JSON.parse(storage['compromised:environment'])).toEqual({ '2/threshold': 'indoor' })
+    expect(JSON.parse(storage['compromised:environment'])).toEqual({ '2/easy': 'outdoor' })
     expect(storage['compromised:live']).toBeUndefined()
     expect(Object.keys(deviceStorage(findScenario('before-program')!, 0))).toEqual(['compromised:settings'])
   })

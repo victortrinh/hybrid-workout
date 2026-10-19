@@ -14,12 +14,12 @@ import {
 import type { SessionLog } from './log'
 import { program } from './program/program'
 
-const AT = '2026-11-04T20:00:00.000Z'
-/** A Week 3 workout: Wednesday 4 November 2026, 7:12 in Toronto. */
+const AT = '2026-11-11T20:00:00.000Z'
+/** A Week 3 workout: Wednesday 11 November 2026, 7:12 in Toronto. */
 const body = {
   type: 'Running',
-  start: '2026-11-04T07:12:00-05:00',
-  end: '2026-11-04T07:54:30-05:00',
+  start: '2026-11-11T07:12:00-05:00',
+  end: '2026-11-11T07:54:30-05:00',
   distanceKm: 8.12,
   heartRates: '140\n152\n161\n171\n148',
 }
@@ -27,9 +27,9 @@ const body = {
 describe('parseActivity', () => {
   it('takes what the Shortcut sends: its day in Toronto, minutes, distance and heart rate from the samples', () => {
     expect(parseActivity(body, AT)).toEqual({
-      id: '2026-11-04T12:12:00Z',
-      date: '2026-11-04',
-      startedAt: '2026-11-04T12:12:00Z',
+      id: '2026-11-11T12:12:00Z',
+      date: '2026-11-11',
+      startedAt: '2026-11-11T12:12:00Z',
       workoutType: 'Running',
       kind: 'run',
       minutes: 43,
@@ -42,12 +42,12 @@ describe('parseActivity', () => {
   })
 
   it('keys an Activity on its start, so a resend replaces it', () => {
-    expect(parseActivity({ ...body, start: '2026-11-04T12:12:00.000Z' }, AT).id).toBe('2026-11-04T12:12:00Z')
+    expect(parseActivity({ ...body, start: '2026-11-11T12:12:00.000Z' }, AT).id).toBe('2026-11-11T12:12:00Z')
   })
 
   it('takes a late-evening workout as its day in Toronto, not in UTC', () => {
-    expect(parseActivity({ ...body, start: '2026-11-05T01:30:00Z', end: '2026-11-05T02:10:00Z' }, AT).date).toBe(
-      '2026-11-04',
+    expect(parseActivity({ ...body, start: '2026-11-12T01:30:00Z', end: '2026-11-12T02:10:00Z' }, AT).date).toBe(
+      '2026-11-11',
     )
   })
 
@@ -69,15 +69,15 @@ describe('parseActivity', () => {
 
   it('keeps only the samples within the workout, by each line’s own time: the Shortcut reads a fixed window', () => {
     const heartRates = [
-      '88 2026-11-04T06:30:00-05:00', // before the start
-      '150 2026-11-04T07:20:00-05:00',
-      '160 count/min 2026-11-04T07:40:00-05:00',
-      '95 2026-11-04T08:30:00-05:00', // after the end
+      '88 2026-11-11T06:30:00-05:00', // before the start
+      '150 2026-11-11T07:20:00-05:00',
+      '160 count/min 2026-11-11T07:40:00-05:00',
+      '95 2026-11-11T08:30:00-05:00', // after the end
     ].join('\n')
     const distanceSamples = [
-      '0.40 km 2026-11-04T06:50:00-05:00 Victor’s iPhone', // the walk to the gym
-      '4.00 km 2026-11-04T07:20:00-05:00 Victor’s Apple Watch',
-      '4.10 km 2026-11-04T07:45:00-05:00 Victor’s Apple Watch',
+      '0.40 km 2026-11-11T06:50:00-05:00 Victor’s iPhone', // the walk to the gym
+      '4.00 km 2026-11-11T07:20:00-05:00 Victor’s Apple Watch',
+      '4.10 km 2026-11-11T07:45:00-05:00 Victor’s Apple Watch',
     ].join('\n')
     expect(parseActivity({ ...body, distanceKm: undefined, heartRates, distanceSamples }, AT)).toMatchObject({
       averageHeartRate: 155,
@@ -87,7 +87,7 @@ describe('parseActivity', () => {
   })
 
   it('takes a start sent as the file’s text, trailing line break and all', () => {
-    expect(parseActivity({ ...body, start: '2026-11-04T07:12:00-05:00\n' }, AT).id).toBe('2026-11-04T12:12:00Z')
+    expect(parseActivity({ ...body, start: '2026-11-11T07:12:00-05:00\n' }, AT).id).toBe('2026-11-11T12:12:00Z')
   })
 
   it('takes metres, heart rates as a list or an average, and no distance or heart rate at all', () => {
@@ -119,8 +119,8 @@ describe('parseActivity', () => {
       'start must be an ISO 8601 date and time, like 2026-11-04T07:12:00-05:00 (got "Oct 14, 2026 at 2:28 PM")',
     )
     expect(() => parseActivity({ ...body, start: undefined }, AT)).toThrow(/\(got nothing\)/)
-    expect(() => parseActivity({ ...body, end: '2026-11-04T07:00:00-05:00' }, AT)).toThrow(/end/)
-    expect(() => parseActivity({ ...body, end: '2026-11-04T19:00:00-05:00' }, AT)).toThrow(/10 hours/)
+    expect(() => parseActivity({ ...body, end: '2026-11-11T07:00:00-05:00' }, AT)).toThrow(/end/)
+    expect(() => parseActivity({ ...body, end: '2026-11-11T19:00:00-05:00' }, AT)).toThrow(/10 hours/)
     expect(() => parseActivity({ ...body, type: '' }, AT)).toThrow(/type/)
     expect(() => parseActivity({ ...body, distanceKm: 900 }, AT)).toThrow(/distance/)
     expect(() => parseActivity({ ...body, heartRates: '150\nfast' }, AT)).toThrow(/heartRates/)
@@ -143,7 +143,7 @@ describe('activityKind', () => {
 })
 
 /**
- * Week 3 (2 to 8 November 2026): Speed, Strength, Threshold, HYROX and the
+ * Week 3 (9 to 15 November 2026): Speed, Strength, Threshold, HYROX and the
  * Optional Easy run.
  */
 const run = (start: string, extra: Partial<Activity> = {}): Activity => ({
@@ -171,99 +171,99 @@ const answer = (activityId: string, sessionId: string | null): ActivityAnswer =>
   activityId,
   week: sessionId ? 3 : null,
   sessionId,
-  updatedAt: '2026-11-04T21:00:00.000Z',
+  updatedAt: '2026-11-11T21:00:00.000Z',
 })
 
 describe('matchActivities', () => {
   it('attaches a run to the one run Session logged that day', () => {
-    const activity = run('2026-11-04T07:00:00-05:00')
-    const [outcome] = matchActivities(program, [activity], [log('speed', '2026-11-04')], [])
+    const activity = run('2026-11-11T07:00:00-05:00')
+    const [outcome] = matchActivities(program, [activity], [log('speed', '2026-11-11')], [])
     expect(outcome).toMatchObject({ state: 'attached', week: 3, sessionId: 'speed', by: 'coach' })
   })
 
   it('attaches by Session type: a lifting workout goes to Strength, not the run logged the same day', () => {
-    const lifting = { ...run('2026-11-04T18:00:00-05:00'), workoutType: 'Traditional Strength Training', kind: 'lifting' as const }
-    const [outcome] = matchActivities(program, [lifting], [log('speed', '2026-11-04'), log('strength', '2026-11-04')], [])
+    const lifting = { ...run('2026-11-11T18:00:00-05:00'), workoutType: 'Traditional Strength Training', kind: 'lifting' as const }
+    const [outcome] = matchActivities(program, [lifting], [log('speed', '2026-11-11'), log('strength', '2026-11-11')], [])
     expect(outcome).toMatchObject({ state: 'attached', sessionId: 'strength' })
   })
 
   it('with nothing logged that day, attaches to the one run Session still Planned', () => {
-    const activity = run('2026-11-04T07:00:00-05:00')
-    const logs = [log('speed', '2026-11-02'), log('easy', '2026-11-03')]
+    const activity = run('2026-11-11T07:00:00-05:00')
+    const logs = [log('speed', '2026-11-09'), log('easy', '2026-11-10')]
     expect(matchActivities(program, [activity], logs, [])[0]).toMatchObject({ state: 'attached', sessionId: 'threshold' })
   })
 
   it('attaches to a Session of another Week logged that day, done early or late', () => {
-    const activity = run('2026-11-04T07:00:00-05:00')
-    const early = { ...log('threshold', '2026-11-04'), week: 5 }
-    expect(matchActivities(program, [activity], [early], [])[0]).toMatchObject({ state: 'attached', week: 5, sessionId: 'threshold' })
-    const late = { ...log('speed', '2026-11-04'), week: 1 }
+    const activity = run('2026-11-11T07:00:00-05:00')
+    const early = { ...log('threshold', '2026-11-11'), week: 4 }
+    expect(matchActivities(program, [activity], [early], [])[0]).toMatchObject({ state: 'attached', week: 4, sessionId: 'threshold' })
+    const late = { ...log('speed', '2026-11-11'), week: 1 }
     expect(matchActivities(program, [activity], [late], [])[0]).toMatchObject({ state: 'attached', week: 1, sessionId: 'speed' })
   })
 
   it('attaches a workout from before the Program to the Week 1 Session logged early that day', () => {
-    const activity = run('2026-10-14T07:00:00-04:00')
-    const early = { ...log('speed', '2026-10-14'), week: 1 }
+    const activity = run('2026-10-21T07:00:00-04:00')
+    const early = { ...log('speed', '2026-10-21'), week: 1 }
     expect(matchActivities(program, [activity], [early], [])[0]).toMatchObject({ state: 'attached', week: 1, sessionId: 'speed' })
     expect(matchActivities(program, [activity], [], [])[0].state).toBe('unmatched')
   })
 
   it('asks when more than one Session fits', () => {
-    const activity = run('2026-11-04T07:00:00-05:00')
+    const activity = run('2026-11-11T07:00:00-05:00')
     const [outcome] = matchActivities(program, [activity], [], [])
     expect(outcome.state).toBe('ambiguous')
     expect(outcome.state === 'ambiguous' && outcome.candidates.map((c) => c.session.id)).toEqual(['speed', 'threshold', 'easy'])
   })
 
   it('offers the likeliest Session first and marks it: half an hour at an easy heart rate is the Easy run', () => {
-    const activity = run('2026-11-04T07:00:00-05:00', { minutes: 30, averageHeartRate: 132, maxHeartRate: 150 })
+    const activity = run('2026-11-11T07:00:00-05:00', { minutes: 30, averageHeartRate: 132, maxHeartRate: 150 })
     const [outcome] = matchActivities(program, [activity], [], [])
     expect(outcome.state === 'ambiguous' && outcome.candidates.map((c) => c.session.id)).toEqual(['easy', 'speed', 'threshold'])
     expect(outcome.state === 'ambiguous' && outcome.guess?.session.id).toBe('easy')
   })
 
   it('goes by duration alone when the watch has no heart rate', () => {
-    const activity = run('2026-11-04T07:00:00-05:00', { minutes: 25, averageHeartRate: null, maxHeartRate: null })
+    const activity = run('2026-11-11T07:00:00-05:00', { minutes: 25, averageHeartRate: null, maxHeartRate: null })
     const [outcome] = matchActivities(program, [activity], [], [])
     expect(outcome.state === 'ambiguous' && outcome.guess?.session.id).toBe('easy')
   })
 
   it('orders a hard 45 minutes Threshold before Speed, but guesses nothing that close', () => {
-    const activity = run('2026-11-04T07:00:00-05:00', { minutes: 45, averageHeartRate: 160, maxHeartRate: 182 })
+    const activity = run('2026-11-11T07:00:00-05:00', { minutes: 45, averageHeartRate: 160, maxHeartRate: 182 })
     const [outcome] = matchActivities(program, [activity], [], [])
     expect(outcome.state === 'ambiguous' && outcome.candidates.map((c) => c.session.id)).toEqual(['threshold', 'speed', 'easy'])
     expect(outcome.state === 'ambiguous' && outcome.guess).toBeNull()
   })
 
   it('guesses nothing when nothing tells them apart, keeping the Bucket order', () => {
-    const activity = run('2026-11-04T07:00:00-05:00', { minutes: 45, averageHeartRate: null, maxHeartRate: null })
+    const activity = run('2026-11-11T07:00:00-05:00', { minutes: 45, averageHeartRate: null, maxHeartRate: null })
     const [outcome] = matchActivities(program, [activity], [], [])
     expect(outcome.state === 'ambiguous' && outcome.candidates.map((c) => c.session.id)).toEqual(['speed', 'threshold', 'easy'])
     expect(outcome.state === 'ambiguous' && outcome.guess).toBeNull()
   })
 
   it('reads heart rate against the highest the watch has seen: 150 is easy for a heart that reaches 205', () => {
-    const activity = run('2026-11-04T07:00:00-05:00', { minutes: 35, averageHeartRate: 150, maxHeartRate: 160 })
-    const race = run('2026-10-31T09:00:00-04:00', { maxHeartRate: 205 })
+    const activity = run('2026-11-11T07:00:00-05:00', { minutes: 35, averageHeartRate: 150, maxHeartRate: 160 })
+    const race = run('2026-11-07T09:00:00-05:00', { maxHeartRate: 205 })
     const outcome = matchActivities(program, [race, activity], [], []).find((o) => o.activity.id === activity.id)!
     expect(outcome.state === 'ambiguous' && outcome.guess?.session.id).toBe('easy')
   })
 
   it('asks between two run Sessions both logged that day', () => {
-    const activity = run('2026-11-04T07:00:00-05:00')
-    const [outcome] = matchActivities(program, [activity], [log('speed', '2026-11-04'), log('easy', '2026-11-04')], [])
+    const activity = run('2026-11-11T07:00:00-05:00')
+    const [outcome] = matchActivities(program, [activity], [log('speed', '2026-11-11'), log('easy', '2026-11-11')], [])
     expect(outcome.state === 'ambiguous' && outcome.candidates.map((c) => c.session.id)).toEqual(['speed', 'easy'])
   })
 
   it('picks, of two run Sessions logged that day, the one whose Live session ran while the watch did', () => {
-    const activity = run('2026-11-04T07:00:00-05:00')
-    const live = { ...log('speed', '2026-11-04'), updatedAt: '2026-11-04T12:50:00.000Z' }
-    const [outcome] = matchActivities(program, [activity], [live, log('easy', '2026-11-04')], [])
+    const activity = run('2026-11-11T07:00:00-05:00')
+    const live = { ...log('speed', '2026-11-11'), updatedAt: '2026-11-11T12:50:00.000Z' }
+    const [outcome] = matchActivities(program, [activity], [live, log('easy', '2026-11-11')], [])
     expect(outcome).toMatchObject({ state: 'attached', sessionId: 'speed', by: 'coach' })
   })
 
   it('takes the athlete’s answer, and “none of these” leaves it unattached without asking again', () => {
-    const activity = run('2026-11-04T07:00:00-05:00')
+    const activity = run('2026-11-11T07:00:00-05:00')
     expect(matchActivities(program, [activity], [], [answer(activity.id, 'easy')])[0]).toMatchObject({
       state: 'attached',
       sessionId: 'easy',
@@ -273,33 +273,33 @@ describe('matchActivities', () => {
   })
 
   it('has no candidate for a walk, a run once every run Session is logged on other days, or a day outside the Program', () => {
-    const walk = { ...run('2026-11-04T07:00:00-05:00'), workoutType: 'Walking', kind: 'other' as const }
+    const walk = { ...run('2026-11-11T07:00:00-05:00'), workoutType: 'Walking', kind: 'other' as const }
     expect(matchActivities(program, [walk], [], [])[0].state).toBe('unmatched')
-    const logs = [log('speed', '2026-11-02'), log('threshold', '2026-11-03'), log('easy', '2026-11-03')]
-    expect(matchActivities(program, [run('2026-11-04T07:00:00-05:00')], logs, [])[0].state).toBe('unmatched')
-    expect(matchActivities(program, [run('2026-09-01T07:00:00-04:00')], [], [])[0].state).toBe('unmatched')
+    const logs = [log('speed', '2026-11-09'), log('threshold', '2026-11-10'), log('easy', '2026-11-10')]
+    expect(matchActivities(program, [run('2026-11-11T07:00:00-05:00')], logs, [])[0].state).toBe('unmatched')
+    expect(matchActivities(program, [run('2026-09-08T07:00:00-04:00')], [], [])[0].state).toBe('unmatched')
   })
 
   it('never attaches two Activities to one Session: the earlier one claims it, the later one asks among the rest', () => {
-    const morning = run('2026-11-04T07:00:00-05:00')
-    const evening = run('2026-11-04T18:00:00-05:00')
-    const outcomes = matchActivities(program, [evening, morning], [log('speed', '2026-11-04')], [])
+    const morning = run('2026-11-11T07:00:00-05:00')
+    const evening = run('2026-11-11T18:00:00-05:00')
+    const outcomes = matchActivities(program, [evening, morning], [log('speed', '2026-11-11')], [])
     expect(outcomes.find((o) => o.activity.id === morning.id)).toMatchObject({ state: 'attached', sessionId: 'speed' })
     expect(outcomes.find((o) => o.activity.id === evening.id)?.state).toBe('ambiguous')
   })
 
   it('lets an answer claim its Session before the Coach matches the rest, which then asks', () => {
-    const morning = run('2026-11-04T07:00:00-05:00')
-    const evening = run('2026-11-04T18:00:00-05:00')
-    const logs = [log('speed', '2026-11-04')]
+    const morning = run('2026-11-11T07:00:00-05:00')
+    const evening = run('2026-11-11T18:00:00-05:00')
+    const logs = [log('speed', '2026-11-11')]
     const outcomes = matchActivities(program, [morning, evening], logs, [answer(evening.id, 'speed')])
     expect(outcomes.find((o) => o.activity.id === evening.id)).toMatchObject({ state: 'attached', sessionId: 'speed' })
     expect(outcomes.find((o) => o.activity.id === morning.id)?.state).toBe('ambiguous')
   })
 
   it('doesn’t match to a Skipped Session', () => {
-    const logs = [log('speed', '2026-11-04', 'skipped'), log('easy', '2026-11-03')]
-    expect(matchActivities(program, [run('2026-11-04T07:00:00-05:00')], logs, [])[0]).toMatchObject({
+    const logs = [log('speed', '2026-11-11', 'skipped'), log('easy', '2026-11-10')]
+    expect(matchActivities(program, [run('2026-11-11T07:00:00-05:00')], logs, [])[0]).toMatchObject({
       state: 'attached',
       sessionId: 'threshold',
     })
@@ -308,7 +308,7 @@ describe('matchActivities', () => {
 
 describe('isTreadmill', () => {
   it('trusts the Shortcut’s flag, else the month’s Environment; only runs are on a treadmill', () => {
-    const activity = run('2026-11-04T07:00:00-05:00')
+    const activity = run('2026-11-11T07:00:00-05:00')
     expect(isTreadmill({ ...activity, indoor: true }, () => 'outdoor')).toBe(true)
     expect(isTreadmill({ ...activity, indoor: false }, () => 'indoor')).toBe(false)
     expect(isTreadmill(activity, () => 'indoor')).toBe(true)
@@ -319,8 +319,8 @@ describe('isTreadmill', () => {
 
 describe('answers', () => {
   it('checks an answer and keeps the later edit of each', () => {
-    const a = parseActivityAnswer({ activityId: '2026-11-04T12:12:00Z', week: 3, sessionId: 'easy', updatedAt: '2026-11-04T21:00:00.000Z' })
-    const b = { ...a, sessionId: 'speed', updatedAt: '2026-11-04T22:00:00.000Z' }
+    const a = parseActivityAnswer({ activityId: '2026-11-11T12:12:00Z', week: 3, sessionId: 'easy', updatedAt: '2026-11-11T21:00:00.000Z' })
+    const b = { ...a, sessionId: 'speed', updatedAt: '2026-11-11T22:00:00.000Z' }
     expect(mergeAnswers([b], [a])).toEqual([b])
     expect(answerFor([a], a.activityId)).toEqual(a)
     expect(() => parseActivityAnswer({ ...a, week: null })).toThrow(/together/)

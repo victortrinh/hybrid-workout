@@ -2,8 +2,8 @@ import { history } from './history'
 import { nights, scenario } from './scenario'
 
 const h = history()
-for (let week = 1; week <= 26; week++) h.week(week, { optional: week % 2 === 0 })
-h.log(27, 'shakeout', '2027-04-19')
+for (let week = 1; week <= 25; week++) h.week(week, { optional: week % 2 === 0 })
+h.log(26, 'shakeout', '2027-04-19')
 
 /**
  * Thursday 22 April 2027, the day after Race day, with the race not logged:

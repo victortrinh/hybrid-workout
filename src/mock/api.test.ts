@@ -11,7 +11,7 @@ const log = (change: Partial<SessionLog> = {}): SessionLog => ({
   id: 'log-speed-0001',
   week: 3,
   sessionId: 'speed',
-  date: '2026-11-04' as SessionLog['date'],
+  date: '2026-11-11' as SessionLog['date'],
   status: 'done',
   minutes: 40,
   rpe: 7,
@@ -22,7 +22,7 @@ const log = (change: Partial<SessionLog> = {}): SessionLog => ({
   intervals: [{ block: 0, rep: 1, targetPace: 240, held: true, actualPace: null }],
   sets: [],
   stations: [],
-  updatedAt: '2026-11-04T20:00:00.000Z',
+  updatedAt: '2026-11-11T20:00:00.000Z',
   ...change,
 })
 
@@ -53,7 +53,7 @@ describe('the Worker in the browser', () => {
     const later = log({
       rpe: 9,
       intervals: [{ block: 0, rep: 1, targetPace: 240, held: false, actualPace: 250 }],
-      updatedAt: '2026-11-04T21:00:00.000Z',
+      updatedAt: '2026-11-11T21:00:00.000Z',
     })
     await sync({ sessionLogs: [later] })
     await sync({ sessionLogs: [log()] })
@@ -61,7 +61,7 @@ describe('the Worker in the browser', () => {
   })
 
   it('keeps the race’s finish time, past the hour a 5K test is held to', async () => {
-    const race = log({ id: 'log-race-0001', week: 27, sessionId: 'race', date: '2027-04-21' as SessionLog['date'], minutes: 85, rpe: null, resultSeconds: 5047, intervals: [] })
+    const race = log({ id: 'log-race-0001', week: 26, sessionId: 'race', date: '2027-04-21' as SessionLog['date'], minutes: 85, rpe: null, resultSeconds: 5047, intervals: [] })
     await sync({ sessionLogs: [race] })
     expect((await state()).sessionLogs).toEqual([race])
   })
@@ -71,14 +71,14 @@ describe('the Worker in the browser', () => {
       api(new Request('http://localhost/api/sync', { method: 'POST', body: JSON.stringify({ sessionLogs }) }))
     expect((await post([log({ resultSeconds: 1380 })])).status).toBe(400)
     expect((await post([log({ sessionId: '5k-test', week: 2, intervals: [], resultSeconds: 5047 })])).status).toBe(400)
-    expect((await post([log({ week: 27, sessionId: 'race', intervals: [], resultSeconds: 600 })])).status).toBe(400)
+    expect((await post([log({ week: 26, sessionId: 'race', intervals: [], resultSeconds: 600 })])).status).toBe(400)
   })
 
   it('keeps the Starting point, a later edit winning, and refuses an unbelievable one', async () => {
     expect((await state()).startingPoint).toBeNull()
-    const point = { fiveKSeconds: 1260, weights: { 'back-squat': 225 }, updatedAt: '2026-10-15T12:00:00.000Z' }
+    const point = { fiveKSeconds: 1260, weights: { 'back-squat': 225 }, updatedAt: '2026-10-22T12:00:00.000Z' }
     expect((await sync({ startingPoint: point })).startingPoint).toEqual(point)
-    const later = { fiveKSeconds: null, weights: { 'romanian-deadlift': 185 }, updatedAt: '2026-10-16T12:00:00.000Z' }
+    const later = { fiveKSeconds: null, weights: { 'romanian-deadlift': 185 }, updatedAt: '2026-10-23T12:00:00.000Z' }
     await sync({ startingPoint: later })
     await sync({ startingPoint: point })
     expect((await state()).startingPoint).toEqual(later)
@@ -92,7 +92,7 @@ describe('the Worker in the browser', () => {
   })
 
   it('lets the Shortcut in with the mock service token, and nobody else', async () => {
-    const night = { date: '2026-11-04', sleepMinutes: 420, hrvMs: 60, restingHeartRate: 50, source: 'Ring' }
+    const night = { date: '2026-11-11', sleepMinutes: 420, hrvMs: 60, restingHeartRate: 50, source: 'Ring' }
     const post = (headers: Record<string, string>) =>
       api(new Request('http://localhost/api/recovery', { method: 'POST', headers, body: JSON.stringify(night) }))
     expect((await post({})).status).toBe(401)

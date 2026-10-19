@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 import { expectNoAxeViolations, WEEK_3 } from './axe'
 import { serveHistory, weekDone } from './history'
 
-const WEEK_2 = weekDone(2, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-10-26')
+const WEEK_2 = weekDone(2, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-11-02')
 
 test('a Session tapped on Today opens its Prescription; Do it today instead makes it Up next', async ({ page }) => {
   await serveHistory(page, WEEK_2)
@@ -75,7 +75,7 @@ test('while a Live session runs, a Session’s sheet says to finish it first', a
 })
 
 test('a logged Session still opens its log', async ({ page }) => {
-  await serveHistory(page, [...WEEK_2, ...weekDone(3, ['speed'], '2026-11-02')])
+  await serveHistory(page, [...WEEK_2, ...weekDone(3, ['speed'], '2026-11-09')])
   await page.clock.setFixedTime(WEEK_3)
   await page.goto('/')
 

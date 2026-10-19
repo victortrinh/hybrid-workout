@@ -6,12 +6,12 @@ import { E2E_SERVICE_TOKEN, serviceTokenHeaders } from './serviceToken'
 /**
  * Apple Watch workouts from the Workout Shortcut (ADR-0004), matched to
  * Sessions by the Coach. The first tests go through the real Worker and D1 on
- * Week 16, which no other test reads (Week 15 is the offline test's, so it
+ * Week 15, which no other test reads (Week 14 is the offline test's, so it
  * stays unseeded; by Friday nothing of it is carried): both projects post the same workouts,
  * which the endpoint takes idempotently, and neither answers anything. The
  * answering test serves its own state, so it never touches the shared database.
  */
-const FRIDAY_WEEK_16 = new Date('2027-02-05T12:00:00-05:00')
+const FRIDAY_WEEK_15 = new Date('2027-02-05T12:00:00-05:00')
 
 const OUTDOOR_RUN = {
   type: 'Running',
@@ -52,8 +52,8 @@ test('workouts sent by the Shortcut attach to the day’s Sessions; a treadmill 
 }, testInfo) => {
   const project = testInfo.project.name
   await seedLogs(request, project, [
-    { week: 16, sessionId: 'speed', date: '2027-02-02', status: 'done' },
-    { week: 16, sessionId: 'easy-deload', date: '2027-02-04', status: 'done' },
+    { week: 15, sessionId: 'speed', date: '2027-02-02', status: 'done' },
+    { week: 15, sessionId: 'easy-deload', date: '2027-02-04', status: 'done' },
   ])
   for (const workout of [OUTDOOR_RUN, TREADMILL_RUN]) {
     const response = await request.post('/api/activities', { data: workout, headers: serviceTokenHeaders() })
@@ -64,7 +64,7 @@ test('workouts sent by the Shortcut attach to the day’s Sessions; a treadmill 
   const state = await (await request.get('/api/state')).json()
   expect(state.activities.filter((a: { id: string }) => a.id === '2027-02-02T12:00:00Z')).toHaveLength(1)
 
-  await page.clock.setFixedTime(FRIDAY_WEEK_16)
+  await page.clock.setFixedTime(FRIDAY_WEEK_15)
   await page.goto('/')
 
   const week = page.getByRole('list').filter({ hasText: 'Speed' }).first()
@@ -80,8 +80,8 @@ test('workouts sent by the Shortcut attach to the day’s Sessions; a treadmill 
   await expectNoAxeViolations(page)
 })
 
-/** Week 18, served: Speed, Threshold and an Easy run all Planned, so a run fits all three. */
-const WEDNESDAY_WEEK_18 = new Date('2027-02-17T12:00:00-05:00')
+/** Week 17, served: Speed, Threshold and an Easy run all Planned, so a run fits all three. */
+const WEDNESDAY_WEEK_17 = new Date('2027-02-17T12:00:00-05:00')
 const AMBIGUOUS = {
   id: '2027-02-17T12:00:00Z',
   date: '2027-02-17',
@@ -111,8 +111,8 @@ test('Today asks which Session an ambiguous workout was; the answer attaches it,
       json: {
         sessionLogs: [
           ...['5k-test', 'strength', 'threshold', 'hyrox'].map((sessionId) => ({
-            id: `served-w17-${sessionId}`,
-            week: 17,
+            id: `served-w16-${sessionId}`,
+            week: 16,
             sessionId,
             date: '2027-02-13',
             status: 'done',
@@ -136,7 +136,7 @@ test('Today asks which Session an ambiguous workout was; the answer attaches it,
       },
     })
   })
-  await page.clock.setFixedTime(WEDNESDAY_WEEK_18)
+  await page.clock.setFixedTime(WEDNESDAY_WEEK_17)
   await page.goto('/')
 
   const question = page.getByRole('region', { name: 'Which Session was this?' })
@@ -146,7 +146,7 @@ test('Today asks which Session an ambiguous workout was; the answer attaches it,
 
   await question.getByRole('button', { name: 'Threshold' }).click()
   await expect(question).toHaveCount(0)
-  expect(answers).toMatchObject([{ activityId: AMBIGUOUS.id, week: 18, sessionId: 'threshold' }])
+  expect(answers).toMatchObject([{ activityId: AMBIGUOUS.id, week: 17, sessionId: 'threshold' }])
   await expect(page.getByText('Watch, Wed: 42 min · avg 152 bpm')).toBeVisible()
 
   // Attached, not logged: Today offers Log it, which asks for the treadmill console's distance.
@@ -155,7 +155,7 @@ test('Today asks which Session an ambiguous workout was; the answer attaches it,
   await expect(attached).toContainText('Bring the console’s distance.')
   await expect(page.getByRole('region', { name: 'Console distance' })).toHaveCount(0)
   await attached.getByRole('link', { name: 'Log it' }).click()
-  await expect(page).toHaveURL('/log/18/threshold')
+  await expect(page).toHaveURL('/log/17/threshold')
   const watch = page.getByRole('region', { name: 'From the watch' })
   await expect(watch).toContainText('Running, Wed 17 February at 7:00')
   await expect(watch).toContainText('It guessed 7.90 km. Treadmill: the console’s distance counts.')
@@ -166,13 +166,13 @@ test('Today asks which Session an ambiguous workout was; the answer attaches it,
   await page.getByRole('button', { name: 'Save log' }).click()
 
   await expect(page).toHaveURL('/')
-  await expect.poll(() => logs.at(-1)).toMatchObject({ week: 18, sessionId: 'threshold', minutes: 42, distanceMeters: 8400 })
+  await expect.poll(() => logs.at(-1)).toMatchObject({ week: 17, sessionId: 'threshold', minutes: 42, distanceMeters: 8400 })
   await expect(page.getByRole('region', { name: 'Console distance' })).toHaveCount(0)
   await expect(page.getByRole('region', { name: 'From the watch' })).toHaveCount(0)
 })
 
 test('Settings has the Workout Shortcut setup page, with the address and the steps', async ({ page }) => {
-  await page.clock.setFixedTime(FRIDAY_WEEK_16)
+  await page.clock.setFixedTime(FRIDAY_WEEK_15)
   await page.goto('/')
   await page.getByRole('button', { name: 'Settings' }).click()
   await page.getByRole('link', { name: 'Workout Shortcut setup' }).click()

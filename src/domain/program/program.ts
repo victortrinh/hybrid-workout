@@ -1,7 +1,7 @@
 /**
  * The approved Program (docs/training-plan.md, approved 13 Oct 2026) as data.
  *
- * All 27 Weeks, built from the Session templates in the plan. Where the plan
+ * All 26 Weeks, built from the Session templates in the plan. Where the plan
  * leaves a detail open (which Stations go in which round, the Deload volumes
  * of accessory lifts) the choice is made once here and commented.
  */
@@ -142,7 +142,7 @@ const HARD: RunEffort = { feel: 'hard' }
 const AT_5K: RunEffort = { pace: '5k' }
 
 function speed(intervals: Intervals, accels: number, week: number, key = false): Session {
-  const early = week <= 6
+  const early = week <= 5
   return {
     id: 'speed',
     type: 'speed',
@@ -239,7 +239,7 @@ const speedTaper: Session = {
   ],
 }
 
-const FIVE_K_TEST_NAMES = { 2: 'baseline', 9: 'second', 17: 'third', 25: 'final' } as const
+const FIVE_K_TEST_NAMES = { 2: 'baseline', 8: 'second', 16: 'third', 24: 'final' } as const
 
 function fiveKTest(week: keyof typeof FIVE_K_TEST_NAMES): Session {
   return {
@@ -751,42 +751,36 @@ const iv = (reps: number, workSeconds: number, recoverySeconds: number, effort: 
 })
 
 const foundation: Week[] = [
-  week(1, '2026-10-19', [
+  week(1, '2026-10-26', [
     speed(iv(5, 120, 120, HARD), 2, 1),
     strength('build', { calibration: true }),
     threshold(3, 7, 120, true),
     hyrox('foundation', 'A', 60),
     easyRun(20),
   ]),
-  week(2, '2026-10-26', [
+  week(2, '2026-11-02', [
     fiveKTest(2),
     strength('build'),
     threshold(3, 7, 120, false),
     hyrox('foundation', 'B', 60),
     easyRun(20),
   ]),
-  week(3, '2026-11-02', [
+  week(3, '2026-11-09', [
     speed(iv(5, 180, 90, HARD), 4, 3),
     strength('build'),
     threshold(2, 12, 120, true),
     hyrox('foundation', 'A', 60),
     easyRun(25),
   ]),
-  week(
-    4,
-    '2026-11-09',
-    [speedDeload, strength('build', { deload: true }), easyInsteadOfThreshold, hyroxTechnique('foundation', 'B'), easyRun(25)],
-    { deload: true },
-  ),
-  week(5, '2026-11-16', [
-    speed(iv(5, 180, 90), 4, 5),
+  week(4, '2026-11-16', [
+    speed(iv(5, 180, 90), 4, 4),
     strength('build'),
     threshold(2, 12, 120, true),
     hyrox('foundation', 'A', 60),
     easyRun(30),
   ]),
-  week(6, '2026-11-23', [
-    speed(iv(4, 240, 120), 4, 6),
+  week(5, '2026-11-23', [
+    speed(iv(4, 240, 120), 4, 5),
     strength('build'),
     threshold(2, 12, 120, true),
     hyrox('foundation', 'B', 60),
@@ -795,55 +789,55 @@ const foundation: Week[] = [
 ]
 
 const development: Week[] = [
-  week(7, '2026-11-30', [
-    speed(iv(4, 240, 90), 4, 7, true),
+  week(6, '2026-11-30', [
+    speed(iv(4, 240, 90), 4, 6, true),
     strength('build'),
     threshold(3, 8, 90, false),
     hyrox('development', 'A', 70),
     easyRun(35),
   ]),
   week(
-    8,
+    7,
     '2026-12-07',
     [speedDeload, strength('build', { deload: true }), easyInsteadOfThreshold, hyroxTechnique('development', 'B'), easyRun(30)],
     { deload: true },
   ),
-  week(9, '2026-12-14', [
-    fiveKTest(9),
+  week(8, '2026-12-14', [
+    fiveKTest(8),
     strength('build'),
     threshold(3, 8, 90, false),
     hyrox('development', 'A', 70),
     easyRun(35),
   ]),
-  week(10, '2026-12-21', [
-    speed(iv(5, 180, 90), 4, 10, true),
+  week(9, '2026-12-21', [
+    speed(iv(5, 180, 90), 4, 9, true),
     strength('build'),
     threshold(3, 8, 90, false),
     hyrox('development', 'B', 75),
     easyRun(40),
   ]),
-  week(11, '2026-12-28', [
-    speed(iv(4, 240, 90), 4, 11, true),
+  week(10, '2026-12-28', [
+    speed(iv(4, 240, 90), 4, 10, true),
     strength('build'),
     threshold(3, 8, 90, false),
     hyrox('development', 'A', 75),
     easyRun(40),
   ]),
   week(
-    12,
+    11,
     '2027-01-04',
     [speedDeload, strength('build', { deload: true }), easyInsteadOfThreshold, hyroxTechnique('development', 'B'), easyRun(30)],
     { deload: true },
   ),
-  week(13, '2027-01-11', [
-    speed(iv(3, 300, 120), 4, 13, true),
+  week(12, '2027-01-11', [
+    speed(iv(3, 300, 120), 4, 12, true),
     strength('build'),
     threshold(4, 6, 60, false),
     hyrox('development', 'A', 80),
     easyRun(45),
   ]),
-  week(14, '2027-01-18', [
-    speed(iv(6, 120, 90, { pace: '5k', secondsPerKmFaster: 5 }), 4, 14, true),
+  week(13, '2027-01-18', [
+    speed(iv(6, 120, 90, { pace: '5k', secondsPerKmFaster: 5 }), 4, 13, true),
     strength('build'),
     threshold(4, 6, 60, false),
     hyrox('development', 'B', 80),
@@ -852,56 +846,56 @@ const development: Week[] = [
 ]
 
 const build: Week[] = [
-  week(15, '2027-01-25', [
-    speed(iv(4, 180, 120), 3, 15),
+  week(14, '2027-01-25', [
+    speed(iv(4, 180, 120), 3, 14),
     strength('maintenance'),
     threshold(2, 10, 120, false),
     hyrox('build', 'A', 90, true),
     easyRun(50),
   ]),
   week(
-    16,
+    15,
     '2027-02-01',
     [speedDeload, strength('maintenance', { deload: true }), easyInsteadOfThreshold, hyroxTechnique('build', 'B'), easyRun(35)],
     { deload: true },
   ),
-  week(17, '2027-02-08', [
-    fiveKTest(17),
+  week(16, '2027-02-08', [
+    fiveKTest(16),
     strength('maintenance'),
     threshold(2, 10, 120, false),
     hyrox('build', 'A', 90),
     easyRun(50),
   ]),
-  week(18, '2027-02-15', [
-    speed(iv(4, 180, 120), 3, 18),
+  week(17, '2027-02-15', [
+    speed(iv(4, 180, 120), 3, 17),
     strength('maintenance'),
     threshold(2, 10, 120, false),
     halfSimulationA,
     easyRun(45),
   ]),
-  week(19, '2027-02-22', [
-    speed(iv(5, 180, 120), 3, 19),
+  week(18, '2027-02-22', [
+    speed(iv(5, 180, 120), 3, 18),
     strength('maintenance'),
     threshold(2, 10, 120, false),
     hyrox('build', 'B', 95, true),
     easyRun(55),
   ]),
-  week(20, '2027-03-01', [
-    speed(iv(4, 180, 120), 3, 20),
+  week(19, '2027-03-01', [
+    speed(iv(4, 180, 120), 3, 19),
     strength('maintenance'),
     threshold(2, 10, 120, false),
     hyrox('build', 'A', 100, true),
     easyRun(55),
   ]),
-  week(21, '2027-03-08', [
-    speed(iv(5, 180, 120), 3, 21),
+  week(20, '2027-03-08', [
+    speed(iv(5, 180, 120), 3, 20),
     strength('maintenance'),
     threshold(2, 10, 120, false),
     halfSimulationB,
     easyRun(45),
   ]),
   week(
-    22,
+    21,
     '2027-03-15',
     [speedDeload, strength('maintenance', { deload: true }), easyInsteadOfThreshold, hyroxTechnique('build', 'B'), easyRun(40)],
     { deload: true },
@@ -909,22 +903,22 @@ const build: Week[] = [
 ]
 
 const raceSpecific: Week[] = [
-  week(23, '2027-03-22', [
-    speed(iv(4, 180, 120), 3, 23),
+  week(22, '2027-03-22', [
+    speed(iv(4, 180, 120), 3, 22),
     strength('maintenance'),
     threshold(2, 10, 120, false),
     hyroxRaceSpecific,
     easyRun(60, { note: 'The long run. Full sentences. No tempo, no hills.' }),
   ]),
-  week(24, '2027-03-29', [
-    speed(iv(4, 180, 120), 3, 24),
+  week(23, '2027-03-29', [
+    speed(iv(4, 180, 120), 3, 23),
     strength('maintenance'),
     threshold(2, 10, 120, false),
     fullRunSimulation,
     easyRun(45),
   ]),
-  week(25, '2027-04-05', [
-    fiveKTest(25),
+  week(24, '2027-04-05', [
+    fiveKTest(24),
     strength('maintenance'),
     threshold(2, 8, 120, false),
     hyroxControlled,
@@ -958,7 +952,7 @@ const race: Session = {
 
 const taper: Week[] = [
   week(
-    26,
+    25,
     '2027-04-12',
     [
       speedTaper,
@@ -983,7 +977,7 @@ const taper: Week[] = [
     ],
   ),
   week(
-    27,
+    26,
     '2027-04-19',
     [
       easyRun(20, {
@@ -1007,13 +1001,13 @@ const taper: Week[] = [
 export const program: Program = {
   version: 2,
   raceDay: RACE_DAY,
-  weekCount: 27,
+  weekCount: 26,
   stations,
   phases: [
-    { id: 'foundation', name: 'Foundation', firstWeek: 1, lastWeek: 6, weeks: foundation },
-    { id: '5k-development', name: '5K development', firstWeek: 7, lastWeek: 14, weeks: development },
-    { id: 'hyrox-build', name: 'HYROX build', firstWeek: 15, lastWeek: 22, weeks: build },
-    { id: 'race-specific', name: 'Race specific', firstWeek: 23, lastWeek: 25, weeks: raceSpecific },
-    { id: 'taper', name: 'Taper', firstWeek: 26, lastWeek: 27, weeks: taper },
+    { id: 'foundation', name: 'Foundation', firstWeek: 1, lastWeek: 5, weeks: foundation },
+    { id: '5k-development', name: '5K development', firstWeek: 6, lastWeek: 13, weeks: development },
+    { id: 'hyrox-build', name: 'HYROX build', firstWeek: 14, lastWeek: 21, weeks: build },
+    { id: 'race-specific', name: 'Race specific', firstWeek: 22, lastWeek: 24, weeks: raceSpecific },
+    { id: 'taper', name: 'Taper', firstWeek: 25, lastWeek: 26, weeks: taper },
   ],
 }

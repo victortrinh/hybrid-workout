@@ -32,7 +32,7 @@ describe('tankLine', () => {
 describe('liveLine', () => {
   const lines = (week: number, id: string) => {
     const session = findWeek(program, week)!.sessions.find((s) => s.id === id)!
-    const run = startRun({ week, session, date: localDate('2026-11-04'), environment: 'indoor' }, 0)
+    const run = startRun({ week, session, date: localDate('2026-11-11'), environment: 'indoor' }, 0)
     return run.blocks.slice(0, 3).map((b) => liveLine(b, run))
   }
 

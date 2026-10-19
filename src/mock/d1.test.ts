@@ -22,7 +22,7 @@ describe('the mock database', () => {
 
   it('restored from a saved copy, keeps its rows and applies nothing twice', async () => {
     const first = openDatabase(SQL)
-    await d1(first).prepare("insert into recovery_nights values ('2026-11-04', 420, 60, 50, 'Ring', 'x')").run()
+    await d1(first).prepare("insert into recovery_nights values ('2026-11-11', 420, 60, 50, 'Ring', 'x')").run()
     const again = openDatabase(SQL, first.export())
     expect(again.exec('select count(*) from d1_migrations')[0].values[0][0]).toBe(migrations.length)
     expect(again.exec('select sleep_minutes from recovery_nights')[0].values).toEqual([[420]])
@@ -35,7 +35,7 @@ describe('d1', () => {
   it('binds positional and numbered parameters into a new statement each time', async () => {
     const db = open()
     const insert = db.prepare(
-      "insert into suggestion_decisions (id, decision, date, updated_at) values (?1, ?2, '2026-11-04', ?3)",
+      "insert into suggestion_decisions (id, decision, date, updated_at) values (?1, ?2, '2026-11-11', ?3)",
     )
     await insert.bind('a', 'accepted', 't1').run()
     await insert.bind('b', 'kept', 't2').run()
@@ -58,7 +58,7 @@ describe('d1', () => {
     const db = open(() => writes++)
     const { meta } = await db
       .prepare("insert into recovery_nights values (?, ?, null, null, 'Ring', 'x')")
-      .bind('2026-11-04', 420)
+      .bind('2026-11-11', 420)
       .run()
     expect(meta.changes).toBe(1)
     expect(meta.changed_db).toBe(true)
@@ -71,10 +71,10 @@ describe('d1', () => {
   it('runs a batch as one transaction: a failure leaves nothing behind', async () => {
     const db = open()
     const insert = db.prepare("insert into recovery_nights values (?, 420, null, null, 'Ring', 'x')")
-    await expect(db.batch([insert.bind('2026-11-04'), insert.bind('2026-11-04')])).rejects.toThrow(/UNIQUE/)
+    await expect(db.batch([insert.bind('2026-11-11'), insert.bind('2026-11-11')])).rejects.toThrow(/UNIQUE/)
     expect(await db.prepare('select count(*) as n from recovery_nights').first('n')).toBe(0)
-    const results = await db.batch([insert.bind('2026-11-04'), db.prepare('select date from recovery_nights')])
-    expect(results[1].results).toEqual([{ date: '2026-11-04' }])
+    const results = await db.batch([insert.bind('2026-11-11'), db.prepare('select date from recovery_nights')])
+    expect(results[1].results).toEqual([{ date: '2026-11-11' }])
   })
 
   it("refuses undefined, as D1 does, and stores booleans as 1 and 0", async () => {

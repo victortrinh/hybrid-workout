@@ -10,16 +10,16 @@ for (const colorScheme of ['light', 'dark'] as const) {
       page,
     }) => {
       // Week 2 done in full: no Key session carried over, no Suggestion.
-      await serveHistory(page, weekDone(2, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-10-26'))
+      await serveHistory(page, weekDone(2, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-11-02'))
       await page.clock.setFixedTime(WEEK_3)
       await page.goto('/')
 
       const band = page.locator('header')
-      await expect(band.locator('.stripe-num')).toHaveText('168')
+      await expect(band.locator('.stripe-num')).toHaveText('161')
       await expect(band.getByText('days to the race · Wed 21 April')).toBeVisible()
-      await expect(page.getByRole('img', { name: /^Phases: Foundation 33% done, 5K development not started/ })).toBeVisible()
-      await expect(band.getByText('Week 3 of 27 · Foundation')).toBeVisible()
-      await expect(band.getByText('Mon 2 – Sun 8 Nov')).toBeVisible()
+      await expect(page.getByRole('img', { name: /^Phases: Foundation 40% done, 5K development not started/ })).toBeVisible()
+      await expect(band.getByText('Week 3 of 26 · Foundation')).toBeVisible()
+      await expect(band.getByText('Mon 9 – Sun 15 Nov')).toBeVisible()
 
       await expect(page.getByRole('heading', { level: 1 })).toHaveText('Speed, 5 × 3′')
       // Focus moves to the heading only when the screen changes, never on first load.
@@ -43,8 +43,8 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await page.clock.setFixedTime(BEFORE_WEEK_1)
       await page.goto('/')
 
-      await expect(page.locator('header .stripe-num')).toHaveText('190')
-      await expect(page.getByText('Week 1 starts Mon 19 Oct')).toBeVisible()
+      await expect(page.locator('header .stripe-num')).toHaveText('183')
+      await expect(page.getByText('Week 1 starts Mon 26 Oct')).toBeVisible()
       await expect(page.getByRole('heading', { level: 1 })).toHaveText('Week 1 starts Monday.')
       await expect(page.getByRole('heading', { level: 2 })).toHaveText(/^Week 1/)
       await expect(page.getByText('Next', { exact: true })).toHaveCount(0)
@@ -55,12 +55,12 @@ for (const colorScheme of ['light', 'dark'] as const) {
 }
 
 test('counts the day in Toronto even when the phone is set to another time zone', async ({ browser }) => {
-  // 00:30 Monday 2 November in Tokyo is still Sunday 1 November, Week 2, in Toronto.
+  // 00:30 Monday 9 November in Tokyo is still Sunday 8 November, Week 2, in Toronto.
   const context = await browser.newContext({ timezoneId: 'Asia/Tokyo' })
   const page = await context.newPage()
-  await page.clock.setFixedTime(new Date('2026-11-02T00:30:00+09:00'))
+  await page.clock.setFixedTime(new Date('2026-11-09T00:30:00+09:00'))
   await page.goto('/')
-  await expect(page.getByText('Week 2 of 27 · Foundation')).toBeVisible()
+  await expect(page.getByText('Week 2 of 26 · Foundation')).toBeVisible()
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('5K test, baseline')
   await context.close()
 })
@@ -91,7 +91,7 @@ test('phases the countdown stripes from the glyph top to the baseline', async ({
 
 test('on the phone, Start sits in the bottom bar, in the thumb’s reach without scrolling', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name === 'desktop', 'Desktop keeps Start in place, under Up next.')
-  await serveHistory(page, weekDone(2, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-10-26'))
+  await serveHistory(page, weekDone(2, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-11-02'))
   await page.clock.setFixedTime(WEEK_3)
   await page.goto('/')
 

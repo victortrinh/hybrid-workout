@@ -8,7 +8,7 @@ const log = (id: string, change: Partial<SessionLog> = {}): SessionLog => ({
   id: `log-${id}-0000`,
   week: 3,
   sessionId: 'speed',
-  date: localDate('2026-11-04'),
+  date: localDate('2026-11-11'),
   status: 'done',
   minutes: 40,
   rpe: 7,
@@ -19,7 +19,7 @@ const log = (id: string, change: Partial<SessionLog> = {}): SessionLog => ({
   intervals: [],
   sets: [],
   stations: [],
-  updatedAt: '2026-11-04T20:00:00.000Z',
+  updatedAt: '2026-11-11T20:00:00.000Z',
   ...change,
 })
 
@@ -94,7 +94,7 @@ describe('the syncer', () => {
   })
 
   it('resolves conflicts last-write-wins per log', async () => {
-    const theirs = log('a', { status: 'partial', updatedAt: '2026-11-05T09:00:00.000Z' })
+    const theirs = log('a', { status: 'partial', updatedAt: '2026-11-12T09:00:00.000Z' })
     const server = fakeServer([theirs])
     server.online = false
     const syncer = createSyncer(memoryStore(), server.send)
@@ -108,7 +108,7 @@ describe('the syncer', () => {
     expect(server.logs).toEqual([theirs])
 
     // …and a later one wins.
-    const mine = log('a', { status: 'skipped', updatedAt: '2026-11-06T09:00:00.000Z' })
+    const mine = log('a', { status: 'skipped', updatedAt: '2026-11-13T09:00:00.000Z' })
     await syncer.save(mine)
     expect(syncer.snapshot().logs).toEqual([mine])
     expect(server.logs).toEqual([mine])
@@ -129,7 +129,7 @@ describe('the syncer', () => {
 
     const first = syncer.save(log('a'))
     await Promise.resolve()
-    const edit = log('a', { status: 'partial', updatedAt: '2026-11-04T21:00:00.000Z' })
+    const edit = log('a', { status: 'partial', updatedAt: '2026-11-11T21:00:00.000Z' })
     const second = syncer.save(edit)
     release()
     await Promise.all([first, second])

@@ -6,12 +6,12 @@ import type { Block, Exercise, Session } from './program/types'
 
 const report: PainReport = {
   id: '0f8c2b1e-7a4d-4c3e-9b2a-1d5e6f7a8b9c',
-  date: localDate('2026-11-04'),
+  date: localDate('2026-11-11'),
   score: 4,
   area: 'achilles-calf',
   week: 3,
   sessionId: 'speed',
-  updatedAt: '2026-11-04T12:00:00.000Z',
+  updatedAt: '2026-11-11T12:00:00.000Z',
 }
 
 describe('painLevel', () => {
@@ -60,7 +60,7 @@ describe('parsePainReport', () => {
       { ...report, week: null },
       { ...report, sessionId: '' },
       { ...report, week: 0 },
-      { ...report, updatedAt: '2026-11-04' },
+      { ...report, updatedAt: '2026-11-11' },
     ]
     for (const value of bad) expect(() => parsePainReport(value)).toThrow()
   })
@@ -69,7 +69,7 @@ describe('parsePainReport', () => {
 describe('mergePainReports', () => {
   it('keeps every report, and the later edit of one in both', () => {
     const other = { ...report, id: 'another-report-id' }
-    const later = { ...report, score: 5, updatedAt: '2026-11-04T13:00:00.000Z' }
+    const later = { ...report, score: 5, updatedAt: '2026-11-11T13:00:00.000Z' }
     expect(mergePainReports([report], [other, later])).toEqual([later, other])
     expect(mergePainReports([later], [report])).toEqual([later])
   })

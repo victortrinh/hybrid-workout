@@ -12,7 +12,7 @@ import {
 const POINT: StartingPoint = {
   fiveKSeconds: 21 * 60,
   weights: { 'back-squat': 225, 'romanian-deadlift': 185 },
-  updatedAt: '2026-10-15T12:00:00.000Z',
+  updatedAt: '2026-10-22T12:00:00.000Z',
 }
 
 describe('parseStartingPoint', () => {
@@ -34,7 +34,7 @@ describe('parseStartingPoint', () => {
 
 describe('laterStartingPoint', () => {
   it('keeps the later edit, and either one over none', () => {
-    const later = { ...POINT, fiveKSeconds: 22 * 60, updatedAt: '2026-10-16T12:00:00.000Z' }
+    const later = { ...POINT, fiveKSeconds: 22 * 60, updatedAt: '2026-10-23T12:00:00.000Z' }
     expect(laterStartingPoint(POINT, later)).toBe(later)
     expect(laterStartingPoint(later, POINT)).toBe(later)
     expect(laterStartingPoint(null, POINT)).toBe(POINT)
