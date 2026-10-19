@@ -51,7 +51,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
     const main = page.getByRole('main')
 
     for (const name of [
-      '5K vs. sub-20',
+      '5K vs. sub-22',
       'Weekly completion',
       'Training load',
       'Training paces',
@@ -62,12 +62,12 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await expect(main.getByRole('heading', { level: 2, name })).toBeVisible()
     }
 
-    // The 5K test against the planned line to 20:00 by Week 24.
+    // The 5K test against the planned line to 22:00 by Week 24.
     const fiveK = page.getByRole('img', { name: /^5K tests:/ })
     await expect(fiveK).toHaveAccessibleName(
-      '5K tests: 23:00 in Week 2 treadmill. Planned line from 23:00 to 20:00 by Week 24. Tests to come in Weeks 8, 16 and 24.',
+      '5K tests: 23:00 in Week 2 treadmill. Planned line from 23:00 to 22:00 by Week 24. Tests to come in Weeks 8, 16 and 24.',
     )
-    await expect(main.getByText('One test so far: latest 23:00 on a treadmill, Week 2. 3:00 to find by Week 24.')).toBeVisible()
+    await expect(main.getByText('One test so far: latest 23:00 on a treadmill, Week 2. 1:00 to find by Week 24.')).toBeVisible()
 
     // Weekly completion: Foundation so far, one row per Week, linking to it.
     const completion = main.getByRole('region', { name: 'Weekly completion' })
@@ -87,7 +87,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
     // Training paces from the 23:00 test, in km/h by default.
     const paces = main.getByRole('region', { name: 'Training paces' }).getByRole('table')
     await expect(paces.getByRole('columnheader')).toHaveText(['Pace', 'min/km', 'km/h'])
-    await expect(paces.getByRole('row', { name: /^Goal/ })).toHaveText(/4:0015\.0/)
+    await expect(paces.getByRole('row', { name: /^Goal/ })).toHaveText(/4:2413\.6/)
     await expect(paces.getByRole('row', { name: /^Threshold/ })).toHaveText(/4:5212\.3/)
 
     // Working weights in pounds: calibrated, then moved by an accepted Suggestion.
@@ -128,7 +128,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 test('desktop lays the panels on twelve columns; a phone stacks them', async ({ page }, testInfo) => {
   await page.goto('/progress')
   const box = async (name: string) => (await page.getByRole('region', { name }).boundingBox())!
-  const fiveK = await box('5K vs. sub-20')
+  const fiveK = await box('5K vs. sub-22')
   const completion = await box('Weekly completion')
   if (testInfo.project.name === 'desktop') {
     // Eight columns beside four, on one row.
