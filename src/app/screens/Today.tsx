@@ -495,14 +495,6 @@ function UpNext({
           onChange={(environment) => onEnvironment(upNextWeek, upNext, environment)}
         />
       )}
-      {upNext && upNextWeek && !live && isLive(upNext) && (
-        <Link
-          href={logPath(upNextWeek, upNext.id)}
-          className="mt-1 inline-flex min-h-11 items-center text-[15px] font-bold text-link underline decoration-2 underline-offset-4 hover:decoration-[3px]"
-        >
-          Log it after instead
-        </Link>
-      )}
       {live ? (
         <ActionBar label="Up next">
           <div className="flex gap-2.5">

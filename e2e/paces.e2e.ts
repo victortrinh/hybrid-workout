@@ -23,7 +23,7 @@ test('logging a 23:00 5K test sets Threshold’s speed, and mph updates every sp
   const bucket = page.getByRole('list').filter({ hasText: 'Strength' })
   await expect(upNext).toHaveText(/^5K test, /)
 
-  await page.getByRole('link', { name: 'Log it after instead' }).click()
+  await page.goto(`/log/${week}/5k-test`)
   await expect(page).toHaveURL(`/log/${week}/5k-test`)
   const time = page.getByRole('textbox', { name: '5 km time' })
   await expect(time).toBeVisible()
