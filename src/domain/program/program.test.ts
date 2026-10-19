@@ -154,10 +154,16 @@ describe('the plan’s marked Weeks', () => {
     ])
   })
 
-  it('tapers in Week 25 with no Threshold and no HYROX circuit, then races in Week 26', () => {
+  it('tapers in Week 25 with no Threshold and a short Station touch, then races in Week 26', () => {
     const taper = byNumber(25)
-    expect(taper.sessions.map((s) => s.type)).toEqual(['speed', 'strength', 'easy', 'easy', 'easy'])
-    expect(taper.sessions.filter((s) => !s.optional).map((s) => s.id)).toEqual(['speed', 'strength', 'easy-strides'])
+    expect(taper.sessions.map((s) => s.type)).toEqual(['speed', 'strength', 'easy', 'hyrox', 'easy'])
+    expect(taper.sessions.filter((s) => !s.optional).map((s) => s.id)).toEqual(['speed', 'strength', 'easy-strides', 'hyrox'])
+    const touch = session(25, 'hyrox')
+    expect(touch.minutes).toBe(25)
+    expect(touch.blocks.filter((b) => b.main).map((b) => b.exercises.map((e) => e.name))).toEqual([
+      ['Run', 'Sled push', 'Wall balls'],
+      ['Run', 'Sled push', 'Wall balls'],
+    ])
     expect(byNumber(26).sessions.map((s) => s.id)).toEqual(['shakeout', 'race'])
   })
 
@@ -194,7 +200,7 @@ describe('warm-ups', () => {
 
   it('splits the HYROX warm-up into a 5′ jog and 2′ of Lunges, with nothing left in a note', () => {
     const circuits = all.filter((s) => s.id === 'hyrox')
-    expect(circuits).toHaveLength(21)
+    expect(circuits).toHaveLength(22)
     for (const s of circuits) {
       expect(warmUp(s)).toEqual(['Warm-up 5′: Easy jog 5 min · Easy, RPE 2–4', 'Lunges 2′: Lunges 2 × 10'])
     }

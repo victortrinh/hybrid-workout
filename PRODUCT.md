@@ -12,11 +12,11 @@ Vite + React 19 + Tailwind v4 + react-aria-components single-page app, installab
 
 ## Users
 
-One user: Victor, an amateur hybrid athlete in Montréal training for a sub-20 5K and a HYROX Men's Open race on 21 April 2027. He trains 4–5 times a week in a gym that has a sled, SkiErg, rower, wall balls, sandbags, dumbbells, a barbell, a bike and about 15 m of open floor; most winter runs are on a treadmill. He is the only person who will ever use the app.
+One user: Victor, an amateur hybrid athlete in Montréal training for a sub-22 5K (sub-20 after it) and a HYROX Men's Open race on 21 April 2027. He trains 4–5 times a week in a gym that has a sled, SkiErg, rower, wall balls, sandbags, dumbbells, a barbell, a bike and about 15 m of open floor; most winter runs are on a treadmill. He is the only person who will ever use the app.
 
 ## Product Purpose
 
-Turn a fixed 26-week Program (`docs/training-plan.md`) into "what do I do today, and at what targets", then adapt the following Sessions to what was actually logged and how recovered he is. Success: every Week's Bucket gets done, the 5K tests trend toward 20:00, and he reaches race day healthy and race-ready without ever opening a spreadsheet.
+Turn a fixed 26-week Program (`docs/training-plan.md`) into "what do I do today, and at what targets", then adapt the following Sessions to what was actually logged and how recovered he is. Success: every Week's Bucket gets done, the 5K tests trend toward 22:00, and he reaches race day healthy and race-ready without ever opening a spreadsheet.
 
 ## Positioning
 
@@ -35,7 +35,7 @@ A coach for exactly one Program and one athlete. It knows the plan, the race dat
 - Today: Up next, the rest of the Week's Bucket, race countdown, "Something hurts".
 - Live session: interval timer with treadmill speed and incline cues, set logger with rest timer, HYROX round clock, wake lock, haptic and sound cues; logging afterwards is always possible.
 - Plan: Phases and Weeks timeline; Session logs for past Sessions.
-- Progress: 5K tests vs. sub-20, Training paces, Working weights, Station and Race simulation times, weekly completion and Training load, recovery trends.
+- Progress: 5K tests vs. sub-22, Training paces, Working weights, Station and Race simulation times, weekly completion and Training load, recovery trends.
 - Settings: treadmill units (km/h default, mph option), Environment defaults, equipment profile, integrations, export.
 - Free to run; works offline in the gym; English only; America/Toronto time zone.
 - Units: distances and speeds are metric (km, m, km/h, with an mph option for the treadmill); every weight is in pounds (lb), matching the gym's plates and dumbbells.

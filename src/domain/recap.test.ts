@@ -78,10 +78,10 @@ describe('the Program recap', () => {
     const logs = [
       log(2, '5k-test', '2026-11-04', { resultSeconds: 1380 }),
       log(8, '5k-test', '2026-12-16', { resultSeconds: 1335 }),
-      log(24, '5k-test', '2027-04-07', { resultSeconds: 1195 }),
+      log(24, '5k-test', '2027-04-07', { resultSeconds: 1315 }),
     ]
     const { fiveK } = programRecap(program, logs, [], DAY_AFTER)
-    expect(fiveK).toEqual({ first: { week: 2, seconds: 1380 }, last: { week: 24, seconds: 1195 }, sub20: true })
+    expect(fiveK).toEqual({ first: { week: 2, seconds: 1380 }, last: { week: 24, seconds: 1315 }, underGoal: true })
   })
 
   it('has no 5K line without a test, and one test is both ends', () => {
@@ -90,7 +90,7 @@ describe('the Program recap', () => {
     expect(programRecap(program, one, [], DAY_AFTER).fiveK).toEqual({
       first: { week: 2, seconds: 1380 },
       last: { week: 2, seconds: 1380 },
-      sub20: false,
+      underGoal: false,
     })
   })
 

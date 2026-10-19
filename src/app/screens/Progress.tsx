@@ -9,6 +9,7 @@ import { stations as STATIONS } from '../../domain/program/program'
 import { LIFT_NAME } from '../../domain/program/describe'
 import type { Lane, Program, Station } from '../../domain/program/types'
 import {
+  GOAL_LABEL,
   GOAL_SECONDS,
   plannedAt,
   progress,
@@ -43,7 +44,7 @@ interface ProgressProps {
 
 /**
  * Progress: whether the Program is working. 5K tests against the planned line
- * to 20:00, each Week's completion by Session type, Training load per Week,
+ * to the goal time, each Week's completion by Session type, Training load per Week,
  * the current Training paces, recent recovery, the Working weights and HYROX
  * Station times. Twelve columns on desktop, stacked on a phone.
  */
@@ -57,11 +58,13 @@ export function Progress({ program, day, logs, recoveryNights, unit }: ProgressP
       <h1 tabIndex={-1} className="text-headline-page">
         Progress
       </h1>
-      <p className="mt-1 text-body-quiet text-muted">5K tests against 20:00, weekly completion, Training load and paces.</p>
+      <p className="mt-1 text-body-quiet text-muted">
+        5K tests against {clock(GOAL_SECONDS)}, weekly completion, Training load and paces.
+      </p>
       {logs.length === 0 && recoveryNights.length === 0 ? (
         <EmptyState title="Nothing logged yet, so nothing to chart.">
           {firstTest
-            ? `The baseline 5K test is Week ${firstTest.number}. The 20:00 line can wait until then.`
+            ? `The baseline 5K test is Week ${firstTest.number}. The ${clock(GOAL_SECONDS)} line can wait until then.`
             : 'Charts start with the first Session log.'}
         </EmptyState>
       ) : (
@@ -153,7 +156,7 @@ function Sweep({ width, height, children }: { width: number; height: number; chi
 const ticks = (width: number, all: number[]) => (width < 480 ? all.filter((_, i) => i % 2 === 0) : all)
 
 // ---------------------------------------------------------------------------
-// 5K vs. sub-20
+// 5K vs. the goal time
 
 const ENVIRONMENT_WORD = { indoor: 'treadmill', outdoor: 'outdoors' } as const
 
@@ -171,7 +174,7 @@ function FiveKPanel({
     ? `No 5K test yet.${firstTestWeek ? ` The baseline is Week ${firstTestWeek}.` : ''}`
     : `${fiveK.tests.length === 1 ? 'One test so far' : `${fiveK.tests.length} tests so far`}: latest ${clock(latest.seconds)}${latest.environment ? ` ${latest.environment === 'indoor' ? 'on a treadmill' : 'outdoors'}` : ''}, Week ${latest.week}. ${toFind(latest.seconds, fiveK)}`
   return (
-    <Panel title="5K vs. sub-20" sub={sub} span={8}>
+    <Panel title={`5K vs. ${GOAL_LABEL}`} sub={sub} span={8}>
       {latest ? (
         <>
           <ChartSlot render={(width) => <FiveKChart width={width} weekCount={program.weekCount} fiveK={fiveK} />} />
@@ -193,8 +196,8 @@ function FiveKPanel({
           </ul>
         </>
       ) : (
-        <EmptyState title="The 20:00 line can wait until the baseline.">
-          The baseline test sets the Training paces and the planned line to sub-20.
+        <EmptyState title={`The ${clock(GOAL_SECONDS)} line can wait until the baseline.`}>
+          The baseline test sets the Training paces and the planned line to {GOAL_LABEL}.
         </EmptyState>
       )}
     </Panel>
@@ -203,7 +206,7 @@ function FiveKPanel({
 
 function toFind(seconds: number, fiveK: FiveKProgress): string {
   const gap = seconds - GOAL_SECONDS
-  if (gap <= 0) return 'Under 20:00.'
+  if (gap <= 0) return `Under ${clock(GOAL_SECONDS)}.`
   const by = fiveK.planned ? ` by Week ${fiveK.planned.to.week}` : ''
   return `${clock(gap)} to find${by}.`
 }
@@ -240,7 +243,7 @@ function FiveKChart({ width: W, weekCount, fiveK }: { width: number; weekCount: 
       ))}
       <line x1={L} x2={W - R} y1={y(GOAL_SECONDS)} y2={y(GOAL_SECONDS)} stroke="var(--speed)" strokeWidth={2} />
       <text x={L + 6} y={y(GOAL_SECONDS) - 8} className="goal">
-        Goal 20:00
+        Goal {clock(GOAL_SECONDS)}
       </text>
       {fiveK.planned && midWeek !== null && (
         <>
@@ -310,7 +313,7 @@ function fiveKSummary(fiveK: FiveKProgress): string {
     .map((t) => `${clock(t.seconds)} in Week ${t.week}${t.environment ? ` ${ENVIRONMENT_WORD[t.environment]}` : ''}`)
     .join(', ')
   const plan = fiveK.planned
-    ? ` Planned line from ${clock(fiveK.planned.from.seconds)} to 20:00 by Week ${fiveK.planned.to.week}.`
+    ? ` Planned line from ${clock(fiveK.planned.from.seconds)} to ${clock(GOAL_SECONDS)} by Week ${fiveK.planned.to.week}.`
     : ''
   const upcoming = fiveK.upcoming.length ? ` Tests to come in Weeks ${listWeeks(fiveK.upcoming.map((u) => u.week))}.` : ''
   return `5K tests: ${tests}.${plan}${upcoming}`

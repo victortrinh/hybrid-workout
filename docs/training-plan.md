@@ -6,7 +6,7 @@ Status: **approved 13 Oct 2026**, start moved to 26 Oct on 19 Oct 2026 (see [Rev
 
 | Goal | Target | Notes |
 | --- | --- | --- |
-| 5K | Sub 20:00 (Goal pace 4:00/km) | 5K tests in weeks 2, 8, 16, 24 |
+| 5K | Sub 22:00 by April (Goal pace 4:24/km); sub 20:00 is the goal after this Program | 5K tests in weeks 2, 8, 16, 24 |
 | HYROX | Men's Open, trained as singles | Race day **Wed 21 April 2027** |
 | Volume | 4 Sessions + 1 Optional session per Week | ~45 min each; Race simulations run longer |
 
@@ -195,7 +195,7 @@ Strength: maintenance, as in HYROX build.
 | Speed | Last short speed maintenance: 4 × 2′ @5K / 2′; pogo 1 × 10; no max sprinting, no broad jumps | 35–40 |
 | Strength | Light technique: squat and RDL 2 × 3 light, calves 2 × 8; no heavy lowering | 25–30 |
 | Threshold → Easy run | Easy run + 4 × 15 s relaxed strides; no threshold | 25–30 |
-| HYROX → Rest | Rest or 15 min easy walk; no circuit | 0–15 |
+| HYROX → Station touch | 2 × (500 m run + sled push 25 m + wall balls 25) at Race load; stop well before tired | 25 |
 | Easy (optional) | 20 min, only if fresh | 20 |
 
 ### Race week (week 26)
@@ -242,3 +242,4 @@ Strength: maintenance, as in HYROX build.
 ## Revisions
 
 - **19 Oct 2026: start moved from Mon 19 Oct to Mon 26 Oct** (sick on day one). Race day stays Wed 21 April, so the Program is 26 Weeks, not 27. The Foundation Deload (old week 4) is cut: the sick week stands in for it, and Foundation runs five loading Weeks into the first Deload, now week 7. Weeks 1–3 keep their content a week later; old weeks 5–27 become 4–26 on the same dates.
+- **19 Oct 2026: Goal pace and Taper, after an evidence review.** Starting 5K is 24:23, so sub-20 (an 18% gain) is unlikely in 26 weeks; Goal pace becomes **4:24/km (sub-22)** as the April checkpoint, with sub-20 the goal after it. HYROX is the priority if the two conflict. Week 25's HYROX rest becomes a short Station touch at Race load: tapers work best cutting volume while keeping frequency (Bosquet et al. 2007), and it keeps the sled and wall balls familiar nine days out.

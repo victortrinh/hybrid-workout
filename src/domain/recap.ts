@@ -31,8 +31,8 @@ export function raceResult(program: Program, logs: SessionLog[], today: LocalDat
 }
 
 export interface ProgramRecap {
-  /** The first and the last 5K test, and whether the last one was sub-20; null with none logged. */
-  fiveK: { first: { week: number; seconds: number }; last: { week: number; seconds: number }; sub20: boolean } | null
+  /** The first and the last 5K test, and whether the last one beat the goal time; null with none logged. */
+  fiveK: { first: { week: number; seconds: number }; last: { week: number; seconds: number }; underGoal: boolean } | null
   /** Each lift with a Working weight: where calibration found it, where it is now. */
   workingWeights: { lift: LiftId; first: number; now: number }[]
   /** Required Sessions Done or Partial out of every one the Program prescribed, and Easy runs on top. */
@@ -57,7 +57,7 @@ export function programRecap(
         ? {
             first: { week: first.week, seconds: first.seconds },
             last: { week: last.week, seconds: last.seconds },
-            sub20: last.seconds < GOAL_SECONDS,
+            underGoal: last.seconds < GOAL_SECONDS,
           }
         : null,
     workingWeights: workingWeightRows(changes).map((row) => ({ lift: row.lift, first: row.first.pounds, now: row.current })),

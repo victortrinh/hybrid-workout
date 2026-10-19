@@ -1,6 +1,6 @@
 # Compromised
 
-A personal coach for one athlete's 26-week program toward a sub-20 5K and a HYROX Men's Open race on 21 April 2027. It turns the program into today's session and adapts it to what has been logged.
+A personal coach for one athlete's 26-week program toward a sub-22 5K (sub-20 after it) and a HYROX Men's Open race on 21 April 2027. It turns the program into today's session and adapts it to what has been logged.
 
 ## Program
 
@@ -109,7 +109,7 @@ _Avoid_: onboarding, baseline (the baseline is the first 5K test)
 Training paces from the Starting point's estimated 5K time, worked out as for a 5K test of that time and shown as estimates until the first 5K test replaces them.
 
 **Goal pace**:
-4:00 per km, the pace of a sub-20 5K.
+4:24 per km, the pace of a sub-22 5K: the April checkpoint. Sub-20 (4:00 per km) is the goal after this Program.
 
 **Environment**:
 Whether a run happens Indoors on a treadmill or Outdoors; Indoor Prescriptions are expressed as speed and incline.
