@@ -9,11 +9,11 @@ import type { ProgramRecap } from '../domain/recap'
 import { raceCopy, shortSleepLine, suggestionCopy, waitingLine } from './coachCopy'
 
 const recovery = (cut: ShortSleepCut | null): RecoverySuggestion => ({
-  id: 'recovery-2026-11-04',
+  id: 'recovery-2026-11-11',
   kind: 'recovery',
   week: 3,
   sessionId: 'hyrox',
-  date: localDate('2026-11-04'),
+  date: localDate('2026-11-11'),
   cut,
   trigger: { sleepMinutes: 320, hrvMs: 40, hrvMean: 52 },
   decision: 'open',
@@ -51,8 +51,8 @@ describe('the short-sleep copy names what is cut', () => {
   })
 })
 
-const race = findWeek(program, 27)!.sessions.find((s) => s.id === 'race')!
-const shakeout = findWeek(program, 27)!.sessions.find((s) => s.id === 'shakeout')!
+const race = findWeek(program, 26)!.sessions.find((s) => s.id === 'race')!
+const shakeout = findWeek(program, 26)!.sessions.find((s) => s.id === 'shakeout')!
 
 describe('waitingLine', () => {
   it('says tomorrow the day before the race', () => {
@@ -77,7 +77,7 @@ describe('the Coach after Race day', () => {
     trainingLoad: { total: 48210, byLane: {} },
   })
   const race = { id: 'r' } as SessionLog
-  const sub20 = { first: { week: 2, seconds: 1380 }, last: { week: 25, seconds: 1195 }, sub20: true }
+  const sub20 = { first: { week: 2, seconds: 1380 }, last: { week: 24, seconds: 1195 }, sub20: true }
 
   it('asks for the finish time, one number', () => {
     expect(raceCopy({ state: 'ask', log: null }, recap(sub20))).toEqual({
@@ -94,7 +94,7 @@ describe('the Coach after Race day', () => {
   })
 
   it('says how far the 5K came when it wasn’t sub-20, without dressing it up', () => {
-    const close = { first: { week: 2, seconds: 1380 }, last: { week: 25, seconds: 1210 }, sub20: false }
+    const close = { first: { week: 2, seconds: 1380 }, last: { week: 24, seconds: 1210 }, sub20: false }
     expect(raceCopy({ state: 'finished', log: race, seconds: 5047 }, recap(close)).target).toBe(
       '1:24:07 at HYROX, and 2:50 off the 5K to 20:10. Not sub-20. Not nothing either.',
     )
@@ -109,7 +109,7 @@ describe('the Coach after Race day', () => {
   it('doesn’t ask after a Skipped race', () => {
     expect(raceCopy({ state: 'skipped', log: race }, recap(sub20))).toEqual({
       heading: 'Program done.',
-      target: 'Race Skipped. The 27 Weeks still happened, and these are their numbers.',
+      target: 'Race Skipped. The 26 Weeks still happened, and these are their numbers.',
     })
   })
 })

@@ -15,19 +15,19 @@ const pick = (scope: Page | Locator, name: string) =>
   scope.locator('label').filter({ hasText: new RegExp(`^${name}$`) }).click()
 
 const WEEK_2 = [
-  { week: 2, sessionId: '5k-test', date: '2026-10-27', status: 'done', resultSeconds: 23 * 60, environment: 'indoor' },
-  ...weekDone(2, ['strength', 'threshold', 'hyrox'], '2026-10-28'),
+  { week: 2, sessionId: '5k-test', date: '2026-11-03', status: 'done', resultSeconds: 23 * 60, environment: 'indoor' },
+  ...weekDone(2, ['strength', 'threshold', 'hyrox'], '2026-11-04'),
 ] as const
 
 /** Shin 2 from Monday, outside any Session: still standing on Wednesday. */
 const SHIN_2 = {
   id: 'seed-shin-2',
-  date: '2026-11-02',
+  date: '2026-11-09',
   score: 2,
   area: 'shin',
   week: null,
   sessionId: null,
-  updatedAt: '2026-11-02T12:00:00.000Z',
+  updatedAt: '2026-11-09T12:00:00.000Z',
 }
 
 test('pain 4 before a Speed session: the accelerations go to the bike and the reps drop', async ({ page }) => {
@@ -71,7 +71,7 @@ test('pain 4 before a Speed session: the accelerations go to the bike and the re
   await expect(blocks.filter({ hasText: 'Accelerations' })).toHaveCount(0)
 
   await expect.poll(() => reports.at(-1)).toMatchObject({
-    date: '2026-11-04',
+    date: '2026-11-11',
     score: 4,
     area: 'achilles-calf',
     week: 3,
@@ -190,7 +190,7 @@ test('with the pain Suggestion open, the step asks it once, in its own words: tw
 test('with the pain Suggestion already accepted, Same starts the Session with it', async ({ page }) => {
   const reports: Record<string, unknown>[] = [ACHILLES_4]
   const suggestionDecisions: Record<string, unknown>[] = [
-    { id: 'pain-seed-achilles-4', decision: 'accepted', date: '2026-11-04', updatedAt: '2026-11-04T11:00:00.000Z' },
+    { id: 'pain-seed-achilles-4', decision: 'accepted', date: '2026-11-11', updatedAt: '2026-11-11T11:00:00.000Z' },
   ]
   await serveHistory(page, [...WEEK_2], reports, { suggestionDecisions })
   await page.clock.setFixedTime(WEEK_3)

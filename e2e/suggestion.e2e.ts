@@ -4,13 +4,13 @@ import { seedLogs } from './history'
 
 /**
  * Each project gets a pair of Weeks no other test reads: the phone skips two
- * Sessions in Week 12 (a Deload) and comes back in Week 13; desktop skips in
- * Week 18 and comes back in Week 19.
+ * Sessions in Week 11 (a Deload) and comes back in Week 12; desktop skips in
+ * Week 17 and comes back in Week 18.
  */
 const SCENARIO = {
   phone: {
-    skipped: 12,
-    back: 13,
+    skipped: 11,
+    back: 12,
     logs: [
       { sessionId: 'speed', date: '2027-01-04', status: 'done' },
       { sessionId: 'strength', date: '2027-01-05', status: 'done' },
@@ -23,8 +23,8 @@ const SCENARIO = {
     lighter: '2 × 5′',
   },
   desktop: {
-    skipped: 18,
-    back: 19,
+    skipped: 17,
+    back: 18,
     logs: [
       { sessionId: 'speed', date: '2027-02-15', status: 'done' },
       { sessionId: 'strength', date: '2027-02-16', status: 'skipped' },

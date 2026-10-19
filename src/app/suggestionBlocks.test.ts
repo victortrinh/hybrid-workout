@@ -10,7 +10,7 @@ function lift(id: LiftId, from: number, to: number, decision: Decision = 'open',
   return {
     id: `ww-${id}-w5`,
     kind: 'working-weight',
-    week: 5,
+    week: 4,
     sessionId: 'strength',
     lift: id,
     date: localDate('2026-11-18'),
@@ -25,12 +25,12 @@ function lift(id: LiftId, from: number, to: number, decision: Decision = 'open',
 const reEntry: Suggestion = {
   id: 're-entry-w7',
   kind: 're-entry',
-  week: 7,
+  week: 6,
   sessionId: null,
   date: TODAY,
   from: { volumePercent: 100 },
   to: { volumePercent: 67 },
-  trigger: { week: 6, skipped: [] },
+  trigger: { week: 5, skipped: [] },
   decision: 'open',
   decidedOn: null,
 }
@@ -38,7 +38,7 @@ const reEntry: Suggestion = {
 const pain: Suggestion = {
   id: 'pain-1',
   kind: 'pain',
-  week: 7,
+  week: 6,
   sessionId: null,
   date: TODAY,
   level: 'ease',
@@ -83,7 +83,7 @@ describe('Suggestion blocks on Today', () => {
 describe('the grouped lift copy', () => {
   it('says the one step on all of them', () => {
     expect(liftsCopy(FIVE).line).toBe('Lifts: +5 lb on all five. Every rep, nothing past RPE 7. Those were warm-ups.')
-    expect(liftsCopy(FIVE).why).toBe('Week 5: Squat, RDL, Bulgarian split squat, Single-leg calf raise and Loaded seated calf raise')
+    expect(liftsCopy(FIVE).why).toBe('Week 4: Squat, RDL, Bulgarian split squat, Single-leg calf raise and Loaded seated calf raise')
   })
 
   it('gives the range when the steps differ', () => {

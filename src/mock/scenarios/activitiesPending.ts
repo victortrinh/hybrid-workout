@@ -2,22 +2,22 @@ import { history } from './history'
 import { scenario, workout } from './scenario'
 
 const h = history()
-for (let week = 1; week <= 10; week++) h.week(week)
+for (let week = 1; week <= 9; week++) h.week(week)
 
 /** Saturday's jog, which the athlete said was none of the Sessions. */
 const DISMISSED = workout('2026-12-26', '15:00', 'Running', 25, { distanceKm: 4.2, indoor: false })
 
 /**
- * Wednesday 30 December 2026, Week 11, nothing logged yet this Week but the
+ * Wednesday 30 December 2026, Week 10, nothing logged yet this Week but the
  * watch has sent two workouts that fit more than one Session: Monday's
  * treadmill run (Speed, Threshold or the Easy run?) and Tuesday's circuit
- * (Strength or HYROX?), so Today asks "Which Session was this?". Week 10's
+ * (Strength or HYROX?), so Today asks "Which Session was this?". Week 9's
  * workouts attached on their own; a Saturday jog was dismissed; Tuesday's
  * walk fits nothing and isn't asked about.
  */
 export default scenario({
   name: 'activities-pending',
-  summary: 'Week 11: Apple Watch workouts waiting for “Which Session was this?”',
+  summary: 'Week 10: Apple Watch workouts waiting for “Which Session was this?”',
   today: '2026-12-30',
   time: '12:10',
   server: {

@@ -10,25 +10,25 @@ import { serveHistory, type SeedLog } from './history'
  */
 const HISTORY: SeedLog[] = [
   ...BASELINE_HISTORY,
-  { week: 2, sessionId: 'threshold', date: '2026-10-31', status: 'skipped' },
-  { week: 3, sessionId: 'speed', date: '2026-11-02', status: 'done', rpe: 7 },
+  { week: 2, sessionId: 'threshold', date: '2026-11-07', status: 'skipped' },
+  { week: 3, sessionId: 'speed', date: '2026-11-09', status: 'done', rpe: 7 },
 ]
 
 /** 14 mornings to Wednesday of Week 3: one missing, two short, last night 5 h 41 with HRV 38. */
 const NIGHTS = [
-  ['2026-10-22', 450, 54],
-  ['2026-10-23', 414, 51],
-  ['2026-10-24', 468, 57],
-  ['2026-10-25', 426, 53],
-  ['2026-10-26', 350, 47],
-  ['2026-10-27', 450, 55],
-  ['2026-10-29', 432, 52],
-  ['2026-10-30', 408, 50],
-  ['2026-10-31', 456, 56],
-  ['2026-11-01', 420, 53],
-  ['2026-11-02', 390, 49],
-  ['2026-11-03', 438, 52],
-  ['2026-11-04', 341, 38],
+  ['2026-10-29', 450, 54],
+  ['2026-10-30', 414, 51],
+  ['2026-10-31', 468, 57],
+  ['2026-11-01', 426, 53],
+  ['2026-11-02', 350, 47],
+  ['2026-11-03', 450, 55],
+  ['2026-11-05', 432, 52],
+  ['2026-11-06', 408, 50],
+  ['2026-11-07', 456, 56],
+  ['2026-11-08', 420, 53],
+  ['2026-11-09', 390, 49],
+  ['2026-11-10', 438, 52],
+  ['2026-11-11', 341, 38],
 ].map(([date, sleepMinutes, hrvMs]) => ({
   date,
   sleepMinutes,
@@ -62,12 +62,12 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await expect(main.getByRole('heading', { level: 2, name })).toBeVisible()
     }
 
-    // The 5K test against the planned line to 20:00 by Week 25.
+    // The 5K test against the planned line to 20:00 by Week 24.
     const fiveK = page.getByRole('img', { name: /^5K tests:/ })
     await expect(fiveK).toHaveAccessibleName(
-      '5K tests: 23:00 in Week 2 treadmill. Planned line from 23:00 to 20:00 by Week 25. Tests to come in Weeks 9, 17 and 25.',
+      '5K tests: 23:00 in Week 2 treadmill. Planned line from 23:00 to 20:00 by Week 24. Tests to come in Weeks 8, 16 and 24.',
     )
-    await expect(main.getByText('One test so far: latest 23:00 on a treadmill, Week 2. 3:00 to find by Week 25.')).toBeVisible()
+    await expect(main.getByText('One test so far: latest 23:00 on a treadmill, Week 2. 3:00 to find by Week 24.')).toBeVisible()
 
     // Weekly completion: Foundation so far, one row per Week, linking to it.
     const completion = main.getByRole('region', { name: 'Weekly completion' })
@@ -109,7 +109,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 
     // HYROX stations: no Race simulation yet, so the first one's date, and each sled's own split in Week 1's round.
     const stations = main.getByRole('region', { name: 'HYROX stations' })
-    await expect(stations).toContainText('No Race simulation yet. The first is Week 18, the week of Mon 15 Feb.')
+    await expect(stations).toContainText('No Race simulation yet. The first is Week 17, the week of Mon 15 Feb.')
     await expect(stations.getByRole('row', { name: /^Sled push/ })).toHaveText('Sled push3:1025 m · W1')
     await expect(stations.getByRole('row', { name: /^Sled pull/ })).toHaveText('Sled pull3:3025 m · W1')
     await expect(stations.getByRole('row', { name: /^SkiErg/ })).toHaveText('SkiErg–Not timed')
@@ -157,7 +157,7 @@ test('the paces table follows the speed unit', async ({ page }) => {
 })
 
 test('before any data for them, the new panels say what fills them', async ({ page }) => {
-  await serveHistory(page, [{ week: 1, sessionId: 'speed', date: '2026-10-19', status: 'done', rpe: 7 }])
+  await serveHistory(page, [{ week: 1, sessionId: 'speed', date: '2026-10-26', status: 'done', rpe: 7 }])
   await page.clock.setFixedTime(WEEK_3)
   await page.goto('/progress')
   const main = page.getByRole('main')
@@ -166,7 +166,7 @@ test('before any data for them, the new panels say what fills them', async ({ pa
   await expect(panel('Recovery')).toContainText('No nights from the ring yet.')
   await expect(panel('Recovery').getByRole('img')).toHaveCount(0)
   await expect(panel('Working weights')).toContainText('No Working weights yet.Week 1’s Strength session finds them.')
-  await expect(panel('HYROX stations')).toContainText('No Race simulation yet. The first is Week 18, the week of Mon 15 Feb.')
+  await expect(panel('HYROX stations')).toContainText('No Race simulation yet. The first is Week 17, the week of Mon 15 Feb.')
   await expect(panel('HYROX stations').getByRole('table')).toHaveCount(0)
   await expectNoAxeViolations(page)
 })

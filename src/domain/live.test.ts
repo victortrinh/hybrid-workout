@@ -52,7 +52,7 @@ const session = (week: number, id: string): Session => {
 }
 
 const MIN = 60_000
-const T0 = Date.parse('2026-11-04T17:00:00Z')
+const T0 = Date.parse('2026-11-11T17:00:00Z')
 const at = (minutes: number) => T0 + minutes * MIN
 
 /** A 23:00 5K test: Threshold 4:52/km, 12.3 km/h. */
@@ -60,7 +60,7 @@ const paces = trainingPaces(23 * 60)
 const indoor: RunContext = { paces, environment: 'indoor', unit: 'kmh' }
 
 const start = (s: Session, environment: 'indoor' | 'outdoor' = 'indoor'): LiveRun =>
-  startRun({ week: 3, session: s, date: localDate('2026-11-04'), environment }, T0)
+  startRun({ week: 3, session: s, date: localDate('2026-11-11'), environment }, T0)
 
 /** The clock caught up to `now`, and Start tapped at once if it holds on a Ready screen. */
 const go = (run: LiveRun, now: number) => resume(advance(run, now), now)
@@ -126,7 +126,7 @@ describe('liveBlocks', () => {
     expect(['speed', 'strength', 'threshold', 'hyrox', 'easy'].map((id) => isLive(session(3, id)))).toEqual([
       true, false, true, true, true,
     ])
-    expect(isLive(session(18, 'race-simulation'))).toBe(true)
+    expect(isLive(session(17, 'race-simulation'))).toBe(true)
   })
 })
 
@@ -357,13 +357,13 @@ describe('the Ready screen', () => {
   })
 
   it('holds before each HYROX round, and only before the first run of a Race simulation', () => {
-    let hyrox = startRun({ week: 1, session: session(1, 'hyrox'), date: localDate('2026-10-21'), environment: 'indoor' }, T0)
+    let hyrox = startRun({ week: 1, session: session(1, 'hyrox'), date: localDate('2026-10-28'), environment: 'indoor' }, T0)
     hyrox = nextBlock(nextBlock(advance(hyrox, at(5)), at(6)), at(7))
     expect(hyrox).toMatchObject({ block: 3, ready: true })
     hyrox = nextBlock(nextBlock(nextBlock(resume(hyrox, at(8)), at(11)), at(14)), at(18))
     expect(hyrox).toMatchObject({ block: 4, ready: true, pausedAt: at(18) })
 
-    let sim = startRun({ week: 18, session: session(18, 'race-simulation'), date: localDate('2027-02-17'), environment: 'indoor' }, T0)
+    let sim = startRun({ week: 17, session: session(17, 'race-simulation'), date: localDate('2027-02-17'), environment: 'indoor' }, T0)
     sim = advance(sim, at(10))
     expect(sim).toMatchObject({ block: 1, ready: true })
     sim = nextBlock(resume(sim, at(10)), at(14))
@@ -469,7 +469,7 @@ describe('the finish sheet', () => {
 })
 
 describe('liveLog', () => {
-  const input = { id: 'live-1234', rpe: 7, distanceMeters: 9400, resultSeconds: null, updatedAt: '2026-11-04T18:00:00.000Z' }
+  const input = { id: 'live-1234', rpe: 7, distanceMeters: 9400, resultSeconds: null, updatedAt: '2026-11-11T18:00:00.000Z' }
 
   it('logs a Session run to the end as Done, with its time, Environment, distance and reps', () => {
     let run = pause(advance(start(session(3, 'threshold')), at(5)), at(5))
@@ -479,7 +479,7 @@ describe('liveLog', () => {
       id: 'live-1234',
       week: 3,
       sessionId: 'threshold',
-      date: '2026-11-04',
+      date: '2026-11-11',
       status: 'done',
       minutes: 45,
       rpe: 7,
@@ -490,7 +490,7 @@ describe('liveLog', () => {
       intervals: [{ block: 1, rep: 1, targetPace: 292, held: true, actualPace: null }],
       sets: [],
       stations: [],
-      updatedAt: '2026-11-04T18:00:00.000Z',
+      updatedAt: '2026-11-11T18:00:00.000Z',
     })
   })
 
@@ -573,39 +573,39 @@ describe('HYROX', () => {
       '600 m: row 250 m, wall-balls 20 reps',
       '600 m: skierg 250 m, burpee-broad-jumps 10 m',
     ])
-    expect(layout(7)).toEqual([
+    expect(layout(6)).toEqual([
       '700 m: sled-push 25 m, sled-pull 25 m, farmers-carry 100 m',
       '700 m: sandbag-lunges 50 m, sled-push 25 m',
       '700 m: sled-pull 25 m, farmers-carry 100 m, sandbag-lunges 50 m',
     ])
-    expect(layout(19)).toEqual(['800 m: skierg 500 m, burpee-broad-jumps 40 m', '800 m: row 500 m, wall-balls 50 reps', '800 m: skierg 500 m'])
-    expect(layout(23)).toEqual(['1000 m: sled-push 50 m', '1000 m: sled-pull 50 m', '1000 m: sandbag-lunges 100 m'])
+    expect(layout(18)).toEqual(['800 m: skierg 500 m, burpee-broad-jumps 40 m', '800 m: row 500 m, wall-balls 50 reps', '800 m: skierg 500 m'])
+    expect(layout(22)).toEqual(['1000 m: sled-push 50 m', '1000 m: sled-pull 50 m', '1000 m: sandbag-lunges 100 m'])
   })
 
   it('cuts a Deload week to a two-round technique circuit', () => {
-    expect(layout(4)).toEqual(['600 m: skierg 250 m, burpee-broad-jumps 10 m', '600 m: row 250 m, wall-balls 20 reps'])
+    expect(layout(7)).toEqual(['700 m: skierg 300 m, burpee-broad-jumps 20 m, wall-balls 30 reps', '700 m: row 300 m, wall-balls 30 reps'])
   })
 
   it.each([
     // Week, Phase and share of Race load: plate weight on the sleds, per hand on the farmers carry, to the nearest 5 lb.
     [1, 'Foundation, 60%', { 'sled-push': 200, 'sled-pull': 135, 'farmers-carry': 30, 'sandbag-lunges': 25 }],
-    [7, '5K development, 70%', { 'sled-push': 235, 'sled-pull': 160, 'farmers-carry': 35, 'sandbag-lunges': 30 }],
-    [11, '5K development, 75%', { 'sled-push': 250, 'sled-pull': 170, 'farmers-carry': 40, 'sandbag-lunges': 35 }],
-    [13, '5K development, 80%', { 'sled-push': 270, 'sled-pull': 180, 'farmers-carry': 40, 'sandbag-lunges': 35 }],
-    [15, 'HYROX build, 90%', { 'sled-push': 300, 'sled-pull': 205, 'farmers-carry': 50, 'sandbag-lunges': 40 }],
-    [20, 'HYROX build, 100%', { 'sled-push': 335, 'sled-pull': 225, 'farmers-carry': 55, 'sandbag-lunges': 45 }],
-    [23, 'Race specific, 100%', { 'sled-push': 335, 'sled-pull': 225, 'sandbag-lunges': 45 }],
+    [6, '5K development, 70%', { 'sled-push': 235, 'sled-pull': 160, 'farmers-carry': 35, 'sandbag-lunges': 30 }],
+    [10, '5K development, 75%', { 'sled-push': 250, 'sled-pull': 170, 'farmers-carry': 40, 'sandbag-lunges': 35 }],
+    [12, '5K development, 80%', { 'sled-push': 270, 'sled-pull': 180, 'farmers-carry': 40, 'sandbag-lunges': 35 }],
+    [14, 'HYROX build, 90%', { 'sled-push': 300, 'sled-pull': 205, 'farmers-carry': 50, 'sandbag-lunges': 40 }],
+    [19, 'HYROX build, 100%', { 'sled-push': 335, 'sled-pull': 225, 'farmers-carry': 55, 'sandbag-lunges': 45 }],
+    [22, 'Race specific, 100%', { 'sled-push': 335, 'sled-pull': 225, 'sandbag-lunges': 45 }],
   ])('loads Week %i (%s) from Race load', (week, _, pounds) => {
     expect(loads(rounds(week))).toEqual(pounds)
   })
 
   it('never scales the wall ball, and gives Stations without a load no pounds', () => {
     expect(loads(rounds(2))).toEqual({ skierg: null, 'burpee-broad-jumps': null, row: null, 'wall-balls': 13 })
-    expect(loads(rounds(19))['wall-balls']).toBe(13)
+    expect(loads(rounds(18))['wall-balls']).toBe(13)
   })
 
   it('times each leg of a round from a tap at its end: the run, then each Station', () => {
-    let run = onRound1(startRun({ week: 1, session: session(1, 'hyrox'), date: localDate('2026-10-21'), environment: 'indoor' }, T0))
+    let run = onRound1(startRun({ week: 1, session: session(1, 'hyrox'), date: localDate('2026-10-28'), environment: 'indoor' }, T0))
     expect(run.blocks[run.block].name).toBe('Round 1 of 3')
     expect(roundLegs(run.blocks[run.block])).toEqual(['run', 'sled-push', 'sled-pull'])
     expect(blockLeft(run, at(9))).toBeNull()
@@ -654,13 +654,13 @@ describe('HYROX', () => {
       { round: 3, part: 'sled-push', pounds: 180, meters: 25, reps: null, seconds: 225 },
       { round: 3, part: 'sled-pull', pounds: 135, meters: 25, reps: null, seconds: 210 },
     ])
-    const input = { id: 'hyrox-1234', rpe: 7, distanceMeters: 1800, resultSeconds: null, updatedAt: '2026-10-21T18:00:00.000Z' }
+    const input = { id: 'hyrox-1234', rpe: 7, distanceMeters: 1800, resultSeconds: null, updatedAt: '2026-10-28T18:00:00.000Z' }
     // 44 minutes on the clock, less the minute setting up.
     expect(liveLog(run, at(44), input)).toMatchObject({ status: 'done', minutes: 43, distanceMeters: null, stations: stationLogs(run) })
   })
 
   it('logs only the rounds finished, Partial, when it ends early', () => {
-    let run = startRun({ week: 1, session: session(1, 'hyrox'), date: localDate('2026-10-21'), environment: 'outdoor' }, T0)
+    let run = startRun({ week: 1, session: session(1, 'hyrox'), date: localDate('2026-10-28'), environment: 'outdoor' }, T0)
     run = end(nextBlock(nextBlock(nextBlock(onRound1(run), at(10)), at(14)), at(18)), at(25))
     // Round 2's run was done, but the round wasn't.
     run = { ...run, legs: [...run.legs, { block: 4, seconds: 200 }] }
@@ -671,7 +671,7 @@ describe('HYROX', () => {
   })
 
   it('goes back to a round on its last leg, the Stations before it kept', () => {
-    let run = onRound1(startRun({ week: 1, session: session(1, 'hyrox'), date: localDate('2026-10-21'), environment: 'indoor' }, T0))
+    let run = onRound1(startRun({ week: 1, session: session(1, 'hyrox'), date: localDate('2026-10-28'), environment: 'indoor' }, T0))
     run = legs(run, 10, 13.5, 17)
     run = nextBlock(run, at(20))
     run = goBack(run, 3, at(21))
@@ -683,7 +683,7 @@ describe('HYROX', () => {
   })
 
   it('logs only the round time for a round finished before legs were timed', () => {
-    let run = onRound1(startRun({ week: 1, session: session(1, 'hyrox'), date: localDate('2026-10-21'), environment: 'indoor' }, T0))
+    let run = onRound1(startRun({ week: 1, session: session(1, 'hyrox'), date: localDate('2026-10-28'), environment: 'indoor' }, T0))
     run = legs(run, 10, 13.5, 17)
     const old = { ...run, legs: [] }
     expect(stationLogs(old).filter((l) => l.round === 1).map((l) => [l.part, l.seconds])).toEqual([
@@ -695,7 +695,7 @@ describe('HYROX', () => {
   })
 
   it('asks about a split quicker than anyone could go, and saves it put right or untimed', () => {
-    let run = onRound1(startRun({ week: 19, session: session(19, 'hyrox'), date: localDate('2027-02-24'), environment: 'indoor' }, T0))
+    let run = onRound1(startRun({ week: 18, session: session(18, 'hyrox'), date: localDate('2027-02-24'), environment: 'indoor' }, T0))
     // 0:14 for 800 m: the run's tap slipped. The SkiErg took the rest of it.
     run = nextBlock(run, at(7) + 14_000)
     run = nextBlock(run, at(14))
@@ -775,7 +775,7 @@ describe('split warm-ups and the HYROX Set up', () => {
     expect(setUp.detail).toEqual(['Nothing else to load.'])
   })
 
-  const hyrox = () => startRun({ week: 1, session: session(1, 'hyrox'), date: localDate('2026-10-21'), environment: 'indoor' }, T0)
+  const hyrox = () => startRun({ week: 1, session: session(1, 'hyrox'), date: localDate('2026-10-28'), environment: 'indoor' }, T0)
   /** On Set up, a minute after the warm-up: both sets of lunges ticked. */
   const onSetUp = () => tick(tick(advance(hyrox(), at(5)), 0, at(5.5)), 1, at(6))
 
@@ -819,8 +819,8 @@ describe('Race simulations', () => {
       .filter((b) => b.round !== null)
       .map((b) => (b.kind === 'distance' ? `run ${b.meters} m` : `${b.stations[0].station} ${b.stations[0].meters ?? b.stations[0].reps} @ ${b.stations[0].pounds}`))
 
-  it('runs Week 18 as half simulation A: a split for each 1 km run and each of Stations 1–4, in race order', () => {
-    expect(sim(18).map((b) => [b.name, b.kind, b.seconds])).toEqual([
+  it('runs Week 17 as half simulation A: a split for each 1 km run and each of Stations 1–4, in race order', () => {
+    expect(sim(17).map((b) => [b.name, b.kind, b.seconds])).toEqual([
       ['Warm-up', 'warm-up', 600],
       ['Run 1', 'distance', null],
       ['SkiErg', 'station', null],
@@ -832,21 +832,21 @@ describe('Race simulations', () => {
       ['Burpee broad jumps', 'station', null],
       ['Cooldown', 'cooldown', 300],
     ])
-    expect(legs(18)).toEqual([
+    expect(legs(17)).toEqual([
       'run 1000 m', 'skierg 1000 @ null', 'run 1000 m', 'sled-push 50 @ 335', 'run 1000 m', 'sled-pull 50 @ 225', 'run 1000 m',
       'burpee-broad-jumps 80 @ null',
     ])
   })
 
-  it('runs Week 21 as half simulation B over Stations 5–8 at race volume', () => {
-    expect(legs(21)).toEqual([
+  it('runs Week 20 as half simulation B over Stations 5–8 at race volume', () => {
+    expect(legs(20)).toEqual([
       'run 1000 m', 'row 1000 @ null', 'run 1000 m', 'farmers-carry 200 @ 55', 'run 1000 m', 'sandbag-lunges 100 @ 45', 'run 1000 m',
       'wall-balls 100 @ 13',
     ])
   })
 
-  it('runs Week 24 as eight full 1 km runs with every Station at half race volume and Race load', () => {
-    expect(legs(24)).toEqual([
+  it('runs Week 23 as eight full 1 km runs with every Station at half race volume and Race load', () => {
+    expect(legs(23)).toEqual([
       'run 1000 m', 'skierg 500 @ null',
       'run 1000 m', 'sled-push 25 @ 335',
       'run 1000 m', 'sled-pull 25 @ 225',
@@ -859,7 +859,7 @@ describe('Race simulations', () => {
   })
 
   it('logs a split on every run and Station in race order', () => {
-    let run = startRun({ week: 18, session: session(18, 'race-simulation'), date: localDate('2027-02-17'), environment: 'indoor' }, T0)
+    let run = startRun({ week: 17, session: session(17, 'race-simulation'), date: localDate('2027-02-17'), environment: 'indoor' }, T0)
     run = go(run, at(10))
     // 1 km in 4:30, SkiErg in 4:15, and so on: a tap at the end of each.
     const taps = [4.5, 4.25, 4.75, 3, 4.75, 3.5, 5, 6]
@@ -886,13 +886,13 @@ describe('Race simulations', () => {
 
 describe('parseLiveRun for HYROX', () => {
   it('takes back a HYROX session in progress', () => {
-    const run = nextBlock(onRound1(startRun({ week: 1, session: session(1, 'hyrox'), date: localDate('2026-10-21'), environment: 'indoor' }, T0)), at(10))
+    const run = nextBlock(onRound1(startRun({ week: 1, session: session(1, 'hyrox'), date: localDate('2026-10-28'), environment: 'indoor' }, T0)), at(10))
     expect(run.legs).toHaveLength(1)
     expect(parseLiveRun(JSON.parse(JSON.stringify(run)))).toEqual(run)
   })
 
   it('takes back one stored before rounds were timed leg by leg, on the round’s first leg', () => {
-    const { legs: _, ...old } = onRound1(startRun({ week: 1, session: session(1, 'hyrox'), date: localDate('2026-10-21'), environment: 'indoor' }, T0))
+    const { legs: _, ...old } = onRound1(startRun({ week: 1, session: session(1, 'hyrox'), date: localDate('2026-10-28'), environment: 'indoor' }, T0))
     const parsed = parseLiveRun(JSON.parse(JSON.stringify(old)))!
     expect(parsed.legs).toEqual([])
     expect(currentLeg(parsed)).toBe(0)

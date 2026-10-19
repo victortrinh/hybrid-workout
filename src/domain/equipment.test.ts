@@ -37,10 +37,10 @@ describe('Substitutions from the Equipment profile', () => {
   })
 
   it('keeps the Deload and Taper loads on the Substitution', () => {
-    const deload = equip(session(4, 'strength'), DEFAULT_EQUIPMENT)
+    const deload = equip(session(7, 'strength'), DEFAULT_EQUIPMENT)
     const calf = deload.blocks.flatMap((b) => b.exercises).find((e) => e.name === 'Single-leg calf raise')!
     expect(calf.prescription).toMatchObject({ sets: 2, load: { kind: 'percent-of-working-weight', percent: [85, 90] } })
-    const taper = equip(session(26, 'strength'), DEFAULT_EQUIPMENT)
+    const taper = equip(session(25, 'strength'), DEFAULT_EQUIPMENT)
     expect(names(taper)).toEqual(['Bike and movement prep', 'Back squat', 'Romanian deadlift', 'Single-leg calf raise'])
   })
 
@@ -57,7 +57,7 @@ describe('Substitutions from the Equipment profile', () => {
   })
 
   it('applies to everything the Coach hands out', () => {
-    const day = coach({ program, today: localDate('2026-11-04'), equipment: ['calf-machine', 'floor-space'] })
+    const day = coach({ program, today: localDate('2026-11-11'), equipment: ['calf-machine', 'floor-space'] })
     const strength = day.bucket.find((e) => e.session.id === 'strength')!.session
     expect(names(strength)).toContain('Standing calf raise')
     expect(names(strength)).toContain('Loaded seated calf raise')

@@ -20,11 +20,11 @@ const sets = (lifts: Lift[]): SeedLog['sets'] =>
  * nothing. The 5K test, Threshold and HYROX are done too: no Suggestions waiting.
  */
 const HISTORY: SeedLog[] = [
-  ...weekDone(1, ['speed', 'threshold', 'hyrox'], '2026-10-20'),
+  ...weekDone(1, ['speed', 'threshold', 'hyrox'], '2026-10-27'),
   {
     week: 1,
     sessionId: 'strength',
-    date: '2026-10-21',
+    date: '2026-10-28',
     status: 'done',
     sets: sets([
       [0, 'back-squat', 185, 5, 7, 1],
@@ -34,12 +34,12 @@ const HISTORY: SeedLog[] = [
       [4, 'seated-calf-raise', 65, 10, 7, 1],
     ]),
   },
-  { week: 2, sessionId: '5k-test', date: '2026-10-27', status: 'done', resultSeconds: 23 * 60, environment: 'indoor' },
-  ...weekDone(2, ['threshold', 'hyrox'], '2026-10-28'),
+  { week: 2, sessionId: '5k-test', date: '2026-11-03', status: 'done', resultSeconds: 23 * 60, environment: 'indoor' },
+  ...weekDone(2, ['threshold', 'hyrox'], '2026-11-04'),
   {
     week: 2,
     sessionId: 'strength',
-    date: '2026-10-29',
+    date: '2026-11-05',
     status: 'done',
     sets: sets([
       [0, 'back-squat', 185, 5, 8, 3],
@@ -167,7 +167,7 @@ test('a full Strength session: a load change, RPEs, a missed rep, then the Coach
   await expect.poll(() => sent.at(-1)).toMatchObject({
     week: 3,
     sessionId: 'strength',
-    date: '2026-11-04',
+    date: '2026-11-11',
     status: 'done',
     rpe: 8,
   })
@@ -217,7 +217,7 @@ test('as prescribed, a Strength session is one tap per set plus three: Start, Fi
 })
 
 test('Week 1 calibrates: ramp to RPE 7, and that load is the Working weight', async ({ page }) => {
-  const wednesday = new Date('2026-10-21T12:00:00-04:00')
+  const wednesday = new Date('2026-10-28T12:00:00-04:00')
   const sent = await serveHistory(page, [])
   await page.clock.install({ time: aMinuteBefore(wednesday) })
   await page.goto('/')

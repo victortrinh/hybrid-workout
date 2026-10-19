@@ -11,18 +11,18 @@ const TODAY = localDate('2026-12-09')
 const MINUTE = 60_000
 
 const h = history()
-for (let week = 1; week <= 7; week++) h.week(week, { optional: week % 2 === 1 })
-h.log(8, 'speed', '2026-12-07')
+for (let week = 1; week <= 6; week++) h.week(week, { optional: week % 2 === 1 })
+h.log(7, 'speed', '2026-12-07')
 
 /**
- * Wednesday 9 December 2026, in Week 8, a Deload week: runs and lifts scaled
+ * Wednesday 9 December 2026, in Week 7, a Deload week: runs and lifts scaled
  * down by a third, and the Strength session's loads at 85–90% of each
  * Working weight. That Strength session was started 25 minutes ago and left
  * running, two squat sets in, to QA coming back to a Live session.
  */
 export default scenario({
   name: 'deload',
-  summary: 'Week 8, a Deload week: scaled runs and lifts, a Live session left running',
+  summary: 'Week 7, a Deload week: scaled runs and lifts, a Live session left running',
   today: TODAY,
   time: '18:20',
   server: {
@@ -32,10 +32,10 @@ export default scenario({
   },
   device: {
     live(now) {
-      const session = findWeek(program, 8)!.sessions.find((s) => s.id === 'strength')!
+      const session = findWeek(program, 7)!.sessions.find((s) => s.id === 'strength')!
       const { weights } = strengthState(program, h.logs, h.decisions, TODAY)
       const started = startLifts(
-        { week: 8, session: equip(session, DEFAULT_EQUIPMENT), date: TODAY, weights },
+        { week: 7, session: equip(session, DEFAULT_EQUIPMENT), date: TODAY, weights },
         now - 25 * MINUTE,
       )
       return logSet(logSet(started, 0, 0, now - 15 * MINUTE), 0, 1, now - MINUTE)

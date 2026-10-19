@@ -8,7 +8,7 @@ const log = (overrides: Partial<SessionLog> = {}): SessionLog => ({
   id: 'log-00000001',
   week: 2,
   sessionId: 'threshold',
-  date: localDate('2026-10-28'),
+  date: localDate('2026-11-04'),
   status: 'done',
   minutes: null,
   rpe: null,
@@ -19,7 +19,7 @@ const log = (overrides: Partial<SessionLog> = {}): SessionLog => ({
   intervals: [],
   sets: [],
   stations: [],
-  updatedAt: '2026-10-28T17:00:00.000Z',
+  updatedAt: '2026-11-04T17:00:00.000Z',
   ...overrides,
 })
 

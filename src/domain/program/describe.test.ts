@@ -74,9 +74,9 @@ describe('describeSession', () => {
 
   it('adds the HYROX Set up to the minutes as an estimate, outside them', () => {
     expect(session(1, 'hyrox').meta).toBe('45 min + ~5′ setup')
-    expect(session(7, 'hyrox').meta).toBe('50 min + ~5′ setup')
-    expect(session(23, 'hyrox').meta).toBe('50 min + ~5′ setup · Key session this Week')
-    expect(session(18, 'race-simulation').meta).toBe('65 min · Key session this Week')
+    expect(session(6, 'hyrox').meta).toBe('50 min + ~5′ setup')
+    expect(session(22, 'hyrox').meta).toBe('50 min + ~5′ setup · Key session this Week')
+    expect(session(17, 'race-simulation').meta).toBe('65 min · Key session this Week')
   })
 
   it('reads the 5K test and the Optional Easy run', () => {

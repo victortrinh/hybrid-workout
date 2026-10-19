@@ -1,12 +1,12 @@
 # Training plan — Hybrid 5K + HYROX (revised)
 
-Status: **approved 13 Oct 2026**. This file is the source the app's Program data is built from. Terms follow [CONTEXT.md](../CONTEXT.md).
+Status: **approved 13 Oct 2026**, start moved to 26 Oct on 19 Oct 2026 (see [Revisions](#revisions)). This file is the source the app's Program data is built from. Terms follow [CONTEXT.md](../CONTEXT.md).
 
 ## Goals
 
 | Goal | Target | Notes |
 | --- | --- | --- |
-| 5K | Sub 20:00 (Goal pace 4:00/km) | 5K tests in weeks 2, 9, 17, 25 |
+| 5K | Sub 20:00 (Goal pace 4:00/km) | 5K tests in weeks 2, 8, 16, 24 |
 | HYROX | Men's Open, trained as singles | Race day **Wed 21 April 2027** |
 | Volume | 4 Sessions + 1 Optional session per Week | ~45 min each; Race simulations run longer |
 
@@ -31,14 +31,14 @@ Every Station is preceded by a 1 km run: 8 km of running in total.
 
 | Phase | Weeks | Dates | Emphasis |
 | --- | --- | --- | --- |
-| Foundation | 1–6 | Oct 19 – Nov 29 | Aerobic base, find Working weights, Station technique |
-| 5K development | 7–14 | Nov 30 – Jan 24 | 5K-pace intervals, threshold volume, strength progression |
-| HYROX build | 15–22 | Jan 25 – Mar 21 | Station loads toward Race load, half Race simulations, long run |
-| Race specific | 23–25 | Mar 22 – Apr 11 | Full-volume Stations at Race load, full Race simulation, final 5K test |
-| Taper | 26 | Apr 12 – Apr 18 | Reduced volume, keep sharpness |
-| Race week | 27 | Apr 19 – Apr 25 | Shakeout, rest, **race Wed Apr 21** |
+| Foundation | 1–5 | Oct 26 – Nov 29 | Aerobic base, find Working weights, Station technique |
+| 5K development | 6–13 | Nov 30 – Jan 24 | 5K-pace intervals, threshold volume, strength progression |
+| HYROX build | 14–21 | Jan 25 – Mar 21 | Station loads toward Race load, half Race simulations, long run |
+| Race specific | 22–24 | Mar 22 – Apr 11 | Full-volume Stations at Race load, full Race simulation, final 5K test |
+| Taper | 25 | Apr 12 – Apr 18 | Reduced volume, keep sharpness |
+| Race week | 26 | Apr 19 – Apr 25 | Shakeout, rest, **race Wed Apr 21** |
 
-**Deload weeks:** 4, 8, 12, 16, 22. Every Prescription drops by about a third; no Key session.
+**Deload weeks:** 7, 11, 15, 21. Every Prescription drops by about a third; no Key session.
 
 ## How a Week works
 
@@ -68,7 +68,7 @@ Substitutions: no floor space or Readiness flag → **sled push sprints 10–15 
 
 ### Strength (~45 min)
 
-| Block | Exercise | Weeks 1–14 | Weeks 15–25 |
+| Block | Exercise | Weeks 1–13 | Weeks 14–24 |
 | --- | --- | --- | --- |
 | Warm-up | Bike + movement prep + ramp-up sets | 6 min | 6 min |
 | Strength | Back squat | 3 × 5 @ RPE 7, 90–120 s rest | 2 × 4 @ RPE 7–8 |
@@ -116,80 +116,79 @@ Wall balls always use the 13 lb (6 kg) ball; volume scales instead of load. Stat
 
 ### Easy run (Optional)
 
-Easy pace, RPE 2–4, full sentences. No tempo, no hills. Grows into a 60-minute long run by week 23 (minutes in the table below).
+Easy pace, RPE 2–4, full sentences. No tempo, no hills. Grows into a 60-minute long run by week 22 (minutes in the table below).
 
 ### 5K test (~45 min)
 
 Warm-up 10 min easy → 4 × 15 s strides (2 min) → **5 km all-out** → 8 min cooldown. Replaces that Week's Speed session. Indoor: treadmill at 1% incline. Each result records its Environment and resets the Training paces.
 
-### Race simulation (60–75 min; week 24 ~75–85 min)
+### Race simulation (60–75 min; week 23 ~75–85 min)
 
 Race order, Race load, conservative first run, RPE 8 (not all-out). Replaces that Week's HYROX session.
 
 | Week | Simulation | Content |
 | --- | --- | --- |
-| 18 | Half simulation A | 4 × (1 km run + Station 1–4: SkiErg, sled push, sled pull, burpee broad jumps) |
-| 21 | Half simulation B | 4 × (1 km run + Station 5–8: row, farmers carry, sandbag lunges, wall balls) |
-| 24 | Full-run simulation | 8 × (1 km run + Station 1–8 at **half race volume**), race order, Race load: SkiErg 500 m, sled push 25 m, sled pull 25 m, BBJ 40 m, row 500 m, farmers 100 m, lunges 50 m, wall balls 50 |
+| 17 | Half simulation A | 4 × (1 km run + Station 1–4: SkiErg, sled push, sled pull, burpee broad jumps) |
+| 20 | Half simulation B | 4 × (1 km run + Station 5–8: row, farmers carry, sandbag lunges, wall balls) |
+| 23 | Full-run simulation | 8 × (1 km run + Station 1–8 at **half race volume**), race order, Race load: SkiErg 500 m, sled push 25 m, sled pull 25 m, BBJ 40 m, row 500 m, farmers 100 m, lunges 50 m, wall balls 50 |
 
 ## Week by week
 
 Minutes for Easy run; "@5K" = at current 5K pace; "@T" = Threshold pace. Key session in **bold**.
 
-### Foundation (weeks 1–6)
+### Foundation (weeks 1–5)
 
 Paces: week 1 runs by RPE only (no 5K test yet). Strength: 3 × 5 / 3 × 6 pattern; week 1 calibrates.
 
 | Wk | Dates | Speed | Threshold | HYROX | Easy | Key |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Oct 19 | 5 × 2′ hard / 2′ jog; 2 accels | 3 × 7′ @T / 2′ jog | 3 × (600 m + Rotation A) | 20 | **Threshold** |
-| 2 | Oct 26 | **5K test** (baseline) | 3 × 7′ @T / 2′ | 3 × (600 m + Rotation B) | 20 | **5K test** |
-| 3 | Nov 2 | 5 × 3′ hard / 90″; 4 accels | 2 × 12′ @T / 2′ | 3 × (600 m + Rotation A) | 25 | **Threshold** |
-| 4 | Nov 9 | Deload: 4 × 2′ controlled; half jump contacts | 35–40′ easy | Technique circuit, ~60–70% volume | 25 | — |
-| 5 | Nov 16 | 5 × 3′ @5K / 90″; 4 accels | 2 × 12′ @T / 2′ | 3 × (600 m + Rotation A) | 30 | **Threshold** |
-| 6 | Nov 23 | 4 × 4′ @5K / 2′; 4 accels | 2 × 12′ @T / 2′ | 3 × (600 m + Rotation B) | 30 | **Threshold** |
+| 1 | Oct 26 | 5 × 2′ hard / 2′ jog; 2 accels | 3 × 7′ @T / 2′ jog | 3 × (600 m + Rotation A) | 20 | **Threshold** |
+| 2 | Nov 2 | **5K test** (baseline) | 3 × 7′ @T / 2′ | 3 × (600 m + Rotation B) | 20 | **5K test** |
+| 3 | Nov 9 | 5 × 3′ hard / 90″; 4 accels | 2 × 12′ @T / 2′ | 3 × (600 m + Rotation A) | 25 | **Threshold** |
+| 4 | Nov 16 | 5 × 3′ @5K / 90″; 4 accels | 2 × 12′ @T / 2′ | 3 × (600 m + Rotation A) | 30 | **Threshold** |
+| 5 | Nov 23 | 4 × 4′ @5K / 2′; 4 accels | 2 × 12′ @T / 2′ | 3 × (600 m + Rotation B) | 30 | **Threshold** |
 
-### 5K development (weeks 7–14)
+### 5K development (weeks 6–13)
 
 Strength: 3 × 5 / 3 × 6 pattern with progression.
 
 | Wk | Dates | Speed | Threshold | HYROX | Easy | Key |
 | --- | --- | --- | --- | --- | --- | --- |
-| 7 | Nov 30 | 4 × 4′ @5K / 90″; 4 accels | 3 × 8′ @T / 90″ | 3 × (700 m + Rotation A cluster) | 35 | **Speed** |
-| 8 | Dec 7 | Deload: 4 × 2′ controlled | 35–40′ easy | Technique circuit | 30 | — |
-| 9 | Dec 14 | **5K test** | 3 × 8′ @T / 90″ | 3 × (700 m + Rotation A cluster) | 35 | **5K test** |
-| 10 | Dec 21 | 5 × 3′ @5K / 90″; 4 accels | 3 × 8′ @T / 90″ | 3 × (700 m + Rotation B cluster) | 40 | **Speed** |
-| 11 | Dec 28 | 4 × 4′ @5K / 90″; 4 accels | 3 × 8′ @T / 90″ | 3 × (700 m + Rotation A cluster) | 40 | **Speed** |
-| 12 | Jan 4 | Deload: 4 × 2′ controlled | 35–40′ easy | Technique circuit | 30 | — |
-| 13 | Jan 11 | 3 × 5′ @5K / 2′; 4 accels | 4 × 6′ @T / 1′ | 3 × (700 m + Rotation A cluster) | 45 | **Speed** |
-| 14 | Jan 18 | 6 × 2′ @ 5K −5 s/km / 90″; 4 accels | 4 × 6′ @T / 1′ | 3 × (700 m + Rotation B cluster) | 45 | **Speed** |
+| 6 | Nov 30 | 4 × 4′ @5K / 90″; 4 accels | 3 × 8′ @T / 90″ | 3 × (700 m + Rotation A cluster) | 35 | **Speed** |
+| 7 | Dec 7 | Deload: 4 × 2′ controlled | 35–40′ easy | Technique circuit | 30 | — |
+| 8 | Dec 14 | **5K test** | 3 × 8′ @T / 90″ | 3 × (700 m + Rotation A cluster) | 35 | **5K test** |
+| 9 | Dec 21 | 5 × 3′ @5K / 90″; 4 accels | 3 × 8′ @T / 90″ | 3 × (700 m + Rotation B cluster) | 40 | **Speed** |
+| 10 | Dec 28 | 4 × 4′ @5K / 90″; 4 accels | 3 × 8′ @T / 90″ | 3 × (700 m + Rotation A cluster) | 40 | **Speed** |
+| 11 | Jan 4 | Deload: 4 × 2′ controlled | 35–40′ easy | Technique circuit | 30 | — |
+| 12 | Jan 11 | 3 × 5′ @5K / 2′; 4 accels | 4 × 6′ @T / 1′ | 3 × (700 m + Rotation A cluster) | 45 | **Speed** |
+| 13 | Jan 18 | 6 × 2′ @ 5K −5 s/km / 90″; 4 accels | 4 × 6′ @T / 1′ | 3 × (700 m + Rotation B cluster) | 45 | **Speed** |
 
-### HYROX build (weeks 15–22)
+### HYROX build (weeks 14–21)
 
 Strength switches to maintenance (2 × 4 squat/RDL + calves + upper).
 
 | Wk | Dates | Speed | Threshold | HYROX | Easy | Key |
 | --- | --- | --- | --- | --- | --- | --- |
-| 15 | Jan 25 | 4 × 3′ @5K / 2′; 3 accels | 2 × 10′ @T / 2′ | 3 × (800 m + Rotation A Station) | 50 | **HYROX** |
-| 16 | Feb 1 | Deload: 4 × 2′ controlled | 35–40′ easy | Technique circuit | 35 | — |
-| 17 | Feb 8 | **5K test** | 2 × 10′ @T / 2′ | 3 × (800 m + Rotation A Station) | 50 | **5K test** |
-| 18 | Feb 15 | 4 × 3′ @5K / 2′; 3 accels | 2 × 10′ @T / 2′ | **Half simulation A** | 45 | **Race simulation** |
-| 19 | Feb 22 | 5 × 3′ @5K / 2′; 3 accels | 2 × 10′ @T / 2′ | 3 × (800 m + Rotation B Station) | 55 | **HYROX** |
-| 20 | Mar 1 | 4 × 3′ @5K / 2′; 3 accels | 2 × 10′ @T / 2′ | 3 × (800 m + Rotation A Station) | 55 | **HYROX** |
-| 21 | Mar 8 | 5 × 3′ @5K / 2′; 3 accels | 2 × 10′ @T / 2′ | **Half simulation B** | 45 | **Race simulation** |
-| 22 | Mar 15 | Deload: 4 × 2′ controlled | 35–40′ easy | Technique circuit | 40 | — |
+| 14 | Jan 25 | 4 × 3′ @5K / 2′; 3 accels | 2 × 10′ @T / 2′ | 3 × (800 m + Rotation A Station) | 50 | **HYROX** |
+| 15 | Feb 1 | Deload: 4 × 2′ controlled | 35–40′ easy | Technique circuit | 35 | — |
+| 16 | Feb 8 | **5K test** | 2 × 10′ @T / 2′ | 3 × (800 m + Rotation A Station) | 50 | **5K test** |
+| 17 | Feb 15 | 4 × 3′ @5K / 2′; 3 accels | 2 × 10′ @T / 2′ | **Half simulation A** | 45 | **Race simulation** |
+| 18 | Feb 22 | 5 × 3′ @5K / 2′; 3 accels | 2 × 10′ @T / 2′ | 3 × (800 m + Rotation B Station) | 55 | **HYROX** |
+| 19 | Mar 1 | 4 × 3′ @5K / 2′; 3 accels | 2 × 10′ @T / 2′ | 3 × (800 m + Rotation A Station) | 55 | **HYROX** |
+| 20 | Mar 8 | 5 × 3′ @5K / 2′; 3 accels | 2 × 10′ @T / 2′ | **Half simulation B** | 45 | **Race simulation** |
+| 21 | Mar 15 | Deload: 4 × 2′ controlled | 35–40′ easy | Technique circuit | 40 | — |
 
-### Race specific (weeks 23–25)
+### Race specific (weeks 22–24)
 
 Strength: maintenance, as in HYROX build.
 
 | Wk | Dates | Speed | Threshold | HYROX | Easy | Key |
 | --- | --- | --- | --- | --- | --- | --- |
-| 23 | Mar 22 | 4 × 3′ @5K / 2′; 3 accels | 2 × 10′ @T / 2′ | 3 × (1 km + full Station at Race load) | 60 | **HYROX** |
-| 24 | Mar 29 | 4 × 3′ @5K / 2′; 3 accels | 2 × 10′ @T / 2′ | **Full-run simulation** | 45 | **Race simulation** |
-| 25 | Apr 5 | **5K test** (final) | 2 × 8′ @T / 2′ | 3 × (800 m + Station at Race load, controlled) | 45 | **5K test** |
+| 22 | Mar 22 | 4 × 3′ @5K / 2′; 3 accels | 2 × 10′ @T / 2′ | 3 × (1 km + full Station at Race load) | 60 | **HYROX** |
+| 23 | Mar 29 | 4 × 3′ @5K / 2′; 3 accels | 2 × 10′ @T / 2′ | **Full-run simulation** | 45 | **Race simulation** |
+| 24 | Apr 5 | **5K test** (final) | 2 × 8′ @T / 2′ | 3 × (800 m + Station at Race load, controlled) | 45 | **5K test** |
 
-### Taper (week 26) — follows the race-week rules
+### Taper (week 25) — follows the race-week rules
 
 | Session | Prescription | Min |
 | --- | --- | --- |
@@ -199,7 +198,7 @@ Strength: maintenance, as in HYROX build.
 | HYROX → Rest | Rest or 15 min easy walk; no circuit | 0–15 |
 | Easy (optional) | 20 min, only if fresh | 20 |
 
-### Race week (week 27)
+### Race week (week 26)
 
 | Day | Session | Min |
 | --- | --- | --- |
@@ -225,17 +224,21 @@ Strength: maintenance, as in HYROX build.
 ## Changes from the spreadsheet
 
 - Fixed weekdays → weekly Bucket, any day, any order.
-- Deload weeks 20 and 24 → 22 (plus 4, 8, 12, 16 unchanged). Week 25 becomes a normal moderate week instead of a second taper week.
-- Week 26 now follows the Race Week sheet everywhere (its Wednesday lifting and Sunday circuit conflicts are removed). Week 27 added.
-- 5K tests scheduled (weeks 2, 9, 17, 25); paces derived from them.
-- Race simulations added in weeks 18, 21, 24; Station volumes now reach race distances.
+- Deload weeks 20 and 24 → 22 (plus 4, 8, 12, 16 unchanged). Week 25 becomes a normal moderate week instead of a second taper week. (Spreadsheet numbering; see Revisions for today's.)
+- Week 26 now follows the Race Week sheet everywhere (its Wednesday lifting and Sunday circuit conflicts are removed). Week 27 added. (Spreadsheet numbering.)
+- 5K tests scheduled (weeks 2, 8, 16, 24); paces derived from them.
+- Race simulations added in weeks 17, 20, 23; Station volumes now reach race distances.
 - Optional Easy run grows into a 60-minute long run.
-- Speed and Threshold progressions vary across weeks 5–14 instead of repeating.
+- Speed and Threshold progressions vary across weeks 4–13 instead of repeating.
 - Equipment Substitutions: 20 m → 15 m accelerations; calf machines → dumbbell single-leg and loaded seated calf raises; sled/bike sprints as acceleration Substitutions.
-- Threshold weeks 7–14 rests shortened to 90″ so the session fits in 45 minutes.
+- Threshold weeks 6–13 rests shortened to 90″ so the session fits in 45 minutes.
 
 ## Resolved during approval
 
-1. Week 24 keeps all eight full 1 km runs, with every Station at half race volume and full Race load (~75–85 min).
-2. The 60-minute long run from week 23 is realistic.
+1. Week 23 keeps all eight full 1 km runs, with every Station at half race volume and full Race load (~75–85 min).
+2. The 60-minute long run from week 22 is realistic.
 3. Sled weight counts as 0: every sled load is the **added plate weight** (push 335 lb, pull 227 lb at Race load), so training is slightly heavier than racing.
+
+## Revisions
+
+- **19 Oct 2026: start moved from Mon 19 Oct to Mon 26 Oct** (sick on day one). Race day stays Wed 21 April, so the Program is 26 Weeks, not 27. The Foundation Deload (old week 4) is cut: the sick week stands in for it, and Foundation runs five loading Weeks into the first Deload, now week 7. Weeks 1–3 keep their content a week later; old weeks 5–27 become 4–26 on the same dates.

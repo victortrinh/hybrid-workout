@@ -4,12 +4,12 @@ import { expectNoAxeViolations } from './axe'
 /**
  * Logs a 5K test to the shared e2e database. Paces come from the latest test
  * on or before today, so each project takes a 5K test Week no other test
- * reaches: the phone Week 17, desktop Week 25. Thursday, so last Week's Key
+ * reaches: the phone Week 16, desktop Week 24. Thursday, so last Week's Key
  * session has stopped carrying over and the 5K test is Up next.
  */
-const WEEK = { phone: 17, desktop: 25 } as Record<string, number>
-/** Thursday noon in Toronto of Week 17 (Mon 8 Feb) or Week 25 (Mon 5 Apr). */
-const THURSDAY = { 17: new Date('2027-02-11T12:00:00-05:00'), 25: new Date('2027-04-08T12:00:00-04:00') } as Record<
+const WEEK = { phone: 16, desktop: 24 } as Record<string, number>
+/** Thursday noon in Toronto of Week 16 (Mon 8 Feb) or Week 24 (Mon 5 Apr). */
+const THURSDAY = { 16: new Date('2027-02-11T12:00:00-05:00'), 24: new Date('2027-04-08T12:00:00-04:00') } as Record<
   number,
   Date
 >

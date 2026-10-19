@@ -11,7 +11,7 @@ test('before the Program, a Week 1 Session is logged early from its Week', async
 
   await page.getByRole('link', { name: 'Can’t wait? Start a Week 1 Session early' }).click()
   await expect(page).toHaveURL('/plan/week/1')
-  await expect(page.getByText('Early. Week 1 starts Mon 19 Oct. Anything done today counts for Week 1.')).toBeVisible()
+  await expect(page.getByText('Early. Week 1 starts Mon 26 Oct. Anything done today counts for Week 1.')).toBeVisible()
   const speed = page.getByRole('region', { name: /^Speed/ })
   await expect(speed.getByRole('button', { name: 'Start session' })).toBeVisible()
   await expectNoAxeViolations(page)
@@ -19,16 +19,16 @@ test('before the Program, a Week 1 Session is logged early from its Week', async
   await speed.getByRole('link', { name: 'Log after' }).click()
   await expect(page).toHaveURL('/log/1/speed')
   // None of Week 1's days has come: today is the only day there is.
-  await expect(page.getByRole('radio', { name: 'Mon 19 October' })).toHaveCount(0)
-  await expect(page.getByRole('radio', { name: 'Today, Tue 13 October' })).toBeChecked()
+  await expect(page.getByRole('radio', { name: 'Mon 26 October' })).toHaveCount(0)
+  await expect(page.getByRole('radio', { name: 'Today, Tue 20 October' })).toBeChecked()
   await expectNoAxeViolations(page)
 
   await page.getByRole('button', { name: 'Save log' }).click()
   await expect(page).toHaveURL('/plan/week/1')
-  await expect(speed).toContainText('Done, Tue 13 Oct')
+  await expect(speed).toContainText('Done, Tue 20 Oct')
   await expect(speed.getByRole('button', { name: 'Start session' })).toHaveCount(0)
   await expect(speed.getByRole('link', { name: 'Edit log' })).toBeVisible()
-  expect(sent.at(-1)).toMatchObject({ week: 1, sessionId: 'speed', date: '2026-10-13', status: 'done' })
+  expect(sent.at(-1)).toMatchObject({ week: 1, sessionId: 'speed', date: '2026-10-20', status: 'done' })
 })
 
 test('before the Program, a Week 1 Session tapped on Today is started early from there', async ({ page }) => {
@@ -39,7 +39,7 @@ test('before the Program, a Week 1 Session tapped on Today is started early from
   await page.getByRole('button', { name: /^Threshold/ }).click()
   await page.getByRole('button', { name: /^Do it today/ }).click()
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^Threshold/)
-  await expect(page.getByText('Early. Week 1 starts Mon 19 Oct. Anything done today counts for Week 1.')).toBeVisible()
+  await expect(page.getByText('Early. Week 1 starts Mon 26 Oct. Anything done today counts for Week 1.')).toBeVisible()
   await expect(page.getByRole('link', { name: /Start a Week 1 Session early/ })).toHaveCount(0)
   await expectNoAxeViolations(page)
 
@@ -49,11 +49,11 @@ test('before the Program, a Week 1 Session tapped on Today is started early from
 })
 
 test('in Week 3, a Week 1 Session never done is started late from its Week', async ({ page }) => {
-  await serveHistory(page, weekDone(2, ['speed', 'strength', 'threshold', 'hyrox'], '2026-10-28'))
+  await serveHistory(page, weekDone(2, ['speed', 'strength', 'threshold', 'hyrox'], '2026-11-04'))
   await page.clock.setFixedTime(WEEK_3)
   await page.goto('/plan/week/1')
 
-  await expect(page.getByText('Late. Week 1 closed Sun 25 Oct.')).toBeVisible()
+  await expect(page.getByText('Late. Week 1 closed Sun 1 Nov.')).toBeVisible()
   const speed = page.getByRole('region', { name: /^Speed/ })
   await expectNoAxeViolations(page)
 
@@ -64,18 +64,18 @@ test('in Week 3, a Week 1 Session never done is started late from its Week', asy
 })
 
 test('with Week 1 all logged before it starts, Today points to Week 2', async ({ page }) => {
-  await serveHistory(page, weekDone(1, ['speed', 'strength', 'threshold', 'hyrox', 'easy'], '2026-10-13'))
+  await serveHistory(page, weekDone(1, ['speed', 'strength', 'threshold', 'hyrox', 'easy'], '2026-10-20'))
   await page.clock.setFixedTime(BEFORE_WEEK_1)
   await page.goto('/')
 
   await page.getByRole('link', { name: 'Can’t wait? Start a Week 2 Session early' }).click()
   await expect(page).toHaveURL('/plan/week/2')
-  await expect(page.getByText('Early. Week 2 starts Mon 26 Oct.')).toBeVisible()
+  await expect(page.getByText('Early. Week 2 starts Mon 2 Nov.')).toBeVisible()
 })
 
 test('once Week 1 is done, Today points to Week 2', async ({ page }) => {
-  await serveHistory(page, weekDone(1, ['speed', 'strength', 'threshold', 'hyrox', 'easy'], '2026-10-20'))
-  await page.clock.setFixedTime(new Date('2026-10-22T12:00:00-04:00'))
+  await serveHistory(page, weekDone(1, ['speed', 'strength', 'threshold', 'hyrox', 'easy'], '2026-10-27'))
+  await page.clock.setFixedTime(new Date('2026-10-29T12:00:00-04:00'))
   await page.goto('/')
 
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Week done.')
