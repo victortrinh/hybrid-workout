@@ -26,6 +26,8 @@ const setVisibility = (page: Page, state: 'hidden' | 'visible') =>
   }, state)
 
 test('Settings offers lock-screen cues once the server is set up, and says so until then', async ({ page }) => {
+  // A phone that allowed notifications: CI's headless Chromium always says denied, whatever is granted.
+  await page.addInitScript(() => Object.defineProperty(Notification, 'permission', { get: () => 'granted' }))
   await page.clock.setFixedTime(WEEK_3)
   await serveKey(page, null)
   await page.goto('/')
