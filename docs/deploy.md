@@ -9,6 +9,8 @@ Steps 1 to 6 happen once. After that, shipping a change is just [Deploy](#deploy
 | Command | What it does |
 | --- | --- |
 | `npm run deploy` | Runs the unit tests, builds the app and the Worker (`dist/`), then `wrangler deploy` uploads the Worker with `dist/client` as its static assets. |
+| `npm run deploy:cues` | Runs the unit tests, then uploads the cue timer, `compromised-cues` (`wrangler.cues.jsonc`, ADR-0006). Only needed when `src/cues/` changes. |
+| `npm run make:vapid-keys -- <mailto:…>` | Prints a new VAPID key pair and the commands that store it as the cue timer's secrets ([step 9](#9-lock-screen-cues-victor)). |
 | `npm run db:migrate:prod` | Applies any unapplied files in `migrations/` to the production D1 database. Wrangler lists them and asks before applying, and captures a backup first. |
 | `npm run db:migrate:local` | The same against the local D1 that `npm run dev` uses. |
 | `npm run check:access -- <url>` | Requests `/`, `/plan` and `/api/health` without signing in and fails unless every one redirects to the Cloudflare Access login. |
@@ -247,6 +249,43 @@ Do a Session with the watch, then open Today:
 - A treadmill run asks **What did the console say?**. **Add console distance** opens Log after with the watch's minutes filled in.
 
 For `npm run dev`, copy `.dev.vars.example` to `.dev.vars`: any pair of values works locally.
+
+### 9. Lock-screen cues (Victor)
+
+The cue timer sends a Live session's Block changes and rest ends to the phone as push notifications while the app is off screen (ADR-0006). It's a second Worker, `compromised-cues`, with no address of its own; the app's Worker reaches it through its `CUES` binding. Do the steps in this order: **merging to `main` deploys production**, and the app's Worker binds a Durable Object in `compromised-cues`, which has to exist first.
+
+#### 9a. Before merging: deploy the cue timer (terminal, on the PR's branch)
+
+```bash
+npm run deploy:cues
+```
+
+It lists one binding, `env.CUES (LiveCues)`, and creates the Durable Object class. Then merge the PR; Workers Builds deploys the app. Until 9b is done, Settings says **Not set up on the server yet.**
+
+#### 9b. The VAPID keys (terminal)
+
+The keys sign every push, so Apple's push service knows it comes from this app. The subject is how Apple would reach you about it:
+
+```bash
+npm run make:vapid-keys -- mailto:<your email>
+```
+
+It prints three `npx wrangler secret put … -c wrangler.cues.jsonc` commands, each with its value. Run each one and paste its value when Wrangler asks. Nothing is written to disk; the private key is shown once. Setting a secret redeploys the cue timer, so there's nothing else to run.
+
+#### 9c. Turn it on (iPhone)
+
+Push only reaches an app on the Home Screen, on iOS 16.4 or later:
+
+1. In Safari, open the app's address, **Share → Add to Home Screen**. Open it from the Home Screen icon from now on.
+2. Tap your initial on Today → **Lock-screen cues** → **Turn on**, and **Allow** notifications.
+
+If Settings says **Add Compromised to the Home Screen…**, it's open in a Safari tab, not the Home Screen app. If it says **Notifications are off for Compromised**, iOS Settings → Notifications → Compromised → **Allow Notifications**.
+
+#### 9d. Check it
+
+Start a Session with a short Block (Easy run's warm-up, or a Speed session after the drills), then switch to another app or lock the phone. When the Block ends, the phone buzzes and the lock screen shows the next Block and its target, with the Coach line under it, for example **Jog · 9.8 km/h** and *Jog. Breathe. Pretend this is easy.* Tapping it opens the Live session. Coming back to the app before then cancels the cue, and the on-screen buzz and beep take over.
+
+No notification? Workers & Pages → `compromised-cues` → **Logs**: a push Apple refused is logged there with its status. Turn Lock-screen cues off and on again to send a fresh subscription.
 
 ## Deploy
 

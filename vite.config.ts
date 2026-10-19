@@ -14,10 +14,19 @@ import { defineConfig, loadEnv, type Plugin } from 'vite'
 // Mock mode (`--mode mock`, or VITE_API=mock; ADR-0005) answers /api/* in the
 // browser instead: Mock Service Worker's script is served and built in place
 // of /sw.js, and `virtual:compromised-mock` resolves to src/mock/browser.ts.
-export default defineConfig(({ mode }) => {
+//
+// In dev the cue timer (wrangler.cues.jsonc, ADR-0006) runs beside the Worker,
+// so its CUES binding answers. Builds leave it out: it deploys on its own.
+export default defineConfig(({ mode, command }) => {
   const mock = loadEnv(mode, process.cwd(), 'VITE_').VITE_API === 'mock'
+  const cues = command === 'serve' && !mock ? [{ configPath: './wrangler.cues.jsonc' }] : []
   return {
-    plugins: [react(), tailwindcss(), cloudflare(), mock ? msw({ mode: 'worker-only' }) : serviceWorker()],
+    plugins: [
+      react(),
+      tailwindcss(),
+      cloudflare({ auxiliaryWorkers: cues }),
+      mock ? msw({ mode: 'worker-only' }) : serviceWorker(),
+    ],
     resolve: {
       alias: { 'virtual:compromised-mock': fileURLToPath(new URL('src/mock/browser.ts', import.meta.url)) },
     },

@@ -6,6 +6,7 @@ interface __BaseEnv_Env {
 	ACCESS_CLIENT_ID: string;
 	ACCESS_CLIENT_SECRET: string;
 	ACCESS_TEAM_DOMAIN: string;
+	CUES: DurableObjectNamespace<import("../cues/index").LiveCues> /* LiveCues from compromised-cues */;
 }
 declare namespace Cloudflare {
 	interface Env extends __BaseEnv_Env {}

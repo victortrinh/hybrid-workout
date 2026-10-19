@@ -1,0 +1,23 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // The cue timer (src/cues/index.ts, ADR-0006): one Durable Object that sends
+  // a Live session's lock-screen cues as push notifications. A Worker of its
+  // own because Cloudflare makes no preview URLs for a Worker with a Durable
+  // Object; the app's Worker reaches it through its CUES binding. Deployed with
+  // `npm run deploy:cues` (docs/deploy.md, step 9).
+  "name": "compromised-cues",
+  "main": "src/cues/index.ts",
+  "compatibility_date": "2026-10-01",
+  // No address of its own: nothing but the app's Worker talks to it.
+  "workers_dev": false,
+  "preview_urls": false,
+  "durable_objects": {
+    "bindings": [{ "name": "CUES", "class_name": "LiveCues" }]
+  },
+  // SQLite-backed, so it runs on the free plan.
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["LiveCues"] }],
+  // VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and VAPID_SUBJECT are secrets, made by
+  // `npm run make:vapid-keys` (docs/deploy.md, step 9). Until they're set the
+  // app says lock-screen cues aren't set up.
+  "observability": { "enabled": true }
+}
