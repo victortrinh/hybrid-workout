@@ -58,17 +58,17 @@ describe('the 5K series', () => {
     expect(fiveK.upcoming.every((u) => u.seconds === null)).toBe(true)
   })
 
-  it('runs the planned line from the baseline to 20:00 by Week 24', () => {
+  it('runs the planned line from the baseline to 22:00 by Week 24', () => {
     const fiveK = fiveKProgress(program, [test5k(2, '2026-11-04', 23 * 60)], localDate('2026-11-11'))
     expect(finalTestWeek(program)).toBe(24)
     expect(fiveK.tests).toEqual([{ week: 2, date: '2026-11-04', seconds: 1380, environment: 'indoor' }])
     expect(fiveK.planned).toEqual({ from: { week: 2, seconds: 1380 }, to: { week: 24, seconds: GOAL_SECONDS } })
-    expect(GOAL_SECONDS).toBe(1200)
-    // 180 s over 22 Weeks.
+    expect(GOAL_SECONDS).toBe(1320)
+    // 60 s over 22 Weeks.
     expect(fiveK.upcoming).toEqual([
-      { week: 8, seconds: Math.round(1380 - (6 / 22) * 180) },
-      { week: 16, seconds: Math.round(1380 - (14 / 22) * 180) },
-      { week: 24, seconds: 1200 },
+      { week: 8, seconds: Math.round(1380 - (6 / 22) * 60) },
+      { week: 16, seconds: Math.round(1380 - (14 / 22) * 60) },
+      { week: 24, seconds: 1320 },
     ])
   })
 

@@ -9,6 +9,7 @@ import { describeSession, LIFT_NAME, SESSION_TYPES } from '../domain/program/des
 import { program } from '../domain/program/program'
 import type { Session } from '../domain/program/types'
 import { CUT_NOUN, EASY_DAY_MINUTES, SLEEP_RPE_CAP, sleepText, type ShortSleepCut } from '../domain/recovery'
+import { GOAL_LABEL, GOAL_SECONDS } from '../domain/progress'
 import { finishClock, type ProgramRecap, type RaceResult } from '../domain/recap'
 import type { Suggestion } from '../domain/suggestion'
 import { plural, shortDay, weekday } from './format'
@@ -166,17 +167,17 @@ export function raceCopy(result: RaceResult, recap: ProgramRecap): { heading: st
   }
   const finish = finishClock(result.seconds)
   const { fiveK } = recap
-  if (fiveK?.sub20) {
+  if (fiveK?.underGoal) {
     return {
       heading: 'Program done.',
-      target: `Sub-20 on the 5K, ${finish} at HYROX. Both goals, one Program. Now sit down for a week.`,
+      target: `Under ${clock(GOAL_SECONDS)} on the 5K, ${finish} at HYROX. Both goals, one Program. Now sit down for a week.`,
     }
   }
   if (fiveK && fiveK.last.seconds < fiveK.first.seconds) {
     const off = clock(fiveK.first.seconds - fiveK.last.seconds)
     return {
       heading: 'Program done.',
-      target: `${finish} at HYROX, and ${off} off the 5K to ${clock(fiveK.last.seconds)}. Not sub-20. Not nothing either.`,
+      target: `${finish} at HYROX, and ${off} off the 5K to ${clock(fiveK.last.seconds)}. Not ${GOAL_LABEL}. Not nothing either.`,
     }
   }
   return {

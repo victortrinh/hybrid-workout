@@ -6,6 +6,7 @@ import { clock } from '../../domain/paces'
 import { LIFT_NAME } from '../../domain/program/describe'
 import { program } from '../../domain/program/program'
 import type { Lane } from '../../domain/program/types'
+import { GOAL_LABEL } from '../../domain/progress'
 import { parseFinish, type ProgramRecap, type RaceResult } from '../../domain/recap'
 import { raceCopy } from '../coachCopy'
 import { ActionBar } from '../components/ActionBar'
@@ -158,7 +159,7 @@ export function ProgramRecapPanel({ recap }: { recap: ProgramRecap }) {
               ? 'None logged. The paces were guesses all the way.'
               : fiveK.first.week === fiveK.last.week
                 ? `Week ${fiveK.first.week}, the only one logged`
-                : `${clock(fiveK.first.seconds)} in Week ${fiveK.first.week} · ${fiveKChange(fiveK.first.seconds, fiveK.last.seconds)}${fiveK.sub20 ? ' · sub-20' : ''}`
+                : `${clock(fiveK.first.seconds)} in Week ${fiveK.first.week} · ${fiveKChange(fiveK.first.seconds, fiveK.last.seconds)}${fiveK.underGoal ? ` · ${GOAL_LABEL}` : ''}`
           }
         />
         <div className="border-b border-rule py-3.5">

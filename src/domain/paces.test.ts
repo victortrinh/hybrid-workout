@@ -115,7 +115,7 @@ describe('paceFor', () => {
     expect(paceFor({ pace: '5k' }, paces)).toEqual([276, 276])
     expect(paceFor({ pace: 'threshold' }, paces)).toEqual([paces.threshold, paces.threshold])
     expect(paceFor({ pace: 'easy' }, paces)).toEqual(paces.easy)
-    expect(paceFor({ pace: 'goal' }, paces)).toEqual([240, 240])
+    expect(paceFor({ pace: 'goal' }, paces)).toEqual([264, 264])
     expect(paceFor({ pace: '5k', secondsPerKmFaster: 5 }, paces)).toEqual([271, 271])
   })
 

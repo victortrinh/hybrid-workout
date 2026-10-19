@@ -23,8 +23,8 @@ export type SpeedUnit = (typeof SPEED_UNITS)[number]
 /** Treadmill incline when the Prescription doesn't say: 1% stands in for the air outdoors. */
 export const DEFAULT_INCLINE = 1
 
-/** Sub-20: 4:00 per km. */
-export const GOAL_PACE = 240
+/** Sub-22: 4:24 per km, the April checkpoint. Sub-20 (4:00) is the goal after it. */
+export const GOAL_PACE = 264
 
 export const KM_PER_MILE = 1.609344
 

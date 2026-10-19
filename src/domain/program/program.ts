@@ -687,6 +687,19 @@ const hyroxControlled = circuit(
   { minutes: 42, note: 'Race load, controlled. Save the legs for the 5K test.' },
 )
 
+/**
+ * Taper: two short rounds at Race load so the sled and the ball still feel
+ * familiar on Race day. Volume drops, frequency doesn't.
+ */
+const hyroxTaper = circuit(
+  [0, 1].map(() => ({
+    runMeters: 500,
+    stations: [station('sled-push', { meters: 25 }, 100), station('wall-balls', { reps: 25 }, 100)],
+  })),
+  6,
+  { headline: 'Station touch', minutes: 25, note: 'Race load, short. Stop well before tired.' },
+)
+
 function raceSimulation(headline: string, ids: readonly StationId[], volume: (id: StationId) => Volume, minutes: number): Session {
   return {
     id: 'race-simulation',
@@ -963,16 +976,7 @@ const taper: Week[] = [
         note: 'In place of Threshold. No threshold work.',
         extra: [{ name: 'Strides', prescription: { kind: 'strides', reps: 4, seconds: 15 }, note: 'Relaxed' }],
       }),
-      {
-        id: 'rest',
-        type: 'easy',
-        headline: 'rest or walk',
-        minutes: 15,
-        key: false,
-        optional: true,
-        note: 'In place of HYROX. No circuit.',
-        blocks: [{ name: 'Walk', minutes: 15, main: true, exercises: [walk(15, 'Easy walk', 'Or rest.')] }],
-      },
+      hyroxTaper,
       easyRun(20, { note: 'Only if fresh.' }),
     ],
   ),

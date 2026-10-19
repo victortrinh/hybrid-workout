@@ -2,7 +2,7 @@
  * Progress: whether the Program is working, read from the Session logs.
  *
  * Pure, like the rest of the Coach (ADR-0002): the 5K tests against a planned
- * line to 20:00, each Week's completion by Session type, Training load per
+ * line to the goal time, each Week's completion by Session type, Training load per
  * Week, the Working weights, recent recovery and HYROX Station times. The screen picks what to show; this decides what the numbers are.
  */
 import { addDays, daysBetween, type LocalDate } from './calendar'
@@ -14,8 +14,10 @@ import { LIFTS, type Lane, type LiftId, type Program, type Session, type Station
 import { nightOf, type RecoveryNight } from './recovery'
 import type { WorkingWeightChange } from './weights'
 
-/** Sub-20: the line every 5K test is measured against. */
+/** The goal time every 5K test is measured against: 22:00. */
 export const GOAL_SECONDS = GOAL_PACE * 5
+/** "sub-22": the goal time in words. */
+export const GOAL_LABEL = `sub-${GOAL_SECONDS / 60}`
 
 export interface FiveKPoint {
   week: number
@@ -33,7 +35,7 @@ export interface PlannedLine {
 export interface FiveKProgress {
   /** Every 5K test logged as Done with a time, on or before today, oldest first. */
   tests: FiveKPoint[]
-  /** From the baseline test to 20:00 by the last 5K test Week. Null until the baseline. */
+  /** From the baseline test to the goal time by the last 5K test Week. Null until the baseline. */
   planned: PlannedLine | null
   /** 5K test Weeks still ahead with no test logged, each with where the planned line puts it. */
   upcoming: { week: number; seconds: number | null }[]
@@ -59,7 +61,7 @@ export interface WeekLoad {
   total: number
 }
 
-/** The last 5K test Week: the planned line reaches 20:00 here. */
+/** The last 5K test Week: the planned line reaches the goal time here. */
 export function finalTestWeek(program: Program): number {
   const weeks = program.phases.flatMap((p) => p.weeks).filter((w) => w.fiveKTest)
   return weeks.length > 0 ? weeks[weeks.length - 1].number : program.weekCount
@@ -89,7 +91,7 @@ export function fiveKProgress(program: Program, logs: SessionLog[], today: Local
   return { tests, planned, upcoming }
 }
 
-/** The planned 5K time in `week`, on the straight line from the baseline to 20:00. */
+/** The planned 5K time in `week`, on the straight line from the baseline to the goal time. */
 export function plannedAt(line: PlannedLine, week: number): number {
   const share = (week - line.from.week) / (line.to.week - line.from.week)
   return Math.round(line.from.seconds + share * (line.to.seconds - line.from.seconds))
