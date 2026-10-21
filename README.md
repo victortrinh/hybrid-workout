@@ -86,9 +86,10 @@ Production is the Worker on its workers.dev address, behind Cloudflare Access wi
 src/domain/   Pure TypeScript: calendar (local dates in Toronto), the Program as data, the Coach
 src/app/      The React app: shell, screens, components, design tokens (styles.css)
 src/worker/   The Hono API and the Worker entry
+src/cues/     The cue timer: a Worker of its own sending Lock-screen cues as Web Push (ADR-0006)
 src/mock/     Mock mode: the Worker's app in the browser, on sql.js (ADR-0005)
 migrations/   D1 migrations, applied with Wrangler
-scripts/      Small Node scripts (check:access, check:no-mocks)
+scripts/      Small Node scripts (check:access, check:no-mocks, make:vapid-keys)
 e2e/          Playwright + axe specs
 prototype/    The approved clickable prototype (reference only)
 ```

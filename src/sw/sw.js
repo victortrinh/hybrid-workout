@@ -1,7 +1,8 @@
 /**
  * The service worker: keeps the app shell on the phone so the installed app
- * opens in a gym with no signal. Session logs don't pass through here; they
- * live in IndexedDB and sync from the page (src/app/sync).
+ * opens in a gym with no signal, and shows the lock-screen cues the server
+ * pushes during a Live session (ADR-0006). Session logs don't pass through
+ * here; they live in IndexedDB and sync from the page (src/app/sync).
  *
  * The build (vite.config.ts) replaces PRECACHE with every built file, so a new
  * deploy is a new worker with its own cache.
@@ -50,6 +51,39 @@ self.addEventListener('fetch', (event) => {
 
   // Built files carry their hash in the name, so the cached copy is the right one.
   event.respondWith(caches.match(request).then((cached) => cached ?? fetch(request)))
+})
+
+// A lock-screen cue: { title, body } (src/domain/cues.ts). Every push shows a notification, as iOS requires;
+// each replaces the last, so the lock screen holds only where the clock is now.
+self.addEventListener('push', (event) => {
+  let cue = { title: 'Compromised', body: '' }
+  try {
+    cue = { ...cue, ...event.data?.json() }
+  } catch {
+    // Not JSON: the generic notification still says the clock moved.
+  }
+  event.waitUntil(
+    self.registration.showNotification(cue.title, {
+      body: cue.body,
+      tag: 'live-cue',
+      renotify: true,
+      icon: '/icons/icon-192.png',
+    }),
+  )
+})
+
+// Tapping a cue opens the Live session, in the app already open if there is one.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
+      const open = windows[0]
+      if (!open) return self.clients.openWindow('/live')
+      // The page holds the session, so a reload onto /live loses nothing; an uncontrolled window can't navigate.
+      const there = new URL(open.url).pathname === '/live'
+      return open.focus().then((focused) => (there ? focused : focused.navigate('/live').catch(() => focused)))
+    }),
+  )
 })
 
 function timeout(promise, ms) {

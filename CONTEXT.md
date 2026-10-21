@@ -63,6 +63,10 @@ Planned, Done, Partial, Skipped or Swapped.
 A Session being performed with guided timers and set-by-set logging.
 _Avoid_: active workout
 
+**Lock-screen cue**:
+A push notification at a Live session's Block change or the end of a rest, sent by the server while the app is off screen (ADR-0006).
+_Avoid_: alert, reminder
+
 **Session log**:
 What actually happened in a Session: actual sets, reps, loads, times, RPE and notes.
 _Avoid_: entry, record
