@@ -2,13 +2,13 @@
 
 Production is one Cloudflare Worker, `compromised`, on the free `compromised.<your-subdomain>.workers.dev` address. It serves the built app and the API, with the D1 database `compromised` bound as `DB`. Cloudflare Access sits in front of the whole address, so the only way in is an email one-time code sent to Victor (ADR-0001). Everything here fits in Cloudflare's free plans.
 
-Steps 1 to 6 happen once. After that, shipping a change is just [Deploy](#deploy) (and [Migrate](#migrate) when a change adds a migration).
+Steps 1 to 6 happen once. After that, merging to `main` ships a change: Workers Builds applies any new migration, then deploys ([Deploy](#deploy)).
 
 ## Commands
 
 | Command | What it does |
 | --- | --- |
-| `npm run deploy` | Runs the unit tests, builds the app and the Worker (`dist/`), then `wrangler deploy` uploads the Worker with `dist/client` as its static assets. |
+| `npm run deploy` | Runs the unit tests, builds the app and the Worker (`dist/`), applies any unapplied migrations to production, then `wrangler deploy` uploads the Worker with `dist/client` as its static assets. |
 | `npm run deploy:cues` | Runs the unit tests, then uploads the cue timer, `compromised-cues` (`wrangler.cues.jsonc`, ADR-0006). Only needed when `src/cues/` changes. |
 | `npm run make:vapid-keys -- <mailto:…>` | Prints a new VAPID key pair and the commands that store it as the cue timer's secrets ([step 9](#9-lock-screen-cues-victor)). |
 | `npm run db:migrate:prod` | Applies any unapplied files in `migrations/` to the production D1 database. Wrangler lists them and asks before applying, and captures a backup first. |
@@ -107,6 +107,8 @@ npm run check:access -- https://<preview>-compromised.<your-subdomain>.workers.d
 ```
 
 Finally, make previews mock builds: Workers & Pages → `compromised` → Settings → Build → **Non-production branch build command** → `VITE_API=mock npm run build`. Leave the production build command as it is.
+
+Then make production migrate before it deploys, in the same Build settings: **Deploy command** → `npm run db:migrate:prod && npx wrangler deploy`. Code that reads a new table must never go out before the table: on 15 October two migrations were missed, `/api/state` answered 500 for a week, and the app quietly stopped showing new Recovery nights. Leave the non-production deploy command as it is: previews have no database to migrate. If the first build after this fails with an authentication error on the migration, the build's API token can't reach D1: Settings → Build → **API token**, edit it in My Profile → API Tokens and add **Account · D1 · Edit**.
 
 ### 7. Recovery Shortcut (Victor)
 
@@ -289,17 +291,18 @@ No notification? Workers & Pages → `compromised-cues` → **Logs**: a push App
 
 ## Deploy
 
+Merging to `main` deploys: Workers Builds builds the app, applies any new file in `migrations/` to production, then deploys the Worker ([step 6](#6-preview-urls-victor)). If the migration fails, the build stops and the running version stays up. By hand, from the terminal, the same thing (with the unit tests first):
+
 ```bash
 npm run deploy
 ```
 
 ## Migrate
 
-When a change adds a file to `migrations/`, apply it to production before deploying the code that needs it:
+Deploying applies new migrations first, so a change that adds a file to `migrations/` needs nothing extra. To apply them on their own, ahead of a merge:
 
 ```bash
 npm run db:migrate:prod
-npm run deploy
 ```
 
 Branch previews need nothing: mock mode applies every file in `migrations/` on start.

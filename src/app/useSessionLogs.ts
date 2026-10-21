@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import type { SessionLog } from '../domain/log'
 import { openIndexedDbStore } from './sync/store'
-import { createSyncer, type Send, type Syncer } from './sync/syncer'
+import { createSyncer, type Send, type ServerTrouble, type Syncer } from './sync/syncer'
 
 export interface SessionLogs {
   logs: SessionLog[]
@@ -11,6 +11,8 @@ export interface SessionLogs {
   pending: number
   /** Something went wrong that the athlete should read. */
   error: string | null
+  /** The server is failing, or Cloudflare Access wants a sign-in: nothing syncs until it's sorted. */
+  server: ServerTrouble | null
 }
 
 /** How long a sync may take before the gym's one bar of signal counts as none. */
@@ -40,7 +42,7 @@ export function useSessionLogs(): SessionLogs {
   useSync(syncer, snapshot.pending > 0)
 
   const save = useCallback((log: SessionLog) => void syncer.save(log), [syncer])
-  return { logs: snapshot.logs, save, pending: snapshot.pending, error: snapshot.error }
+  return { logs: snapshot.logs, save, pending: snapshot.pending, error: snapshot.error, server: snapshot.server }
 }
 
 function useSync(syncer: Syncer, waiting: boolean) {
@@ -74,10 +76,17 @@ const send: Send = async (sessionLogs) => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ sessionLogs }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
+      // An expired Cloudflare Access session answers with a redirect to its
+      // login page. Followed, it fails like being offline; seen, it can be said.
+      redirect: 'manual',
     })
-    // Only a 400 means the logs themselves are wrong. Anything else, an expired
-    // Cloudflare Access session included, is worth trying again later.
+    // Only a 400 means the logs themselves are wrong. Anything else is worth
+    // trying again later, but a sign-in or a failing server is said on Today.
     if (response.status === 400) return { kind: 'refused' }
+    if (response.type === 'opaqueredirect' || response.status === 401 || response.status === 403) {
+      return { kind: 'unreachable', server: 'signed-out' }
+    }
+    if (response.status >= 500) return { kind: 'unreachable', server: 'failing' }
     if (!response.ok) return { kind: 'unreachable' }
     return { kind: 'taken', state: await response.json() }
   } catch {
