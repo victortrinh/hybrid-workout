@@ -5,5 +5,5 @@
     "lib": ["ES2023"],
     "types": []
   },
-  "include": ["src/worker", "src/domain"]
+  "include": ["src/worker", "src/cues", "src/domain"]
 }

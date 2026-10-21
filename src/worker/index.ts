@@ -8,6 +8,7 @@ import { isServiceToken } from './access'
 import { parseActivity, parseActivityAnswer, type Activity, type ActivityAnswer } from '../domain/activity'
 import { localDateIn } from '../domain/calendar'
 import { nowDate } from '../domain/clock'
+import { parseCues, parseSubscription, type Cue, type PushSubscriptionKeys } from '../domain/cues'
 import { findWeek } from '../domain/coach'
 import { isCircuit, isLiveRun } from '../domain/live'
 import { parseSessionLog, RACE_SESSION_ID, resultRange, type SessionLog, type StationPart, type SyncState } from '../domain/log'
@@ -246,6 +247,64 @@ app.post('/activities', async (c) => {
     )
     .run()
   return c.json({ ok: true, activity })
+})
+
+/**
+ * Lock-screen cues (ADR-0006): the phone's push subscription and the Live
+ * session's cues, kept by the cue timer's one Durable Object. Where there's
+ * no timer (mock mode) or it can't be reached, these answer 503.
+ */
+type CueTimer = DurableObjectStub<import('../cues/index').LiveCues>
+
+async function withTimer(env: Partial<Pick<Env, 'CUES'>>, use: (timer: CueTimer) => Promise<Response>): Promise<Response> {
+  const unavailable = () => Response.json({ error: 'Lock-screen cues are not available here' }, { status: 503 })
+  if (!env.CUES) return unavailable()
+  try {
+    return await use(env.CUES.get(env.CUES.idFromName('athlete')))
+  } catch (error) {
+    console.error('Cue timer unreachable', error)
+    return unavailable()
+  }
+}
+
+/** The VAPID public key to subscribe with (null until it's set up) and whether a phone is subscribed. */
+app.get('/cues', (c) =>
+  withTimer(c.env, async (timer) => c.json({ key: await timer.publicKey(), subscribed: await timer.subscribed() })),
+)
+
+/** This phone's push subscription, replacing any other. */
+app.put('/cues/subscription', async (c) => {
+  let subscription: PushSubscriptionKeys
+  try {
+    subscription = parseSubscription(await c.req.json())
+  } catch (error) {
+    return c.json({ error: error instanceof Error ? error.message : 'Invalid request' }, 400)
+  }
+  return withTimer(c.env, async (timer) => {
+    await timer.subscribe(subscription)
+    return c.body(null, 204)
+  })
+})
+
+app.delete('/cues/subscription', (c) =>
+  withTimer(c.env, async (timer) => {
+    await timer.unsubscribe()
+    return c.body(null, 204)
+  }),
+)
+
+/** Every cue from now on, replacing the last list; an empty one clears them. */
+app.put('/cues/schedule', async (c) => {
+  let list: Cue[]
+  try {
+    list = parseCues(((await c.req.json()) as { cues?: unknown } | null)?.cues)
+  } catch (error) {
+    return c.json({ error: error instanceof Error ? error.message : 'Invalid request' }, 400)
+  }
+  return withTimer(c.env, async (timer) => {
+    await timer.schedule(list)
+    return c.body(null, 204)
+  })
 })
 
 app.notFound((c) => c.json({ error: 'Not found' }, 404))

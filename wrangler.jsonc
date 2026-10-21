@@ -25,6 +25,11 @@
       "migrations_dir": "migrations"
     }
   ],
+  // The cue timer, a Worker of its own (wrangler.cues.jsonc, ADR-0006): this
+  // Worker only binds its Durable Object, so it still gets preview URLs.
+  "durable_objects": {
+    "bindings": [{ "name": "CUES", "class_name": "LiveCues", "script_name": "compromised-cues" }]
+  },
   // Cloudflare Access's team domain: the Worker checks Access's signed
   // assertion for the recovery Shortcut's service token against its keys
   // (src/worker/access.ts). Not a secret: it's the login page's address.

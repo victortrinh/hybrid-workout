@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
  * mode can pin it. Token expiry in access.ts keeps real time on purpose.
  */
 const sources = import.meta.glob<string>(
-  ['../app/**/*.{ts,tsx}', '../worker/**/*.ts', '!**/*.test.{ts,tsx}', '!../worker/access.ts', '!../worker/worker-configuration.d.ts'],
+  ['../app/**/*.{ts,tsx}', '../worker/**/*.ts', '../cues/**/*.ts', '!**/*.test.{ts,tsx}', '!../worker/access.ts', '!../worker/worker-configuration.d.ts'],
   { query: '?raw', import: 'default', eager: true },
 )
 

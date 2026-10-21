@@ -44,6 +44,7 @@ import { useSessionLogs } from './useSessionLogs'
 import { useStartingPoint } from './useStartingPoint'
 import { environmentKey, useSettings } from './useSettings'
 import { useLiveRun } from './useLiveRun'
+import { useLockScreenCues } from './useLockScreenCues'
 import { useToday } from './useToday'
 
 const NAV = [
@@ -118,6 +119,9 @@ export function App() {
   const setEnvironment = (week: number, session: Session, environment: Environment) =>
     override(week, session.id, environment)
   const [live, setLive] = useLiveRun()
+  /** As the Live screen runs the clock: the run's own Environment replaces this one. */
+  const liveContext: RunContext = { paces: day.paces, unit: settings.unit, environment: 'indoor' }
+  useLockScreenCues(live, liveContext)
   /** The slot above the tab bar where a screen's ActionBar docks on the phone. */
   const [dock, setDock] = useState<HTMLElement | null>(null)
   /** A Pain report given now, for a Session or (with neither) from Something hurts. */
@@ -235,7 +239,7 @@ export function App() {
         <main id="main">
           <Live
             live={live}
-            runContext={{ paces: day.paces, unit: settings.unit, environment: 'indoor' }}
+            runContext={liveContext}
             onChange={setLive}
             onSave={(run, finish) => saveLive((id, updatedAt) => liveLog(run, nowMs(), { ...finish, id, updatedAt }))}
             onSaveLifts={(lifts, finish) =>

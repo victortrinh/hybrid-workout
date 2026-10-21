@@ -14,6 +14,6 @@ export function mockApi(db: D1Database): (request: Request) => Promise<Response>
     DB: db,
     ACCESS_CLIENT_ID: MOCK_SERVICE_TOKEN.id,
     ACCESS_CLIENT_SECRET: MOCK_SERVICE_TOKEN.secret,
-  } satisfies Omit<Env, 'ACCESS_TEAM_DOMAIN'>
+  } satisfies Omit<Env, 'ACCESS_TEAM_DOMAIN' | 'CUES'>
   return async (request) => app.fetch(request, env as Env)
 }

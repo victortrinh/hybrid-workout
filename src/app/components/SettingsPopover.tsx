@@ -3,6 +3,7 @@ import { EQUIPMENT, EQUIPMENT_LABEL, type Equipment } from '../../domain/equipme
 import { UNIT_LABEL, type SpeedUnit } from '../../domain/paces'
 import { MONTHS, type Settings, type Theme } from '../../domain/settings'
 import { SCREEN_PATH } from '../router'
+import { useCuesSetting, type CuesStatus } from '../useLockScreenCues'
 import type { StartingPoint } from '../../domain/startingPoint'
 import { ScenarioPicker } from './ScenarioPicker'
 import { Segmented } from './Segmented'
@@ -35,8 +36,8 @@ const linkClass =
 /**
  * Settings, from the athlete's initial on the field band: theme, treadmill
  * units, which months run on the treadmill, the Equipment profile, the
- * Starting point's estimates and the data export. Every change applies at
- * once, the estimates on Save. Integrations each have a page of their own.
+ * Starting point's estimates, lock-screen cues and the data export. Every
+ * change applies at once, the estimates on Save. Integrations each have a page of their own.
  */
 export function SettingsPopover({
   settings,
@@ -127,6 +128,7 @@ export function SettingsPopover({
               compact
             />
           </div>
+          <LockScreenCues />
           <div className="grid gap-1 border-t border-rule pt-3">
             <span className="text-[18px] font-bold">Integrations</span>
             <Link
@@ -161,6 +163,37 @@ export function SettingsPopover({
         </div>
       </Popover>
     </DialogTrigger>
+  )
+}
+
+const CUES_WORDS: Record<CuesStatus, string> = {
+  checking: 'Checking this phone…',
+  unsupported: 'Add Compromised to the Home Screen and open it from there: iPhone only sends notifications to installed apps.',
+  blocked: 'Notifications are off for Compromised. Turn them on in iOS Settings → Notifications.',
+  unavailable: 'Not set up on the server yet.',
+  off: 'A buzz and a notification at every Block change and when rest is over, while the app is off screen.',
+  on: 'On. A buzz and a notification at every Block change and when rest is over, while the app is off screen.',
+  busy: 'One moment…',
+  failed: 'That didn’t work. Try again with signal.',
+}
+
+/** Lock-screen cues (ADR-0006): this phone subscribed to push, or not. */
+function LockScreenCues() {
+  const { status, turnOn, turnOff } = useCuesSetting()
+  const on = status === 'on'
+  const can = on || status === 'off' || status === 'failed'
+  return (
+    <div className="grid gap-2 border-t border-rule pt-3">
+      <span className="text-[18px] font-bold">Lock-screen cues</span>
+      {can && (
+        <Button onPress={on ? turnOff : turnOn} className={toggleClass}>
+          {on ? 'Turn off' : 'Turn on'}
+        </Button>
+      )}
+      <Text aria-live="polite" className="text-[12px] text-muted">
+        {CUES_WORDS[status]}
+      </Text>
+    </div>
   )
 }
 
