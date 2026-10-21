@@ -6,8 +6,11 @@ export type SendResult =
   | { kind: 'taken'; state: SyncState }
   /** The server answered 400: these logs will never be taken as they are. */
   | { kind: 'refused' }
-  /** Offline, timed out, signed out or a 5xx: try again later. */
-  | { kind: 'unreachable' }
+  /** Offline, timed out, signed out or a 5xx: try again later. `server` says when it was the server's doing. */
+  | { kind: 'unreachable'; server?: ServerTrouble }
+
+/** Why the server answered without taking anything: it failed, or Cloudflare Access wants a sign-in. */
+export type ServerTrouble = 'failing' | 'signed-out'
 
 export type Send = (logs: SessionLog[]) => Promise<SendResult>
 
@@ -17,6 +20,8 @@ export interface SyncSnapshot {
   pending: number
   /** Something the athlete should read: a refused log, or a store that won't open. */
   error: string | null
+  /** The server's last answer was a failure or a sign-in; null once it takes a sync, or before it has answered. */
+  server: ServerTrouble | null
 }
 
 export interface Syncer {
@@ -40,19 +45,23 @@ export function createSyncer(store: LocalStore, send: Send): Syncer {
   let logs: SessionLog[] = []
   let outbox = new Map<string, SessionLog>()
   let error: string | null = null
-  let snapshot: SyncSnapshot = { logs, pending: 0, error }
+  let server: ServerTrouble | null = null
+  let snapshot: SyncSnapshot = { logs, pending: 0, error, server }
   const listeners = new Set<() => void>()
   let flushing: Promise<void> | null = null
   let again = false
 
   function publish() {
-    snapshot = { logs, pending: outbox.size, error }
+    snapshot = { logs, pending: outbox.size, error, server }
     for (const listener of listeners) listener()
   }
 
   async function sendOnce() {
     const batch = [...outbox.values()]
     let result = await send(batch)
+    // Any answer says how the server is; offline says nothing, so what it said last stands.
+    if (result.kind !== 'unreachable') server = null
+    else if (result.server) server = result.server
     let refused: SessionLog[] = []
 
     // One bad log mustn't hold the rest back: find it by sending them one at a time.
@@ -61,7 +70,10 @@ export function createSyncer(store: LocalStore, send: Send): Syncer {
       let state: SyncState | null = null
       for (const log of batch) {
         const single = await send([log])
-        if (single.kind === 'unreachable') return
+        if (single.kind === 'unreachable') {
+          if (single.server) server = single.server
+          return
+        }
         if (single.kind === 'refused') refused.push(log)
         else {
           taken.push(log)

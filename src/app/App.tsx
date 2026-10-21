@@ -74,7 +74,7 @@ const NAV_SCREEN: Partial<Record<Screen, Screen>> = { week: 'plan', log: 'today'
  */
 export function App() {
   const today = useToday()
-  const { logs, save, pending, error } = useSessionLogs()
+  const { logs, save, pending, error, server } = useSessionLogs()
   const { decisions, decide, error: decisionError } = useDecisions()
   const [picked, pick] = usePicked()
   const { reports: painReports, report } = usePainReports()
@@ -295,6 +295,7 @@ export function App() {
               race={showsRacePlan(day.daysToRace) ? { plan: racePlan(program, logs, today), program } : null}
               pending={pending}
               error={error ?? decisionError ?? answerError}
+              server={server}
               onPick={(weekNumber, sessionId) => pick(weekNumber, sessionId, today)}
               onDecide={decideSuggestion}
               runContext={runContext}

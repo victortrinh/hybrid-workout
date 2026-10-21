@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { localDate } from '../../domain/calendar'
 import { mergeLogs, type SessionLog } from '../../domain/log'
 import { memoryStore } from './store'
-import { createSyncer, type Send, type SendResult } from './syncer'
+import { createSyncer, type Send, type SendResult, type ServerTrouble } from './syncer'
 
 const log = (id: string, change: Partial<SessionLog> = {}): SessionLog => ({
   id: `log-${id}-0000`,
@@ -27,6 +27,8 @@ const log = (id: string, change: Partial<SessionLog> = {}): SessionLog => ({
 interface FakeServer {
   logs: SessionLog[]
   online: boolean
+  /** Answers every sync with a 5xx, or Access's sign-in, instead of taking it. */
+  trouble: ServerTrouble | null
   refuses: (log: SessionLog) => boolean
   send: Send
 }
@@ -35,9 +37,11 @@ function fakeServer(held: SessionLog[] = []): FakeServer {
   const server: FakeServer = {
     logs: held,
     online: true,
+    trouble: null,
     refuses: () => false,
     send: async (batch): Promise<SendResult> => {
       if (!server.online) return { kind: 'unreachable' }
+      if (server.trouble) return { kind: 'unreachable', server: server.trouble }
       if (batch.some(server.refuses)) return { kind: 'refused' }
       server.logs = mergeLogs(server.logs, batch)
       return { kind: 'taken', state: { sessionLogs: server.logs, suggestionDecisions: [], painReports: [] } }
@@ -162,5 +166,31 @@ describe('the syncer', () => {
     const syncer = createSyncer(broken, fakeServer().send)
     await syncer.start()
     expect(syncer.snapshot().error).toMatch(/storage/)
+  })
+
+  it('says when the server fails or wants a sign-in, until a sync goes through, and not when only offline', async () => {
+    const server = fakeServer()
+    server.trouble = 'failing'
+    const syncer = createSyncer(memoryStore(), server.send)
+    await syncer.start()
+    expect(syncer.snapshot()).toMatchObject({ server: 'failing', error: null })
+
+    await syncer.save(log('a'))
+    expect(syncer.snapshot()).toMatchObject({ server: 'failing', pending: 1 })
+
+    server.trouble = 'signed-out'
+    await syncer.flush()
+    expect(syncer.snapshot().server).toBe('signed-out')
+
+    // Offline says nothing new about the server.
+    server.trouble = null
+    server.online = false
+    await syncer.flush()
+    expect(syncer.snapshot().server).toBe('signed-out')
+
+    server.online = true
+    await syncer.flush()
+    expect(syncer.snapshot()).toMatchObject({ server: null, pending: 0 })
+    expect(server.logs).toEqual([log('a')])
   })
 })

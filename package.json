@@ -12,7 +12,7 @@
     "build": "tsc -b && vite build",
     "build:mock": "tsc -b && vite build --mode mock",
     "preview": "npm run build && wrangler dev",
-    "deploy": "npm test && npm run build && wrangler deploy",
+    "deploy": "npm test && npm run build && npm run db:migrate:prod && wrangler deploy",
     "db:migrate:local": "wrangler d1 migrations apply compromised --local",
     "db:migrate:prod": "wrangler d1 migrations apply compromised --remote",
     "check:access": "node scripts/check-access.mjs",

@@ -12,6 +12,7 @@ import { finishClock } from '../../domain/recap'
 import type { Program, Session, Station, StationId } from '../../domain/program/types'
 import type { RacePlan } from '../../domain/racePlan'
 import type { Settings } from '../../domain/settings'
+import type { ServerTrouble } from '../sync/syncer'
 import type { Decision, Suggestion, WorkingWeightSuggestion } from '../../domain/suggestion'
 import { heldCopy, liftChange, liftsCopy, suggestionBlocks, VISIBLE_BLOCKS, type SuggestionBlock } from '../suggestionBlocks'
 import {
@@ -62,6 +63,7 @@ export function Today({
   stations,
   pending,
   error,
+  server,
   onPick,
   runContext,
   onEnvironment,
@@ -89,6 +91,8 @@ export function Today({
   pending: number
   /** A log the server refused or the device couldn't store, said once under Up next. */
   error: string | null
+  /** The server is failing, or Cloudflare Access wants a sign-in: said under Up next until a sync goes through. */
+  server: ServerTrouble | null
   /** Makes a Session of the Bucket today's Session instead of Up next. */
   onPick: (week: number, sessionId: string) => void
   /** Accepts, Keeps or (with 'open') undoes a Suggestion. */
@@ -159,7 +163,7 @@ export function Today({
         <>
           <RaceLead race={afterRace}>
             <SomethingHurts previous={day.pain?.report.score ?? null} onReport={onSomethingHurts} />
-            <SyncLine pending={pending} error={error} />
+            <SyncLine pending={pending} error={error} server={server} />
           </RaceLead>
           <ProgramRecapPanel recap={afterRace.recap} />
           <WhatsNext />
@@ -173,6 +177,7 @@ export function Today({
             weekCount={weekCount}
             pending={pending}
             error={error}
+            server={server}
             onDecide={onDecide}
             runContext={runContext}
             onEnvironment={onEnvironment}
@@ -345,6 +350,7 @@ function UpNext({
   weekCount,
   pending,
   error,
+  server,
   onDecide,
   runContext,
   onEnvironment,
@@ -362,6 +368,7 @@ function UpNext({
   weekCount: number
   pending: number
   error: string | null
+  server: ServerTrouble | null
   onDecide: (suggestions: Suggestion | Suggestion[], decision: Decision) => void
   runContext: (week: number, session: Session) => RunContext
   onEnvironment: (week: number, session: Session, environment: Environment) => void
@@ -541,7 +548,7 @@ function UpNext({
         )
       )}
       {!asking && <SomethingHurts previous={previousPain} onReport={onSomethingHurts} />}
-      <SyncLine pending={pending} error={error} />
+      <SyncLine pending={pending} error={error} server={server} />
       <CoachSuggestions
         // While the pain step asks, it carries the pain Suggestion: asked once, not twice.
         day={asking && painSuggestion ? { ...day, suggestions: day.suggestions.filter((s) => s !== painSuggestion) } : day}
@@ -573,11 +580,28 @@ function UpNext({
   )
 }
 
-/** A log the server refused, said once, and how many are still on this phone. */
-function SyncLine({ pending, error }: { pending: number; error: string | null }) {
+/**
+ * A log the server refused, said once; a server that can't take anything, said
+ * until it can; and how many logs are still on this phone.
+ */
+function SyncLine({ pending, error, server }: { pending: number; error: string | null; server: ServerTrouble | null }) {
   return (
     <div aria-live="polite">
       {error && <p className="mt-3 text-body">{error}</p>}
+      {server === 'failing' && (
+        <p className="mt-3 text-body">
+          The server is failing, so nothing syncs: logs stay on this phone, and last night’s Recovery can’t arrive.
+        </p>
+      )}
+      {server === 'signed-out' && (
+        <div className="mt-3">
+          <p className="text-body">Signed out of Cloudflare Access, so nothing syncs.</p>
+          {/* A full load goes through Access, which shows its sign-in; the app's own requests can't. */}
+          <Button onPress={() => window.location.reload()} className={linkButton}>
+            Sign in again
+          </Button>
+        </div>
+      )}
       {pending > 0 && (
         <p className="mt-3 text-body-quiet text-muted">{plural(pending, 'log')} on this phone, waiting to sync.</p>
       )}
