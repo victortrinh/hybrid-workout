@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { BEFORE_WEEK_1, expectNoAxeViolations, WEEK_3 } from './axe'
 import { serveHistory, weekDone } from './history'
+import { startAsChosen } from './today'
 
 /** A Session from another Week, started or logged today, still counts for its own Week. */
 
@@ -44,6 +45,7 @@ test('before the Program, a Week 1 Session tapped on Today is started early from
   await expectNoAxeViolations(page)
 
   await page.getByRole('button', { name: /^Start / }).click()
+  await startAsChosen(page)
   await expect(page).toHaveURL('/live')
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^Threshold, /)
 })
@@ -57,8 +59,9 @@ test('in Week 3, a Week 1 Session never done is started late from its Week', asy
   const speed = page.getByRole('region', { name: /^Speed/ })
   await expectNoAxeViolations(page)
 
-  // Nothing hurts on record: Start is one tap, straight to the Live session.
+  // Nothing hurts on record: Start asks only where, then it's the Live session.
   await speed.getByRole('button', { name: 'Start session' }).click()
+  await startAsChosen(page, speed)
   await expect(page).toHaveURL('/live')
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^Speed, /)
 })
