@@ -164,13 +164,74 @@ describe('liveTarget', () => {
   })
 
   it('takes the middle of an Easy range for the hero figure and keeps the range in words', () => {
-    const target = liveTarget(jog, indoor)!
+    const [warmUp] = liveBlocks(session(3, 'threshold'))
+    const target = liveTarget({ ...warmUp, effort: { pace: 'easy' } }, indoor)!
     const [fast, slow] = paces.easy
     const middle = Math.round((fast + slow) / 2)
     expect(target.pace).toBe(middle)
     expect(target.secondary).toEqual({ value: clock(middle), unit: '/km' })
     expect(target.figure).toBe(`${target.value} km/h · ${clock(middle)}/km · 1% incline`)
     expect(target.words).toMatch(/^\d+\.\d–\d+\.\d km\/h · \d:\d\d–\d:\d\d\/km · 1% incline$/)
+  })
+
+  describe('a recovery jog', () => {
+    // A 23:00 test: Easy 5:51–6:26/km, so its slow end is 9.3 km/h.
+    const slowEasy = Math.round((3600 / paces.easy[1]) * 10) / 10
+
+    it('suggests the slow end of Easy pace less 0.5 km/h, with walking allowed', () => {
+      expect(slowEasy).toBe(9.3)
+      expect(liveTarget(jog, indoor)).toEqual({
+        value: '8.8',
+        unit: 'km/h',
+        secondary: { value: '6:49', unit: '/km' },
+        incline: 1,
+        pace: 409,
+        figure: '8.8 km/h · 6:49/km · 1% incline',
+        words: 'Jog ~8.8 km/h · 6:49/km, or walk',
+      })
+    })
+
+    it('reads in the Settings unit indoors and as pace per km outdoors', () => {
+      expect(liveTarget(jog, { ...indoor, unit: 'mph' })).toMatchObject({ value: '5.5', unit: 'mph', words: 'Jog ~5.5 mph · 6:49/km, or walk' })
+      expect(liveTarget(jog, { ...indoor, environment: 'outdoor' })).toMatchObject({
+        value: '6:49',
+        unit: '/km',
+        incline: null,
+        words: 'Jog ~6:49/km, or walk',
+      })
+    })
+
+    it('comes from Estimated Training paces the same way', () => {
+      const estimated = { ...indoor, paces: trainingPaces(23 * 60, { estimate: true }) }
+      expect(liveTarget(jog, estimated)).toMatchObject({ value: '8.8', words: 'Jog ~8.8 km/h · 6:49/km, or walk' })
+    })
+
+    it('is ~7 km/h with no Training paces', () => {
+      const none = { ...indoor, paces: null }
+      expect(liveTarget(jog, none)).toEqual({
+        value: '7.0',
+        unit: 'km/h',
+        secondary: { value: '8:34', unit: '/km' },
+        incline: 1,
+        pace: 514,
+        figure: '7.0 km/h · 8:34/km · 1% incline',
+        words: 'Jog ~7.0 km/h · 8:34/km, or walk',
+      })
+      expect(liveTarget(jog, { ...none, environment: 'outdoor' })).toMatchObject({ value: '8:34', words: 'Jog ~8:34/km, or walk' })
+    })
+
+    it('has no floor: slow Easy pace gives a slow jog', () => {
+      const slow = { ...indoor, paces: trainingPaces(45 * 60) }
+      const kmh = Math.round((3600 / slow.paces.easy[1]) * 10) / 10 - 0.5
+      expect(kmh).toBeLessThan(7)
+      expect(liveTarget(jog, slow)?.value).toBe(kmh.toFixed(1))
+    })
+
+    it('never asks Held it or Changed', () => {
+      // Rep 1 ends at minute 22 and asks; its jog ends at 24 and doesn't.
+      const run = advance(go(start(session(3, 'threshold')), at(10)), at(24.5))
+      expect(run).toMatchObject({ block: 3, asks: [1] })
+    })
   })
 
   it('is the RPE before the baseline 5K test, and nothing for drills or a run by feel alone', () => {

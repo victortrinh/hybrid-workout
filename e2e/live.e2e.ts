@@ -105,6 +105,9 @@ test('a full Threshold Session from Start to logged', async ({ page }) => {
   // The rep is over: it asks, and saying nothing means it was held.
   await page.clock.runFor('11:30')
   await expect(s.block).toHaveText('Jog · 2 min')
+  // The jog suggests a speed under Easy pace, and walking is fine.
+  await expect(s.target).toHaveText('8.8')
+  await expect(s.line).toHaveText('Jog or walk. Breathe. Pretend this is easy.')
   const check = page.getByRole('region', { name: 'Rep 1 of 2: held the target?' })
   await expect(check).toContainText('Rep 1 of 2: held 12.3 km/h?')
   await expect(check).toContainText('Say nothing and it logs as held.')
