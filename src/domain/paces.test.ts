@@ -169,15 +169,15 @@ describe('units', () => {
 })
 
 describe('Indoor versus Outdoor', () => {
-  it('reads Indoor as speed and 1% incline, Outdoor as pace per km', () => {
-    expect(formatPace([292, 292], 'indoor', 'kmh')).toBe('12.3 km/h · 1% incline')
-    expect(formatPace([292, 292], 'indoor', 'mph')).toBe('7.7 mph · 1% incline')
+  it('reads Indoor as speed, pace per km and 1% incline, Outdoor as pace per km', () => {
+    expect(formatPace([292, 292], 'indoor', 'kmh')).toBe('12.3 km/h · 4:52/km · 1% incline')
+    expect(formatPace([292, 292], 'indoor', 'mph')).toBe('7.7 mph · 4:52/km · 1% incline')
     expect(formatPace([292, 292], 'outdoor', 'kmh')).toBe('4:52/km')
     expect(formatPace([292, 292], 'outdoor', 'mph')).toBe('4:52/km')
   })
 
   it('reads a range slow to fast on the treadmill and fast to slow outside', () => {
-    expect(formatPace([351, 386], 'indoor', 'kmh')).toBe('9.3–10.3 km/h · 1% incline')
+    expect(formatPace([351, 386], 'indoor', 'kmh')).toBe('9.3–10.3 km/h · 5:51–6:26/km · 1% incline')
     expect(formatPace([351, 386], 'outdoor', 'kmh')).toBe('5:51–6:26/km')
   })
 
@@ -252,9 +252,9 @@ describe('the latest 5K test', () => {
 
 describe('run Prescriptions with Training paces', () => {
   it('give Threshold an exact speed indoors and pace outdoors', () => {
-    expect(describeSession(session(3, 'threshold'), indoor(23)).target).toBe('12.3 km/h · 1% incline · RPE 6–7 · 2′ jog')
+    expect(describeSession(session(3, 'threshold'), indoor(23)).target).toBe('12.3 km/h · 4:52/km · 1% incline · RPE 6–7 · 2′ jog')
     expect(describeSession(session(3, 'threshold'), { ...indoor(23), unit: 'mph' }).target).toBe(
-      '7.7 mph · 1% incline · RPE 6–7 · 2′ jog',
+      '7.7 mph · 4:52/km · 1% incline · RPE 6–7 · 2′ jog',
     )
     expect(describeSession(session(3, 'threshold'), outdoor(23)).target).toBe('4:52/km · RPE 6–7 · 2′ jog')
   })
@@ -265,7 +265,7 @@ describe('run Prescriptions with Training paces', () => {
   })
 
   it('give the Easy run an easy range', () => {
-    expect(describeSession(session(3, 'easy'), indoor(23)).target).toBe('9.3–10.3 km/h · 1% incline · RPE 2–4')
+    expect(describeSession(session(3, 'easy'), indoor(23)).target).toBe('9.3–10.3 km/h · 5:51–6:26/km · 1% incline · RPE 2–4')
   })
 
   it('leave efforts by feel as they are', () => {
@@ -286,7 +286,7 @@ describe('Deload weeks', () => {
     expect(findWeek(program, 7)!.deload).toBe(true)
     expect(describeSession(normal, indoor(23)).summary).toBe('5 × 3′ at 5K pace / 90″ jog')
     expect(describeSession(deload, indoor(23)).summary).toBe('4 × 2′ controlled / 2′ jog')
-    expect(describeSession(deload, indoor(23)).target).toBe('12.3 km/h · 1% incline · 2′ jog · 2 accelerations first')
+    expect(describeSession(deload, indoor(23)).target).toBe('12.3 km/h · 4:52/km · 1% incline · 2′ jog · 2 accelerations first')
   })
 
   it('cut the main run volume by about a third', () => {
