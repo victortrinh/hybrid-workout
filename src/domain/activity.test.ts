@@ -162,6 +162,7 @@ const log = (sessionId: string, date: string, status: SessionLog['status'] = 'do
   resultSeconds: null,
   environment: null,
   distanceMeters: null,
+  recoveryPace: null,
   intervals: [],
   sets: [],
   stations: [],

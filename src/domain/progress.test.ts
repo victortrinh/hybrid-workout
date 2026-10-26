@@ -38,6 +38,7 @@ function log(
     resultSeconds: null,
     environment: null,
     distanceMeters: null,
+    recoveryPace: null,
     intervals: [],
     sets: [],
     stations: [],

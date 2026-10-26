@@ -79,14 +79,14 @@ app.post('/sync', async (c) => {
     const upsert = c.env.DB.prepare(
       `insert into session_logs
          (id, week, session_id, date, status, minutes, rpe, notes, result_seconds, finish_seconds, environment,
-          distance_meters, updated_at)
-       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          distance_meters, recovery_pace, updated_at)
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        on conflict (id) do update set
          week = excluded.week, session_id = excluded.session_id, date = excluded.date,
          status = excluded.status, minutes = excluded.minutes, rpe = excluded.rpe,
          notes = excluded.notes, result_seconds = excluded.result_seconds, finish_seconds = excluded.finish_seconds,
          environment = excluded.environment, distance_meters = excluded.distance_meters,
-         updated_at = excluded.updated_at
+         recovery_pace = excluded.recovery_pace, updated_at = excluded.updated_at
        where excluded.updated_at > session_logs.updated_at`,
     )
     // A log's reps go with the log: replaced only when this edit is the one stored, so an older replay changes nothing.
@@ -125,7 +125,7 @@ app.post('/sync', async (c) => {
           // The race's finish has a column of its own: result_seconds holds a 5K test's time.
           l.sessionId === RACE_SESSION_ID ? null : l.resultSeconds,
           l.sessionId === RACE_SESSION_ID ? l.resultSeconds : null,
-          l.environment, l.distanceMeters, l.updatedAt,
+          l.environment, l.distanceMeters, l.recoveryPace, l.updatedAt,
         ),
         clearReps.bind(l.id, l.updatedAt),
         ...l.intervals.map((i) =>
@@ -429,6 +429,8 @@ interface SessionLogRow {
   finish_seconds?: number | null
   environment: string | null
   distance_meters: number | null
+  /** The recovery jogs' pace; null where it wasn't asked, and before migration 0012. */
+  recovery_pace?: number | null
   updated_at: string
 }
 
@@ -626,6 +628,7 @@ async function readState(db: D1Database): Promise<SyncState> {
         resultSeconds: row.result_seconds ?? row.finish_seconds ?? null,
         environment: row.environment,
         distanceMeters: row.distance_meters,
+        recoveryPace: row.recovery_pace ?? null,
         intervals: (reps.get(row.id) ?? []).map((rep) => ({
           block: rep.block,
           rep: rep.rep,

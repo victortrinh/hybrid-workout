@@ -20,6 +20,7 @@ function log(week: number, sessionId: string, date: string, extra: Partial<Sessi
     resultSeconds: null,
     environment: null,
     distanceMeters: null,
+    recoveryPace: null,
     intervals: [],
     sets: [],
     stations: [],

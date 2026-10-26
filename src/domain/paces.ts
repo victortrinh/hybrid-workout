@@ -122,6 +122,9 @@ export function currentPaces(logs: SessionLog[], today: LocalDate, estimatedSeco
   return estimatedSeconds === null ? null : trainingPaces(estimatedSeconds, { estimate: true })
 }
 
+/** An effort with no pace to hold, whatever the Training paces: "Hard, by feel". Controlled is Threshold. */
+export const isByFeel = (effort: RunEffort) => 'feel' in effort && effort.feel !== 'controlled'
+
 /** The pace range a run effort asks for, in seconds per km, or null where it goes by feel. */
 export function paceFor(effort: RunEffort, paces: TrainingPaces): Range | null {
   if ('feel' in effort) {

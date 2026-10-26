@@ -16,6 +16,7 @@ import {
   clock,
   DEFAULT_INCLINE,
   formatPace,
+  isByFeel,
   paceFor,
   runTarget,
   speedFor,
@@ -446,7 +447,7 @@ export interface LiveRun {
   legs: { block: number; seconds: number }[]
   /**
    * Blocks that are over and still waiting for an answer, oldest first: reps
-   * for Held it or Changed, HYROX rounds and Race simulation Stations for As
+   * at a target for Held it or Changed, HYROX rounds and Race simulation Stations for As
    * written or Changed. A round or Station left unanswered logs as written.
    */
   asks: number[]
@@ -533,8 +534,18 @@ export function advance(run: LiveRun, now: number): LiveRun {
   return next
 }
 
-/** The Blocks that ask something once over: a rep, a HYROX round, a Race simulation's Station. */
-const asks = (block: LiveBlock) => block.rep !== null || block.kind === 'round' || block.kind === 'station'
+/**
+ * The Blocks that ask something once over: a rep at a target, a HYROX round,
+ * a Race simulation's Station. A by-feel rep asks nothing: its speed is asked once, at the end.
+ */
+export const asksAfter = (block: LiveBlock) =>
+  (block.rep !== null && !byFeelRep(block)) || block.kind === 'round' || block.kind === 'station'
+
+/** A rep with no pace to hold: "5 × 2′ hard, by feel". */
+export const byFeelRep = (block: LiveBlock) => block.rep !== null && block.effort !== null && isByFeel(block.effort)
+
+/** Whether the finish sheet asks the By-feel speeds. */
+export const hasByFeelReps = (run: Pick<LiveRun, 'blocks'>) => run.blocks.some(byFeelRep)
 
 /**
  * Whether the clock holds on Ready before Block `i`: a work Block after
@@ -554,7 +565,7 @@ function moveOn(run: LiveRun, at: number, cut: { skipped: boolean; seconds: numb
   const ready = holdsBefore(run.blocks, block)
   return {
     ...run,
-    asks: asks(run.blocks[run.block]) ? [...run.asks, run.block] : run.asks,
+    asks: asksAfter(run.blocks[run.block]) ? [...run.asks, run.block] : run.asks,
     skipped: cut?.skipped ? [...run.skipped, run.block] : run.skipped,
     cutShort: cut ? [...run.cutShort, { block: run.block, seconds: cut.seconds }] : run.cutShort,
     block,
@@ -955,6 +966,9 @@ export interface LiveLogInput {
   resultSeconds: number | null
   /** Splits too quick to be true, put right or left untimed on the finish sheet. */
   fixes?: SplitFix[]
+  /** By-feel speeds, in seconds per km: the hard reps' and the recovery jogs'. Either can be left out. */
+  hardPace?: number | null
+  recoveryPace?: number | null
   updatedAt: string
 }
 
@@ -998,11 +1012,28 @@ export function liveLog(run: LiveRun, now: number, input: LiveLogInput): Session
     environment: run.environment,
     // A circuit's runs are logged one by one, not as a console total.
     distanceMeters: run.environment === 'indoor' && !circuit ? input.distanceMeters : null,
-    intervals: run.intervals,
+    recoveryPace: input.recoveryPace ?? null,
+    intervals: repLogs(run, input.hardPace ?? null),
     stations: stationLogs(run, input.fixes),
     sets: [],
     updatedAt: input.updatedAt,
   }
+}
+
+/**
+ * The reps' log: each paced rep as answered, and each by-feel rep that ran its
+ * course at the hard-rep speed. With no speed given, a by-feel rep logs as held,
+ * or as it was answered in a run stored before by-feel reps stopped asking.
+ */
+function repLogs(run: LiveRun, hardPace: number | null): IntervalLog[] {
+  const paced = run.intervals.filter((i) => !byFeelRep(run.blocks[i.block]))
+  const byFeel = run.blocks.flatMap((b, block): IntervalLog[] => {
+    if (!byFeelRep(b) || block >= run.block || run.skipped.includes(block)) return []
+    const answered = run.intervals.find((i) => i.block === block)
+    if (hardPace === null && answered) return [answered]
+    return [{ block, rep: b.rep!, targetPace: null, held: hardPace === null, actualPace: hardPace }]
+  })
+  return [...paced, ...byFeel].sort((a, b) => a.block - b.block)
 }
 
 /** A stored Live run, checked enough to trust: anything else is dropped and the athlete starts again. */
