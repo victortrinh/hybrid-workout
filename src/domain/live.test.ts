@@ -27,6 +27,9 @@ import {
   liveStatus,
   liveLog,
   liveTarget,
+  byFeelHint,
+  byFeelPrefill,
+  loggedSpeeds,
   nextBlock,
   parseLiveRun,
   pause,
@@ -45,6 +48,7 @@ import {
   type LiveBlock,
   type LiveRun,
 } from './live'
+import type { SessionLog } from './log'
 import { clock, currentPaces, trainingPaces, type RunContext } from './paces'
 import { program } from './program/program'
 import type { Session } from './program/types'
@@ -781,6 +785,119 @@ describe('by-feel speeds', () => {
     expect(currentPaces([test, byFeel], today, null)).toEqual(currentPaces([test], today, null))
     expect(currentPaces([byFeel], today, null)).toBeNull()
     expect(currentPaces([byFeel], today, 25 * 60)).toEqual(trainingPaces(25 * 60, { estimate: true }))
+  })
+})
+
+describe('last time', () => {
+  const input = { id: 'live-9012', rpe: 8, distanceMeters: null, resultSeconds: null, updatedAt: '2026-11-11T18:00:00.000Z' }
+  /** 14 km/h and 6 km/h, as seconds per km. */
+  const HARD = 257
+  const JOG = 600
+  /** Week 3's Speed from Rep 1 to the end, the By-feel speeds answered, logged on `date`. */
+  const run = advance(go(nextBlock(nextBlock(nextBlock(advance(start(session(3, 'speed')), at(7)), at(8)), at(9)), at(10)), at(10)), at(60))
+  const speedLog = (date: string, hardPace: number | null, recoveryPace: number | null): SessionLog => ({
+    ...liveLog(run, at(60), { ...input, hardPace, recoveryPace }),
+    id: `live-${date}`,
+    date: localDate(date),
+  })
+  const today = localDate('2026-11-18')
+  const byFeel = liveBlocks(session(3, 'speed'))[4]
+
+  it('is the latest by-feel rep speed and jog pace logged before the Session, of any Session type', () => {
+    const logs = [speedLog('2026-11-04', 240, 620), speedLog('2026-11-11', HARD, JOG), speedLog('2026-11-25', 200, 400)]
+    expect(loggedSpeeds(logs, today)).toEqual({ hardPace: HARD, recoveryPace: JOG })
+    // The same day's own log doesn't count: it's this Session's.
+    expect(loggedSpeeds(logs, localDate('2026-11-11'))).toEqual({ hardPace: 240, recoveryPace: 620 })
+  })
+
+  it('takes each from the latest log that has it', () => {
+    const logs = [speedLog('2026-11-04', 240, 620), speedLog('2026-11-11', HARD, null), speedLog('2026-11-12', null, null)]
+    expect(loggedSpeeds(logs, today)).toEqual({ hardPace: HARD, recoveryPace: 620 })
+  })
+
+  it('is nothing with no history', () => {
+    expect(loggedSpeeds([], today)).toEqual({ hardPace: null, recoveryPace: null })
+    expect(loggedSpeeds([speedLog('2026-11-11', null, null)], today)).toEqual({ hardPace: null, recoveryPace: null })
+  })
+
+  it('never reads a paced rep run by RPE and changed', () => {
+    let run = advance(go(start(session(3, 'threshold')), at(10)), at(60))
+    run = answer(run, 1, null, 270)
+    const changed = { ...liveLog(run, at(60), input), date: localDate('2026-11-12') }
+    expect(changed.intervals).toEqual([{ block: 1, rep: 1, targetPace: null, held: false, actualPace: 270 }])
+    expect(loggedSpeeds([speedLog('2026-11-04', HARD, null), changed], today).hardPace).toBe(HARD)
+  })
+
+  describe('beside a by-feel rep', () => {
+    const logged = { hardPace: HARD, recoveryPace: JOG }
+
+    it('reads as a speed in the Settings unit indoors, and as a pace per km outdoors', () => {
+      expect(byFeelHint(byFeel, { ...indoor, logged })).toBe('Last time 14.0 km/h')
+      expect(byFeelHint(byFeel, { ...indoor, unit: 'mph', logged })).toBe('Last time 8.7 mph')
+      // Logged on the treadmill, run outside: the same pace, per km.
+      expect(byFeelHint(byFeel, { ...indoor, environment: 'outdoor', logged })).toBe('Last time 4:17/km')
+    })
+
+    it('shows nothing with no history, or on any other Block', () => {
+      expect(byFeelHint(byFeel, indoor)).toBeNull()
+      expect(byFeelHint(byFeel, { ...indoor, logged: { hardPace: null, recoveryPace: JOG } })).toBeNull()
+      const [, rep, jog] = liveBlocks(session(3, 'threshold'))
+      expect(byFeelHint(rep, { ...indoor, logged })).toBeNull()
+      expect(byFeelHint(jog, { ...indoor, logged })).toBeNull()
+    })
+
+    it('is never a target, and raises no check', () => {
+      expect(liveTarget(byFeel, { ...indoor, logged })).toBeNull()
+      expect(isOver(run)).toBe(true)
+      expect(run.asks).toEqual([])
+      expect(heldUnanswered(run, { ...indoor, logged })).toEqual(heldUnanswered(run, indoor))
+    })
+
+    it('never changes the Training paces', () => {
+      const logs = [speedLog('2026-11-11', 200, 300)]
+      expect(loggedSpeeds(logs, today).hardPace).toBe(200)
+      expect(currentPaces(logs, today, null)).toBeNull()
+      expect(currentPaces(logs, today, 25 * 60)).toEqual(trainingPaces(25 * 60, { estimate: true }))
+    })
+  })
+
+  describe('the recovery jog', () => {
+    const [, , jog] = liveBlocks(session(3, 'threshold'))
+
+    it('is the latest logged jog pace with no Training paces', () => {
+      const none = { ...indoor, paces: null, logged: { hardPace: null, recoveryPace: JOG } }
+      expect(liveTarget(jog, none)).toMatchObject({ value: '6.0', pace: JOG, words: 'Jog ~6.0 km/h · 10:00/km, or walk' })
+      const outside = { ...none, environment: 'outdoor' as const, logged: { hardPace: null, recoveryPace: 357 } }
+      expect(liveTarget(jog, outside)).toMatchObject({ value: '5:57', pace: 357, words: 'Jog ~5:57/km, or walk' })
+    })
+
+    it('still comes from the Training paces first, real or estimated', () => {
+      const logged = { hardPace: null, recoveryPace: JOG }
+      expect(liveTarget(jog, { ...indoor, logged })).toMatchObject({ value: '8.8', pace: 409 })
+      const estimated = { ...indoor, paces: trainingPaces(23 * 60, { estimate: true }), logged }
+      expect(liveTarget(jog, estimated)).toMatchObject({ value: '8.8', pace: 409 })
+    })
+  })
+
+  describe('the end-of-run question', () => {
+    const logged = { hardPace: HARD, recoveryPace: JOG }
+
+    it('pre-fills both fields from the latest logged values, as typed', () => {
+      expect(byFeelPrefill(start(session(3, 'speed')), { ...indoor, logged })).toEqual({ hard: '14.0', jog: '6.0' })
+      expect(byFeelPrefill(start(session(3, 'speed')), { ...indoor, unit: 'mph', logged })).toEqual({ hard: '8.7', jog: '3.7' })
+      expect(byFeelPrefill(start(session(3, 'speed'), 'outdoor'), { ...indoor, environment: 'outdoor', logged })).toEqual({
+        hard: '4:17',
+        jog: '10:00',
+      })
+    })
+
+    it('leaves blank what was never logged', () => {
+      expect(byFeelPrefill(start(session(3, 'speed')), indoor)).toEqual({ hard: '', jog: '' })
+      expect(byFeelPrefill(start(session(3, 'speed')), { ...indoor, logged: { hardPace: HARD, recoveryPace: null } })).toEqual({
+        hard: '14.0',
+        jog: '',
+      })
+    })
   })
 })
 

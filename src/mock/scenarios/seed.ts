@@ -16,6 +16,10 @@ export interface SeedLog {
   /** A 5K test's time in seconds, and where it was run. */
   resultSeconds?: number
   environment?: 'indoor' | 'outdoor'
+  /** A Live run's reps: a by-feel rep logs the speed answered at the end. */
+  intervals?: { block: number; rep: number; targetPace: number | null; held: boolean; actualPace: number | null }[]
+  /** The recovery jogs' pace from the By-feel speeds, in seconds per km. */
+  recoveryPace?: number
   /** A Strength session's sets: what the Coach reads for the Working weights. */
   sets?: { exercise: number; set: number; lift: string | null; pounds: number | null; reps: number; rpe: number }[]
   /** A HYROX session's rounds or a Race simulation's splits. */

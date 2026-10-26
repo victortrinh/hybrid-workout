@@ -22,10 +22,12 @@ import {
   speedFor,
   UNIT_LABEL,
   type Environment,
+  type LoggedSpeeds,
   type RunContext,
+  type SpeedUnit,
 } from './paces'
 import { drillAmount, SESSION_TYPES, stationPounds } from './program/describe'
-import { stations } from './program/program'
+import { program, stations } from './program/program'
 import type { Block, Exercise, Lane, RunEffort, Session, SessionType, StationId } from './program/types'
 
 /** The Session types that are only running: their reps get Held it or Changed. */
@@ -385,17 +387,17 @@ const RECOVERY_KMH = 7
 const RECOVERY_UNDER_EASY_KMH = 0.5
 
 /**
- * The speed suggested for a recovery jog, in km/h: the first of these there
- * is. No floor: a slow Easy pace makes a slow jog.
+ * The pace suggested for a recovery jog, in seconds per km: the first of these
+ * there is. No floor: a slow Easy pace makes a slow jog.
  */
-export function recoveryKmh(run: RunContext): number {
-  const underEasy = run.paces && speedFor(run.paces.easy[1], 'kmh') - RECOVERY_UNDER_EASY_KMH
-  return Math.round((underEasy ?? RECOVERY_KMH) * 10) / 10
+function recoveryPace(run: RunContext): number {
+  if (run.paces) return Math.round(3600 / (Math.round((speedFor(run.paces.easy[1], 'kmh') - RECOVERY_UNDER_EASY_KMH) * 10) / 10))
+  return run.logged?.recoveryPace ?? Math.round(3600 / RECOVERY_KMH)
 }
 
 /** "Jog ~8.8 km/h · 6:49/km, or walk": a number to set the belt to, never one to hold. */
 function recoveryTarget(run: RunContext, incline: number | null): LiveTarget {
-  const pace = Math.round(3600 / recoveryKmh(run))
+  const pace = recoveryPace(run)
   const figure = formatPace([pace, pace], run.environment, run.unit)
   if (run.environment === 'outdoor') {
     return { value: clock(pace), unit: '/km', secondary: null, incline, pace, figure, words: `Jog ~${clock(pace)}/km, or walk` }
@@ -404,6 +406,54 @@ function recoveryTarget(run: RunContext, incline: number | null): LiveTarget {
   const unit = UNIT_LABEL[run.unit]
   const words = `Jog ~${value} ${unit} · ${clock(pace)}/km, or walk`
   return { value, unit, secondary: { value: clock(pace), unit: '/km' }, incline, pace, figure, words }
+}
+
+/**
+ * The By-feel speeds last logged before `date`, each from the latest Session
+ * log that has it, whatever its Session type. A hard rep's speed counts only on
+ * a rep the Program runs by feel, not a paced rep run by RPE and changed.
+ */
+export function loggedSpeeds(logs: readonly SessionLog[], date: LocalDate): LoggedSpeeds {
+  const before = logs.filter((l) => l.date < date).sort((a, b) => b.date.localeCompare(a.date) || b.updatedAt.localeCompare(a.updatedAt))
+  const hardPace = before.map(loggedHardPace).find((pace) => pace !== null) ?? null
+  const recoveryPace = before.find((l) => l.recoveryPace !== null)?.recoveryPace ?? null
+  return { hardPace, recoveryPace }
+}
+
+/** A log's by-feel rep speed, from the Program's own Blocks for its Session. */
+function loggedHardPace(log: SessionLog): number | null {
+  const reps = log.intervals.filter((i) => i.targetPace === null && i.actualPace !== null)
+  if (reps.length === 0) return null
+  const session = program.phases
+    .flatMap((p) => p.weeks)
+    .find((w) => w.number === log.week)
+    ?.sessions.find((s) => s.id === log.sessionId)
+  if (!session) return null
+  const blocks = liveBlocks(session)
+  return reps.find((i) => blocks[i.block] && byFeelRep(blocks[i.block]))?.actualPace ?? null
+}
+
+/** A By-feel speed as the athlete types it: "14.0" in the Settings unit indoors, "4:17" outdoors. */
+function speedText(pace: number, environment: Environment, unit: SpeedUnit): string {
+  return environment === 'indoor' ? speedFor(pace, unit).toFixed(1) : clock(pace)
+}
+
+/**
+ * "Last time 14.0 km/h" beside a by-feel rep's effort, or "Last time 4:17/km"
+ * outdoors: a hint, never a target. Null with no history or on any other Block.
+ */
+export function byFeelHint(block: LiveBlock, run: RunContext): string | null {
+  const pace = run.logged?.hardPace
+  if (!byFeelRep(block) || pace == null) return null
+  const text = speedText(pace, run.environment, run.unit)
+  return run.environment === 'indoor' ? `Last time ${text} ${UNIT_LABEL[run.unit]}` : `Last time ${text}/km`
+}
+
+/** The end-of-run question's fields, filled with the speeds last logged. The jog's only when the run has jogs. */
+export function byFeelPrefill(live: Pick<LiveRun, 'blocks' | 'environment'>, run: RunContext): { hard: string; jog: string } {
+  const text = (pace: number | null | undefined) => (pace == null ? '' : speedText(pace, live.environment, run.unit))
+  const jogs = live.blocks.some((b) => b.kind === 'recovery' && b.effort !== null)
+  return { hard: text(run.logged?.hardPace), jog: jogs ? text(run.logged?.recoveryPace) : '' }
 }
 
 /** A Live run session in progress, as stored on the device. */

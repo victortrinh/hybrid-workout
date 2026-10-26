@@ -72,7 +72,7 @@ What actually happened in a Session: actual sets, reps, loads, times, RPE and no
 _Avoid_: entry, record
 
 **By-feel speeds**:
-The speeds of a Live session's by-feel reps and of its recovery jogs, asked once on the finish sheet (a treadmill speed indoors, a pace per km outdoors), since nobody types on a moving belt. Both optional. The hard-rep speed is logged on each by-feel rep that ran its course; the jogs' is the Session log's recovery pace. Never Training paces (ADR-0002).
+The speeds of a Live session's by-feel reps and of its recovery jogs, asked once on the finish sheet (a treadmill speed indoors, a pace per km outdoors), since nobody types on a moving belt. Both optional. The hard-rep speed is logged on each by-feel rep that ran its course; the jogs' is the Session log's recovery pace. The latest logged before a Session come back as a hint, "Hard, by feel · Last time 14.0 km/h", as the recovery jog's suggestion when there are no Training paces, and as the finish sheet's starting answers. Never a target, never Training paces (ADR-0002).
 _Avoid_: rep feedback, actual speed
 
 **Station log**:
