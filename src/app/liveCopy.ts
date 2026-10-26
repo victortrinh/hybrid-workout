@@ -105,4 +105,6 @@ export function rpeLine(rpe: number): string {
 }
 
 export const REST_OVER_LINE = 'Rest over. Under the bar.'
+/** A checklist's rest over: the next jump set or acceleration. */
+export const SET_REST_OVER_LINE = 'Rest over. Next set.'
 export const ALL_SETS_LINE = 'Every set in. Finish when you’re ready.'

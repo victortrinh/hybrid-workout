@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { localDate } from '../domain/calendar'
 import { findWeek } from '../domain/coach'
 import { currentSet, finish, logSet, startLifts } from '../domain/lifts'
-import { advance, end, pause, resume, startRun } from '../domain/live'
+import { advance, end, nextBlock, pause, resume, startRun, tick } from '../domain/live'
 import { trainingPaces, type RunContext } from '../domain/paces'
 import { program } from '../domain/program/program'
 import { cuesFor } from './lockScreenCues'
@@ -59,6 +59,29 @@ describe('cuesFor a run', () => {
     expect(cuesFor(pause(r, at(30)), RPE_ONLY)).toEqual([])
     expect(cuesFor(end(r, at(30)), RPE_ONLY)).toEqual([])
     expect(cuesFor(advance(r, at(600)), RPE_ONLY)).toEqual([])
+  })
+})
+
+describe('cuesFor a checklist rest', () => {
+  /** On Plyometrics at 600 s: the jog ran its 7 minutes, the Drills were Done at 600. */
+  const plyometrics = () => nextBlock(advance(run('speed'), at(420)), at(600))
+
+  it('is the end of the rest, naming the set it’s for', () => {
+    const resting = tick(plyometrics(), 0, at(630))
+    expect(cuesFor(resting, RPE_ONLY)).toEqual([
+      { at: at(690), title: 'Pogo jumps 15 · set 2 of 2', body: 'Rest over. Next set.' },
+    ])
+    const broad = tick(tick(resting, 1, at(640)), 2, at(700))
+    expect(cuesFor(broad, RPE_ONLY)).toEqual([
+      { at: at(720), title: 'Broad jumps 3 · set 2 of 3', body: 'Rest over. Next set.' },
+    ])
+  })
+
+  it('is gone once the rest is cleared: an untick, Done or End', () => {
+    const resting = tick(plyometrics(), 0, at(630))
+    expect(cuesFor(tick(resting, 0, at(631)), RPE_ONLY)).toEqual([])
+    expect(cuesFor(end(resting, at(631)), RPE_ONLY)).toEqual([])
+    expect(cuesFor(nextBlock(resting, at(631)), RPE_ONLY)).toEqual([])
   })
 })
 

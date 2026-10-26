@@ -21,7 +21,7 @@ const live = (page: Page) => {
     heading: page.getByRole('heading', { level: 1 }),
     block: band.locator('p').first(),
     target: band.locator('.stripe-num'),
-    timer: page.getByRole('timer'),
+    timer: band.getByRole('timer'),
     line: band.locator('[aria-live]'),
     pause: page.getByRole('button', { name: /^(Pause|Resume)$/ }),
     skip: page.getByRole('button', { name: /^(Skip block|Done|Finished 5 km)$/ }),
@@ -241,6 +241,60 @@ test('a 5K test Live session records the time and updates the Training paces', a
   await page.clock.resume()
   await doToday(page, page.getByRole('list').filter({ hasText: 'Strength' }).getByRole('button', { name: /^Threshold/ }))
   await expect(page.getByRole('heading', { level: 1 }).locator('xpath=following-sibling::p[1]')).toHaveText(/^4:46\/km/)
+})
+
+test('Speed: a rest between jump and acceleration sets, none between drills', async ({ page }) => {
+  await serveHistory(page, [...WEEK_2])
+  await page.clock.install({ time: WEEK_3 })
+  await page.goto('/')
+  await page.clock.pauseAt(new Date(WEEK_3.getTime() + 1000))
+  await page.getByRole('button', { name: 'Start Speed' }).click()
+  const s = live(page)
+  const rest = page.getByRole('timer', { name: 'Rest left' })
+
+  // Warm-up Done; a drill ticked starts no rest.
+  await s.skip.click()
+  await expect(s.block).toHaveText('Drills · 7 sets')
+  await page.getByRole('checkbox', { name: 'Leg swings 10 / leg' }).click({ force: true })
+  await expect(rest).toHaveCount(0)
+  await s.skip.click()
+  await expect(s.block).toHaveText('Plyometrics · 5 sets')
+
+  // Pogo set 1: 60″, counting down beside the checklist.
+  await page.getByRole('checkbox', { name: 'Pogo jumps 15 · set 1 of 2' }).click({ force: true })
+  await expect(rest).toHaveText('1:00')
+  await page.clock.runFor('00:15')
+  await expect(rest).toHaveText('0:45')
+  await expect(page.getByRole('list', { name: 'Sets' })).toBeVisible()
+
+  // Set 2 ticked early ends that rest and starts its own; unticking it clears it.
+  await page.getByRole('checkbox', { name: 'Pogo jumps 15 · set 2 of 2' }).click({ force: true })
+  await expect(rest).toHaveText('1:00')
+  await page.getByRole('checkbox', { name: 'Pogo jumps 15 · set 2 of 2' }).click({ force: true })
+  await expect(rest).toHaveCount(0)
+
+  // Ticked again and left to run out: the rest goes on its own.
+  await page.getByRole('checkbox', { name: 'Pogo jumps 15 · set 2 of 2' }).click({ force: true })
+  await page.clock.runFor('01:01')
+  await expect(rest).toHaveCount(0)
+
+  // Broad jumps: 20″, Skip ends it.
+  await page.getByRole('checkbox', { name: 'Broad jumps 3 · set 1 of 3' }).click({ force: true })
+  await expect(rest).toHaveText('0:20')
+  await page.getByRole('button', { name: 'Skip', exact: true }).click()
+  await expect(rest).toHaveCount(0)
+
+  // Done mid-rest clears it; Accelerations rest 45″, and End clears that one.
+  await page.getByRole('checkbox', { name: 'Broad jumps 3 · set 2 of 3' }).click({ force: true })
+  await expect(rest).toHaveText('0:20')
+  await s.skip.click()
+  await expect(s.block).toHaveText('Accelerations · 4 sets')
+  await expect(rest).toHaveCount(0)
+  await page.getByRole('checkbox', { name: 'Accelerations · 1 of 4' }).click({ force: true })
+  await expect(rest).toHaveText('0:45')
+  await scan(page, new Date(WEEK_3.getTime() + 10 * 60_000))
+  await page.getByRole('button', { name: 'End', exact: true }).click()
+  await expect(rest).toHaveCount(0)
 })
 
 test('Speed: Done, the checklists, Start, Undo, going back, and a Partial flipped to Done', async ({ page }) => {

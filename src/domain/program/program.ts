@@ -108,22 +108,22 @@ const floorSubstitution: Substitution = {
 
 const pogo = (sets: number, reps: number): Exercise => ({
   name: 'Pogo jumps',
-  prescription: { kind: 'sets', sets, reps, load: { kind: 'bodyweight' } },
+  prescription: { kind: 'sets', sets, reps, load: { kind: 'bodyweight' }, restSeconds: [60, 60] },
   note: 'Ground contacts',
   substitutions: [floorSubstitution],
 })
 
 const broadJumps = (sets: number, reps: number): Exercise => ({
   name: 'Broad jumps',
-  prescription: { kind: 'sets', sets, reps, load: { kind: 'bodyweight' } },
+  prescription: { kind: 'sets', sets, reps, load: { kind: 'bodyweight' }, restSeconds: [20, 20] },
   note: 'Full reset between jumps',
   substitutions: [floorSubstitution],
 })
 
-/** Accelerations start at 80–90% and build to 90–95% from the 5K development Phase on. */
+/** Accelerations start at 80–90% and build to 90–95% from the 5K development Phase on, each after a 45″ walk back. */
 const accelerations = (reps: number, percentOfMax: Range, note: string): Exercise => ({
   name: 'Accelerations',
-  prescription: { kind: 'accelerations', reps, meters: 15, percentOfMax },
+  prescription: { kind: 'accelerations', reps, meters: 15, percentOfMax, restSeconds: [45, 45] },
   note,
   substitutions: [floorSubstitution],
 })
