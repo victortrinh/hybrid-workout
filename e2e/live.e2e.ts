@@ -294,10 +294,10 @@ test('Speed: Done, the checklists, Start, Undo, going back, and a Partial flippe
   await expect(s.timer).toHaveText('01:30')
   const sets = page.getByRole('list', { name: 'Sets' }).getByRole('checkbox')
   await expect(sets).toHaveCount(5)
-  await page.getByRole('checkbox', { name: 'Pogo jumps · set 1 of 2' }).check({ force: true })
-  await expect(page.getByRole('checkbox', { name: 'Pogo jumps · set 1 of 2' })).toBeChecked()
+  await page.getByRole('checkbox', { name: 'Pogo jumps 15 · set 1 of 2' }).check({ force: true })
+  await expect(page.getByRole('checkbox', { name: 'Pogo jumps 15 · set 1 of 2' })).toBeChecked()
   await scan(page, new Date(start.getTime() + 5 * 60_000))
-  for (const name of ['Pogo jumps · set 2 of 2', 'Broad jumps · set 1 of 3', 'Broad jumps · set 2 of 3', 'Broad jumps · set 3 of 3']) {
+  for (const name of ['Pogo jumps 15 · set 2 of 2', 'Broad jumps 3 · set 1 of 3', 'Broad jumps 3 · set 2 of 3', 'Broad jumps 3 · set 3 of 3']) {
     await page.getByRole('checkbox', { name }).click({ force: true })
   }
   await expect(s.block).toHaveText('Accelerations · 4 sets')

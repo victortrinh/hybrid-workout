@@ -90,7 +90,7 @@ export interface LiveBlock {
   /** Everything else the Block asks for: "Station prep", "Pogo jumps 2 × 15". */
   detail: string[]
   /**
-   * A checklist Block's sets, one row each to tick: "Pogo jumps · set 1 of 2".
+   * A checklist Block's sets, one row each to tick: "Pogo jumps 15 · set 1 of 2".
    * Its clock counts up, and it ends on the last tick or Done. Empty for every other Block.
    */
   checklist: string[]
@@ -245,15 +245,20 @@ export function liveBlocks(session: Session): LiveBlock[] {
 }
 
 /**
- * A row per set to tick, when every Exercise is counted in sets: "Pogo jumps ·
- * set 1 of 2", "Accelerations · 1 of 4", "A-skips 20 m · 1 of 2". Empty when one isn't, so the Block
- * stays on the clock.
+ * A row per set to tick, when every Exercise is counted in sets: "Pogo jumps 15 ·
+ * set 1 of 2", "Accelerations · 1 of 4", "A-skips 20 m · 1 of 2", "Bike sprints 8–10″". Empty when one
+ * isn't, so the Block stays on the clock.
  */
 export function checklistRows(exercises: Exercise[]): string[] {
-  const rows = exercises.map(({ name, prescription: rx }): string[] | null => {
+  const rows = exercises.map((exercise): string[] | null => {
+    const { name, prescription: rx } = exercise
     switch (rx.kind) {
-      case 'sets':
-        return Array.from({ length: rx.sets }, (_, i) => `${name} · set ${i + 1} of ${rx.sets}`)
+      case 'sets': {
+        const what = `${name} ${typeof rx.reps === 'number' ? rx.reps : range(rx.reps)}`
+        return rx.sets === 1 ? [what] : Array.from({ length: rx.sets }, (_, i) => `${what} · set ${i + 1} of ${rx.sets}`)
+      }
+      case 'sprints':
+        return [exerciseWords(exercise)]
       case 'accelerations':
       case 'strides':
         return Array.from({ length: rx.reps }, (_, i) => `${name} · ${i + 1} of ${rx.reps}`)
@@ -293,9 +298,10 @@ function blockKind(block: Block): LiveBlockKind {
   return block.main ? 'run' : 'drills'
 }
 
+const range = ([low, high]: readonly [number, number]) => (low === high ? `${low}` : `${low}–${high}`)
+
 /** "Pogo jumps 2 × 15", "Accelerations 4 × 15 m at 80–90%", "Strides 4 × 15″" */
 function exerciseWords({ name, prescription: rx }: Exercise): string {
-  const range = ([low, high]: readonly [number, number]) => (low === high ? `${low}` : `${low}–${high}`)
   switch (rx.kind) {
     case 'sets':
       return `${name} ${rx.sets} × ${typeof rx.reps === 'number' ? rx.reps : range(rx.reps)}`
