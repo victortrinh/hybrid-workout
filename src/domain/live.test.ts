@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { localDate } from './calendar'
 import { findWeek } from './coach'
+import { equip } from './equipment'
 import {
   advance,
   answer,
@@ -275,17 +276,32 @@ describe('checklist Blocks', () => {
     expect(warmUp.checklist).toEqual([])
     expect(plyo).toMatchObject({ seconds: null, work: false })
     expect(plyo.checklist).toEqual([
-      'Pogo jumps · set 1 of 2',
-      'Pogo jumps · set 2 of 2',
-      'Broad jumps · set 1 of 3',
-      'Broad jumps · set 2 of 3',
-      'Broad jumps · set 3 of 3',
+      'Pogo jumps 15 · set 1 of 2',
+      'Pogo jumps 15 · set 2 of 2',
+      'Broad jumps 3 · set 1 of 3',
+      'Broad jumps 3 · set 2 of 3',
+      'Broad jumps 3 · set 3 of 3',
     ])
     expect(accels.checklist).toEqual(['Accelerations · 1 of 4', 'Accelerations · 2 of 4', 'Accelerations · 3 of 4', 'Accelerations · 4 of 4'])
     const run = plyometrics()
     expect(blockLeft(run, at(12))).toBeNull()
     expect(blockElapsed(run, at(12))).toBe(120)
     expect(advance(run, at(40))).toBe(run)
+  })
+
+  it('shows the reduced jumps of a Deload and the Taper, and a Substitution’s amount', () => {
+    const plyo = (s: Session) => liveBlocks(s).find((b) => b.name === 'Plyometrics')!.checklist
+    expect(plyo(session(7, 'speed'))).toEqual(['Pogo jumps 15', 'Broad jumps 2 · set 1 of 2', 'Broad jumps 2 · set 2 of 2'])
+    expect(plyo(session(25, 'speed'))).toEqual(['Pogo jumps 10'])
+    expect(plyo(equip(session(3, 'speed'), []))).toEqual(['Sled push sprints 10–15 m', 'Sled push sprints 10–15 m'])
+    const bike = { ...session(3, 'speed'), blocks: session(3, 'speed').blocks.map((b) => ({ ...b, exercises: b.exercises.map((e) => (e.name === 'Pogo jumps' ? e.substitutions![0].options[1] : e)) })) }
+    expect(plyo(bike)).toEqual(['Bike sprints 8–10″', 'Broad jumps 3 · set 1 of 3', 'Broad jumps 3 · set 2 of 3', 'Broad jumps 3 · set 3 of 3'])
+  })
+
+  it('leaves Drills and Accelerations rows as they were', () => {
+    const [, drills, , accels] = liveBlocks(session(3, 'speed'))
+    expect(drills.checklist.slice(0, 3)).toEqual(['Leg swings 10 / leg', 'A-skips 20 m · 1 of 2', 'A-skips 20 m · 2 of 2'])
+    expect(accels.checklist[0]).toBe('Accelerations · 1 of 4')
   })
 
   it('ticks and unticks sets, and ends the Block on the last one', () => {
