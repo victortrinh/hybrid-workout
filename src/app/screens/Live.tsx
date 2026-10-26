@@ -279,6 +279,12 @@ function Running({
               <p className="@container mt-1.5 flex flex-wrap items-baseline gap-x-2">
                 <StripedNumeral value={target.value} className="text-numeral-live" />
                 <span className="text-[24px] font-bold">{target.unit}</span>
+                {target.secondary && (
+                  <span className="basis-full text-[24px] font-bold">
+                    {target.secondary.value}
+                    {target.secondary.unit}
+                  </span>
+                )}
               </p>
             ) : (
               <p className="mt-2 text-headline">{nb(feelWords(block))}</p>
@@ -410,24 +416,32 @@ function Running({
  * its current leg's: the run, then each Station.
  */
 function targetFor(block: LiveBlock, context: RunContext, leg: number | null): LiveTarget | null {
-  const none = { incline: null, pace: null }
+  const plain = (value: string, unit: string, words: string): LiveTarget => ({
+    value,
+    unit,
+    secondary: null,
+    incline: null,
+    pace: null,
+    figure: `${value} ${unit}`,
+    words,
+  })
   const part = leg === null ? null : roundLegs(block)[leg]
   const station = block.kind === 'station' ? block.stations[0] : block.stations.find((s) => s.station === part)
   if ((block.kind === 'distance' || part === 'run') && block.meters) {
     const unit = part === 'run' ? ' run' : ''
     return block.meters % 1000 === 0
-      ? { ...none, value: String(block.meters / 1000), unit: `km${unit}`, words: km(block.meters) }
-      : { ...none, value: String(block.meters), unit: `m${unit}`, words: km(block.meters) }
+      ? plain(String(block.meters / 1000), `km${unit}`, km(block.meters))
+      : plain(String(block.meters), `m${unit}`, km(block.meters))
   }
   if (station) {
     // A round's Station says which, beside its number: "500 m SkiErg".
     const name = part === null ? '' : ` ${stations[station.station].name}`
-    if (station.reps) return { ...none, value: String(station.reps), unit: `reps${name}`, words: volume(station) }
+    if (station.reps) return plain(String(station.reps), `reps${name}`, volume(station))
     // Four digits don't fit a phone: 1000 m reads as 1 km, like the runs.
     const meters = station.meters ?? 0
     return meters % 1000 === 0
-      ? { ...none, value: String(meters / 1000), unit: `km${name}`, words: volume(station) }
-      : { ...none, value: String(meters), unit: `m${name}`, words: volume(station) }
+      ? plain(String(meters / 1000), `km${name}`, volume(station))
+      : plain(String(meters), `m${name}`, volume(station))
   }
   return liveTarget(block, context)
 }
@@ -544,15 +558,14 @@ function blockLength(block: LiveBlock): string {
   return block.seconds % 60 === 0 ? `${block.seconds / 60} min` : `${block.seconds} s`
 }
 
-/** "Ready? Up next: Rep 1 of 5 · 15.1 km/h", "Ready? Up next: 5 km" */
+/** "Ready? Up next: Rep 1 of 5 · 15.1 km/h · 3:58/km · 1% incline", "Ready? Up next: 5 km" */
 function readyWords(block: LiveBlock, target: LiveTarget | null): string {
-  const what = target ? targetShort(target) : blockLength(block)
+  const what = target ? target.figure : blockLength(block)
   return `Ready? Up next: ${what === block.name ? block.name : `${block.name} · ${what}`}`
 }
 
-/** "12.3 km/h", "4:52/km", "RPE 6–7" */
-function targetShort({ value, unit }: LiveTarget): string {
-  if (unit === 'RPE') return `RPE ${value}`
+/** The hero figure alone, in the unit the athlete answers in: "12.3 km/h", "4:52/km" */
+function heroShort({ value, unit }: LiveTarget): string {
   return unit === '/km' ? `${value}/km` : `${value} ${unit}`
 }
 
@@ -696,7 +709,7 @@ function Lanes({
               <span>{b.name}</span>
             )}
             <span className="text-muted">
-              {target ? targetShort(target) : blockLength(b)}
+              {target ? target.figure : blockLength(b)}
               {split && ` · ${clock(split.seconds)}`}
             </span>
             <span aria-hidden="true" className={`relative col-span-full block overflow-hidden bg-rule transition-[height] duration-(--dur-enter) ${current ? 'h-[26px]' : 'h-3'}`}>
@@ -755,7 +768,7 @@ function HeldCheck({
   const target = liveTarget(block, context)
   const indoor = run.environment === 'indoor'
   const unit = context.unit === 'kmh' ? 'km/h' : 'mph'
-  const question = target?.pace ? `held ${targetShort(target)}?` : 'done as written?'
+  const question = target?.pace ? `held ${heroShort(target)}?` : 'done as written?'
 
   function submit(event: FormEvent) {
     event.preventDefault()
