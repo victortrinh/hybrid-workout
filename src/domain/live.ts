@@ -94,6 +94,8 @@ export interface LiveBlock {
    * Its clock counts up, and it ends on the last tick or Done. Empty for every other Block.
    */
   checklist: string[]
+  /** The rest after each checklist row's set, in seconds, from its Exercise's Prescription; null where it has none (drills). */
+  rests: (number | null)[]
 }
 
 const RECOVERY_EFFORT: RunEffort = { pace: 'easy' }
@@ -109,7 +111,7 @@ export function liveBlocks(session: Session): LiveBlock[] {
   let round = 0
   return session.blocks.flatMap((block): LiveBlock[] => {
     const kind = blockKind(block)
-    const base = { meters: null, rep: null, round: null, stations: [] as LiveStation[], detail: [] as string[], checklist: [] as string[] }
+    const base = { meters: null, rep: null, round: null, stations: [] as LiveStation[], detail: [] as string[], checklist: [] as string[], rests: [] as (number | null)[] }
 
     if (block.setup) {
       return [
@@ -227,7 +229,8 @@ export function liveBlocks(session: Session): LiveBlock[] {
 
     // No run to target: drills, or a walk to warm up or cool down.
     const walk = kind === 'warm-up' || kind === 'cooldown'
-    const checklist = walk ? [] : checklistRows(block.exercises)
+    const sets = walk ? [] : checklistSets(block.exercises)
+    const checklist = sets.map((s) => s.row)
     return [
       {
         ...base,
@@ -239,6 +242,7 @@ export function liveBlocks(session: Session): LiveBlock[] {
         work: false,
         detail,
         checklist,
+        rests: sets.map((s) => s.rest),
       },
     ]
   })
@@ -249,7 +253,7 @@ export function liveBlocks(session: Session): LiveBlock[] {
  * set 1 of 2", "Accelerations · 1 of 4", "A-skips 20 m · 1 of 2", "Bike sprints 8–10″". Empty when one
  * isn't, so the Block stays on the clock.
  */
-export function checklistRows(exercises: Exercise[]): string[] {
+function checklistSets(exercises: Exercise[]): { row: string; rest: number | null }[] {
   const rows = exercises.map((exercise): string[] | null => {
     const { name, prescription: rx } = exercise
     switch (rx.kind) {
@@ -270,7 +274,11 @@ export function checklistRows(exercises: Exercise[]): string[] {
         return null
     }
   })
-  return rows.length > 0 && rows.every((r) => r !== null) ? rows.flat() as string[] : []
+  if (rows.length === 0 || rows.some((r) => r === null)) return []
+  return exercises.flatMap(({ prescription: rx }, i) => {
+    const rest = 'restSeconds' in rx && rx.restSeconds ? rx.restSeconds[1] : null
+    return rows[i]!.map((row) => ({ row, rest }))
+  })
 }
 
 /** A Block of sets to tick rather than a clock to run down. */
@@ -430,6 +438,8 @@ export interface LiveRun {
   ready: boolean
   /** The current checklist Block's sets ticked. Only a guide: never logged. */
   ticked: number[]
+  /** The rest after the set just ticked, like Live lifts'; null when nobody's resting. */
+  rest: { row: number; startedAt: number; seconds: number } | null
   /** Blocks run to a distance, with the seconds they took; a HYROX round's is the whole round. */
   splits: { block: number; seconds: number }[]
   /** Each HYROX round leg finished, with its own seconds, in the order of `roundLegs`. */
@@ -477,6 +487,7 @@ export function startRun({ week, session, date, environment }: LiveStart, now: n
     cutShort: [],
     ready: false,
     ticked: [],
+    rest: null,
     splits: [],
     legs: [],
     asks: [],
@@ -552,6 +563,7 @@ function moveOn(run: LiveRun, at: number, cut: { skipped: boolean; seconds: numb
     pausedAt: ready ? (run.pausedAt ?? at) : run.pausedAt,
     ready,
     ticked: [],
+    rest: null,
     finishedAt: block >= run.blocks.length ? at : null,
     undo: null,
   }
@@ -644,10 +656,22 @@ export function tick(run: LiveRun, row: number, now: number): LiveRun {
   const current = advance(run, now)
   const block = current.blocks[current.block]
   if (!block || row < 0 || row >= block.checklist.length) return current
-  const ticked = current.ticked.includes(row) ? current.ticked.filter((r) => r !== row) : [...current.ticked, row].sort((a, b) => a - b)
-  const next = { ...current, ticked }
-  return ticked.length === block.checklist.length ? finishBlock(next, now, current) : next
+  const untick = current.ticked.includes(row)
+  const ticked = untick ? current.ticked.filter((r) => r !== row) : [...current.ticked, row].sort((a, b) => a - b)
+  if (ticked.length === block.checklist.length) return finishBlock({ ...current, ticked, rest: null }, now, current)
+  // A tick starts its set's rest, ending any before it; an untick ends it.
+  const seconds = untick ? null : (block.rests[row] ?? null)
+  return { ...current, ticked, rest: seconds === null ? null : { row, startedAt: now, seconds } }
 }
+
+/** Seconds left of the rest between checklist sets, or null when nobody's resting. */
+export function restLeft(run: LiveRun, now: number): number | null {
+  if (!run.rest) return null
+  return Math.max(0, run.rest.seconds - (now - run.rest.startedAt) / 1000)
+}
+
+/** Rest over, or cut short. */
+export const endRest = (run: LiveRun): LiveRun => (run.rest ? { ...run, rest: null } : run)
 
 /** How long Undo stays offered after Skip block or Done. */
 export const UNDO_MS = 8_000
@@ -697,6 +721,7 @@ export function goBack(run: LiveRun, block: number, now: number): LiveRun {
     intervals: run.intervals.filter((i) => before(i.block)),
     ready: false,
     ticked: [],
+    rest: null,
     ending: false,
     finishedAt: null,
     undo: null,
@@ -723,7 +748,7 @@ export const markDone = (run: LiveRun, done: boolean): LiveRun => ({ ...run, mar
 /** End: pauses and opens the finish sheet. Keep going is `resume`. */
 export function end(run: LiveRun, now: number): LiveRun {
   const paused = pause(run, now)
-  return paused.block >= paused.blocks.length ? paused : { ...paused, ending: true, undo: null }
+  return paused.block >= paused.blocks.length ? paused : { ...paused, ending: true, undo: null, rest: null }
 }
 
 /** Held it (`actualPace` null) or Changed, for a rep that's over. */
@@ -999,6 +1024,8 @@ export function parseLiveRun(value: unknown): LiveRun | null {
     round: b.round ?? null,
     stations: b.stations ?? [],
     checklist: Array.isArray(b.checklist) ? b.checklist : [],
+    // Before rests between sets, none.
+    rests: Array.isArray(b.rests) ? b.rests : [],
   }))
   // Runs stored before Done, Ready and Undo have none of them.
   const before = v.undo && typeof v.undo === 'object' && typeof v.undo.at === 'number' ? parseLiveRun(v.undo.run) : null
@@ -1011,6 +1038,7 @@ export function parseLiveRun(value: unknown): LiveRun | null {
     legs: Array.isArray(v.legs) ? v.legs : [],
     ready: v.ready === true,
     ticked: Array.isArray(v.ticked) ? v.ticked : [],
+    rest: v.rest && typeof v.rest === 'object' && typeof v.rest.startedAt === 'number' ? v.rest : null,
     undo: before ? { run: before, at: v.undo!.at } : null,
     markedDone: v.markedDone === true,
   } as LiveRun

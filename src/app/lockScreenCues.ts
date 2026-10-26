@@ -8,19 +8,23 @@ import type { Cue } from '../domain/cues'
 import { currentSet, isLifts, type LiveLifts, type LiveSession } from '../domain/lifts'
 import { advance, isOver, liveTarget, type LiveRun } from '../domain/live'
 import type { RunContext } from '../domain/paces'
-import { liveLine, REST_OVER_LINE } from './liveCopy'
+import { liveLine, REST_OVER_LINE, SET_REST_OVER_LINE } from './liveCopy'
 
 /**
  * Every cue from now until the clock next waits on a tap: each timed Block's
  * end, up to the Ready screen, a Block run to a distance or a checklist, or
- * the end of the Session. Strength has one: the end of the rest.
+ * the end of the Session; or, between a checklist's sets, the end of the
+ * rest. Strength has one: the end of the rest.
  */
 export function cuesFor(live: LiveSession, runContext: RunContext): Cue[] {
   return isLifts(live) ? restCue(live) : runCues(live, { ...runContext, environment: live.environment })
 }
 
 function runCues(run: LiveRun, context: RunContext): Cue[] {
-  if (isOver(run) || run.pausedAt !== null) return []
+  if (isOver(run)) return []
+  // A checklist Block has no clock to run down: only its rest ends on its own.
+  if (run.rest) return [checklistRestCue(run, run.rest)]
+  if (run.pausedAt !== null) return []
   const cues: Cue[] = []
   let next = run
   while (next.block < next.blocks.length && next.pausedAt === null) {
@@ -40,6 +44,13 @@ function cueText(run: LiveRun, context: RunContext): Pick<Cue, 'title' | 'body'>
   if (run.ready) return { title: `${block.name} next`, body: 'Open the app and tap Start.' }
   const target = liveTarget(block, context)
   return { title: target ? `${block.name} · ${target.figure}` : block.name, body: liveLine(block, run) }
+}
+
+function checklistRestCue(run: LiveRun, rest: NonNullable<LiveRun['rest']>): Cue {
+  const block = run.blocks[run.block]
+  const next = block.checklist.find((_, i) => i > rest.row && !run.ticked.includes(i)) ??
+    block.checklist.find((_, i) => !run.ticked.includes(i))
+  return { at: rest.startedAt + rest.seconds * 1000, title: next ?? 'Rest over', body: SET_REST_OVER_LINE }
 }
 
 function restCue(lifts: LiveLifts): Cue[] {

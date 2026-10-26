@@ -358,7 +358,9 @@ function prescriptionWords(
     case 'strides':
       return `${rx.reps} × ${duration(rx.seconds)}`
     case 'accelerations':
-      return `${rx.reps} × ${rx.meters} m · ${range(rx.percentOfMax)}% of max`
+      return [`${rx.reps} × ${rx.meters} m · ${range(rx.percentOfMax)}% of max`, rx.restSeconds && `${range(rx.restSeconds)}″ rest`]
+        .filter(Boolean)
+        .join(' · ')
     case 'sets': {
       const reps = typeof rx.reps === 'number' ? `${rx.reps}` : range(rx.reps)
       const pounds = weights && prescribedPounds(rx, weights)

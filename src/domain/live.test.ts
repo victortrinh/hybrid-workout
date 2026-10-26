@@ -13,6 +13,8 @@ import {
   shortBlocks,
   tick,
   undo,
+  endRest,
+  restLeft,
   answerStations,
   blockLeft,
   end,
@@ -425,6 +427,78 @@ describe('checklist Blocks', () => {
       ],
     })
     expect(liveStatus(advance(tap(run, at(13)), at(40)))).toBe('done')
+  })
+})
+
+describe('rest on checklist Blocks', () => {
+  const plyometrics = (week = 3) => nextBlock(advance(start(session(week, 'speed')), at(7)), at(10))
+  /** On Accelerations at minute 14: Plyometrics Done at 13. */
+  const accelerations = () => nextBlock(plyometrics(), at(13))
+  const SECOND = 1000
+
+  it('starts the Exercise’s rest on a tick: pogo 60″, broad jumps 20″, Accelerations 45″', () => {
+    const pogo = tick(plyometrics(), 0, at(11))
+    expect(pogo.rest).toEqual({ row: 0, startedAt: at(11), seconds: 60 })
+    expect(restLeft(pogo, at(11) + 15 * SECOND)).toBe(45)
+    expect(restLeft(pogo, at(13))).toBe(0)
+    const broad = tick(tick(pogo, 1, at(12)), 2, at(12.5))
+    expect(broad.rest).toEqual({ row: 2, startedAt: at(12.5), seconds: 20 })
+    const accels = tick(accelerations(), 0, at(14))
+    expect(accels.rest).toEqual({ row: 0, startedAt: at(14), seconds: 45 })
+  })
+
+  it('ends the rest on the next tick, which starts its own; the Block’s last set starts none', () => {
+    let run = tick(plyometrics(), 0, at(11))
+    run = tick(run, 1, at(11.25))
+    expect(run.rest).toEqual({ row: 1, startedAt: at(11.25), seconds: 60 })
+    run = tick(tick(tick(run, 2, at(12)), 3, at(12.5)), 4, at(13))
+    expect(run.block).toBe(3)
+    expect(run.rest).toBeNull()
+    expect(restLeft(run, at(13))).toBeNull()
+    // Ticked out of order, the last one left still ends the Block with no rest.
+    const accels = [3, 2, 1].reduce((r, row) => tick(r, row, at(14)), accelerations())
+    expect(accels.rest).not.toBeNull()
+    expect(tick(accels, 0, at(14.5)).rest).toBeNull()
+  })
+
+  it('clears the rest on an untick, Done, End or the rest’s own end', () => {
+    const resting = tick(plyometrics(), 0, at(11))
+    expect(tick(resting, 0, at(11.1)).rest).toBeNull()
+    expect(nextBlock(resting, at(11.1)).rest).toBeNull()
+    expect(end(resting, at(11.1)).rest).toBeNull()
+    expect(endRest(resting).rest).toBeNull()
+    expect(endRest(plyometrics())).toEqual(plyometrics())
+  })
+
+  it('clears it on Skip block too, and going back', () => {
+    const resting = tick(plyometrics(), 0, at(11))
+    expect(goBack(resting, 1, at(11.1)).rest).toBeNull()
+    const skipped = { ...resting, blocks: resting.blocks.map((b, i) => (i === 2 ? { ...b, work: true } : b)) }
+    expect(nextBlock(skipped, at(11.1))).toMatchObject({ rest: null, skipped: [2] })
+  })
+
+  it('gives the Drills no rest', () => {
+    const drills = advance(start(session(3, 'speed')), at(7))
+    expect(drills.blocks[1].kind).toBe('drills')
+    expect(tick(drills, 1, at(8)).rest).toBeNull()
+  })
+
+  it('rests the Deload’s and the Taper’s jumps the same way', () => {
+    const deload = tick(plyometrics(7), 0, at(11))
+    expect(deload.rest).toEqual({ row: 0, startedAt: at(11), seconds: 60 })
+    expect(tick(deload, 1, at(12)).rest).toEqual({ row: 1, startedAt: at(12), seconds: 20 })
+    // The Taper's one pogo set is the whole Block: ticking it ends the Block, with nothing to rest before.
+    const taper = nextBlock(advance(start(session(25, 'speed')), at(7)), at(10))
+    expect(taper.blocks[taper.block].checklist).toEqual(['Pogo jumps 10'])
+    expect(tick(taper, 0, at(11))).toMatchObject({ block: 3, rest: null })
+  })
+
+  it('parses a run stored before rests with none', () => {
+    const { rest: _r, ...old } = plyometrics()
+    const blocks = old.blocks.map(({ rests: _, ...b }) => b)
+    const parsed = parseLiveRun(JSON.parse(JSON.stringify({ ...old, blocks })))!
+    expect(parsed.rest).toBeNull()
+    expect(tick(parsed, 0, at(11)).rest).toBeNull()
   })
 })
 

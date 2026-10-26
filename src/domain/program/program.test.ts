@@ -302,7 +302,7 @@ describe('describeExercise', () => {
     expect(line(14, 'strength', 'Back squat').detail).toBe('2 × 4 · RPE 7–8 · 90–120″ rest')
     expect(line(7, 'strength', 'Back squat').detail).toBe('2 × 5 · 85–90% of Working weight · RPE ≤ 6 · 90–120″ rest')
     expect(line(3, 'speed', 'Accelerations')).toMatchObject({
-      detail: '4 × 15 m · 80–90% of max',
+      detail: '4 × 15 m · 80–90% of max · 45″ rest',
       substitutions: ['No floor space or Readiness says no jumps: Sled push sprints 10–15 m, light, or Bike sprints 8–10″'],
     })
   })

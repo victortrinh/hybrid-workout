@@ -115,7 +115,7 @@ export type Prescription =
       effort: RunEffort
     }
   | { kind: 'strides'; reps: number; seconds: number }
-  | { kind: 'accelerations'; reps: number; meters: number; percentOfMax: Range }
+  | { kind: 'accelerations'; reps: number; meters: number; percentOfMax: Range; restSeconds?: Range }
   | {
       kind: 'sets'
       sets: number

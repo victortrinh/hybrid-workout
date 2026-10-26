@@ -22,6 +22,7 @@ import {
   currentLeg,
   distanceSeconds,
   end,
+  endRest,
   goBack,
   heldUnanswered,
   isChecklist,
@@ -59,6 +60,7 @@ import type { Lane } from '../../domain/program/types'
 import type { StationPart } from '../../domain/log'
 import type { WorkingWeightSuggestion } from '../../domain/suggestion'
 import { dropIn, LanePresence, play, riseIn, useEntrances, wipeIn } from '../motion'
+import { RestCountdown } from '../components/RestCountdown'
 import { StripedNumeral } from '../components/StripedNumeral'
 import { nb } from '../format'
 import { blockChangeCue, keepAwake, letSleep, unlockSound } from '../liveCues'
@@ -380,6 +382,24 @@ function Running({
           </>
         )}
       </div>
+
+      {/* Between a checklist's sets: the rest, as Live lifts has it, over the bar. Ticking the next set ends it. */}
+      <LanePresence popLayout>
+        {!over && run.rest && (
+          <motion.div
+            key={`rest-${run.block}-${run.rest.row}-${run.rest.startedAt}`}
+            {...play(riseIn, entrances)}
+            className="flex-none bg-cobalt px-pad py-2 text-on-cobalt desktop:px-gutter"
+          >
+            <RestCountdown
+              startedAt={run.rest.startedAt}
+              seconds={run.rest.seconds}
+              onOver={() => act(endRest)}
+              onSkip={() => act(endRest)}
+            />
+          </motion.div>
+        )}
+      </LanePresence>
 
       {!over && block && (
         <div className="flex-none border-t-2 border-ink bg-paper px-pad pt-3 pb-[calc(12px+env(safe-area-inset-bottom))] desktop:px-gutter">

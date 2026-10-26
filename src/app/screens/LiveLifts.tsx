@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type RefObject } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Button, Form, Group, Input, Label, NumberField, Radio, RadioGroup } from 'react-aria-components'
 import { motion } from 'motion/react'
 import { nowMs } from '../../domain/clock'
@@ -13,7 +13,6 @@ import {
   logSet,
   predictedLiftsRpe,
   rpeChoices,
-  restLeft,
   setLoad,
   setReps,
   setRpe,
@@ -21,15 +20,15 @@ import {
   type LiveLifts,
   type LiveSet,
 } from '../../domain/lifts'
-import { clock } from '../../domain/paces'
 import type { WorkingWeightSuggestion } from '../../domain/suggestion'
 import { suggestionCopy } from '../coachCopy'
 import { FieldLane } from '../components/FieldLane'
+import { RestCountdown } from '../components/RestCountdown'
 import { Icon } from '../components/Icons'
 import { StripedNumeral } from '../components/StripedNumeral'
 import { nb } from '../format'
 import { DUR, dropIn, lane, LanePresence, play, riseIn, useEntrances, useMounted, wipeIn } from '../motion'
-import { blockChangeCue, keepAwake, letSleep, unlockSound } from '../liveCues'
+import { keepAwake, letSleep, unlockSound } from '../liveCues'
 import { ALL_SETS_LINE, finishLine, liftsStartLine, loggedLine, REST_OVER_LINE, rpeLine } from '../liveCopy'
 import { navigate, SCREEN_PATH } from '../router'
 import {
@@ -83,8 +82,6 @@ export function Lifting({
   const [say, setSay] = useState(() => liftsStartLine(lifts))
   const liftsRef = useRef(lifts)
   liftsRef.current = lifts
-  const restTextRef = useRef<HTMLElement>(null)
-  const restFillRef = useRef<HTMLElement>(null)
   /** The set whose RPE takes focus once it's logged, so the next tap is right there. */
   const [focusRpe, setFocusRpe] = useState<string | null>(null)
 
@@ -96,48 +93,6 @@ export function Lifting({
     },
     [onChange],
   )
-
-  /** Writes the rest clock into the page without React. */
-  const paint = useCallback((now: number) => {
-    const { rest } = liftsRef.current
-    const left = restLeft(liftsRef.current, now)
-    if (!rest || left === null) return
-    if (restTextRef.current) restTextRef.current.textContent = clock(Math.ceil(left - 0.001))
-    if (restFillRef.current) restFillRef.current.style.width = `${Math.min(100, (1 - left / rest.seconds) * 100)}%`
-  }, [])
-
-  useLayoutEffect(() => paint(nowMs()))
-
-  const restStarted = lifts.rest?.startedAt ?? null
-  useEffect(() => {
-    if (restStarted === null) return
-    let timer = 0
-    const tick = () => {
-      const now = nowMs()
-      const left = restLeft(liftsRef.current, now)
-      if (left === null) return
-      if (left <= 0) {
-        blockChangeCue()
-        setSay(REST_OVER_LINE)
-        act(endRest)
-        return
-      }
-      paint(now)
-      const toNextSecond = (left * 1000) % 1000
-      timer = window.setTimeout(tick, toNextSecond < 1 ? 1000 : toNextSecond)
-    }
-    tick()
-    const visible = () => {
-      if (document.visibilityState !== 'visible') return
-      window.clearTimeout(timer)
-      tick()
-    }
-    document.addEventListener('visibilitychange', visible)
-    return () => {
-      window.clearTimeout(timer)
-      document.removeEventListener('visibilitychange', visible)
-    }
-  }, [restStarted, act, paint])
 
   useEffect(() => {
     if (lifts.ending) {
@@ -291,8 +246,11 @@ export function Lifting({
               }
               onLog={() => current && logCurrent(current.exercise, current.set)}
               rpe={lifts.sets[lifts.rest.exercise][lifts.rest.set].rpe}
-              textRef={restTextRef}
-              fillRef={restFillRef}
+              rest={lifts.rest}
+              onOver={() => {
+                setSay(REST_OVER_LINE)
+                act(endRest)
+              }}
               onRpe={(rpe) => {
                 const { exercise: x, set: s } = lifts.rest!
                 act((l) => setRpe(l, x, s, rpe))
@@ -363,8 +321,8 @@ function RestBar({
   next,
   onLog,
   rpe,
-  textRef,
-  fillRef,
+  rest,
+  onOver,
   onRpe,
   onSkip,
 }: {
@@ -374,27 +332,15 @@ function RestBar({
   next: { label: string; words: string } | null
   onLog: () => void
   rpe: number
-  textRef: RefObject<HTMLElement | null>
-  fillRef: RefObject<HTMLElement | null>
+  rest: { startedAt: number; seconds: number }
+  onOver: () => void
   onRpe: (rpe: number) => void
   onSkip: () => void
 }) {
   const [rating, setRating] = useState(false)
   return (
     <div className="bg-cobalt px-pad pt-3 pb-[calc(12px+env(safe-area-inset-bottom))] text-on-cobalt desktop:px-gutter">
-      <div className="flex items-center gap-3.5">
-        <span className="text-[17px] font-bold">Rest</span>
-        <span aria-hidden="true" className="relative h-2 flex-1 overflow-hidden bg-cobalt-soft">
-          <i ref={fillRef} className="lane-fill absolute inset-y-0 left-0 bg-on-cobalt" />
-        </span>
-        <b ref={textRef} role="timer" aria-label="Rest left" className="text-[26px] font-black font-stretch-125%" />
-        <Button
-          onPress={onSkip}
-          className="min-h-11 min-w-11 cursor-pointer px-2 text-[15px] font-bold text-on-cobalt underline decoration-2 underline-offset-4 data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-on-cobalt"
-        >
-          Skip
-        </Button>
-      </div>
+      <RestCountdown startedAt={rest.startedAt} seconds={rest.seconds} onOver={onOver} onSkip={onSkip} />
       {rating ? (
         <RadioGroup
           aria-label={`RPE for ${exercise.name}, set ${number + 1}, from the rest bar`}
