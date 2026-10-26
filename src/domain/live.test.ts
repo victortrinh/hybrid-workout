@@ -18,6 +18,7 @@ import {
   answerStations,
   blockLeft,
   end,
+  hasByFeelReps,
   heldUnanswered,
   isLive,
   isLiveRun,
@@ -44,7 +45,7 @@ import {
   type LiveBlock,
   type LiveRun,
 } from './live'
-import { clock, trainingPaces, type RunContext } from './paces'
+import { clock, currentPaces, trainingPaces, type RunContext } from './paces'
 import { program } from './program/program'
 import type { Session } from './program/types'
 
@@ -663,6 +664,7 @@ describe('liveLog', () => {
       resultSeconds: null,
       environment: 'indoor',
       distanceMeters: 9400,
+      recoveryPace: null,
       intervals: [{ block: 1, rep: 1, targetPace: 292, held: true, actualPace: null }],
       sets: [],
       stations: [],
@@ -690,6 +692,95 @@ describe('liveLog', () => {
     })
     const cut = end(advance(start(session(2, '5k-test')), at(20)), at(20))
     expect(liveLog(cut, at(20), { ...input, resultSeconds: 1350 })).toMatchObject({ status: 'partial', resultSeconds: null })
+  })
+})
+
+describe('by-feel speeds', () => {
+  const input = { id: 'live-5678', rpe: 8, distanceMeters: null, resultSeconds: null, updatedAt: '2026-11-11T18:00:00.000Z' }
+  /** 14 km/h and 6 km/h, as seconds per km. */
+  const HARD = 257
+  const JOG = 600
+  /**
+   * Speed on Rep 1 at minute 10: the jog ran its 7, drills, Plyometrics and
+   * Accelerations Done at 8, 9 and 10, Start at once. Reps are Blocks 4, 6, 8, 10 and 12.
+   */
+  const onRep1 = (week: number) => go(nextBlock(nextBlock(nextBlock(advance(start(session(week, 'speed')), at(7)), at(8)), at(9)), at(10)), at(10))
+
+  it('raises no Held it or Changed after a by-feel rep, and still does after a paced one', () => {
+    const byFeel = advance(onRep1(3), at(40))
+    expect(byFeel.blocks[4]).toMatchObject({ name: 'Rep 1 of 5', effort: { feel: 'hard' } })
+    expect(isOver(byFeel)).toBe(true)
+    expect(byFeel.asks).toEqual([])
+    expect(answer(byFeel, 4, null, HARD)).toBe(byFeel)
+
+    const paced = advance(onRep1(4), at(40))
+    expect(paced.asks).toEqual([4, 6, 8, 10, 12])
+  })
+
+  it('asks the question at the end only of a run with by-feel reps', () => {
+    expect(hasByFeelReps(start(session(3, 'speed')))).toBe(true)
+    expect(hasByFeelReps(start(session(4, 'speed')))).toBe(false)
+    expect(hasByFeelReps(start(session(3, 'threshold')))).toBe(false)
+    // Deload reps are controlled: Threshold pace, so asked per rep like any paced rep.
+    expect(hasByFeelReps(start(session(11, 'speed')))).toBe(false)
+  })
+
+  it('logs the hard-rep speed on every by-feel rep not cut short, and the jogs’ as the recovery pace', () => {
+    // Rep 2 skipped a minute in.
+    const run = advance(nextBlock(advance(onRep1(3), at(15.5)), at(15.5)), at(40))
+    const log = liveLog(heldUnanswered(run, indoor), at(40), { ...input, hardPace: HARD, recoveryPace: JOG })
+    expect(log).toMatchObject({ status: 'partial', recoveryPace: JOG })
+    expect(log.intervals).toEqual(
+      [4, 8, 10, 12].map((block) => ({ block, rep: block / 2 - 1, targetPace: null, held: false, actualPace: HARD })),
+    )
+  })
+
+  it('leaves out the reps never reached or ended in', () => {
+    const ended = end(advance(onRep1(3), at(16)), at(16))
+    expect(liveLog(ended, at(16), { ...input, hardPace: HARD }).intervals.map((i) => i.block)).toEqual([4])
+  })
+
+  it('saves the log without them when the question is skipped', () => {
+    const run = advance(onRep1(3), at(40))
+    const log = liveLog(heldUnanswered(run, indoor), at(40), input)
+    expect(log.recoveryPace).toBeNull()
+    expect(log.intervals).toEqual(
+      [4, 6, 8, 10, 12].map((block) => ({ block, rep: block / 2 - 1, targetPace: null, held: true, actualPace: null })),
+    )
+    expect(liveLog(run, at(40), { ...input, hardPace: null, recoveryPace: null })).toEqual(log)
+  })
+
+  it('keeps paced reps’ own answers, and gives them no recovery pace but the jogs’', () => {
+    let run = advance(onRep1(4), at(40))
+    run = heldUnanswered(answer(run, 6, 270, 280), indoor)
+    const log = liveLog(run, at(40), { ...input, hardPace: HARD, recoveryPace: JOG })
+    expect(log.intervals.map((i) => [i.block, i.held, i.actualPace])).toEqual([
+      [4, true, null],
+      [6, false, 280],
+      [8, true, null],
+      [10, true, null],
+      [12, true, null],
+    ])
+  })
+
+  it('logs a run stored before by-feel speeds, its by-feel reps already asked, once per rep', () => {
+    const run = advance(onRep1(3), at(40))
+    const stored = parseLiveRun(JSON.parse(JSON.stringify({ ...run, asks: [4, 6, 8, 10, 12] })))!
+    expect(stored.asks).toEqual([4, 6, 8, 10, 12])
+    const log = liveLog(heldUnanswered(stored, indoor), at(40), { ...input, hardPace: HARD })
+    expect(log.intervals.map((i) => [i.block, i.held, i.actualPace])).toEqual(
+      [4, 6, 8, 10, 12].map((block) => [block, false, HARD]),
+    )
+  })
+
+  it('never changes the Training paces', () => {
+    const fiveK = liveLog(advance(start(session(2, '5k-test')), at(60)), at(60), { ...input, id: 'live-5k01' })
+    const test = { ...fiveK, status: 'done' as const, resultSeconds: 23 * 60 }
+    const byFeel = liveLog(advance(onRep1(3), at(40)), at(40), { ...input, hardPace: 200, recoveryPace: 300 })
+    const today = localDate('2026-11-12')
+    expect(currentPaces([test, byFeel], today, null)).toEqual(currentPaces([test], today, null))
+    expect(currentPaces([byFeel], today, null)).toBeNull()
+    expect(currentPaces([byFeel], today, 25 * 60)).toEqual(trainingPaces(25 * 60, { estimate: true }))
   })
 })
 

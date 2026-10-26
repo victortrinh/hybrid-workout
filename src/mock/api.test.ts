@@ -19,6 +19,7 @@ const log = (change: Partial<SessionLog> = {}): SessionLog => ({
   resultSeconds: null,
   environment: null,
   distanceMeters: null,
+  recoveryPace: null,
   intervals: [{ block: 0, rep: 1, targetPace: 240, held: true, actualPace: null }],
   sets: [],
   stations: [],
@@ -58,6 +59,11 @@ describe('the Worker in the browser', () => {
     await sync({ sessionLogs: [later] })
     await sync({ sessionLogs: [log()] })
     expect((await state()).sessionLogs).toEqual([later])
+  })
+
+  it('keeps by-feel speeds: a rep’s actual pace with no target, and the jogs’ recovery pace', () => {
+    const byFeel = log({ recoveryPace: 600, intervals: [{ block: 4, rep: 1, targetPace: null, held: false, actualPace: 257 }] })
+    return sync({ sessionLogs: [byFeel] }).then(async () => expect((await state()).sessionLogs).toEqual([byFeel]))
   })
 
   it('keeps the race’s finish time, past the hour a 5K test is held to', async () => {
@@ -105,14 +111,16 @@ describe('the Worker in the browser', () => {
   })
 
   it('exports what it holds', async () => {
-    await sync({ sessionLogs: [log()] })
+    await sync({ sessionLogs: [log({ recoveryPace: 600 })] })
     const response = await api(new Request('http://localhost/api/export.json'))
     expect(response.headers.get('content-disposition')).toMatch(/attachment; filename="compromised-.*\.json"/)
     const { tables } = (await response.json()) as { tables: Record<string, unknown[]> }
-    expect(tables.session_logs).toHaveLength(1)
+    expect(tables.session_logs).toEqual([expect.objectContaining({ id: 'log-speed-0001', recovery_pace: 600 })])
     expect(tables.interval_logs).toHaveLength(1)
     expect(tables.starting_point).toEqual([])
     const zip = await api(new Request('http://localhost/api/export.zip'))
     expect(zip.headers.get('content-type')).toBe('application/zip')
+    const files = new TextDecoder().decode(await zip.arrayBuffer())
+    expect(files).toMatch(/session_logs\.csvid,week,session_id,.*,recovery_pace\r\nlog-speed-0001,.*,600\r\n/)
   })
 })

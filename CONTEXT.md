@@ -71,6 +71,10 @@ _Avoid_: alert, reminder
 What actually happened in a Session: actual sets, reps, loads, times, RPE and notes.
 _Avoid_: entry, record
 
+**By-feel speeds**:
+The speeds of a Live session's by-feel reps and of its recovery jogs, asked once on the finish sheet (a treadmill speed indoors, a pace per km outdoors), since nobody types on a moving belt. Both optional. The hard-rep speed is logged on each by-feel rep that ran its course; the jogs' is the Session log's recovery pace. Never Training paces (ADR-0002).
+_Avoid_: rep feedback, actual speed
+
 **Station log**:
 One line of a HYROX session or Race simulation log: a round's time, or a run or Station with the load, distance and split actually done.
 

@@ -345,6 +345,7 @@ export function liftsLog(lifts: LiveLifts, now: number, input: LiftsLogInput): S
     resultSeconds: null,
     environment: null,
     distanceMeters: null,
+    recoveryPace: null,
     intervals: [],
     stations: [],
     sets,

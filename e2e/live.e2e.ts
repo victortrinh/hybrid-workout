@@ -138,6 +138,8 @@ test('a full Threshold Session from Start to logged', async ({ page }) => {
   await expect(page.getByText('Session over')).toBeVisible()
   await expect(s.pause).toHaveCount(0)
   await page.getByRole('textbox', { name: 'Console distance, km' }).fill('9.4')
+  // Paced reps were asked one by one: no By-feel speeds at the end.
+  await expect(page.getByRole('region', { name: 'By-feel speeds' })).toHaveCount(0)
   // Overall RPE starts on the Coach's guess for Threshold, said as a guess: Save is the only tap.
   await expect(page.getByRole('radio', { name: '7', exact: true })).toBeChecked()
   await expect(page.getByText('The Coach’s guess: 7.')).toBeVisible()
@@ -477,3 +479,117 @@ test('Speed: Done, the checklists, Start, Undo, going back, and a Partial flippe
   await expect(page).toHaveURL('/')
   await expect.poll(() => sent.at(-1)).toMatchObject({ week: 3, sessionId: 'speed', status: 'done' })
 })
+
+/** Speed, Week 3, from Start to Rep 1 started: the warm-up, drills, Plyometrics and Accelerations each ended with Done. */
+async function toRep1(page: Page) {
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Speed, 5 × 3′')
+  await page.getByRole('button', { name: 'Start Speed' }).click()
+  const s = live(page)
+  for (const block of ['Warm-up · 7 min', 'Drills · 7 sets', 'Plyometrics · 5 sets', 'Accelerations · 4 sets']) {
+    await expect(s.block).toHaveText(block)
+    await s.skip.click()
+  }
+  await expect(s.block).toHaveText('Ready? Up next: Rep 1 of 5 · 3 min')
+  await s.start.click()
+  return s
+}
+
+test('by-feel reps ask nothing as they go, and the speeds once at the end, on the treadmill', async ({ page }) => {
+  const sent = await serveHistory(page, [...WEEK_2])
+  await page.clock.install({ time: WEEK_3 })
+  await page.goto('/')
+  await page.clock.pauseAt(new Date(WEEK_3.getTime() + 1000))
+  const s = await toRep1(page)
+
+  // "Hard, by feel": nothing to hold, so nothing asked after the rep.
+  await page.clock.runFor('03:00')
+  await expect(s.block).toHaveText('Jog · 90 s')
+  await expect(page.getByRole('region', { name: /held the target\?$/ })).toHaveCount(0)
+
+  // Rep 2 skipped a minute in, then the rest runs out to the finish sheet.
+  await page.clock.runFor('02:30')
+  await expect(s.block).toHaveText('Rep 2 of 5 · 3 min')
+  await s.skip.click()
+  await page.clock.runFor('18:30')
+  await expect(page.getByText('Session over')).toBeVisible()
+  await expect(page.getByRole('region', { name: /held the target\?$/ })).toHaveCount(0)
+
+  const speeds = page.getByRole('region', { name: 'By-feel speeds' })
+  await expect(speeds).toContainText('Optional.')
+  await speeds.getByRole('textbox', { name: 'Hard reps, km/h' }).fill('14')
+  await speeds.getByRole('textbox', { name: 'Jogs, km/h' }).fill('6')
+  await page.clock.resume()
+  await expectNoAxeViolations(page)
+  await page.getByRole('button', { name: 'Save log' }).click()
+
+  await expect(page).toHaveURL('/')
+  // 14 km/h on every rep that ran its course, Rep 2 left out; the jogs at 6 km/h.
+  await expect.poll(() => sent.at(-1)).toMatchObject({
+    week: 3,
+    sessionId: 'speed',
+    status: 'partial',
+    environment: 'indoor',
+    recoveryPace: 600,
+    intervals: [4, 8, 10, 12].map((block) => ({ block, rep: block / 2 - 1, targetPace: null, held: false, actualPace: 257 })),
+  })
+  // Logged speeds are no 5K test: Threshold still reads off the 23:00 test.
+  await doToday(page, page.getByRole('list').filter({ hasText: 'Strength' }).getByRole('button', { name: /^Threshold/ }))
+  await expect(page.getByRole('heading', { level: 1 }).locator('xpath=following-sibling::p[1]')).toHaveText(/^12\.3\skm\/h/)
+})
+
+test('outdoors, the by-feel question asks pace per km, and skipping it still saves the log', async ({ page }) => {
+  const sent = await serveHistory(page, [...WEEK_2])
+  await page.addInitScript(() => localStorage.setItem('compromised:environment', JSON.stringify({ '3/speed': 'outdoor' })))
+  await page.clock.install({ time: WEEK_3 })
+  await page.goto('/')
+  await page.clock.pauseAt(new Date(WEEK_3.getTime() + 1000))
+  const s = await toRep1(page)
+
+  // Rep 1 runs its course; End in the jog after it.
+  await page.clock.runFor('03:30')
+  await expect(s.block).toHaveText('Jog · 90 s')
+  await page.getByRole('button', { name: 'End' }).click()
+  const speeds = page.getByRole('region', { name: 'By-feel speeds' })
+  await expect(speeds.getByRole('textbox', { name: 'Hard reps, per km' })).toBeVisible()
+  await expect(speeds.getByRole('textbox', { name: 'Jogs, per km' })).toBeVisible()
+  await page.getByRole('button', { name: 'Save log' }).click()
+
+  await expect(page).toHaveURL('/')
+  await expect.poll(() => sent.at(-1)).toMatchObject({
+    sessionId: 'speed',
+    status: 'partial',
+    environment: 'outdoor',
+    recoveryPace: null,
+    intervals: [{ block: 4, rep: 1, targetPace: null, held: true, actualPace: null }],
+  })
+})
+
+test('a by-feel pace that can’t be right holds the save until it’s put right', async ({ page }) => {
+  const sent = await serveHistory(page, [...WEEK_2])
+  await page.addInitScript(() => localStorage.setItem('compromised:environment', JSON.stringify({ '3/speed': 'outdoor' })))
+  await page.clock.install({ time: WEEK_3 })
+  await page.goto('/')
+  await page.clock.pauseAt(new Date(WEEK_3.getTime() + 1000))
+  const s = await toRep1(page)
+  await page.clock.runFor('03:30')
+  await expect(s.block).toHaveText('Jog · 90 s')
+  await page.getByRole('button', { name: 'End' }).click()
+
+  const hard = page.getByRole('textbox', { name: 'Hard reps, per km' })
+  await hard.fill('045')
+  await page.getByRole('button', { name: 'Save log' }).click()
+  await expect(page.getByText('A pace like 4:17.')).toBeVisible()
+  await expect(page).toHaveURL('/live')
+  await hard.fill('417')
+  await expect(hard).toHaveValue('4:17')
+  await page.getByRole('textbox', { name: 'Jogs, per km' }).fill('1000')
+  await page.getByRole('button', { name: 'Save log' }).click()
+
+  await expect(page).toHaveURL('/')
+  await expect.poll(() => sent.at(-1)).toMatchObject({
+    environment: 'outdoor',
+    recoveryPace: 600,
+    intervals: [{ block: 4, rep: 1, targetPace: null, held: false, actualPace: 257 }],
+  })
+})
+

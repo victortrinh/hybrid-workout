@@ -8,7 +8,7 @@ import { localDate, type LocalDate } from '../../domain/calendar'
 import { findWeek } from '../../domain/coach'
 import { DEFAULT_EQUIPMENT, equip, type Equipment } from '../../domain/equipment'
 import { startLifts } from '../../domain/lifts'
-import { liveBlocks, liveTarget, roundLegs, startRun, stationLogs, type LiveBlock } from '../../domain/live'
+import { byFeelRep, liveBlocks, liveTarget, roundLegs, startRun, stationLogs, type LiveBlock } from '../../domain/live'
 import { RACE_SESSION_ID, type IntervalLog, type LoggedStatus, type SessionLog, type StationPart } from '../../domain/log'
 import type { PainArea, PainReport } from '../../domain/pain'
 import { latestFiveKTest, trainingPaces, type Environment } from '../../domain/paces'
@@ -23,6 +23,10 @@ const HARD_DAYS = [0, 2, 4, 6]
 
 /** Each 5K test's time when a scenario doesn't say: 23:00 at baseline down to 19:55. */
 const FIVE_K: Record<number, number> = { 2: 1380, 9: 1335, 17: 1265, 25: 1195 }
+
+/** By-feel speeds as the first Live session ran them: 14 km/h reps, 6 km/h jogs. */
+const BY_FEEL_PACE = 257
+const JOG_PACE = 600
 
 /** Where a calibration ramps to, RPE 7: the athlete's Working weights in Week 1. */
 const CALIBRATED: Record<LiftId, number> = {
@@ -159,6 +163,7 @@ function build(
     resultSeconds: null,
     environment: null,
     distanceMeters: null,
+    recoveryPace: null,
     intervals: [],
     sets: [],
     stations: [],
@@ -222,6 +227,8 @@ function build(
   const kept = partial ? reps.slice(0, Math.ceil(reps.length * 0.6)) : reps
   const missed = options.missedReps ?? 0
   const intervals: IntervalLog[] = kept.map(({ b, block }, i) => {
+    // A by-feel rep has no target to hold: it logs the speed answered at the end.
+    if (byFeelRep(b)) return { block, rep: b.rep!, targetPace: null, held: false, actualPace: BY_FEEL_PACE }
     const targetPace = liveTarget(b, context)?.pace ?? null
     const held = i < kept.length - missed
     return { block, rep: b.rep!, targetPace, held, actualPace: held || targetPace === null ? null : targetPace + 8 }
@@ -229,6 +236,7 @@ function build(
   return {
     ...done,
     environment,
+    recoveryPace: blocks.some(byFeelRep) ? JOG_PACE : null,
     intervals,
     resultSeconds: session.type === '5k-test' && status === 'done' ? (options.resultSeconds ?? FIVE_K[week] ?? 1380) : null,
   }

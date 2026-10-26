@@ -39,6 +39,7 @@ function strength(week: number, lifts: Partial<Record<LiftId, SetSpec[]>>, statu
     resultSeconds: null,
     environment: null,
     distanceMeters: null,
+    recoveryPace: null,
     intervals: [],
     stations: [],
     sets,

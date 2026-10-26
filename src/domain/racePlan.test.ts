@@ -25,6 +25,7 @@ function simulation(
     resultSeconds: null,
     environment: 'indoor',
     distanceMeters: null,
+    recoveryPace: null,
     intervals: [],
     sets: [],
     stations,
