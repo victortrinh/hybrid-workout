@@ -5,7 +5,7 @@ import type { CoachDay } from '../../domain/coach'
 import { isLive, type LiveSession } from '../../domain/lifts'
 import { logFor, missingRequired, trained, type SessionLog } from '../../domain/log'
 import { logSummary } from '../../domain/logSummary'
-import { clock, type RunContext } from '../../domain/paces'
+import { clock, type Environment, type RunContext } from '../../domain/paces'
 import { describeSession, SESSION_TYPES } from '../../domain/program/describe'
 import type { Program, Session, Week } from '../../domain/program/types'
 import type { PainReport } from '../../domain/pain'
@@ -15,7 +15,8 @@ import { outsideWeekLine } from '../coachCopy'
 import { lineAction, primaryAction } from '../components/actions'
 import { LaneChip } from '../components/LaneChip'
 import { Prescription } from '../components/Prescription'
-import { asksPain, PAIN_FREE, painSuggestionFor, PainStep, type PainAtStart } from '../components/PainStep'
+import { PAIN_FREE, painSuggestionFor, type PainAtStart } from '../components/PainStep'
+import { asksAtStart, StartStep } from '../components/StartStep'
 import { longDay, nb, shortDay, STATUS_LABEL, weekRange } from '../format'
 import { logPath, SCREEN_PATH, weekPath } from '../router'
 import { weekMark } from './Plan'
@@ -46,7 +47,7 @@ export function WeekScreen({
   runContext: (week: number, session: Session) => RunContext
   logs: SessionLog[]
   live: LiveSession | null
-  onStart: (week: number, session: Session, pain: PainAtStart) => void
+  onStart: (week: number, session: Session, pain: PainAtStart, environment: Environment | null) => void
 }) {
   const [asking, setAsking] = useState<string | null>(null)
   /** The Session whose pain step was just dismissed, to put focus back on its Start. */
@@ -145,9 +146,10 @@ export function WeekScreen({
                   setAsking(ask ? session.id : null)
                   setDismissed(ask ? null : session.id)
                 }}
-                onStart={(pain) => {
+                environment={runContext(week.number, session).environment}
+                onStart={(pain, environment) => {
                   setAsking(null)
-                  onStart(week.number, session, pain)
+                  onStart(week.number, session, pain, environment)
                 }}
               />
             )}
@@ -177,7 +179,7 @@ export function WeekScreen({
  * Start session and Log after for a Session of another Week. The Session Today
  * offers as Next gets Today's pair, a cobalt Start and a line Log after, so the
  * screen still has one answer; every other Start is a line button with Log
- * after as a link. Start asks the pain step first when pain stands, as Today does; a trained
+ * after as a link. Start asks the pain step first when pain stands, and Treadmill or outside for a run, as Today does; a trained
  * log leaves only Edit log. While a Live session runs, only its own Session
  * offers Resume.
  */
@@ -192,6 +194,7 @@ function SessionActions({
   refocus,
   standing,
   painSuggestion,
+  environment,
   onAsk,
   onStart,
 }: {
@@ -204,19 +207,28 @@ function SessionActions({
   next: boolean
   live: LiveSession | null
   asking: boolean
-  /** Back from the pain step with "Not now": focus returns to Start session. */
+  /** Back from Start's questions with "Not now": focus returns to Start session. */
   refocus: boolean
   /** The Pain report standing now: above 0, Start asks whether it still hurts. */
   standing: PainReport | null
   /** Its pain Suggestion: once decided, Same starts with that. */
   painSuggestion: PainSuggestion | null
+  /** Where its runs happen as it stands: what Treadmill or outside comes chosen with. */
+  environment: Environment
   onAsk: (asking: boolean) => void
-  onStart: (pain: PainAtStart) => void
+  onStart: (pain: PainAtStart, environment: Environment | null) => void
 }) {
-  if (asking && !live && standing) {
+  if (asking && !live) {
     return (
       <div className="mt-4 border-t-2 border-ink pt-3.5">
-        <PainStep standing={standing} suggestion={painSuggestion} onAnswer={onStart} onCancel={() => onAsk(false)} />
+        <StartStep
+          session={session}
+          standing={standing}
+          suggestion={painSuggestion}
+          environment={environment}
+          onStart={onStart}
+          onCancel={() => onAsk(false)}
+        />
       </div>
     )
   }
@@ -247,7 +259,7 @@ function SessionActions({
           !live && (
             <Button
               autoFocus={refocus}
-              onPress={() => (asksPain(standing) ? onAsk(true) : onStart({ ...PAIN_FREE }))}
+              onPress={() => (asksAtStart(session, standing) ? onAsk(true) : onStart({ ...PAIN_FREE }, null))}
               aria-describedby={headingId}
               className={next ? primaryAction : `${lineAction} flex-none`}
             >
