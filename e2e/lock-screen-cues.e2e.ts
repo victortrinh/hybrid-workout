@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { expectNoAxeViolations, WEEK_3 } from './axe'
 import { serveHistory, weekDone } from './history'
-import { aMinuteBefore, doToday } from './today'
+import { aMinuteBefore, doToday, startAsChosen } from './today'
 
 /**
  * Lock-screen cues (ADR-0006). The browser here has no push service, so the
@@ -62,6 +62,7 @@ test('a Live session hands its cues to the server as the app goes off screen, an
   await doToday(page, page.getByRole('list').filter({ hasText: 'Strength' }).getByRole('button', { name: /^Threshold/ }))
   await page.clock.pauseAt(start)
   await page.getByRole('button', { name: /^Start / }).click()
+  await startAsChosen(page)
   await expect(page).toHaveURL('/live')
   await page.clock.runFor('02:00')
 
@@ -90,6 +91,7 @@ test('nothing goes to the server while lock-screen cues are off', async ({ page 
   await doToday(page, page.getByRole('list').filter({ hasText: 'Strength' }).getByRole('button', { name: /^Threshold/ }))
   await page.clock.pauseAt(new Date(WEEK_3.getTime() + 1000))
   await page.getByRole('button', { name: /^Start / }).click()
+  await startAsChosen(page)
   await expect(page).toHaveURL('/live')
   await setVisibility(page, 'hidden')
   await setVisibility(page, 'visible')

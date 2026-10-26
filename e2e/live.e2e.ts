@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { expectNoAxeViolations, WEEK_3 } from './axe'
 import { serveHistory, weekDone } from './history'
-import { aMinuteBefore, doToday } from './today'
+import { aMinuteBefore, doToday, startAsChosen } from './today'
 
 /**
  * Live run sessions under a controlled clock: the page's timers only move
@@ -51,6 +51,7 @@ test('a full Threshold Session from Start to logged', async ({ page }) => {
 
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Threshold, 2 × 12′')
   await page.getByRole('button', { name: /^Start / }).click()
+  await startAsChosen(page)
 
   await expect(page).toHaveURL('/live')
   await expect(page).toHaveTitle('Live session · Compromised')
@@ -105,6 +106,9 @@ test('a full Threshold Session from Start to logged', async ({ page }) => {
   // The rep is over: it asks, and saying nothing means it was held.
   await page.clock.runFor('11:30')
   await expect(s.block).toHaveText('Jog · 2 min')
+  // The jog suggests a speed under Easy pace, and walking is fine.
+  await expect(s.target).toHaveText('8.8')
+  await expect(s.line).toHaveText('Jog or walk. Breathe. Pretend this is easy.')
   const check = page.getByRole('region', { name: 'Rep 1 of 2: held the target?' })
   await expect(check).toContainText('Rep 1 of 2: held 12.3 km/h?')
   await expect(check).toContainText('Say nothing and it logs as held.')
@@ -162,6 +166,69 @@ test('a full Threshold Session from Start to logged', async ({ page }) => {
   })
 })
 
+test('Start asks Treadmill or outside: the answer is the run’s Environment and the Session’s', async ({ page }) => {
+  const sent = await serveHistory(page, [...WEEK_2])
+  // Every month outside, as October is: nothing says treadmill until Start asks.
+  await page.addInitScript(() =>
+    localStorage.setItem('compromised:settings', JSON.stringify({ environmentByMonth: Array(12).fill('outdoor') })),
+  )
+  await page.clock.install({ time: aMinuteBefore(WEEK_3) })
+  await page.goto('/')
+  await doToday(page, page.getByRole('list').filter({ hasText: 'Strength' }).getByRole('button', { name: /^Threshold/ }))
+  await page.clock.pauseAt(new Date(WEEK_3.getTime() + 1000))
+  await expect(page.getByRole('radio', { name: 'Outdoor' })).toBeChecked()
+
+  // The month's default comes chosen, and focus lands on it; Today's own toggle steps aside.
+  const start = page.getByRole('button', { name: 'Start Threshold' })
+  await start.click()
+  const where = page.getByRole('region', { name: 'Treadmill or outside?' })
+  await expect(where.getByRole('radio', { name: 'Outside' })).toBeChecked()
+  await expect(where.getByRole('radio', { name: 'Outside' })).toBeFocused()
+  await expect(page.getByRole('radio', { name: 'Outdoor' })).toHaveCount(0)
+  await scan(page)
+
+  // Not now goes back to Start, with nothing changed.
+  await where.getByRole('button', { name: 'Not now' }).click()
+  await expect(start).toBeFocused()
+  await expect(page.getByRole('radio', { name: 'Outdoor' })).toBeChecked()
+
+  // By keyboard: Treadmill, then Start session.
+  await start.press('Enter')
+  await expect(where.getByRole('radio', { name: 'Outside' })).toBeFocused()
+  await page.keyboard.press('ArrowLeft')
+  await expect(where.getByRole('radio', { name: 'Treadmill' })).toBeChecked()
+  await page.keyboard.press('Tab')
+  await expect(where.getByRole('button', { name: 'Start session' })).toBeFocused()
+  await page.keyboard.press('Enter')
+
+  // Indoor targets for the whole run: speed and incline, not pace.
+  await expect(page).toHaveURL('/live')
+  await expect(page.getByRole('list', { name: 'Blocks' }).getByRole('listitem').nth(1)).toHaveText(/^Rep 1 of 2\s*12\.3 km\/h/)
+
+  // Kept as the Session's own: Today shows Indoor for it now.
+  await page.goto('/')
+  await expect(page.getByRole('radio', { name: 'Indoor' })).toBeChecked()
+  await page.getByRole('link', { name: 'Resume Threshold, 2 × 12′' }).click()
+  await page.getByRole('button', { name: 'End' }).click()
+  await page.getByRole('button', { name: 'Save log' }).click()
+  await expect(page).toHaveURL('/')
+  await expect.poll(() => sent.at(-1)).toMatchObject({ week: 3, sessionId: 'threshold', environment: 'indoor' })
+})
+
+test('a Session set Outdoor on Today comes to Start with Outside chosen', async ({ page }) => {
+  await serveHistory(page, [...WEEK_2])
+  // November is a treadmill month by default; the Session's own Outdoor wins.
+  await page.addInitScript(() => localStorage.setItem('compromised:environment', JSON.stringify({ '3/speed': 'outdoor' })))
+  await page.clock.setFixedTime(WEEK_3)
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Start Speed' }).click()
+  const where = page.getByRole('region', { name: 'Treadmill or outside?' })
+  await expect(where.getByRole('radio', { name: 'Outside' })).toBeChecked()
+  await where.getByRole('button', { name: 'Start session' }).click()
+  await expect(page).toHaveURL('/live')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Speed, 5 × 3′')
+})
+
 test('the target speed fits its column on a phone', async ({ page }) => {
   await serveHistory(page, [...WEEK_2])
   await page.clock.install({ time: WEEK_3 })
@@ -169,6 +236,7 @@ test('the target speed fits its column on a phone', async ({ page }) => {
   await page.getByRole('list').filter({ hasText: 'Strength' }).getByRole('button', { name: /^Threshold/ }).click()
   await page.getByRole('button', { name: /^Do it today/ }).click()
   await page.getByRole('button', { name: /^Start / }).click()
+  await startAsChosen(page)
   const s = live(page)
   await s.skip.click()
   await expect(s.target).toHaveText('12.3')
@@ -198,6 +266,7 @@ test('a 5K test Live session records the time and updates the Training paces', a
 
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('5K test, baseline')
   await page.getByRole('button', { name: /^Start / }).click()
+  await startAsChosen(page)
   const s = live(page)
   await expect(s.block).toHaveText('Warm-up · 10 min')
 
@@ -256,6 +325,7 @@ test('Speed: Done, the checklists, Start, Undo, going back, and a Partial flippe
   // Speed is Up next.
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Speed, 5 × 3′')
   await page.getByRole('button', { name: 'Start Speed' }).click()
+  await startAsChosen(page)
   await expect(page).toHaveURL('/live')
   const s = live(page)
   const blocks = page.getByRole('list', { name: 'Blocks' })
