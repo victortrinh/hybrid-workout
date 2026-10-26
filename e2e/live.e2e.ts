@@ -484,6 +484,7 @@ test('Speed: Done, the checklists, Start, Undo, going back, and a Partial flippe
 async function toRep1(page: Page) {
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Speed, 5 × 3′')
   await page.getByRole('button', { name: 'Start Speed' }).click()
+  await startAsChosen(page)
   const s = live(page)
   for (const block of ['Warm-up · 7 min', 'Drills · 7 sets', 'Plyometrics · 5 sets', 'Accelerations · 4 sets']) {
     await expect(s.block).toHaveText(block)
