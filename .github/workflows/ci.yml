@@ -43,8 +43,18 @@ jobs:
       - name: Build in mock mode
         run: npm run build:mock && npm run check:no-mocks -- --expect
 
+      # The browser only, no --with-deps: the runner image already has Chromium's
+      # libraries, and the extra fonts and xvfb (headless, no screenshots) came from
+      # an apt mirror that sometimes crawls at ~40 kB/s for ten minutes.
+      - name: Cache Playwright's Chromium
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
       - name: Install Playwright's Chromium
-        run: npx playwright install --with-deps chromium
+        timeout-minutes: 3
+        run: npx playwright install chromium
 
       # Builds the app, serves it from the Worker with `wrangler dev` and a fresh
       # local D1, then runs the Playwright + axe specs at 390 px and 1440 px.
