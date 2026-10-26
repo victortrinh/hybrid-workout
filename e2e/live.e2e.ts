@@ -319,6 +319,8 @@ test('Speed: a rest between jump and acceleration sets, none between drills', as
   await page.goto('/')
   await page.clock.pauseAt(new Date(WEEK_3.getTime() + 1000))
   await page.getByRole('button', { name: 'Start Speed' }).click()
+  await startAsChosen(page)
+  await expect(page).toHaveURL('/live')
   const s = live(page)
   const rest = page.getByRole('timer', { name: 'Rest left' })
 
