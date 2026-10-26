@@ -360,7 +360,7 @@ function Running({
               // The sets, a tap each between jumps, take the target's place; the clock only counts up beside them.
               checklist
             ) : (
-              <p className="mt-2 text-headline">{nb(feelWords(block))}</p>
+              <p className="mt-2 text-headline">{nb(feelWords(block, context))}</p>
             )}
             <div className="mt-auto flex justify-end pt-2">{timer(checklist ? 'text-[56px] leading-[0.9] font-black tracking-[-0.03em]' : 'text-figure')}</div>
           </>
