@@ -355,6 +355,11 @@ Blunt, full-height and wide.
 ### Field band (signature)
 The cobalt header of Today and every Live session: brand and avatar row, the striped hero numeral, a 600-weight caption, five lanes, and a footer line with Week and count. In a Live session it carries the block name, striped target, solid timer and the Coach line.
 
+### Sideways (a phone in the treadmill's holder)
+The app turns with the phone. Sideways means landscape and under 32rem tall (`sideways:` in `styles.css`, `useSideways()` in code): the shape, never the device, so a tablet or laptop held wide keeps the portrait or desktop layout. Edges respect `env(safe-area-inset-left/right)`, never less than `pad`.
+- **Live run:** two columns, the field wider. Left, the field band full height: heading and End, the striped target sized to a share of the height (`--text-numeral-side`) with its unit, the other unit and the incline stacked beside it, and the timer bottom right. On a checklist Block the sets take the target's place and the timer drops to 56px. Right, the field goes on across the top behind a 2px `cobalt-soft` rule: the Block name, the Coach line, then "Then Jog · 2 min"; below it, on paper, Held it / Changed and the block lanes scroll; the rest strip and the action bar dock at its foot. The finish sheet stays one column, the page scrolling, Save log pinned.
+- **Every other screen:** the portrait layout at the wider width; no horizontal page scroll.
+
 ### Lanes (signature)
 - **Field lanes:** 5px `cobalt-soft` tracks with white fill; the current lane is 8px and its label 800. Used for Phases on Today, exercise groups in strength Live sessions and the Logged screen.
 - **Live block lanes:** 12px `rule` tracks filled in the block's Session-type colour; the current block grows to 26px with a 17px/800 label and its time or speed right-aligned in muted.

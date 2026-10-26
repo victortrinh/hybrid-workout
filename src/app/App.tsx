@@ -272,7 +272,8 @@ export function App() {
       >
         Skip to content
       </a>
-      <div className="grid min-h-dvh desktop:grid-cols-[240px_1fr]">
+      {/* On its side, clear of the notch and the rounded corners on the long edges. */}
+      <div className="grid min-h-dvh desktop:grid-cols-[240px_1fr] sideways:pr-[env(safe-area-inset-right)] sideways:pl-[env(safe-area-inset-left)]">
         <SideRail screen={navScreen} day={day} />
         {/* Clear of the fixed dock (the tab bar, any ActionBar, the home-indicator inset), with room to spare. */}
         <DockContext value={dock}>
@@ -449,7 +450,7 @@ function TabBar({ screen }: { screen: Screen }) {
   return (
     <nav
       aria-label="Main"
-      className="flex justify-around border-t-2 border-ink bg-paper pt-2 pb-[calc(8px+env(safe-area-inset-bottom))]"
+      className="flex justify-around border-t-2 border-ink bg-paper pt-2 pb-[calc(8px+env(safe-area-inset-bottom))] sideways:pr-[env(safe-area-inset-right)] sideways:pl-[env(safe-area-inset-left)]"
     >
       {NAV.map((item) => (
         <Link
