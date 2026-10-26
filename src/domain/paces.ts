@@ -7,8 +7,8 @@
  * baseline test the Starting point's estimated 5K time stands in, marked as
  * an estimate; with neither, run Prescriptions stay RPE only.
  *
- * Paces are seconds per km. Indoor runs read as treadmill speed and incline,
- * Outdoor runs as pace per km.
+ * Paces are seconds per km. Indoor runs read as treadmill speed, then the pace
+ * per km, then the incline; Outdoor runs as pace per km alone.
  */
 import { daysBetween, type LocalDate } from './calendar'
 import type { SessionLog } from './log'
@@ -186,19 +186,23 @@ export function clockInput(text: string): string {
   return digits.length < 3 ? digits : `${digits.slice(0, -2)}:${digits.slice(-2)}`
 }
 
+/** "4:52/km", or "5:51–6:26/km" for a range, fast to slow. */
+function perKm([fast, slow]: Range): string {
+  return fast === slow ? `${clock(fast)}/km` : `${clock(fast)}–${clock(slow)}/km`
+}
+
 /**
- * A pace range as the athlete reads it: "12.3 km/h · 1% incline" on the treadmill,
- * "4:52/km" outdoors. Ranges run slow to fast on the treadmill and fast to
- * slow outdoors, the way each is dialled.
+ * A pace range as the athlete reads it: "12.3 km/h · 4:52/km · 1% incline" on
+ * the treadmill, so the belt can be set and still compared with the Program's
+ * paces, and "4:52/km" outdoors. The speed runs slow to fast, the way the
+ * belt is dialled; the pace per km always fast to slow.
  */
-export function formatPace([fast, slow]: Range, environment: Environment, unit: SpeedUnit): string {
-  if (environment === 'outdoor') {
-    return fast === slow ? `${clock(fast)}/km` : `${clock(fast)}–${clock(slow)}/km`
-  }
-  const high = speedFor(fast, unit)
-  const low = speedFor(slow, unit)
+export function formatPace(range: Range, environment: Environment, unit: SpeedUnit): string {
+  if (environment === 'outdoor') return perKm(range)
+  const high = speedFor(range[0], unit)
+  const low = speedFor(range[1], unit)
   const speed = low === high ? high.toFixed(1) : `${low.toFixed(1)}–${high.toFixed(1)}`
-  return `${speed} ${UNIT_LABEL[unit]} · ${DEFAULT_INCLINE}% incline`
+  return `${speed} ${UNIT_LABEL[unit]} · ${perKm(range)} · ${DEFAULT_INCLINE}% incline`
 }
 
 /** The exact target for a run effort, or null when it stays RPE only. */

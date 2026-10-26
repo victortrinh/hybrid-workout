@@ -47,7 +47,7 @@ test('logging a 23:00 5K test sets Threshold’s speed, and mph updates every sp
   const target = upNext.locator('xpath=following-sibling::p[1]')
   // February runs indoors by default, April outdoors: start both on the treadmill.
   await page.getByRole('radio', { name: 'Indoor' }).check({ force: true })
-  await expect(target).toHaveText(/^12\.3 km\/h · 1% incline/)
+  await expect(target).toHaveText(/^12\.3 km\/h · 4:52\/km · 1% incline/)
 
   // One Session outdoors: pace per km instead.
   await page.getByRole('radio', { name: 'Outdoor' }).check({ force: true })
@@ -63,7 +63,7 @@ test('logging a 23:00 5K test sets Threshold’s speed, and mph updates every sp
   await settings.getByText('mph', { exact: true }).click()
   await page.keyboard.press('Escape')
   await expect(settings).toBeHidden()
-  await expect(target).toHaveText(/^7\.7 mph · 1% incline/)
+  await expect(target).toHaveText(/^7\.7 mph · 4:52\/km · 1% incline/)
 
   await page.goto(`/plan/week/${week}`)
   const main = page.getByRole('main')

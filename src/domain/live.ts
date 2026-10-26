@@ -15,6 +15,7 @@ import type { IntervalLog, SessionLog, StationLog, StationPart } from './log'
 import {
   clock,
   DEFAULT_INCLINE,
+  formatPace,
   isByFeel,
   paceFor,
   runTarget,
@@ -90,7 +91,7 @@ export interface LiveBlock {
   /** Everything else the Block asks for: "Station prep", "Pogo jumps 2 × 15". */
   detail: string[]
   /**
-   * A checklist Block's sets, one row each to tick: "Pogo jumps · set 1 of 2".
+   * A checklist Block's sets, one row each to tick: "Pogo jumps 15 · set 1 of 2".
    * Its clock counts up, and it ends on the last tick or Done. Empty for every other Block.
    */
   checklist: string[]
@@ -245,15 +246,20 @@ export function liveBlocks(session: Session): LiveBlock[] {
 }
 
 /**
- * A row per set to tick, when every Exercise is counted in sets: "Pogo jumps ·
- * set 1 of 2", "Accelerations · 1 of 4", "A-skips 20 m · 1 of 2". Empty when one isn't, so the Block
- * stays on the clock.
+ * A row per set to tick, when every Exercise is counted in sets: "Pogo jumps 15 ·
+ * set 1 of 2", "Accelerations · 1 of 4", "A-skips 20 m · 1 of 2", "Bike sprints 8–10″". Empty when one
+ * isn't, so the Block stays on the clock.
  */
 export function checklistRows(exercises: Exercise[]): string[] {
-  const rows = exercises.map(({ name, prescription: rx }): string[] | null => {
+  const rows = exercises.map((exercise): string[] | null => {
+    const { name, prescription: rx } = exercise
     switch (rx.kind) {
-      case 'sets':
-        return Array.from({ length: rx.sets }, (_, i) => `${name} · set ${i + 1} of ${rx.sets}`)
+      case 'sets': {
+        const what = `${name} ${typeof rx.reps === 'number' ? rx.reps : range(rx.reps)}`
+        return rx.sets === 1 ? [what] : Array.from({ length: rx.sets }, (_, i) => `${what} · set ${i + 1} of ${rx.sets}`)
+      }
+      case 'sprints':
+        return [exerciseWords(exercise)]
       case 'accelerations':
       case 'strides':
         return Array.from({ length: rx.reps }, (_, i) => `${name} · ${i + 1} of ${rx.reps}`)
@@ -293,9 +299,10 @@ function blockKind(block: Block): LiveBlockKind {
   return block.main ? 'run' : 'drills'
 }
 
+const range = ([low, high]: readonly [number, number]) => (low === high ? `${low}` : `${low}–${high}`)
+
 /** "Pogo jumps 2 × 15", "Accelerations 4 × 15 m at 80–90%", "Strides 4 × 15″" */
 function exerciseWords({ name, prescription: rx }: Exercise): string {
-  const range = ([low, high]: readonly [number, number]) => (low === high ? `${low}` : `${low}–${high}`)
   switch (rx.kind) {
     case 'sets':
       return `${name} ${rx.sets} × ${typeof rx.reps === 'number' ? rx.reps : range(rx.reps)}`
@@ -318,18 +325,23 @@ export interface LiveTarget {
   value: string
   /** "km/h", "mph", "/km" or "RPE". */
   unit: string
+  /** The pace per km beside a treadmill speed, `{ value: '4:52', unit: '/km' }`; null anywhere else. */
+  secondary: { value: string; unit: string } | null
   /** Treadmill incline in %, indoors only. */
   incline: number | null
   /** Seconds per km, for the interval log; null while runs are RPE only. */
   pace: number | null
-  /** The whole target in words: "9.2–10.3 km/h · 1% incline". */
+  /** The hero figure in words, as the Ready line and Lock-screen cues read it: "12.3 km/h · 4:52/km · 1% incline". */
+  figure: string
+  /** The whole target in words: "9.2–10.3 km/h · 5:51–6:26/km · 1% incline". */
   words: string
 }
 
 /**
  * The exact target of a Block: the middle of its pace range as a treadmill
- * speed or a pace per km, or its RPE before there are Training paces. Null
- * where there's nothing to dial: drills, or a run by feel with no RPE.
+ * speed with its pace per km, or a pace per km alone outdoors, or its RPE
+ * before there are Training paces. Null where there's nothing to dial:
+ * drills, or a run by feel with no RPE.
  */
 export function liveTarget(block: LiveBlock, run: RunContext): LiveTarget | null {
   if (!block.effort) return null
@@ -337,15 +349,24 @@ export function liveTarget(block: LiveBlock, run: RunContext): LiveTarget | null
   const range = run.paces && paceFor(block.effort, run.paces)
   if (range) {
     const pace = Math.round((range[0] + range[1]) / 2)
+    const figure = formatPace([pace, pace], run.environment, run.unit)
     const words = runTarget(block.effort, run) ?? ''
     return run.environment === 'indoor'
-      ? { value: speedFor(pace, run.unit).toFixed(1), unit: UNIT_LABEL[run.unit], incline, pace, words }
-      : { value: clock(pace), unit: '/km', incline, pace, words }
+      ? {
+          value: speedFor(pace, run.unit).toFixed(1),
+          unit: UNIT_LABEL[run.unit],
+          secondary: { value: clock(pace), unit: '/km' },
+          incline,
+          pace,
+          figure,
+          words,
+        }
+      : { value: clock(pace), unit: '/km', secondary: null, incline, pace, figure, words }
   }
   const rpe = block.effort.rpe
   if (!rpe) return null
   const value = rpe[0] === rpe[1] ? `${rpe[0]}` : `${rpe[0]}–${rpe[1]}`
-  return { value, unit: 'RPE', incline, pace: null, words: `RPE ${value}` }
+  return { value, unit: 'RPE', secondary: null, incline, pace: null, figure: `RPE ${value}`, words: `RPE ${value}` }
 }
 
 /** A Live run session in progress, as stored on the device. */

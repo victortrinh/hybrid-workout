@@ -39,8 +39,7 @@ function cueText(run: LiveRun, context: RunContext): Pick<Cue, 'title' | 'body'>
   if (!block) return { title: 'Session over', body: 'Open the app to log it.' }
   if (run.ready) return { title: `${block.name} next`, body: 'Open the app and tap Start.' }
   const target = liveTarget(block, context)
-  const figure = target && (target.unit === 'RPE' ? `RPE ${target.value}` : `${target.value} ${target.unit}`)
-  return { title: figure ? `${block.name} · ${figure}` : block.name, body: liveLine(block, run) }
+  return { title: target ? `${block.name} · ${target.figure}` : block.name, body: liveLine(block, run) }
 }
 
 function restCue(lifts: LiveLifts): Cue[] {

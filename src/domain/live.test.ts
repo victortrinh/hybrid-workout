@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { localDate } from './calendar'
 import { findWeek } from './coach'
+import { equip } from './equipment'
 import {
   advance,
   answer,
@@ -42,7 +43,7 @@ import {
   type LiveBlock,
   type LiveRun,
 } from './live'
-import { currentPaces, trainingPaces, type RunContext } from './paces'
+import { clock, currentPaces, trainingPaces, type RunContext } from './paces'
 import { program } from './program/program'
 import type { Session } from './program/types'
 
@@ -134,30 +135,55 @@ describe('liveBlocks', () => {
 describe('liveTarget', () => {
   const [, rep, jog] = liveBlocks(session(3, 'threshold'))
 
-  it('reads Threshold as treadmill speed and incline indoors, in either unit', () => {
+  it('reads Threshold as treadmill speed, with the pace per km and incline beside it, in either unit', () => {
     expect(liveTarget(rep, indoor)).toEqual({
       value: '12.3',
       unit: 'km/h',
+      secondary: { value: '4:52', unit: '/km' },
       incline: 1,
       pace: 292,
-      words: '12.3 km/h · 1% incline',
+      figure: '12.3 km/h · 4:52/km · 1% incline',
+      words: '12.3 km/h · 4:52/km · 1% incline',
     })
-    expect(liveTarget(rep, { ...indoor, unit: 'mph' })).toMatchObject({ value: '7.7', unit: 'mph' })
+    expect(liveTarget(rep, { ...indoor, unit: 'mph' })).toMatchObject({
+      value: '7.7',
+      unit: 'mph',
+      secondary: { value: '4:52', unit: '/km' },
+      figure: '7.7 mph · 4:52/km · 1% incline',
+    })
   })
 
-  it('reads it as pace per km outdoors', () => {
-    expect(liveTarget(rep, { ...indoor, environment: 'outdoor' })).toMatchObject({ value: '4:52', unit: '/km', incline: null })
+  it('reads it as pace per km alone outdoors', () => {
+    expect(liveTarget(rep, { ...indoor, environment: 'outdoor' })).toMatchObject({
+      value: '4:52',
+      unit: '/km',
+      secondary: null,
+      incline: null,
+      figure: '4:52/km',
+      words: '4:52/km',
+    })
   })
 
   it('takes the middle of an Easy range for the hero figure and keeps the range in words', () => {
     const target = liveTarget(jog, indoor)!
     const [fast, slow] = paces.easy
-    expect(target.pace).toBe(Math.round((fast + slow) / 2))
-    expect(target.words).toMatch(/^\d+\.\d–\d+\.\d km\/h · 1% incline$/)
+    const middle = Math.round((fast + slow) / 2)
+    expect(target.pace).toBe(middle)
+    expect(target.secondary).toEqual({ value: clock(middle), unit: '/km' })
+    expect(target.figure).toBe(`${target.value} km/h · ${clock(middle)}/km · 1% incline`)
+    expect(target.words).toMatch(/^\d+\.\d–\d+\.\d km\/h · \d:\d\d–\d:\d\d\/km · 1% incline$/)
   })
 
   it('is the RPE before the baseline 5K test, and nothing for drills or a run by feel alone', () => {
-    expect(liveTarget(rep, { ...indoor, paces: null })).toEqual({ value: '6–7', unit: 'RPE', incline: 1, pace: null, words: 'RPE 6–7' })
+    expect(liveTarget(rep, { ...indoor, paces: null })).toEqual({
+      value: '6–7',
+      unit: 'RPE',
+      secondary: null,
+      incline: 1,
+      pace: null,
+      figure: 'RPE 6–7',
+      words: 'RPE 6–7',
+    })
     const speed = liveBlocks(session(3, 'speed'))
     expect(liveTarget(speed[1], indoor)).toBeNull()
     expect(liveTarget(speed[3], indoor)).toBeNull()
@@ -276,17 +302,32 @@ describe('checklist Blocks', () => {
     expect(warmUp.checklist).toEqual([])
     expect(plyo).toMatchObject({ seconds: null, work: false })
     expect(plyo.checklist).toEqual([
-      'Pogo jumps · set 1 of 2',
-      'Pogo jumps · set 2 of 2',
-      'Broad jumps · set 1 of 3',
-      'Broad jumps · set 2 of 3',
-      'Broad jumps · set 3 of 3',
+      'Pogo jumps 15 · set 1 of 2',
+      'Pogo jumps 15 · set 2 of 2',
+      'Broad jumps 3 · set 1 of 3',
+      'Broad jumps 3 · set 2 of 3',
+      'Broad jumps 3 · set 3 of 3',
     ])
     expect(accels.checklist).toEqual(['Accelerations · 1 of 4', 'Accelerations · 2 of 4', 'Accelerations · 3 of 4', 'Accelerations · 4 of 4'])
     const run = plyometrics()
     expect(blockLeft(run, at(12))).toBeNull()
     expect(blockElapsed(run, at(12))).toBe(120)
     expect(advance(run, at(40))).toBe(run)
+  })
+
+  it('shows the reduced jumps of a Deload and the Taper, and a Substitution’s amount', () => {
+    const plyo = (s: Session) => liveBlocks(s).find((b) => b.name === 'Plyometrics')!.checklist
+    expect(plyo(session(7, 'speed'))).toEqual(['Pogo jumps 15', 'Broad jumps 2 · set 1 of 2', 'Broad jumps 2 · set 2 of 2'])
+    expect(plyo(session(25, 'speed'))).toEqual(['Pogo jumps 10'])
+    expect(plyo(equip(session(3, 'speed'), []))).toEqual(['Sled push sprints 10–15 m', 'Sled push sprints 10–15 m'])
+    const bike = { ...session(3, 'speed'), blocks: session(3, 'speed').blocks.map((b) => ({ ...b, exercises: b.exercises.map((e) => (e.name === 'Pogo jumps' ? e.substitutions![0].options[1] : e)) })) }
+    expect(plyo(bike)).toEqual(['Bike sprints 8–10″', 'Broad jumps 3 · set 1 of 3', 'Broad jumps 3 · set 2 of 3', 'Broad jumps 3 · set 3 of 3'])
+  })
+
+  it('leaves Drills and Accelerations rows as they were', () => {
+    const [, drills, , accels] = liveBlocks(session(3, 'speed'))
+    expect(drills.checklist.slice(0, 3)).toEqual(['Leg swings 10 / leg', 'A-skips 20 m · 1 of 2', 'A-skips 20 m · 2 of 2'])
+    expect(accels.checklist[0]).toBe('Accelerations · 1 of 4')
   })
 
   it('ticks and unticks sets, and ends the Block on the last one', () => {
