@@ -70,6 +70,7 @@ import { nb } from '../format'
 import { blockChangeCue, keepAwake, letSleep, unlockSound } from '../liveCues'
 import { finishLine, liveLine } from '../liveCopy'
 import { navigate, SCREEN_PATH } from '../router'
+import { useSideways } from '../useSideways'
 import { validateTime } from './LogAfter'
 import { Lifting, type LiftsFinish } from './LiveLifts'
 import {
@@ -95,6 +96,12 @@ export interface LiveFinish {
   hardPace: number | null
   recoveryPace: number | null
 }
+
+/** Sideways, the long edges' safe areas: the notch on one side, the rounded corners on both. Never less than the page's pad. */
+const INSET_LEFT = 'pl-[max(var(--pad),env(safe-area-inset-left))]'
+const INSET_RIGHT = 'pr-[max(var(--pad),env(safe-area-inset-right))]'
+/** Out through INSET_RIGHT to the screen's edge. */
+const BLEED_RIGHT = '-mr-[max(var(--pad),env(safe-area-inset-right))]'
 
 const LANE_BG: Record<Lane, string> = {
   speed: 'bg-speed',
@@ -170,6 +177,9 @@ function Running({
   const leg = currentLeg(run)
   const target = block && targetFor(block, context, leg)
   const [backTo, setBackTo] = useState<number | null>(null)
+  const sideways = useSideways()
+  // The finish sheet stays one column on its side too: a form, read top to bottom, the page scrolling.
+  const side = sideways && !over
 
   const runRef = useRef(run)
   runRef.current = run
@@ -249,15 +259,62 @@ function Running({
     onChange(runRef.current)
   }
 
+  // The parts that move to the other column when the phone is on its side: the Block, the Coach's line, the sets.
+  const blockWords = block && nb(run.ready ? readyWords(block, target) : `${block.name} · ${blockLength(block)}`)
+  const coachLine = block && (run.ready ? 'The clock waits. Tap Start when you’re set.' : liveLine(block, run))
+  const legs = block && (leg !== null ? (
+    <RoundLegs block={block} leg={leg} done={run.legs.filter((l) => l.block === run.block).map((l) => l.seconds)} />
+  ) : (
+    block.stations.length > 0 && <StationList block={block} />
+  ))
+  const checklist = block && isChecklist(block) && (
+    <Checklist block={block} ticked={run.ticked} onTick={(row) => act((r, now) => tick(r, row, now))} />
+  )
+  const detail = block && block.detail.length > 0 && (
+    <ul className="mt-3 text-body">
+      {block.detail.map((d) => (
+        <li key={d}>{nb(d)}</li>
+      ))}
+    </ul>
+  )
+  const timer = (size: string) =>
+    block && (
+      <span
+        ref={timerRef}
+        role="timer"
+        aria-label={
+          leg !== null
+            ? `Time on the ${legName(roundLegs(block)[leg])}`
+            : block.seconds === null
+              ? `Time on the ${block.name}`
+              : `Time left in ${block.name}`
+        }
+        className={`${size} font-stretch-125%`}
+      />
+    )
+  // On its side, the screen's edges are the phone's long sides: clear of the notch and the rounded corners.
+  const across = sideways ? `${INSET_LEFT} ${INSET_RIGHT}` : 'px-pad'
+
   return (
     // On the clock the page is one screen that never scrolls: the band keeps the target and the clock at
     // the top, the Blocks scroll in what's left (or fold away to make room), and the actions stay docked.
-    <div className={`flex flex-col ${over ? 'min-h-dvh' : 'h-dvh'}`}>
+    // On its side, two columns: the target and the clock on the field, the rest beside them (DESIGN.md, Sideways).
+    <div
+      className={
+        side
+          ? 'grid h-dvh grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto_auto]'
+          : `flex flex-col ${over ? 'min-h-dvh' : 'h-dvh'}`
+      }
+    >
       {/* The field drops in from the top as the session opens, once. */}
       <motion.header
         ref={bandRef}
         {...play(dropIn, entrances)}
-        className={`on-field bg-cobalt px-pad pt-[calc(14px+env(safe-area-inset-top))] pb-5 text-on-cobalt desktop:px-gutter desktop:pb-7 ${over ? '' : 'relative min-h-0 flex-[0_1_auto] overflow-y-auto'}`}
+        className={
+          side
+            ? `on-field col-start-1 row-span-3 row-start-1 flex min-h-0 flex-col overflow-y-auto bg-cobalt ${INSET_LEFT} pt-[calc(10px+env(safe-area-inset-top))] pr-pad pb-[max(12px,env(safe-area-inset-bottom))] text-on-cobalt`
+            : `on-field bg-cobalt ${across} pt-[calc(14px+env(safe-area-inset-top))] pb-5 text-on-cobalt desktop:px-gutter desktop:pb-7 ${over ? '' : 'relative min-h-0 flex-[0_1_auto] overflow-y-auto'}`
+        }
       >
         <div className="flex items-center justify-between gap-3">
           <h1 tabIndex={-1} className="text-[22px]">
@@ -278,11 +335,40 @@ function Running({
             <p className="mt-5 text-[20px] font-bold">{run.ending ? 'Ended early' : 'Session over'}</p>
             <p className="mt-2 text-[18px] font-semibold">{finishLine(liveStatus(run))}</p>
           </>
+        ) : side ? (
+          <>
+            {/* The speed as large as the short side allows, its pace and incline beside it, the clock under. */}
+            {target ? (
+              <p className="mt-2 flex items-end gap-x-3">
+                <span className="@container min-w-0 flex-1">
+                  <StripedNumeral value={target.value} className="text-numeral-side" />
+                </span>
+                <span className="flex-none pb-0.5 text-[24px] leading-tight font-bold">
+                  <span className="block">{target.unit}</span>
+                  {target.secondary && (
+                    <span className="block">
+                      {target.secondary.value}
+                      {target.secondary.unit}
+                    </span>
+                  )}
+                  {target.incline !== null && (
+                    <span className="block text-[17px] font-semibold">{target.incline}% incline</span>
+                  )}
+                </span>
+              </p>
+            ) : checklist ? (
+              // The sets, a tap each between jumps, take the target's place; the clock only counts up beside them.
+              checklist
+            ) : (
+              <p className="mt-2 text-headline">{nb(feelWords(block))}</p>
+            )}
+            <div className="mt-auto flex justify-end pt-2">{timer(checklist ? 'text-[56px] leading-[0.9] font-black tracking-[-0.03em]' : 'text-figure')}</div>
+          </>
         ) : (
           <>
             {/* A new Block's name wipes in; its numbers below change at once, to be read mid-stride. */}
             <motion.p key={run.block} {...play(wipeIn, entrances)} className="mt-3.5 text-[20px] font-bold">
-              {nb(run.ready ? readyWords(block, target) : `${block.name} · ${blockLength(block)}`)}
+              {blockWords}
             </motion.p>
             {target ? (
               <p className="@container mt-1.5 flex flex-wrap items-baseline gap-x-2">
@@ -309,35 +395,12 @@ function Running({
                   </>
                 )}
               </span>
-              <span
-                ref={timerRef}
-                role="timer"
-                aria-label={
-                  leg !== null
-                    ? `Time on the ${legName(roundLegs(block)[leg])}`
-                    : block.seconds === null
-                      ? `Time on the ${block.name}`
-                      : `Time left in ${block.name}`
-                }
-                className="text-figure font-stretch-125%"
-              />
+              {timer('text-figure')}
             </div>
-            {leg !== null ? (
-              <RoundLegs block={block} leg={leg} done={run.legs.filter((l) => l.block === run.block).map((l) => l.seconds)} />
-            ) : (
-              block.stations.length > 0 && <StationList block={block} />
-            )}
-            {isChecklist(block) ? (
-              <Checklist block={block} ticked={run.ticked} onTick={(row) => act((r, now) => tick(r, row, now))} />
-            ) : block.detail.length > 0 && (
-              <ul className="mt-3 text-body">
-                {block.detail.map((d) => (
-                  <li key={d}>{nb(d)}</li>
-                ))}
-              </ul>
-            )}
+            {legs}
+            {checklist || detail}
             <p aria-live="polite" className="mt-3.5 min-h-6 text-[18px] font-semibold">
-              {run.ready ? 'The clock waits. Tap Start when you’re set.' : liveLine(block, run)}
+              {coachLine}
             </p>
           </>
         )}
@@ -347,8 +410,28 @@ function Running({
       {/* A question about the Block just finished keeps room for itself; the Blocks alone can fold to nothing. */}
       <div
         ref={restRef}
-        className={`flex flex-1 flex-col px-pad desktop:max-w-plan desktop:px-gutter ${over ? 'desktop:pb-6' : 'relative min-h-0 basis-0 overflow-y-auto pb-6 has-[section]:min-h-28'}`}
+        className={
+          side
+            ? `relative col-start-2 row-start-1 flex min-h-0 flex-col overflow-y-auto pl-pad ${INSET_RIGHT} pb-6`
+            : `flex flex-1 flex-col ${across} desktop:max-w-plan desktop:px-gutter ${over ? 'desktop:pb-6' : 'relative min-h-0 basis-0 overflow-y-auto pb-6 has-[section]:min-h-28'}`
+        }
       >
+        {/* On its side, the field goes on across the top of this column: the Block, the Coach's line, what's next, the sets. */}
+        {side && block && (
+          <div
+            className={`on-field -ml-pad ${BLEED_RIGHT} border-l-2 border-cobalt-soft bg-cobalt pt-[calc(10px+env(safe-area-inset-top))] pb-4 pl-pad ${INSET_RIGHT} text-on-cobalt`}
+          >
+            <motion.p key={run.block} {...play(wipeIn, entrances)} className="flex min-h-11 items-center text-[20px] font-bold">
+              {blockWords}
+            </motion.p>
+            <p aria-live="polite" className="mt-1 min-h-6 text-[18px] font-semibold">
+              {coachLine}
+            </p>
+            <p className="mt-1.5 text-[17px] font-semibold">{nb(thenWords(run, context))}</p>
+            {legs}
+            {!checklist && detail}
+          </div>
+        )}
         <HeldCheck
           run={run}
           context={context}
@@ -396,7 +479,11 @@ function Running({
           <motion.div
             key={`rest-${run.block}-${run.rest.row}-${run.rest.startedAt}`}
             {...play(riseIn, entrances)}
-            className="flex-none bg-cobalt px-pad py-2 text-on-cobalt desktop:px-gutter"
+            className={
+              side
+                ? `col-start-2 row-start-2 bg-cobalt pl-pad ${INSET_RIGHT} py-2 text-on-cobalt`
+                : 'flex-none bg-cobalt px-pad py-2 text-on-cobalt desktop:px-gutter'
+            }
           >
             <RestCountdown
               startedAt={run.rest.startedAt}
@@ -409,7 +496,13 @@ function Running({
       </LanePresence>
 
       {!over && block && (
-        <div className="flex-none border-t-2 border-ink bg-paper px-pad pt-3 pb-[calc(12px+env(safe-area-inset-bottom))] desktop:px-gutter">
+        <div
+          className={
+            side
+              ? `col-start-2 row-start-3 border-t-2 border-ink bg-paper pt-2.5 pb-[max(10px,env(safe-area-inset-bottom))] pl-pad ${INSET_RIGHT}`
+              : 'flex-none border-t-2 border-ink bg-paper px-pad pt-3 pb-[calc(12px+env(safe-area-inset-bottom))] desktop:px-gutter'
+          }
+        >
           <UndoToast run={run} onUndo={() => act(undo)} />
           <div className="flex gap-2.5">
             {run.ready ? (
@@ -591,6 +684,14 @@ function blockLength(block: LiveBlock): string {
 function readyWords(block: LiveBlock, target: LiveTarget | null): string {
   const what = target ? target.figure : blockLength(block)
   return `Ready? Up next: ${what === block.name ? block.name : `${block.name} · ${what}`}`
+}
+
+/** What comes after the Block on the clock: "Then Jog · 2 min", "Then Rep 2 of 5 · 15.1 km/h · 3:58/km", "Last Block" */
+function thenWords(run: LiveRun, context: RunContext): string {
+  const next = run.blocks[run.block + 1]
+  if (!next) return 'Last Block'
+  const target = next.kind === 'rep' ? liveTarget(next, context) : null
+  return `Then ${next.name} · ${target ? target.figure : blockLength(next)}`
 }
 
 /** The hero figure alone, in the unit the athlete answers in: "12.3 km/h", "4:52/km" */

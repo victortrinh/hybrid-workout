@@ -125,7 +125,7 @@ export function Lifting({
   const set = current && lifts.sets[current.exercise][current.set]
 
   return (
-    <div className="flex min-h-dvh flex-col">
+    <div className="flex min-h-dvh flex-col sideways:pr-[env(safe-area-inset-right)] sideways:pl-[env(safe-area-inset-left)]">
       {/* The field drops in from the top as the session opens, once. */}
       <motion.header
         {...play(dropIn, entrances)}

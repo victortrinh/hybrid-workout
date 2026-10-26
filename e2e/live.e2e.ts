@@ -480,6 +480,153 @@ test('Speed: Done, the checklists, Start, Undo, going back, and a Partial flippe
   await expect.poll(() => sent.at(-1)).toMatchObject({ week: 3, sessionId: 'speed', status: 'done' })
 })
 
+/** A phone on its side in the treadmill's holder. */
+const SIDEWAYS = { width: 812, height: 375 }
+
+/** The page itself never scrolls, either way: only a column inside it may. */
+async function expectNoPageScroll(page: Page) {
+  const page_ = await page.evaluate(() => {
+    const root = document.scrollingElement!
+    return { width: root.scrollWidth, height: root.scrollHeight, innerWidth, innerHeight }
+  })
+  expect(page_.width, 'no sideways page scroll').toBeLessThanOrEqual(page_.innerWidth)
+  expect(page_.height, 'no page scroll').toBeLessThanOrEqual(page_.innerHeight)
+}
+
+/** All of it on the screen, nothing cut off at an edge. */
+const onScreen = (locator: ReturnType<Page['locator']>) => expect(locator).toBeInViewport({ ratio: 1 })
+
+test('on its side, a Threshold rep: the target and the clock on the field, the rep, the Coach and what’s next beside', async ({ page }) => {
+  const sent = await serveHistory(page, [...WEEK_2])
+  const start = new Date(WEEK_3.getTime() + 1000)
+  await page.setViewportSize(SIDEWAYS)
+  await page.clock.install({ time: aMinuteBefore(WEEK_3) })
+  await page.goto('/')
+  await doToday(page, page.getByRole('list').filter({ hasText: 'Strength' }).getByRole('button', { name: /^Threshold/ }))
+  await page.clock.pauseAt(start)
+  await page.getByRole('button', { name: /^Start / }).click()
+  await startAsChosen(page)
+  const s = live(page)
+  await s.skip.click()
+  await s.start.click()
+
+  // The target in both units, the incline and the clock on one side; the rep, the Coach's line and the next Block on the other.
+  const band = page.locator('header')
+  await expect(s.target).toHaveText('12.3')
+  for (const words of ['km/h', '4:52/km', '1% incline']) await onScreen(band.getByText(words, { exact: true }))
+  await expect(s.timer).toHaveText('12:00')
+  await onScreen(s.timer)
+  await onScreen(s.target)
+  await onScreen(page.getByText('Rep 1 of 2 · 12 min', { exact: true }))
+  await onScreen(page.getByText('Rep 1. Threshold. Do not race it.', { exact: true }))
+  await onScreen(page.getByText('Then Jog · 2 min', { exact: true }))
+  for (const control of [s.pause, s.skip, page.getByRole('button', { name: 'End' })]) await onScreen(control)
+  const columns = await Promise.all([s.target, page.getByText('Rep 1 of 2 · 12 min', { exact: true })].map((l) => l.boundingBox()))
+  expect(columns[0]!.x + columns[0]!.width, 'the target left of the rep').toBeLessThan(columns[1]!.x)
+  await expectNoPageScroll(page)
+  await scan(page, minutes(start, 1))
+
+  // Pause and Resume work where they are.
+  await s.pause.click()
+  await expect(s.pause).toHaveText('Resume')
+  await s.pause.click()
+
+  // The rep over: Held it or Changed, beside the jog's target.
+  await s.skip.click()
+  await expect(s.target).toHaveText('8.8')
+  const check = page.getByRole('region', { name: 'Rep 1 of 2: held the target?' })
+  await check.getByRole('button', { name: 'Changed' }).click()
+  const actual = check.getByRole('textbox', { name: 'Actual speed, km/h' })
+  await expect(actual).toBeFocused()
+  await actual.fill('12.1')
+  await check.getByRole('button', { name: 'Save' }).click()
+  await expect(check).toBeHidden()
+  await expectNoPageScroll(page)
+
+  // End: the finish sheet, one column, its Save log under the thumb.
+  await page.getByRole('button', { name: 'End' }).click()
+  await expect(page.getByText('Ended early')).toBeVisible()
+  await page.getByRole('radio', { name: '7', exact: true }).check({ force: true })
+  await page.getByRole('textbox', { name: 'Console distance, km' }).fill('3')
+  await onScreen(page.getByRole('button', { name: 'Save log' }))
+  await onScreen(page.getByRole('button', { name: 'Keep going' }))
+  await scan(page)
+  await page.getByRole('button', { name: 'Save log' }).click()
+  await expect(page).toHaveURL('/')
+  await expect.poll(() => sent.at(-1)).toMatchObject({
+    sessionId: 'threshold',
+    status: 'partial',
+    distanceMeters: 3000,
+    intervals: [{ block: 1, rep: 1, targetPace: 292, held: false, actualPace: 298 }],
+  })
+})
+
+test('on its side, the Plyometrics checklist, its rest and every control fit and work', async ({ page }) => {
+  await serveHistory(page, [...WEEK_2])
+  await page.setViewportSize(SIDEWAYS)
+  await page.clock.install({ time: WEEK_3 })
+  await page.goto('/')
+  await page.clock.pauseAt(new Date(WEEK_3.getTime() + 1000))
+  await page.getByRole('button', { name: 'Start Speed' }).click()
+  await startAsChosen(page)
+  const s = live(page)
+  await s.skip.click()
+  await s.skip.click()
+  await expect(page.getByText('Plyometrics · 5 sets', { exact: true })).toBeVisible()
+
+  // Every set on the screen, the rest beside them once one is ticked.
+  const sets = page.getByRole('list', { name: 'Sets' }).getByRole('checkbox')
+  await expect(sets).toHaveCount(5)
+  for (const set of await sets.all()) await onScreen(set.locator('xpath=ancestor::label[1]'))
+  await page.getByRole('checkbox', { name: 'Pogo jumps 15 · set 1 of 2' }).click({ force: true })
+  const rest = page.getByRole('timer', { name: 'Rest left' })
+  await expect(rest).toHaveText('1:00')
+  await onScreen(rest)
+  for (const control of [page.getByRole('button', { name: 'Skip', exact: true }), s.pause, s.skip, page.getByRole('button', { name: 'End' })]) {
+    await onScreen(control)
+  }
+  await onScreen(page.getByText('Then Accelerations · 4 sets', { exact: true }))
+  await expectNoPageScroll(page)
+
+  // Skip ends the rest; the next tick starts one; Done moves on.
+  await page.getByRole('button', { name: 'Skip', exact: true }).click()
+  await expect(rest).toHaveCount(0)
+  await page.getByRole('checkbox', { name: 'Pogo jumps 15 · set 2 of 2' }).click({ force: true })
+  await expect(rest).toHaveText('1:00')
+  await s.skip.click()
+  await expect(page.getByText('Accelerations · 4 sets', { exact: true })).toBeVisible()
+  await expect(rest).toHaveCount(0)
+  await page.getByRole('checkbox', { name: 'Accelerations · 1 of 4' }).click({ force: true })
+  await expect(rest).toHaveText('0:45')
+  await scan(page)
+
+  // End: the finish sheet asks the By-feel speeds, one column, Save log under the thumb.
+  await page.getByRole('button', { name: 'End', exact: true }).click()
+  const byFeel = page.getByRole('region', { name: 'By-feel speeds' })
+  await byFeel.getByRole('textbox', { name: 'Hard reps, km/h' }).fill('15')
+  await expect(byFeel.getByRole('textbox', { name: 'Hard reps, km/h' })).toHaveValue('15')
+  await page.getByRole('radio', { name: '6', exact: true }).check({ force: true })
+  await onScreen(page.getByRole('button', { name: 'Save log' }))
+  expect(await page.evaluate(() => document.scrollingElement!.scrollWidth - innerWidth)).toBeLessThanOrEqual(0)
+})
+
+test('on its side, Today and Live lifts have no sideways scroll', async ({ page }) => {
+  await serveHistory(page, [...WEEK_2])
+  await page.setViewportSize(SIDEWAYS)
+  await page.clock.install({ time: WEEK_3 })
+  await page.goto('/')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Speed, 5 × 3′')
+  const sideways = () => page.evaluate(() => document.scrollingElement!.scrollWidth - innerWidth)
+  expect(await sideways()).toBeLessThanOrEqual(0)
+
+  await doToday(page, page.getByRole('list').filter({ hasText: 'Threshold' }).getByRole('button', { name: /^Strength/ }))
+  await page.getByRole('button', { name: /^Start / }).click()
+  await expect(page).toHaveURL('/live')
+  await expect(page.locator('header .stripe-num')).toBeVisible()
+  expect(await sideways()).toBeLessThanOrEqual(0)
+  await onScreen(page.getByRole('button', { name: /^Log set/ }))
+})
+
 /** Speed, Week 3, from Start to Rep 1 started: the warm-up, drills, Plyometrics and Accelerations each ended with Done. */
 async function toRep1(page: Page) {
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Speed, 5 × 3′')
