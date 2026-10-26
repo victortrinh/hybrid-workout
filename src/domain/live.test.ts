@@ -42,7 +42,7 @@ import {
   type LiveBlock,
   type LiveRun,
 } from './live'
-import { trainingPaces, type RunContext } from './paces'
+import { clock, trainingPaces, type RunContext } from './paces'
 import { program } from './program/program'
 import type { Session } from './program/types'
 
@@ -134,30 +134,55 @@ describe('liveBlocks', () => {
 describe('liveTarget', () => {
   const [, rep, jog] = liveBlocks(session(3, 'threshold'))
 
-  it('reads Threshold as treadmill speed and incline indoors, in either unit', () => {
+  it('reads Threshold as treadmill speed, with the pace per km and incline beside it, in either unit', () => {
     expect(liveTarget(rep, indoor)).toEqual({
       value: '12.3',
       unit: 'km/h',
+      secondary: { value: '4:52', unit: '/km' },
       incline: 1,
       pace: 292,
-      words: '12.3 km/h · 1% incline',
+      figure: '12.3 km/h · 4:52/km · 1% incline',
+      words: '12.3 km/h · 4:52/km · 1% incline',
     })
-    expect(liveTarget(rep, { ...indoor, unit: 'mph' })).toMatchObject({ value: '7.7', unit: 'mph' })
+    expect(liveTarget(rep, { ...indoor, unit: 'mph' })).toMatchObject({
+      value: '7.7',
+      unit: 'mph',
+      secondary: { value: '4:52', unit: '/km' },
+      figure: '7.7 mph · 4:52/km · 1% incline',
+    })
   })
 
-  it('reads it as pace per km outdoors', () => {
-    expect(liveTarget(rep, { ...indoor, environment: 'outdoor' })).toMatchObject({ value: '4:52', unit: '/km', incline: null })
+  it('reads it as pace per km alone outdoors', () => {
+    expect(liveTarget(rep, { ...indoor, environment: 'outdoor' })).toMatchObject({
+      value: '4:52',
+      unit: '/km',
+      secondary: null,
+      incline: null,
+      figure: '4:52/km',
+      words: '4:52/km',
+    })
   })
 
   it('takes the middle of an Easy range for the hero figure and keeps the range in words', () => {
     const target = liveTarget(jog, indoor)!
     const [fast, slow] = paces.easy
-    expect(target.pace).toBe(Math.round((fast + slow) / 2))
-    expect(target.words).toMatch(/^\d+\.\d–\d+\.\d km\/h · 1% incline$/)
+    const middle = Math.round((fast + slow) / 2)
+    expect(target.pace).toBe(middle)
+    expect(target.secondary).toEqual({ value: clock(middle), unit: '/km' })
+    expect(target.figure).toBe(`${target.value} km/h · ${clock(middle)}/km · 1% incline`)
+    expect(target.words).toMatch(/^\d+\.\d–\d+\.\d km\/h · \d:\d\d–\d:\d\d\/km · 1% incline$/)
   })
 
   it('is the RPE before the baseline 5K test, and nothing for drills or a run by feel alone', () => {
-    expect(liveTarget(rep, { ...indoor, paces: null })).toEqual({ value: '6–7', unit: 'RPE', incline: 1, pace: null, words: 'RPE 6–7' })
+    expect(liveTarget(rep, { ...indoor, paces: null })).toEqual({
+      value: '6–7',
+      unit: 'RPE',
+      secondary: null,
+      incline: 1,
+      pace: null,
+      figure: 'RPE 6–7',
+      words: 'RPE 6–7',
+    })
     const speed = liveBlocks(session(3, 'speed'))
     expect(liveTarget(speed[1], indoor)).toBeNull()
     expect(liveTarget(speed[3], indoor)).toBeNull()
