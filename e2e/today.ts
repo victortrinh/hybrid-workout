@@ -12,3 +12,11 @@ export async function doToday(page: Page, row: Locator) {
 
 /** Where a clock that is paused after a pick starts: early enough that the pause is still ahead. */
 export const aMinuteBefore = (time: Date) => new Date(time.getTime() - 60_000)
+
+/**
+ * Treadmill or outside, asked at the Start of a run: Start session takes the
+ * Environment it comes with. On Today it sits in Up next; on a Week, in the Session.
+ */
+export async function startAsChosen(page: Page, scope: Locator = page.getByRole('region', { name: 'Up next' })) {
+  await scope.getByRole('region', { name: 'Treadmill or outside?' }).getByRole('button', { name: 'Start session' }).click()
+}

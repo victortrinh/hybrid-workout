@@ -14,6 +14,7 @@ export function Segmented<T extends string>({
   onChange,
   className = '',
   labelClassName = 'text-[18px] font-bold',
+  autoFocus = false,
 }: {
   label: string
   value: T
@@ -21,6 +22,8 @@ export function Segmented<T extends string>({
   onChange: (value: T) => void
   className?: string
   labelClassName?: string
+  /** Focus lands on the chosen segment, so the question is read with its answer. */
+  autoFocus?: boolean
 }) {
   const marker = useId()
   return (
@@ -31,6 +34,7 @@ export function Segmented<T extends string>({
           <Radio
             key={option.value}
             value={option.value}
+            autoFocus={autoFocus && option.value === value}
             className="relative isolate grid min-h-11 flex-1 cursor-pointer place-items-center px-2 text-[15px] font-bold data-focus-visible:outline-3 data-focus-visible:-outline-offset-4 data-focus-visible:outline-link data-selected:text-paper"
           >
             {({ isSelected }) => (

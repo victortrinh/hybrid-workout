@@ -1,6 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
 import { expectNoAxeViolations, WEEK_3 } from './axe'
 import { serveHistory, weekDone } from './history'
+import { startAsChosen } from './today'
 
 /**
  * Pain reports and the pain rules. The server is stood in for, so nothing
@@ -49,6 +50,7 @@ test('pain 4 before a Speed session: the accelerations go to the bike and the re
   await expect(step).toContainText('Pain 4 and rising. No jumps, fewer reps, before it gets a vote.')
   await expectNoAxeViolations(page)
   await step.getByRole('button', { name: 'Start with that' }).click()
+  await startAsChosen(page)
 
   // The Live session has it already: bike sprints for the jumps and accelerations, four reps for five.
   await expect(page).toHaveURL('/live')
@@ -79,13 +81,14 @@ test('pain 4 before a Speed session: the accelerations go to the bike and the re
   })
 })
 
-test('with nothing hurting on record, Start is one tap and starts the Session as written', async ({ page }) => {
+test('with nothing hurting on record, Start skips the pain step and starts the Session as written', async ({ page }) => {
   const reports: Record<string, unknown>[] = []
   await serveHistory(page, [...WEEK_2], reports)
   await page.clock.setFixedTime(WEEK_3)
   await page.goto('/')
 
   await page.getByRole('button', { name: /^Start / }).click()
+  await startAsChosen(page)
   await expect(page).toHaveURL('/live')
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Speed, 5 × 3′')
   await expect.poll(() => reports.at(-1)).toMatchObject({ score: 0, area: null, week: 3, sessionId: 'speed' })
@@ -118,7 +121,7 @@ test('Something hurts from Today: pain 6 makes the day easy bike or rest once Ac
   await expect(page.getByRole('link', { name: 'Log after' })).toBeVisible()
 })
 
-test('Gone records a 0 and starts; next time Start is one tap again', async ({ page }) => {
+test('Gone records a 0 and starts; next time Start skips the pain step', async ({ page }) => {
   const reports: Record<string, unknown>[] = [SHIN_2]
   await serveHistory(page, [...WEEK_2], reports)
   await page.clock.setFixedTime(WEEK_3)
@@ -126,6 +129,7 @@ test('Gone records a 0 and starts; next time Start is one tap again', async ({ p
 
   await page.getByRole('button', { name: /^Start / }).click()
   await page.getByRole('region', { name: 'Up next' }).getByRole('button', { name: 'Gone' }).click()
+  await startAsChosen(page)
   await expect(page).toHaveURL('/live')
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Speed, 5 × 3′')
   await expect.poll(() => reports.at(-1)).toMatchObject({ score: 0, area: null, week: 3, sessionId: 'speed' })
@@ -139,6 +143,7 @@ test('Same repeats the standing report: pain 2 changes nothing, so it starts at 
 
   await page.getByRole('button', { name: /^Start / }).click()
   await page.getByRole('region', { name: 'Up next' }).getByRole('button', { name: 'Same' }).click()
+  await startAsChosen(page)
   await expect(page).toHaveURL('/live')
   await expect.poll(() => reports.at(-1)).toMatchObject({ score: 2, area: 'shin', week: 3, sessionId: 'speed' })
 })
@@ -163,7 +168,7 @@ test('Log after asks too, and links the report to the Session', async ({ page })
 /** Achilles 4 from Monday: its pain Suggestion stands for the rest of Week 3. */
 const ACHILLES_4 = { ...SHIN_2, id: 'seed-achilles-4', score: 4, area: 'achilles-calf' }
 
-test('with the pain Suggestion open, the step asks it once, in its own words: two taps to the Live session', async ({
+test('with the pain Suggestion open, the step asks it once, in its own words: two taps through the pain step', async ({
   page,
 }) => {
   const reports: Record<string, unknown>[] = [ACHILLES_4]
@@ -182,6 +187,7 @@ test('with the pain Suggestion open, the step asks it once, in its own words: tw
   await step.getByRole('button', { name: 'Same' }).click()
   await expect(step).toContainText(line)
   await step.getByRole('button', { name: 'Start with that' }).click()
+  await startAsChosen(page)
 
   await expect(page).toHaveURL('/live')
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Speed, 4 × 3′')
@@ -199,6 +205,7 @@ test('with the pain Suggestion already accepted, Same starts the Session with it
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Speed, 4 × 3′')
   await page.getByRole('button', { name: /^Start / }).click()
   await page.getByRole('region', { name: 'Up next' }).getByRole('button', { name: 'Same' }).click()
+  await startAsChosen(page)
 
   await expect(page).toHaveURL('/live')
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Speed, 4 × 3′')

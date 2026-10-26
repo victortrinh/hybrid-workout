@@ -139,9 +139,10 @@ export function App() {
    * decision on its Suggestion count at once, and the Live session starts
    * from the Coach's answer with them in it, so the pain rules are already in
    * its Blocks. Strength is prefilled with today's Working weights; a run's
-   * clock starts at the tap, in the Environment Today shows for it.
+   * clock starts at the tap, where Start said it happens (else the
+   * Environment Today shows for it).
    */
-  const startLive = (week: number, session: Session, pain: PainAtStart) => {
+  const startLive = (week: number, session: Session, pain: PainAtStart, where: Environment | null) => {
     unlockSound()
     const given = painReport(pain.score, pain.area, week, session.id)
     report(given)
@@ -152,6 +153,8 @@ export function App() {
       decided = mergeDecisions(decisions, [decision])
     }
     if (!pain.start) return
+    // Treadmill or outside, answered at Start: the Session's override from now on, so Today shows it too.
+    if (where) setEnvironment(week, session, where)
     const after = coach({
       program,
       today,
@@ -191,7 +194,7 @@ export function App() {
             },
             now,
           )
-        : startRun({ week, session: started, date: today, environment: runContext(week, session).environment }, now),
+        : startRun({ week, session: started, date: today, environment: where ?? runContext(week, session).environment }, now),
     )
     navigate(SCREEN_PATH.live)
   }

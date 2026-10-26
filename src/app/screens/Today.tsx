@@ -29,7 +29,8 @@ import { LaneChip } from '../components/LaneChip'
 import { buttonBase, lineAction, primaryAction, quietButton } from '../components/actions'
 import { answered, PainFields, type PainAnswer } from '../components/PainFields'
 import { ActionBar } from '../components/ActionBar'
-import { asksPain, PAIN_FREE, painSuggestionFor, PainStep, type PainAtStart } from '../components/PainStep'
+import { PAIN_FREE, painSuggestionFor, type PainAtStart } from '../components/PainStep'
+import { asksAtStart, StartStep } from '../components/StartStep'
 import { Segmented } from '../components/Segmented'
 import { SessionSheet, useSheet, type SheetAction } from '../components/SessionSheet'
 import { SettingsPopover, type StartingPointEdit } from '../components/SettingsPopover'
@@ -108,7 +109,7 @@ export function Today({
   /** The Live session running on this device, if any. */
   live: LiveSession | null
   /** Start session, after the pain step: a Pain report, then a Live session of Up next. */
-  onStart: (week: number, session: Session, pain: PainAtStart) => void
+  onStart: (week: number, session: Session, pain: PainAtStart, environment: Environment | null) => void
   /** A Pain report given from Today, outside any Session. */
   onSomethingHurts: (score: number, area: PainArea) => void
   /** Whether a run of the watch's was on a treadmill. */
@@ -373,7 +374,7 @@ function UpNext({
   runContext: (week: number, session: Session) => RunContext
   onEnvironment: (week: number, session: Session, environment: Environment) => void
   live: LiveSession | null
-  onStart: (week: number, session: Session, pain: PainAtStart) => void
+  onStart: (week: number, session: Session, pain: PainAtStart, environment: Environment | null) => void
   onSomethingHurts: (score: number, area: PainArea) => void
   treadmill: (activity: Activity) => boolean
   onAnswer: (activity: Activity, week: number | null, sessionId: string | null) => void
@@ -383,7 +384,7 @@ function UpNext({
   const [asking, setAsking] = useState(false)
   const entrances = useEntrances()
   const mounted = useMounted()
-  /** Back from the pain step with Not now: focus returns to Start. */
+  /** Back from Start's questions with Not now: focus returns to Start. */
   const [refocus, setRefocus] = useState(false)
   const { position, upNext } = day
   const standing = day.pain?.report ?? null
@@ -489,7 +490,7 @@ function UpNext({
           )}
         </p>
       )}
-      {upNext && upNextWeek && run && dependsOnEnvironment(upNext, run) && (
+      {!asking && upNext && upNextWeek && run && dependsOnEnvironment(upNext, run) && (
         <Segmented
           label="Where"
           labelClassName="sr-only"
@@ -510,14 +511,16 @@ function UpNext({
             </Link>
           </div>
         </ActionBar>
-      ) : upNext && upNextWeek && asking && standing && isLive(upNext) ? (
+      ) : upNext && upNextWeek && run && asking && isLive(upNext) ? (
         <ActionBar label="Up next">
-          <PainStep
+          <StartStep
+            session={upNext}
             standing={standing}
             suggestion={painSuggestion}
-            onAnswer={(pain) => {
+            environment={run.environment}
+            onStart={(pain, environment) => {
               setAsking(false)
-              onStart(upNextWeek, upNext, pain)
+              onStart(upNextWeek, upNext, pain, environment)
             }}
             onCancel={() => {
               setAsking(false)
@@ -533,7 +536,7 @@ function UpNext({
               {isLive(upNext) ? (
                 <Button
                   autoFocus={refocus}
-                  onPress={() => (asksPain(standing) ? setAsking(true) : onStart(upNextWeek, upNext, { ...PAIN_FREE }))}
+                  onPress={() => (asksAtStart(upNext, standing) ? setAsking(true) : onStart(upNextWeek, upNext, { ...PAIN_FREE }, null))}
                   className={primaryAction}
                 >
                   {nb(`Start ${SESSION_TYPES[upNext.type].name}`)}

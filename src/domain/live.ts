@@ -15,6 +15,7 @@ import type { IntervalLog, SessionLog, StationLog, StationPart } from './log'
 import {
   clock,
   DEFAULT_INCLINE,
+  formatPace,
   paceFor,
   runTarget,
   speedFor,
@@ -331,34 +332,77 @@ export interface LiveTarget {
   value: string
   /** "km/h", "mph", "/km" or "RPE". */
   unit: string
+  /** The pace per km beside a treadmill speed, `{ value: '4:52', unit: '/km' }`; null anywhere else. */
+  secondary: { value: string; unit: string } | null
   /** Treadmill incline in %, indoors only. */
   incline: number | null
   /** Seconds per km, for the interval log; null while runs are RPE only. */
   pace: number | null
-  /** The whole target in words: "9.2–10.3 km/h · 1% incline". */
+  /** The hero figure in words, as the Ready line and Lock-screen cues read it: "12.3 km/h · 4:52/km · 1% incline". */
+  figure: string
+  /** The whole target in words: "9.2–10.3 km/h · 5:51–6:26/km · 1% incline". */
   words: string
 }
 
 /**
  * The exact target of a Block: the middle of its pace range as a treadmill
- * speed or a pace per km, or its RPE before there are Training paces. Null
- * where there's nothing to dial: drills, or a run by feel with no RPE.
+ * speed with its pace per km, or a pace per km alone outdoors, or its RPE
+ * before there are Training paces. Null where there's nothing to dial:
+ * drills, or a run by feel with no RPE.
  */
 export function liveTarget(block: LiveBlock, run: RunContext): LiveTarget | null {
   if (!block.effort) return null
   const incline = run.environment === 'indoor' ? DEFAULT_INCLINE : null
+  if (block.kind === 'recovery') return recoveryTarget(run, incline)
   const range = run.paces && paceFor(block.effort, run.paces)
   if (range) {
     const pace = Math.round((range[0] + range[1]) / 2)
+    const figure = formatPace([pace, pace], run.environment, run.unit)
     const words = runTarget(block.effort, run) ?? ''
     return run.environment === 'indoor'
-      ? { value: speedFor(pace, run.unit).toFixed(1), unit: UNIT_LABEL[run.unit], incline, pace, words }
-      : { value: clock(pace), unit: '/km', incline, pace, words }
+      ? {
+          value: speedFor(pace, run.unit).toFixed(1),
+          unit: UNIT_LABEL[run.unit],
+          secondary: { value: clock(pace), unit: '/km' },
+          incline,
+          pace,
+          figure,
+          words,
+        }
+      : { value: clock(pace), unit: '/km', secondary: null, incline, pace, figure, words }
   }
   const rpe = block.effort.rpe
   if (!rpe) return null
   const value = rpe[0] === rpe[1] ? `${rpe[0]}` : `${rpe[0]}–${rpe[1]}`
-  return { value, unit: 'RPE', incline, pace: null, words: `RPE ${value}` }
+  return { value, unit: 'RPE', secondary: null, incline, pace: null, figure: `RPE ${value}`, words: `RPE ${value}` }
+}
+
+/** A recovery jog's speed with no Training paces: slow, but not so slow the belt feels awkward. */
+const RECOVERY_KMH = 7
+
+/** How far under the slow end of Easy pace a recovery jog sits. */
+const RECOVERY_UNDER_EASY_KMH = 0.5
+
+/**
+ * The speed suggested for a recovery jog, in km/h: the first of these there
+ * is. No floor: a slow Easy pace makes a slow jog.
+ */
+export function recoveryKmh(run: RunContext): number {
+  const underEasy = run.paces && speedFor(run.paces.easy[1], 'kmh') - RECOVERY_UNDER_EASY_KMH
+  return Math.round((underEasy ?? RECOVERY_KMH) * 10) / 10
+}
+
+/** "Jog ~8.8 km/h · 6:49/km, or walk": a number to set the belt to, never one to hold. */
+function recoveryTarget(run: RunContext, incline: number | null): LiveTarget {
+  const pace = Math.round(3600 / recoveryKmh(run))
+  const figure = formatPace([pace, pace], run.environment, run.unit)
+  if (run.environment === 'outdoor') {
+    return { value: clock(pace), unit: '/km', secondary: null, incline, pace, figure, words: `Jog ~${clock(pace)}/km, or walk` }
+  }
+  const value = speedFor(pace, run.unit).toFixed(1)
+  const unit = UNIT_LABEL[run.unit]
+  const words = `Jog ~${value} ${unit} · ${clock(pace)}/km, or walk`
+  return { value, unit, secondary: { value: clock(pace), unit: '/km' }, incline, pace, figure, words }
 }
 
 /** A Live run session in progress, as stored on the device. */

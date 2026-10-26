@@ -32,7 +32,7 @@ export function liveLine(block: LiveBlock, run: LiveRun): string {
       return last ? 'Last rep. Hard, not desperate.' : `Rep ${block.rep}. Hard, not desperate.`
     }
     case 'recovery':
-      return 'Jog. Breathe. Pretend this is easy.'
+      return 'Jog or walk. Breathe. Pretend this is easy.'
     case 'run':
       return 'Conversational. If you can’t talk, slow down.'
     case 'distance':

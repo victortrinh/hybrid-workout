@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { expectNoAxeViolations, WEEK_3 } from './axe'
 import { serveHistory, weekDone } from './history'
+import { startAsChosen } from './today'
 
 const WEEK_2 = weekDone(2, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-11-02')
 
@@ -65,6 +66,7 @@ test('while a Live session runs, a Session’s sheet says to finish it first', a
   await page.clock.install({ time: WEEK_3 })
   await page.goto('/')
   await page.getByRole('button', { name: /^Start / }).click()
+  await startAsChosen(page)
   await expect(page).toHaveURL('/live')
 
   await page.goto('/')
