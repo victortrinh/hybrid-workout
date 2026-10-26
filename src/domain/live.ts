@@ -384,16 +384,17 @@ export function recoveryKmh(run: RunContext): number {
   return Math.round((underEasy ?? RECOVERY_KMH) * 10) / 10
 }
 
-/** "Jog ~8.7 km/h, or walk": a number to set the belt to, never one to hold. */
+/** "Jog ~8.8 km/h · 6:49/km, or walk": a number to set the belt to, never one to hold. */
 function recoveryTarget(run: RunContext, incline: number | null): LiveTarget {
-  const kmh = recoveryKmh(run)
-  const pace = Math.round(3600 / kmh)
-  const [value, unit] =
-    run.environment === 'indoor'
-      ? [(run.unit === 'kmh' ? kmh : speedFor(pace, run.unit)).toFixed(1), UNIT_LABEL[run.unit]]
-      : [clock(pace), '/km']
-  const figure = unit === '/km' ? `${value}/km` : `${value} ${unit}`
-  return { value, unit, incline, pace, words: `Jog ~${figure}, or walk` }
+  const pace = Math.round(3600 / recoveryKmh(run))
+  const figure = formatPace([pace, pace], run.environment, run.unit)
+  if (run.environment === 'outdoor') {
+    return { value: clock(pace), unit: '/km', secondary: null, incline, pace, figure, words: `Jog ~${clock(pace)}/km, or walk` }
+  }
+  const value = speedFor(pace, run.unit).toFixed(1)
+  const unit = UNIT_LABEL[run.unit]
+  const words = `Jog ~${value} ${unit} · ${clock(pace)}/km, or walk`
+  return { value, unit, secondary: { value: clock(pace), unit: '/km' }, incline, pace, figure, words }
 }
 
 /** A Live run session in progress, as stored on the device. */

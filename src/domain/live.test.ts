@@ -183,14 +183,16 @@ describe('liveTarget', () => {
       expect(liveTarget(jog, indoor)).toEqual({
         value: '8.8',
         unit: 'km/h',
+        secondary: { value: '6:49', unit: '/km' },
         incline: 1,
         pace: 409,
-        words: 'Jog ~8.8 km/h, or walk',
+        figure: '8.8 km/h · 6:49/km · 1% incline',
+        words: 'Jog ~8.8 km/h · 6:49/km, or walk',
       })
     })
 
     it('reads in the Settings unit indoors and as pace per km outdoors', () => {
-      expect(liveTarget(jog, { ...indoor, unit: 'mph' })).toMatchObject({ value: '5.5', unit: 'mph', words: 'Jog ~5.5 mph, or walk' })
+      expect(liveTarget(jog, { ...indoor, unit: 'mph' })).toMatchObject({ value: '5.5', unit: 'mph', words: 'Jog ~5.5 mph · 6:49/km, or walk' })
       expect(liveTarget(jog, { ...indoor, environment: 'outdoor' })).toMatchObject({
         value: '6:49',
         unit: '/km',
@@ -201,12 +203,20 @@ describe('liveTarget', () => {
 
     it('comes from Estimated Training paces the same way', () => {
       const estimated = { ...indoor, paces: trainingPaces(23 * 60, { estimate: true }) }
-      expect(liveTarget(jog, estimated)).toMatchObject({ value: '8.8', words: 'Jog ~8.8 km/h, or walk' })
+      expect(liveTarget(jog, estimated)).toMatchObject({ value: '8.8', words: 'Jog ~8.8 km/h · 6:49/km, or walk' })
     })
 
     it('is ~7 km/h with no Training paces', () => {
       const none = { ...indoor, paces: null }
-      expect(liveTarget(jog, none)).toEqual({ value: '7.0', unit: 'km/h', incline: 1, pace: 514, words: 'Jog ~7.0 km/h, or walk' })
+      expect(liveTarget(jog, none)).toEqual({
+        value: '7.0',
+        unit: 'km/h',
+        secondary: { value: '8:34', unit: '/km' },
+        incline: 1,
+        pace: 514,
+        figure: '7.0 km/h · 8:34/km · 1% incline',
+        words: 'Jog ~7.0 km/h · 8:34/km, or walk',
+      })
       expect(liveTarget(jog, { ...none, environment: 'outdoor' })).toMatchObject({ value: '8:34', words: 'Jog ~8:34/km, or walk' })
     })
 
