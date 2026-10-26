@@ -25,6 +25,8 @@ import {
   end,
   endRest,
   goBack,
+  byFeelHint,
+  byFeelPrefill,
   hasByFeelReps,
   heldUnanswered,
   isChecklist,
@@ -294,7 +296,7 @@ function Running({
                 )}
               </p>
             ) : (
-              <p className="mt-2 text-headline">{nb(feelWords(block))}</p>
+              <p className="mt-2 text-headline">{nb(feelWords(block, context))}</p>
             )}
             <div className="mt-3.5 flex items-end justify-between gap-4">
               <span>
@@ -558,12 +560,14 @@ function RoundLegs({ block, leg, done }: { block: LiveBlock; leg: number; done: 
   )
 }
 
-/** Where there's nothing to dial: what the Block is about instead. */
-function feelWords(block: LiveBlock): string {
+/** Where there's nothing to dial: what the Block is about instead, and a by-feel rep's speed last time. */
+function feelWords(block: LiveBlock, context: RunContext): string {
   if (block.effort && 'feel' in block.effort) {
-    return { easy: 'Easy', hard: 'Hard, by feel', controlled: 'Controlled', relaxed: 'Relaxed', 'all-out': 'All-out' }[
+    const feel = { easy: 'Easy', hard: 'Hard, by feel', controlled: 'Controlled', relaxed: 'Relaxed', 'all-out': 'All-out' }[
       block.effort.feel
     ]
+    const hint = byFeelHint(block, context)
+    return hint ? `${feel} · ${hint}` : feel
   }
   if (block.effort) return 'Easy'
   if (block.kind === 'setup') return 'Not training time'
@@ -1046,7 +1050,7 @@ function FinishSheet({
   const [missingRpe, setMissingRpe] = useState(false)
   const quick = quickSplits(run)
   const [fixes, setFixes] = useState<Record<string, string>>({})
-  const [speeds, setSpeeds] = useState<ByFeelAnswer>({ hard: '', jog: '' })
+  const [speeds, setSpeeds] = useState<ByFeelAnswer>(() => byFeelPrefill(run, context))
   const fixText = (q: QuickSplit) => fixes[splitKey(q)] ?? clock(q.seconds)
 
   function submit(event: FormEvent) {

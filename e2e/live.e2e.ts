@@ -484,6 +484,7 @@ test('Speed: Done, the checklists, Start, Undo, going back, and a Partial flippe
 async function toRep1(page: Page) {
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Speed, 5 × 3′')
   await page.getByRole('button', { name: 'Start Speed' }).click()
+  await startAsChosen(page)
   const s = live(page)
   for (const block of ['Warm-up · 7 min', 'Drills · 7 sets', 'Plyometrics · 5 sets', 'Accelerations · 4 sets']) {
     await expect(s.block).toHaveText(block)
@@ -501,7 +502,8 @@ test('by-feel reps ask nothing as they go, and the speeds once at the end, on th
   await page.clock.pauseAt(new Date(WEEK_3.getTime() + 1000))
   const s = await toRep1(page)
 
-  // "Hard, by feel": nothing to hold, so nothing asked after the rep.
+  // "Hard, by feel": nothing to hold, so nothing asked after the rep. Nothing logged before: no Last time.
+  await expect(page.locator('header').getByText(/^Hard, by feel/)).toHaveText('Hard, by feel')
   await page.clock.runFor('03:00')
   await expect(s.block).toHaveText('Jog · 90 s')
   await expect(page.getByRole('region', { name: /held the target\?$/ })).toHaveCount(0)
@@ -593,3 +595,80 @@ test('a by-feel pace that can’t be right holds the save until it’s put right
   })
 })
 
+
+/** Week 1's Speed on the treadmill, its by-feel reps at 14 km/h and its jogs at 6 km/h. */
+const WEEK_1_SPEED = {
+  week: 1,
+  sessionId: 'speed',
+  date: '2026-10-27',
+  status: 'done',
+  environment: 'indoor',
+  recoveryPace: 600,
+  intervals: [4, 6, 8, 10, 12].map((block) => ({ block, rep: block / 2 - 1, targetPace: null, held: false, actualPace: 257 })),
+} as const
+
+test('by-feel reps show the speed logged last time, and the question at the end starts from it', async ({ page }) => {
+  const sent = await serveHistory(page, [WEEK_1_SPEED, ...WEEK_2])
+  await page.clock.install({ time: aMinuteBefore(WEEK_3) })
+  await page.goto('/')
+  await page.clock.pauseAt(WEEK_3)
+  const s = await toRep1(page)
+
+  // A hint beside the effort, never a target: no speed in the hero, nothing asked after the rep.
+  await expect(page.locator('header').getByText(/^Hard, by feel/)).toHaveText('Hard, by feel · Last time 14.0 km/h')
+  await expect(s.target).toHaveCount(0)
+  await page.clock.runFor('03:00')
+  await expect(s.block).toHaveText('Jog · 90 s')
+  await expect(page.getByRole('region', { name: /held the target\?$/ })).toHaveCount(0)
+  // The jog still comes off the 23:00 test, not the jog logged last time.
+  await expect(s.target).toHaveText('8.8')
+
+  await page.getByRole('button', { name: 'End' }).click()
+  const speeds = page.getByRole('region', { name: 'By-feel speeds' })
+  await expect(speeds.getByRole('textbox', { name: 'Hard reps, km/h' })).toHaveValue('14.0')
+  await expect(speeds.getByRole('textbox', { name: 'Jogs, km/h' })).toHaveValue('6.0')
+  await page.clock.resume()
+  await page.getByRole('button', { name: 'Save log' }).click()
+
+  await expect(page).toHaveURL('/')
+  await expect.poll(() => sent.at(-1)).toMatchObject({
+    sessionId: 'speed',
+    recoveryPace: 600,
+    intervals: [{ block: 4, rep: 1, targetPace: null, held: false, actualPace: 257 }],
+  })
+  // Logged speeds are no 5K test: Threshold still reads off the 23:00 test.
+  await doToday(page, page.getByRole('list').filter({ hasText: 'Strength' }).getByRole('button', { name: /^Threshold/ }))
+  await expect(page.getByRole('heading', { level: 1 }).locator('xpath=following-sibling::p[1]')).toHaveText(/^12\.3\skm\/h/)
+})
+
+test('outdoors, last time reads as a pace per km, converted from the treadmill', async ({ page }) => {
+  await serveHistory(page, [WEEK_1_SPEED, ...WEEK_2])
+  await page.addInitScript(() => localStorage.setItem('compromised:environment', JSON.stringify({ '3/speed': 'outdoor' })))
+  await page.clock.install({ time: aMinuteBefore(WEEK_3) })
+  await page.goto('/')
+  await page.clock.pauseAt(WEEK_3)
+  const s = await toRep1(page)
+
+  await expect(page.locator('header').getByText(/^Hard, by feel/)).toHaveText('Hard, by feel · Last time 4:17/km')
+  await page.clock.runFor('03:30')
+  await expect(s.block).toHaveText('Jog · 90 s')
+  await page.getByRole('button', { name: 'End' }).click()
+  await expect(page.getByRole('textbox', { name: 'Hard reps, per km' })).toHaveValue('4:17')
+  await expect(page.getByRole('textbox', { name: 'Jogs, per km' })).toHaveValue('10:00')
+})
+
+test('with no Training paces, the jog suggestion is the jog logged last time', async ({ page }) => {
+  // No 5K test yet: every run is RPE only, but Week 1's jogs were logged at 6 km/h.
+  await serveHistory(page, [WEEK_1_SPEED])
+  await page.clock.install({ time: aMinuteBefore(WEEK_3) })
+  await page.goto('/')
+  // The baseline 5K test leads Today: Speed is picked from the Bucket.
+  await doToday(page, page.getByRole('list').filter({ hasText: 'Strength' }).getByRole('button', { name: /^Speed/ }))
+  await page.clock.pauseAt(WEEK_3)
+  const s = await toRep1(page)
+
+  await page.clock.runFor('03:00')
+  await expect(s.block).toHaveText('Jog · 90 s')
+  await expect(s.target).toHaveText('6.0')
+  await expect(page.locator('header')).toContainText('10:00/km')
+})

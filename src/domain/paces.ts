@@ -47,6 +47,14 @@ export interface RunContext {
   paces: TrainingPaces | null
   environment: Environment
   unit: SpeedUnit
+  /** The By-feel speeds last logged, for a Live run: hints beside the effort, never targets (ADR-0002). */
+  logged?: LoggedSpeeds
+}
+
+/** The latest logged By-feel speeds, in seconds per km; null where none was ever logged. */
+export interface LoggedSpeeds {
+  hardPace: number | null
+  recoveryPace: number | null
 }
 
 /**

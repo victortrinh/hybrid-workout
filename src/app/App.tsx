@@ -6,7 +6,7 @@ import { Link, RouterProvider } from 'react-aria-components'
 import { motion } from 'motion/react'
 import { coach, findWeek, keyDeadline, prescribedWeek, type CoachDay } from '../domain/coach'
 import { liftsLog, startLifts } from '../domain/lifts'
-import { liveLog, startRun } from '../domain/live'
+import { liveLog, loggedSpeeds, startRun } from '../domain/live'
 import { logDays, logFor, type SessionLog } from '../domain/log'
 import type { Environment, RunContext } from '../domain/paces'
 import type { PainArea, PainReport } from '../domain/pain'
@@ -119,8 +119,11 @@ export function App() {
   const setEnvironment = (week: number, session: Session, environment: Environment) =>
     override(week, session.id, environment)
   const [live, setLive] = useLiveRun()
+  /** The By-feel speeds last logged before the Live session's day: hints, never targets. */
+  const liveDate = live?.date ?? today
+  const lastLogged = useMemo(() => loggedSpeeds(logs, liveDate), [logs, liveDate])
   /** As the Live screen runs the clock: the run's own Environment replaces this one. */
-  const liveContext: RunContext = { paces: day.paces, unit: settings.unit, environment: 'indoor' }
+  const liveContext: RunContext = { paces: day.paces, unit: settings.unit, environment: 'indoor', logged: lastLogged }
   useLockScreenCues(live, liveContext)
   /** The slot above the tab bar where a screen's ActionBar docks on the phone. */
   const [dock, setDock] = useState<HTMLElement | null>(null)
