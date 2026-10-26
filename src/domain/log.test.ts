@@ -14,6 +14,7 @@ const valid = {
   resultSeconds: null,
   environment: null,
   distanceMeters: null,
+  recoveryPace: null,
   intervals: [],
   sets: [],
   stations: [],
@@ -56,6 +57,15 @@ describe('parseSessionLog', () => {
     expect(parseSessionLog(live)).toEqual(live)
     const { distanceMeters, intervals, ...older } = valid
     expect(parseSessionLog(older)).toMatchObject({ distanceMeters: null, intervals: [] })
+  })
+
+  it('accepts by-feel speeds: a rep’s actual pace with no target, and the jogs’ recovery pace', () => {
+    const rep = { block: 4, rep: 1, targetPace: null, held: false, actualPace: 257 }
+    const byFeel = { ...valid, sessionId: 'speed', environment: 'indoor', recoveryPace: 600, intervals: [rep] }
+    expect(parseSessionLog(byFeel)).toEqual(byFeel)
+    // Logs saved before by-feel speeds have no recovery pace.
+    const { recoveryPace, ...older } = valid
+    expect(parseSessionLog(older)).toEqual(valid)
   })
 
   it('accepts a Strength session’s sets, bodyweight ones included, and treats missing ones as none', () => {
@@ -107,6 +117,9 @@ describe('parseSessionLog', () => {
     ['a Station log with no round', { stations: [{ ...sled, round: null }] }],
     ['a load that is not whole pounds', { stations: [{ ...sled, pounds: 202.5 }] }],
     ['a negative split', { stations: [{ ...round, seconds: -1 }] }],
+    ['a recovery pace faster than 2:00/km', { recoveryPace: 119 }],
+    ['a recovery pace slower than 20:00/km', { recoveryPace: 1201 }],
+    ['a recovery pace that is not whole seconds', { recoveryPace: 600.5 }],
     ['an updatedAt with a local offset', { updatedAt: '2026-11-04T12:00:00-05:00' }],
   ])('rejects %s', (_, change) => {
     expect(() => parseSessionLog({ ...valid, ...change })).toThrow()

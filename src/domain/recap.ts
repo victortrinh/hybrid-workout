@@ -107,6 +107,7 @@ export function finishLog(
     resultSeconds: seconds,
     environment: null,
     distanceMeters: null,
+    recoveryPace: null,
     intervals: [],
     sets: [],
     stations: [],

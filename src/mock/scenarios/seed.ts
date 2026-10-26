@@ -33,6 +33,7 @@ export const toLog = (seed: SeedLog, prefix: string) =>
     resultSeconds: null,
     environment: null,
     distanceMeters: null,
+    recoveryPace: null,
     intervals: [],
     stations: [],
     sets: [],

@@ -102,6 +102,7 @@ test.describe('the sync endpoint', () => {
     resultSeconds: null,
     environment: null,
     distanceMeters: null,
+    recoveryPace: null,
     intervals: [],
     sets: [],
     stations: [],
@@ -149,7 +150,9 @@ test.describe('the sync endpoint', () => {
     }
 
     expect(await stored(run)).toEqual([run])
-    const edited = { ...run, intervals: [run.intervals[1]], updatedAt: '2027-03-09T08:00:00.000Z' }
+    // By-feel speeds: a rep with no target at the speed run, and the jogs' recovery pace.
+    const byFeel = { block: 5, rep: 3, targetPace: null, held: false, actualPace: 257 }
+    const edited = { ...run, recoveryPace: 600, intervals: [run.intervals[1], byFeel], updatedAt: '2027-03-09T08:00:00.000Z' }
     expect(await stored(edited)).toEqual([edited])
     // An older copy arriving late doesn't bring its reps back.
     expect(await stored(run)).toEqual([edited])

@@ -52,6 +52,11 @@ export interface SessionLog {
   environment: Environment | null
   /** The treadmill console's distance in metres: the watch guesses wrong indoors. */
   distanceMeters: number | null
+  /**
+   * The recovery jogs' pace in seconds per km, from a Live run's By-feel speeds.
+   * Never a Training pace: only a 5K test sets those (ADR-0002).
+   */
+  recoveryPace: number | null
   /** One per interval rep of a Live session: held the target, or what was run instead. */
   intervals: IntervalLog[]
   /** One per set logged in a Live Strength session, in Exercise and set order. */
@@ -74,7 +79,7 @@ export interface IntervalLog {
   /** The target it was run against; null while runs are RPE only. */
   targetPace: number | null
   held: boolean
-  /** What was run instead, when not held. */
+  /** What was run instead, when not held; on a by-feel rep, its By-feel speed. */
   actualPace: number | null
 }
 
@@ -184,6 +189,7 @@ export function parseSessionLog(value: unknown): SessionLog {
     throw new Error(`environment must be one of ${ENVIRONMENTS.join(', ')}`)
   }
   const distanceMeters = optionalInteger(v.distanceMeters, 'distanceMeters', ...DISTANCE_METERS)
+  const recoveryPace = optionalInteger(v.recoveryPace, 'recoveryPace', ...PACE_SECONDS)
   const intervals = parseIntervals(v.intervals ?? [])
   const sets = parseSets(v.sets ?? [])
   const stationLogs = parseStationLogs(v.stations ?? [])
@@ -204,6 +210,7 @@ export function parseSessionLog(value: unknown): SessionLog {
     resultSeconds,
     environment: environment as Environment | null,
     distanceMeters,
+    recoveryPace,
     intervals,
     sets,
     stations: stationLogs,

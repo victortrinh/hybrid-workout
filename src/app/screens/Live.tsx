@@ -16,6 +16,7 @@ import {
   advance,
   answer,
   answerStations,
+  asksAfter,
   blockElapsed,
   blockLeft,
   canUndo,
@@ -23,6 +24,7 @@ import {
   distanceSeconds,
   end,
   goBack,
+  hasByFeelReps,
   heldUnanswered,
   isChecklist,
   isOver,
@@ -85,6 +87,9 @@ export interface LiveFinish {
   resultSeconds: number | null
   /** Splits too quick to be true, put right or left untimed. */
   fixes: SplitFix[]
+  /** By-feel speeds in seconds per km, each null when left blank. */
+  hardPace: number | null
+  recoveryPace: number | null
 }
 
 const LANE_BG: Record<Lane, string> = {
@@ -721,12 +726,10 @@ function roundFill(run: LiveRun, block: LiveBlock, i: number): string | undefine
   return `${(run.legs.filter((l) => l.block === i).length / legs) * 100}%`
 }
 
-/** The Blocks that ask something once over: a rep, a HYROX round, a Race simulation's Station. */
-const asksAfter = (block: LiveBlock) => block.rep !== null || block.kind === 'round' || block.kind === 'station'
-
 /**
- * After a rep: Held it, or Changed with what was run instead. Saying nothing
- * is Held it, so the tap is only for a rep that wasn't.
+ * After a rep at a target: Held it, or Changed with what was run instead.
+ * Saying nothing is Held it, so the tap is only for a rep that wasn't. A
+ * by-feel rep asks nothing: its speed is asked once, on the finish sheet.
  */
 function HeldCheck({
   run,
@@ -1010,6 +1013,7 @@ function FinishSheet({
   const [missingRpe, setMissingRpe] = useState(false)
   const quick = quickSplits(run)
   const [fixes, setFixes] = useState<Record<string, string>>({})
+  const [speeds, setSpeeds] = useState<ByFeelAnswer>({ hard: '', jog: '' })
   const fixText = (q: QuickSplit) => fixes[splitKey(q)] ?? clock(q.seconds)
 
   function submit(event: FormEvent) {
@@ -1023,7 +1027,10 @@ function FinishSheet({
     if (quick.some((q) => validateSplit(q, fixText(q)))) return
     const meters = indoor && Number.isFinite(distance) ? Math.round(distance * (mile ? KM_PER_MILE * 1000 : 1000)) : null
     const fixed = quick.map(({ block, leg }, i) => ({ block, leg, seconds: parseClock(fixText(quick[i])) }))
-    onSave({ rpe, distanceMeters: meters, resultSeconds, fixes: fixed })
+    const hardPace = speedPace(speeds.hard, run.environment, context.unit)
+    const recoveryPace = speedPace(speeds.jog, run.environment, context.unit)
+    if (hardPace === undefined || recoveryPace === undefined) return
+    onSave({ rpe, distanceMeters: meters, resultSeconds, fixes: fixed, hardPace, recoveryPace })
   }
 
   return (
@@ -1058,6 +1065,7 @@ function FinishSheet({
         </section>
       )}
       <CutShort run={run} onMarkDone={onMarkDone} />
+      {hasByFeelReps(run) && <ByFeelSpeeds run={run} context={context} value={speeds} onChange={setSpeeds} />}
       {result && (
         <TextField
           value={time}
@@ -1123,5 +1131,66 @@ function FinishSheet({
         )}
       </div>
     </Form>
+  )
+}
+
+/** The By-feel speeds as typed: a speed indoors, a pace per km outdoors. Blank is no answer. */
+interface ByFeelAnswer {
+  hard: string
+  jog: string
+}
+
+/**
+ * A By-feel speed typed in to seconds per km: null when blank, undefined when
+ * it can't be a pace, so the sheet holds until it's put right.
+ */
+function speedPace(text: string, environment: LiveRun['environment'], unit: RunContext['unit']): number | null | undefined {
+  if (text.trim() === '') return null
+  const pace = environment === 'indoor' ? paceFromSpeed(Number(text.replace(',', '.')), unit) : parseClock(text)
+  return paceOk(pace) ? pace : undefined
+}
+
+/**
+ * After a run with by-feel reps: what the hard reps and the jogs were, asked
+ * once now that typing is possible. Both optional; never a Training pace.
+ */
+function ByFeelSpeeds({
+  run,
+  context,
+  value,
+  onChange,
+}: {
+  run: LiveRun
+  context: RunContext
+  value: ByFeelAnswer
+  onChange: (value: ByFeelAnswer) => void
+}) {
+  const indoor = run.environment === 'indoor'
+  const unit = indoor ? (context.unit === 'kmh' ? 'km/h' : 'mph') : 'per km'
+  const jogs = run.blocks.some((b) => b.kind === 'recovery' && b.effort !== null)
+  const field = (key: keyof ByFeelAnswer, label: string) => (
+    <TextField
+      value={value[key]}
+      onChange={(text) => onChange({ ...value, [key]: indoor ? text : clockInput(text) })}
+      validate={(text) => (speedPace(text, run.environment, context.unit) === undefined ? (indoor ? 'A speed like 14.0.' : 'A pace like 4:17.') : null)}
+      inputMode={indoor ? 'decimal' : 'numeric'}
+      className="grid gap-2"
+    >
+      <Label className="text-body">
+        {label}, {unit}
+      </Label>
+      <Input placeholder={indoor ? '0.0' : 'm:ss'} autoComplete="off" className={inputClass} />
+      <FieldError className="text-body-quiet font-bold text-ink" />
+    </TextField>
+  )
+  return (
+    <section aria-label="By-feel speeds" className="grid gap-4">
+      <h2 className={groupLabel}>{indoor ? 'What speed did you run?' : 'What pace did you run?'}</h2>
+      <p className="-mt-2 text-body-quiet text-muted">Optional. Kept with the log, and it never changes the Training paces.</p>
+      <div className="flex flex-wrap gap-4">
+        {field('hard', 'Hard reps')}
+        {jogs && field('jog', 'Jogs')}
+      </div>
+    </section>
   )
 }

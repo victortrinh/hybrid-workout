@@ -72,10 +72,11 @@ export async function openIndexedDbStore(): Promise<LocalStore> {
   }
 }
 
-/** Logs stored before Live sessions had no console distance, reps, Station logs or sets. */
+/** Logs stored before Live sessions had no console distance, reps, Station logs or sets; before By-feel speeds, no recovery pace. */
 const upgrade = (log: SessionLog): SessionLog => ({
   ...log,
   distanceMeters: log.distanceMeters ?? null,
+  recoveryPace: log.recoveryPace ?? null,
   intervals: log.intervals ?? [],
   sets: log.sets ?? [],
   stations: log.stations ?? [],
