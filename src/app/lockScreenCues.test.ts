@@ -34,14 +34,14 @@ describe('cuesFor a run', () => {
     expect(cues[3].body).toBe('Open the app to log it.')
   })
 
-  it('puts the target on the title, as the hero figure reads it', () => {
+  it('puts the target on the title in the screen’s wording: both units indoors, pace per km outdoors', () => {
     const started = resume(advance(run('threshold'), at(600)), at(600))
     const paces = trainingPaces(21 * 60)
     const [, rep] = cuesFor(started, { paces, unit: 'kmh', environment: 'indoor' })
-    expect(rep.title).toMatch(/^Rep 2 of 2 · \d+\.\d km\/h$/)
+    expect(rep.title).toMatch(/^Rep 2 of 2 · \d+\.\d km\/h · \d:\d\d\/km · 1% incline$/)
     const outdoors = startRun({ week: 3, session: session(3, 'threshold'), date: localDate('2026-11-11'), environment: 'outdoor' }, T0)
     const [, outdoorRep] = cuesFor(resume(advance(outdoors, at(600)), at(600)), { paces, unit: 'kmh', environment: 'indoor' })
-    expect(outdoorRep.title).toMatch(/^Rep 2 of 2 · \d:\d\d \/km$/)
+    expect(outdoorRep.title).toMatch(/^Rep 2 of 2 · \d:\d\d\/km$/)
   })
 
   it('counts time paused in the Block: the cues move later by it', () => {

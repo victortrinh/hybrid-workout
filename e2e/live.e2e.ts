@@ -63,9 +63,9 @@ test('a full Threshold Session from Start to logged', async ({ page }) => {
   const blocks = page.getByRole('list', { name: 'Blocks' }).getByRole('listitem')
   await expect(blocks).toHaveText([
     /^Warm-up\s*10 min$/,
-    /^Rep 1 of 2\s*12\.3 km\/h$/,
+    /^Rep 1 of 2\s*12\.3 km\/h · 4:52\/km · 1% incline$/,
     /^Jog\s*2 min$/,
-    /^Rep 2 of 2\s*12\.3 km\/h$/,
+    /^Rep 2 of 2\s*12\.3 km\/h · 4:52\/km · 1% incline$/,
     /^Easy and cooldown\s*9 min$/,
   ])
 
@@ -83,16 +83,17 @@ test('a full Threshold Session from Start to logged', async ({ page }) => {
 
   // The warm-up is over; Rep 1 waits on Ready, and the wait counts nowhere.
   await page.clock.runFor('05:00')
-  await expect(s.block).toHaveText('Ready? Up next: Rep 1 of 2 · 12.3 km/h')
+  await expect(s.block).toHaveText('Ready? Up next: Rep 1 of 2 · 12.3 km/h · 4:52/km · 1% incline')
   await expect(s.pause).toHaveCount(0)
   await page.clock.runFor('01:00')
   await expect(s.timer).toHaveText('12:00')
   await s.start.click()
 
-  // Rep 1: the target speed huge, the incline and the time left.
+  // Rep 1: the target speed huge, the pace per km below it, the incline and the time left.
   await expect(s.block).toHaveText('Rep 1 of 2 · 12 min')
   await expect(s.target).toHaveText('12.3')
   await expect(page.locator('header').getByText('km/h', { exact: true })).toBeVisible()
+  await expect(page.locator('header').getByText('4:52/km', { exact: true })).toBeVisible()
   await expect(page.locator('header').getByText('1%')).toBeVisible()
   await expect(s.timer).toHaveText('12:00')
   await expect(s.line).toHaveText('Rep 1. Threshold. Do not race it.')
@@ -296,10 +297,10 @@ test('Speed: Done, the checklists, Start, Undo, going back, and a Partial flippe
   await expect(s.timer).toHaveText('01:30')
   const sets = page.getByRole('list', { name: 'Sets' }).getByRole('checkbox')
   await expect(sets).toHaveCount(5)
-  await page.getByRole('checkbox', { name: 'Pogo jumps · set 1 of 2' }).check({ force: true })
-  await expect(page.getByRole('checkbox', { name: 'Pogo jumps · set 1 of 2' })).toBeChecked()
+  await page.getByRole('checkbox', { name: 'Pogo jumps 15 · set 1 of 2' }).check({ force: true })
+  await expect(page.getByRole('checkbox', { name: 'Pogo jumps 15 · set 1 of 2' })).toBeChecked()
   await scan(page, new Date(start.getTime() + 5 * 60_000))
-  for (const name of ['Pogo jumps · set 2 of 2', 'Broad jumps · set 1 of 3', 'Broad jumps · set 2 of 3', 'Broad jumps · set 3 of 3']) {
+  for (const name of ['Pogo jumps 15 · set 2 of 2', 'Broad jumps 3 · set 1 of 3', 'Broad jumps 3 · set 2 of 3', 'Broad jumps 3 · set 3 of 3']) {
     await page.getByRole('checkbox', { name }).click({ force: true })
   }
   await expect(s.block).toHaveText('Accelerations · 4 sets')
