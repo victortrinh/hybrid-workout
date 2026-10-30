@@ -19,6 +19,7 @@ import {
   asksAfter,
   blockElapsed,
   blockLeft,
+  canKeepGoing,
   canUndo,
   currentLeg,
   distanceSeconds,
@@ -31,6 +32,7 @@ import {
   heldUnanswered,
   isChecklist,
   isOver,
+  keepGoing,
   legElapsed,
   liveStatus,
   liveTarget,
@@ -442,7 +444,7 @@ function Running({
           <FinishSheet
             run={run}
             context={context}
-            onKeepGoing={() => act(resume)}
+            onKeepGoing={() => act(keepGoing)}
             onMarkDone={(done) => act((r) => markDone(r, done))}
             onSave={(f) => onSave(heldUnanswered(run, context), f)}
             onDiscard={() => {
@@ -1120,7 +1122,8 @@ function paceFromSpeed(speed: number, unit: RunContext['unit']): number | null {
 
 /**
  * The end: a 5K test's time, the console distance indoors, and an overall
- * RPE for every Session. Ended early, Keep going goes back to the clock.
+ * RPE for every Session. Ended early, Keep going goes back to the clock;
+ * ended on a tap, it goes back onto the last Block, in case that tap slipped.
  */
 function FinishSheet({
   run,
@@ -1262,7 +1265,7 @@ function FinishSheet({
         <Button type="submit" className={`${primaryButton} desktop:flex-none`}>
           Save log
         </Button>
-        {run.ending && (
+        {canKeepGoing(run) && (
           <Button onPress={onKeepGoing} className={`${lineButton} desktop:flex-none`}>
             Keep going
           </Button>

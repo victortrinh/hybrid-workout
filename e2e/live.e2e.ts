@@ -137,6 +137,8 @@ test('a full Threshold Session from Start to logged', async ({ page }) => {
   await page.clock.runFor('08:00')
   await expect(page.getByText('Session over')).toBeVisible()
   await expect(s.pause).toHaveCount(0)
+  // The clock ran it out, no tap to take back: nothing to keep going with.
+  await expect(page.getByRole('button', { name: 'Keep going' })).toHaveCount(0)
   await page.getByRole('textbox', { name: 'Console distance, km' }).fill('9.4')
   // Paced reps were asked one by one: no By-feel speeds at the end.
   await expect(page.getByRole('region', { name: 'By-feel speeds' })).toHaveCount(0)
@@ -287,6 +289,14 @@ test('a 5K test Live session records the time and updates the Training paces', a
   await expect(s.timer).toHaveText('22:30')
   await s.skip.click()
   await expect(s.block).toHaveText('Cooldown · 8 min')
+
+  // Done tapped on the cooldown a minute in, by mistake: Keep going puts it back, the 5 km's time kept.
+  await page.clock.runFor('01:00')
+  await s.skip.click()
+  await expect(page.getByText('Session over')).toBeVisible()
+  await page.getByRole('button', { name: 'Keep going' }).click()
+  await expect(s.block).toHaveText('Cooldown · 8 min')
+  await expect(s.timer).toHaveText('07:00')
 
   // Ended in the cooldown: the 5 km was run, so it's Done, with its time.
   await page.getByRole('button', { name: 'End' }).click()

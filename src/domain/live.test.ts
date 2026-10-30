@@ -6,8 +6,10 @@ import {
   advance,
   answer,
   blockElapsed,
+  canKeepGoing,
   canUndo,
   goBack,
+  keepGoing,
   markDone,
   redone,
   shortBlocks,
@@ -646,6 +648,37 @@ describe('the finish sheet', () => {
       { block: 1, seconds: 300 },
       { block: 3, seconds: null },
     ])
+  })
+
+  it('takes Done tapped on the last Block back, onto the cooldown where it was left', () => {
+    let run = advance(go(start(session(3, 'threshold')), at(10)), at(40))
+    run = answer(answer(run, 1, 292, null), 3, 292, null)
+    run = nextBlock(run, at(44))
+    expect(isOver(run)).toBe(true)
+    expect(canKeepGoing(run)).toBe(true)
+    const back = keepGoing(run, at(45))
+    expect(isOver(back)).toBe(false)
+    expect(back).toMatchObject({ block: 4, finishedAt: null, cutShort: [], intervals: [{ block: 1 }, { block: 3 }] })
+    expect(blockElapsed(back, at(45))).toBe(8 * 60)
+  })
+
+  it('keeps a 5K test’s 5 km when its cooldown is taken back, and goes back to the clock after End', () => {
+    const run = nextBlock(nextBlock(onFiveK(start(session(2, '5k-test'))), at(34.5)), at(35))
+    expect(canKeepGoing(run)).toBe(true)
+    const back = keepGoing(run, at(36))
+    expect(back).toMatchObject({ block: 3, splits: [{ block: 2, seconds: 22 * 60 + 30 }] })
+    expect(blockElapsed(back, at(36))).toBe(30)
+
+    const ended = end(advance(go(start(session(3, 'threshold')), at(10)), at(15)), at(15))
+    expect(canKeepGoing(ended)).toBe(true)
+    expect(keepGoing(ended, at(16))).toEqual(resume(ended, at(16)))
+  })
+
+  it('offers nothing to go back to when the clock ran the last Block out', () => {
+    const run = advance(go(start(session(3, 'threshold')), at(10)), at(60))
+    expect(isOver(run)).toBe(true)
+    expect(canKeepGoing(run)).toBe(false)
+    expect(keepGoing(run, at(61))).toBe(run)
   })
 })
 
