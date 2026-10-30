@@ -388,3 +388,43 @@ test('tapping a load selects it, so typing 225 replaces it in one go', async ({ 
   await squat.getByRole('listitem', { name: 'Back squat, set 1' }).getByRole('button', { name: 'Heavier' }).click()
   await expect(load(1)).toHaveValue('230')
 })
+
+test('a set logged by mistake comes back with Undo: changed, logged again, and saved as fixed', async ({ page }) => {
+  const sent = await serveHistory(page, HISTORY)
+  await page.clock.install({ time: aMinuteBefore(WEEK_3) })
+  await page.goto('/')
+  await doToday(page, page.getByRole('list').filter({ hasText: 'Threshold' }).getByRole('button', { name: /^Strength/ }))
+  await page.clock.pauseAt(new Date(WEEK_3.getTime() + 1000))
+  await page.getByRole('button', { name: /^Start / }).click()
+
+  const band = page.locator('header')
+  const squat = page.getByRole('region', { name: 'Back squat' })
+  const set = (n: number) => squat.getByRole('listitem', { name: `Back squat, set ${n}` })
+
+  // Set 1 logged at 185 by mistake: it was 175.
+  await currentLog(page).click()
+  await expect(page.getByRole('timer', { name: 'Rest left' })).toBeVisible()
+  await expect(set(1).getByRole('textbox')).toBeDisabled()
+
+  await set(1).getByRole('button', { name: 'Undo Back squat, set 1' }).click()
+  await expect(page.getByRole('timer', { name: 'Rest left' })).toHaveCount(0)
+  await expect(band.locator('[aria-live]')).toHaveText('Set 1 taken back. Fix it, then log it for real.')
+  await expect(page.getByRole('img', { name: '0 of 15 sets logged' })).toBeVisible()
+  await expect(set(1).getByRole('button', { name: 'Log Back squat, set 1' })).toBeFocused()
+  await expect(currentLog(page)).toHaveAccessibleName('Log set 1 · 185 lb, Back squat')
+
+  // Its load is free again; the sets after it follow, as before it was logged.
+  await set(1).getByRole('button', { name: 'Lighter' }).click()
+  await set(1).getByRole('button', { name: 'Lighter' }).click()
+  await expect(set(1).getByRole('textbox')).toHaveValue('175')
+  await expect(set(3).getByRole('textbox')).toHaveValue('175')
+  await currentLog(page).click()
+  await expect(set(1).getByText('Logged')).toBeVisible()
+  await scan(page)
+
+  await page.getByRole('button', { name: 'End' }).click()
+  await page.getByRole('button', { name: 'Save log' }).click()
+  await expect
+    .poll(() => sent.at(-1)?.sets)
+    .toEqual([{ exercise: 0, set: 1, lift: 'back-squat', pounds: 175, reps: 5, rpe: 7 }])
+})
