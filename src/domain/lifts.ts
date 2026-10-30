@@ -246,6 +246,18 @@ export function logSet(lifts: LiveLifts, exercise: number, set: number, now: num
   }
 }
 
+/**
+ * Undo a set logged by mistake: it's not done again, its load, reps and RPE
+ * as they were, so it can be changed and logged again. Its rest stops.
+ */
+export function unlogSet(lifts: LiveLifts, exercise: number, set: number): LiveLifts {
+  const target = lifts.sets[exercise]?.[set]
+  if (!target?.done) return lifts
+  const next = updateSets(lifts, exercise, (sets) => sets.map((s, i) => (i === set ? { ...s, done: false } : s)))
+  const resting = lifts.rest?.exercise === exercise && lifts.rest.set === set
+  return resting ? { ...next, rest: null } : next
+}
+
 /** How many RPEs a set offers, one tap each. */
 const RPE_CHOICES = 6
 

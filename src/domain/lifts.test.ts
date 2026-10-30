@@ -19,6 +19,7 @@ import {
   setReps,
   setRpe,
   startLifts,
+  unlogSet,
   type LiveLifts,
 } from './lifts'
 import { parseSessionLog } from './log'
@@ -212,6 +213,23 @@ describe('logging sets', () => {
     lifts = setRpe(setReps(lifts, 0, 0, 4), 0, 0, 9)
     expect(lifts.sets[0][0]).toMatchObject({ reps: 4, rpe: 9 })
     expect(setRpe(lifts, 0, 0, 11)).toBe(lifts)
+  })
+
+  it('undoes a set logged by mistake: its rest stops and it leads again, its load free to change', () => {
+    let lifts = setRpe(logSet(start(3), 0, 0, at(0)), 0, 0, 9)
+    lifts = unlogSet(lifts, 0, 0)
+    expect(lifts.sets[0][0]).toMatchObject({ done: false, pounds: 185, rpe: 9 })
+    expect(lifts.rest).toBeNull()
+    expect(currentSet(lifts)).toEqual({ exercise: 0, set: 0 })
+    expect(setLoad(lifts, 0, 0, 175).sets[0].map((s) => s.pounds)).toEqual([175, 175, 175])
+    expect(unlogSet(lifts, 0, 0)).toBe(lifts)
+  })
+
+  it('keeps the rest of a later set when an earlier one is undone', () => {
+    const lifts = logSet(logSet(start(3), 0, 0, at(0)), 0, 1, at(120))
+    const undone = unlogSet(lifts, 0, 0)
+    expect(undone.rest).toEqual(lifts.rest)
+    expect(currentSet(undone)).toEqual({ exercise: 0, set: 0 })
   })
 
   it('adds ramp sets to a calibration only', () => {

@@ -16,6 +16,7 @@ import {
   setLoad,
   setReps,
   setRpe,
+  unlogSet,
   type LiveExercise,
   type LiveLifts,
   type LiveSet,
@@ -29,7 +30,7 @@ import { StripedNumeral } from '../components/StripedNumeral'
 import { nb } from '../format'
 import { DUR, dropIn, lane, LanePresence, play, riseIn, useEntrances, useMounted, wipeIn } from '../motion'
 import { keepAwake, letSleep, unlockSound } from '../liveCues'
-import { ALL_SETS_LINE, finishLine, liftsStartLine, loggedLine, REST_OVER_LINE, rpeLine } from '../liveCopy'
+import { ALL_SETS_LINE, finishLine, liftsStartLine, loggedLine, REST_OVER_LINE, rpeLine, unloggedLine } from '../liveCopy'
 import { navigate, SCREEN_PATH } from '../router'
 import {
   DiscardButton,
@@ -105,6 +106,15 @@ export function Lifting({
     return () => document.removeEventListener('visibilitychange', visible)
   }, [lifts.ending])
   useEffect(() => letSleep, [])
+
+  /** The set whose Log set takes focus once it's undone, as the Undo under it goes. */
+  const [focusLog, setFocusLog] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!focusLog) return
+    document.getElementById(focusLog)?.focus({ preventScroll: true })
+    setFocusLog(null)
+  }, [focusLog])
 
   useEffect(() => {
     if (!focusRpe) return
@@ -222,6 +232,11 @@ export function Lifting({
                   setSay(rpeLine(rpe))
                 }}
                 onReps={(s, reps) => act((l) => setReps(l, x, s, reps))}
+                onUndo={(s) => {
+                  act((l) => unlogSet(l, x, s))
+                  setSay(unloggedLine(s + 1))
+                  setFocusLog(logId(x, s))
+                }}
                 onAddSet={() => act((l) => addSet(l, x))}
               />
             ))}
@@ -306,6 +321,7 @@ export function Lifting({
 }
 
 const rpeId = (exercise: number, set: number) => `rpe-${exercise}-${set}`
+const logId = (exercise: number, set: number) => `log-${exercise}-${set}`
 
 /** "Log set 2 · 190 lb": the set and the load the tap logs. */
 const logLabel = (number: number, set: LiveSet) => `Log set ${number + 1} · ${set.pounds === null ? 'BW' : `${set.pounds} lb`}`
@@ -428,6 +444,7 @@ function ExerciseSets({
   onLog,
   onRpe,
   onReps,
+  onUndo,
   onAddSet,
 }: {
   exercise: LiveExercise
@@ -439,6 +456,8 @@ function ExerciseSets({
   onLog: (set: number) => void
   onRpe: (set: number, rpe: number) => void
   onReps: (set: number, reps: number) => void
+  /** Undo a set logged by mistake. */
+  onUndo: (set: number) => void
   onAddSet: () => void
 }) {
   const headingId = `exercise-${index}`
@@ -473,6 +492,7 @@ function ExerciseSets({
             onLog={() => onLog(s)}
             onRpe={(rpe) => onRpe(s, rpe)}
             onReps={(reps) => onReps(s, reps)}
+            onUndo={() => onUndo(s)}
           />
         ))}
       </ol>
@@ -495,6 +515,7 @@ function SetRow({
   onLog,
   onRpe,
   onReps,
+  onUndo,
 }: {
   exercise: LiveExercise
   index: number
@@ -505,6 +526,7 @@ function SetRow({
   onLog: () => void
   onRpe: (rpe: number) => void
   onReps: (reps: number) => void
+  onUndo: () => void
 }) {
   const name = `${exercise.name}, set ${number + 1}`
   const mounted = useMounted()
@@ -564,6 +586,7 @@ function SetRow({
           </motion.span>
         ) : (
           <Button
+            id={logId(index, number)}
             onPress={onLog}
             aria-label={`Log ${name}`}
             className={`${logClass} text-ink hover:bg-sunk data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-link ${
@@ -574,12 +597,17 @@ function SetRow({
           </Button>
         )}
       </div>
-      {set.done && <SetFeel exercise={exercise} index={index} number={number} set={set} onRpe={onRpe} onReps={onReps} />}
+      {set.done && (
+        <SetFeel exercise={exercise} index={index} number={number} set={set} onRpe={onRpe} onReps={onReps} onUndo={onUndo} />
+      )}
     </li>
   )
 }
 
-/** Under a logged set: its RPE, one tap, and the reps if they weren't the target. */
+/**
+ * Under a logged set: its RPE, one tap, the reps if they weren't the target,
+ * and Undo for a set logged by mistake, which opens it again to change and log.
+ */
 function SetFeel({
   exercise,
   index,
@@ -587,6 +615,7 @@ function SetFeel({
   set,
   onRpe,
   onReps,
+  onUndo,
 }: {
   exercise: LiveExercise
   index: number
@@ -594,6 +623,7 @@ function SetFeel({
   set: LiveSet
   onRpe: (rpe: number) => void
   onReps: (reps: number) => void
+  onUndo: () => void
 }) {
   const [changing, setChanging] = useState(false)
   const [reps, setRepsDraft] = useState(set.reps)
@@ -635,16 +665,21 @@ function SetFeel({
           </Button>
         </Form>
       ) : (
-        <Button
-          onPress={() => {
-            setRepsDraft(set.reps)
-            setChanging(true)
-          }}
-          aria-label={`Reps for ${exercise.name}, set ${number + 1}: ${set.reps}. Change`}
-          className={`justify-self-start ${quietButton} ${short ? 'text-ink' : 'text-muted'}`}
-        >
-          {short ? `${set.reps} reps · Change` : `${set.reps} reps · Missed some?`}
-        </Button>
+        <div className="flex flex-wrap items-center justify-between gap-x-5">
+          <Button
+            onPress={() => {
+              setRepsDraft(set.reps)
+              setChanging(true)
+            }}
+            aria-label={`Reps for ${exercise.name}, set ${number + 1}: ${set.reps}. Change`}
+            className={`${quietButton} ${short ? 'text-ink' : 'text-muted'}`}
+          >
+            {short ? `${set.reps} reps · Change` : `${set.reps} reps · Missed some?`}
+          </Button>
+          <Button onPress={onUndo} aria-label={`Undo ${exercise.name}, set ${number + 1}`} className={quietButton}>
+            Undo
+          </Button>
+        </div>
       )}
     </div>
   )
