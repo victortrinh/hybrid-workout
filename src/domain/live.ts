@@ -812,6 +812,23 @@ export function end(run: LiveRun, now: number): LiveRun {
   return paused.block >= paused.blocks.length ? paused : { ...paused, ending: true, undo: null, rest: null }
 }
 
+/**
+ * Whether the finish sheet offers Keep going: after End, or after a tap
+ * (Finished, Done, Skip block, the last set ticked) ended the last Block,
+ * which may have been a slipped thumb. Not when the clock ran it out.
+ */
+export function canKeepGoing(run: LiveRun): boolean {
+  if (run.ending) return true
+  const last = run.blocks.length - 1
+  return run.block > last && (run.cutShort.some((c) => c.block === last) || run.splits.some((s) => s.block === last))
+}
+
+/** Keep going on the finish sheet: back to the clock after End, or back on the last Block, as Go back would. */
+export function keepGoing(run: LiveRun, now: number): LiveRun {
+  if (!canKeepGoing(run)) return run
+  return run.ending ? resume(run, now) : goBack(run, run.blocks.length - 1, now)
+}
+
 /** Held it (`actualPace` null) or Changed, for a rep that's over. */
 export function answer(run: LiveRun, block: number, targetPace: number | null, actualPace: number | null): LiveRun {
   const rep = run.blocks[block]?.rep
