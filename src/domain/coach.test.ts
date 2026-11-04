@@ -745,7 +745,7 @@ describe('Catch-up', () => {
     ]
     const day = coach({ program, today: localDate('2026-11-05'), logs })
     expect(day.upNext).toBeNull()
-    expect(day.rest).toMatchObject({ kind: 'hard-yesterday' })
+    expect(day.rest).toMatchObject({ kind: 'hard-yesterday', anyway: { week: 2, session: { id: 'threshold' } } })
   })
 })
 

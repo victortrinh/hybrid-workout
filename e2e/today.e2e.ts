@@ -109,11 +109,14 @@ test('on the phone, Start sits in the bottom bar, in the thumb’s reach without
 
 test('taps past a rest the spacing rules only suggest, for today', async ({ page }) => {
   // Week 3: Speed Monday, Strength Wednesday. Thursday is a suggested rest, with Threshold behind it.
-  const sent = await serveHistory(page, [
-    ...weekDone(2, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-11-02'),
-    { week: 3, sessionId: 'speed', date: '2026-11-09', status: 'done' },
-    { week: 3, sessionId: 'strength', date: '2026-11-11', status: 'done' },
-  ])
+  const sent = await serveHistory(
+    page,
+    caughtUp(1, [
+      ...weekDone(2, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-11-02'),
+      { week: 3, sessionId: 'speed', date: '2026-11-09', status: 'done' },
+      { week: 3, sessionId: 'strength', date: '2026-11-11', status: 'done' },
+    ]),
+  )
   await page.clock.setFixedTime(new Date('2026-11-12T12:00:00-05:00'))
   await page.goto('/')
 
