@@ -749,6 +749,81 @@ describe('Catch-up', () => {
   })
 })
 
+// Race specific starts Monday 22 March 2027 (Week 22). Week 20 runs Mon 8 – Sun 14 Mar,
+// Week 21 (a Deload week) Mon 15 – Sun 21 Mar.
+
+describe('Catch-up ending as Race specific starts', () => {
+  /** Weeks 1–19 cleared; Week 20's Threshold and Race simulation and Week 21's HYROX never logged. */
+  const behind = [
+    ...caughtUpBefore(localDate('2027-03-08')),
+    log(20, 'speed', '2027-03-08'),
+    log(20, 'strength', '2027-03-10'),
+    ...['speed', 'strength', 'easy-deload'].map((id) => log(21, id, '2027-03-16')),
+  ]
+  const lateIds = ['threshold by coach', 'race-simulation by coach']
+
+  it('still serves the Late sessions the Sunday before, Week 21’s HYROX still in its own Week', () => {
+    const day = coach({ program, today: localDate('2027-03-21'), logs: behind })
+    expect(rows(day).filter((r) => r.endsWith('late'))).toEqual(['20/threshold late', '20/race-simulation late'])
+    expect(day.upNext?.id).toBe('threshold')
+    expect(day.behind).toEqual({ sessions: 2, week: 20 })
+    expect(day.dropped).toBeNull()
+    expect(missed(outcome(20, '2027-03-21', behind))).toEqual([])
+  })
+
+  it('drops them as Coach-Skipped on its Monday: they never come back as Up next', () => {
+    for (const iso of ['2027-03-22', '2027-03-24', '2027-04-02']) {
+      const day = coach({ program, today: localDate(iso), logs: behind })
+      expect(day.bucket.some((e) => e.late)).toBe(false)
+      expect(day.behind).toBeNull()
+      expect(missed(outcome(20, iso, behind))).toEqual(lateIds)
+      expect(missed(outcome(21, iso, behind))).toEqual(['hyrox by coach'])
+    }
+    const monday = coach({ program, today: localDate('2027-03-22'), logs: behind })
+    expect(monday.upNext).toMatchObject({ id: 'speed' })
+    expect(rows(monday)[0]).toBe('22/speed')
+  })
+
+  it('says how many were dropped, and from which Weeks, until it is dismissed', () => {
+    const notice = { id: 'dropped-race-specific', sessions: 3, firstWeek: 20, lastWeek: 21 }
+    expect(coach({ program, today: localDate('2027-03-22'), logs: behind }).dropped).toEqual(notice)
+    // The first time Today opens on or after that Monday, whenever that is.
+    expect(coach({ program, today: localDate('2027-03-30'), logs: behind }).dropped).toEqual(notice)
+
+    const dismissed: SuggestionDecision = {
+      id: 'dropped-race-specific',
+      decision: 'kept',
+      date: localDate('2027-03-22'),
+      updatedAt: '2027-03-22T12:00:00.000Z',
+    }
+    expect(coach({ program, today: localDate('2027-03-23'), logs: behind, decisions: [dismissed] }).dropped).toBeNull()
+  })
+
+  it('says nothing when nothing was late', () => {
+    const day = coach({ program, today: localDate('2027-03-22'), logs: caughtUpBefore(localDate('2027-03-22')) })
+    expect(day.dropped).toBeNull()
+  })
+
+  it('counts only Sessions the Coach dropped, not the athlete’s own Skips', () => {
+    const logs = [...behind, log(20, 'threshold', '2027-03-12', 'skipped'), log(20, 'race-simulation', '2027-03-20')]
+    expect(coach({ program, today: localDate('2027-03-22'), logs }).dropped).toMatchObject({
+      sessions: 1,
+      firstWeek: 21,
+      lastWeek: 21,
+    })
+  })
+
+  it('from then on misses a Week’s undone required Sessions on its Sunday, as before Catch-up', () => {
+    const logs = [...caughtUpBefore(localDate('2027-03-22')), log(22, 'speed', '2027-03-22'), log(22, 'strength', '2027-03-24')]
+    expect(missed(outcome(22, '2027-03-28', logs))).toEqual([])
+    expect(missed(outcome(22, '2027-03-29', logs))).toEqual(['threshold by coach', 'hyrox by coach'])
+    const day = coach({ program, today: localDate('2027-03-29'), logs })
+    expect(day.bucket.every((e) => e.week === 23 && !e.late)).toBe(true)
+    expect(day.behind).toBeNull()
+    expect(day.dropped).toBeNull()
+  })
+})
+
 describe('Sessions not done by Sunday', () => {
   it('leave the Optional session alone: missing it is not a miss', () => {
     expect(missed(outcome(3, '2026-11-20'))).not.toContain('easy by coach')

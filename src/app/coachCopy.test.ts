@@ -6,7 +6,7 @@ import type { ShortSleepCut } from '../domain/recovery'
 import type { RecoverySuggestion } from '../domain/suggestion'
 import type { SessionLog } from '../domain/log'
 import type { ProgramRecap } from '../domain/recap'
-import { raceCopy, shortSleepLine, suggestedRestCopy, suggestionCopy, waitingLine } from './coachCopy'
+import { droppedLine, raceCopy, shortSleepLine, suggestedRestCopy, suggestionCopy, waitingLine } from './coachCopy'
 
 const recovery = (cut: ShortSleepCut | null): RecoverySuggestion => ({
   id: 'recovery-2026-11-11',
@@ -135,5 +135,23 @@ describe('the Coach after Race day', () => {
       heading: 'Program done.',
       target: 'Race Skipped. The 26 Weeks still happened, and these are their numbers.',
     })
+  })
+})
+
+describe('the Sessions dropped as Race specific starts', () => {
+  const dropped = (sessions: number, firstWeek: number, lastWeek: number) => ({
+    id: 'dropped-race-specific',
+    sessions,
+    firstWeek,
+    lastWeek,
+  })
+
+  it('names the range of Weeks they came from', () => {
+    expect(droppedLine(dropped(3, 14, 15))).toBe('3 Sessions from Weeks 14–15 dropped to keep Race specific on schedule.')
+  })
+
+  it('names the one Week, and says Session for one', () => {
+    expect(droppedLine(dropped(2, 21, 21))).toBe('2 Sessions from Week 21 dropped to keep Race specific on schedule.')
+    expect(droppedLine(dropped(1, 21, 21))).toBe('1 Session from Week 21 dropped to keep Race specific on schedule.')
   })
 })
