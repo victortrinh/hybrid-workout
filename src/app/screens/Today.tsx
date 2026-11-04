@@ -3,7 +3,15 @@ import { Button, Link } from 'react-aria-components'
 import { motion } from 'motion/react'
 import { addDays, daysBetween } from '../../domain/calendar'
 import type { Activity } from '../../domain/activity'
-import type { ActivityAttached, ActivityQuestion, BucketEntry, CoachDay, PhaseProgress, RestReason } from '../../domain/coach'
+import type {
+  ActivityAttached,
+  ActivityQuestion,
+  BucketEntry,
+  CoachDay,
+  PhaseProgress,
+  RestAnyway,
+  RestReason,
+} from '../../domain/coach'
 import { isLive, type LiveSession } from '../../domain/lifts'
 import type { Environment, RunContext } from '../../domain/paces'
 import { painLevel, type PainArea } from '../../domain/pain'
@@ -21,6 +29,7 @@ import {
   recoveryWhy,
   shortSleepLine,
   skippedTodayLine,
+  suggestedRestCopy,
   suggestionCopy,
   waitingLine,
 } from '../coachCopy'
@@ -188,6 +197,10 @@ export function Today({
             treadmill={treadmill}
             onAnswer={onAnswer}
             onShow={openSheet}
+            onAnyway={(week, sessionId) => {
+              onPick(week, sessionId)
+              setLanded((n) => n + 1)
+            }}
           />
           <ThisWeek day={day} onOpen={openSheet} treadmill={treadmill} />
         </>
@@ -361,6 +374,7 @@ function UpNext({
   treadmill,
   onAnswer,
   onShow,
+  onAnyway,
   lead,
 }: {
   day: CoachDay
@@ -380,6 +394,8 @@ function UpNext({
   onAnswer: (activity: Activity, week: number | null, sessionId: string | null) => void
   /** Opens a Session's Prescription in the sheet. */
   onShow: (entry: BucketEntry) => void
+  /** Do it anyway: past a suggested rest, that Session is Up next for today. */
+  onAnyway: (week: number, sessionId: string) => void
 }) {
   const [asking, setAsking] = useState(false)
   const entrances = useEntrances()
@@ -464,6 +480,9 @@ function UpNext({
         >
           Show the Prescription
         </Button>
+      )}
+      {!upNext && !live && position.kind === 'in-week' && day.rest && 'anyway' in day.rest && (
+        <AnywayButton anyway={day.rest.anyway} onAnyway={onAnyway} />
       )}
       {upNext && position.kind === 'before-start' && (
         <p className="mt-3.5 text-body">
@@ -975,6 +994,17 @@ function SomethingHurts({
   )
 }
 
+function AnywayButton({ anyway, onAnyway }: { anyway: RestAnyway; onAnyway: (week: number, sessionId: string) => void }) {
+  return (
+    <Button
+      onPress={() => onAnyway(anyway.week, anyway.session.id)}
+      className="mt-1 inline-flex min-h-11 cursor-pointer items-center text-[15px] font-bold text-link underline decoration-2 underline-offset-4 hover:decoration-[3px] data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-link"
+    >
+      Do it anyway
+    </Button>
+  )
+}
+
 /** Blunt, with the reason first (PRODUCT.md, Coach voice). */
 function restCopy(
   rest: RestReason,
@@ -991,23 +1021,9 @@ function restCopy(
         meta: week < weekCount ? `Week ${week + 1} starts ${shortDay(addDays(weekEnd, 1))}` : '',
       }
     case 'hard-yesterday':
-      return {
-        heading: 'Rest day.',
-        target: 'Hard yesterday, and the Week has room. Legs up.',
-        meta: 'Tap a Session below to train anyway',
-      }
     case 'hard-today':
-      return {
-        heading: 'Done for today.',
-        target: 'One Hard session a day. The rest of the Week fits.',
-        meta: 'Tap a Session below to train anyway',
-      }
     case 'speed-after-load':
-      return {
-        heading: 'Rest day.',
-        target: 'Speed on legs that just lifted or pushed a sled? No. It waits a day.',
-        meta: 'Tap Speed below to do it anyway',
-      }
+      return suggestedRestCopy(rest)
     case 'skipped-today':
       return {
         heading: today === weekEnd ? 'Week over.' : 'Skipped.',

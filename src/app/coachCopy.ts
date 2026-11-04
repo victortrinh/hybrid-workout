@@ -7,6 +7,7 @@ import { PAIN_AREA_LABEL, PAIN_REPS_PERCENT, type PainLevel } from '../domain/pa
 import { clock } from '../domain/paces'
 import { describeSession, LIFT_NAME, SESSION_TYPES } from '../domain/program/describe'
 import { program } from '../domain/program/program'
+import type { RestAnyway, RestReason } from '../domain/coach'
 import type { Session } from '../domain/program/types'
 import { CUT_NOUN, EASY_DAY_MINUTES, SLEEP_RPE_CAP, sleepText, type ShortSleepCut } from '../domain/recovery'
 import { GOAL_LABEL, GOAL_SECONDS } from '../domain/progress'
@@ -146,6 +147,23 @@ export function waitingLine(session: Session, date: LocalDate, today: LocalDate)
   const what = session.id === 'race' ? 'The race' : describeSession(session).heading
   const when = daysBetween(today, date) === 1 ? 'tomorrow' : weekday(date)
   return `${what} is ${when}. Save it for that.`
+}
+
+/** A rest from the spacing rules: the Coach suggests it, the athlete can do the Session anyway (ADR-0007). */
+export type SuggestedRest = Extract<RestReason, { anyway: RestAnyway }>
+
+/** Today's words for a suggested rest: "Rest suggested.", the reason, and what Do it anyway does. */
+export function suggestedRestCopy(rest: SuggestedRest): { heading: string; target: string; meta: string } {
+  const reason = {
+    'hard-yesterday': 'Hard session yesterday. The Week has room, so legs up.',
+    'hard-today': 'Hard session already today. The rest of the Week fits.',
+    'speed-after-load': 'Speed on legs that just lifted or pushed a sled? Better tomorrow.',
+  }[rest.kind]
+  return {
+    heading: 'Rest suggested.',
+    target: `${reason} Your call.`,
+    meta: `${SESSION_TYPES[rest.anyway.session.type].name} if you go anyway`,
+  }
 }
 
 /**
