@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { expectNoAxeViolations, WEEK_3 } from './axe'
-import { serveHistory, weekDone } from './history'
+import { caughtUp, serveHistory, weekDone } from './history'
 import { aMinuteBefore, doToday, startAsChosen } from './today'
 
 /**
@@ -49,7 +49,7 @@ test('Settings offers lock-screen cues once the server is set up, and says so un
 test('a Live session hands its cues to the server as the app goes off screen, and takes them back on return', async ({
   page,
 }) => {
-  await serveHistory(page, [...WEEK_2])
+  await serveHistory(page, caughtUp(1, [...WEEK_2]))
   const schedules: { cues: { at: number; title: string; body: string }[] }[] = []
   await page.route('/api/cues/schedule', (route) => {
     schedules.push(route.request().postDataJSON())
@@ -80,7 +80,7 @@ test('a Live session hands its cues to the server as the app goes off screen, an
 })
 
 test('nothing goes to the server while lock-screen cues are off', async ({ page }) => {
-  await serveHistory(page, [...WEEK_2])
+  await serveHistory(page, caughtUp(1, [...WEEK_2]))
   let calls = 0
   await page.route('/api/cues/schedule', (route) => {
     calls += 1

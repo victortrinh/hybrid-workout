@@ -17,13 +17,13 @@ h.log(4, 'speed', '2026-11-16')
 
 /**
  * Monday 30 November 2026, the first day of Week 6, after a Week 5 with two
- * Sessions Skipped and its Threshold Key session never done, so carried until
- * Wednesday. Two Suggestions wait: a lighter re-entry Week, and Week 4's
+ * Sessions Skipped and its Threshold Key session never done, so Late: Up next
+ * until it's done, one Session behind. Two Suggestions wait: a lighter re-entry Week, and Week 4's
  * squat going up. Week 4's HYROX was done late, Week 6's Easy run early.
  */
 export default scenario({
   name: 'rollover',
-  summary: 'Monday after misses: a carried Key session, pending Suggestions',
+  summary: 'Monday after misses: a Late Key session, pending Suggestions',
   today: '2026-11-30',
   time: '06:45',
   server: {

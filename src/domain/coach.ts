@@ -71,18 +71,18 @@ export type BucketState = 'planned' | 'next' | LoggedStatus
 
 export interface BucketEntry {
   session: Session
-  /** The Week the Session belongs to: last Week's, for a carried Key session. */
+  /** The Week the Session belongs to: an earlier one, for a Late session. */
   week: number
   state: BucketState
   /** The log behind a logged state; null while Planned or Next. */
   log: SessionLog | null
-  /** For last Week's Key session carried into this one: the last day it can be done. */
-  carriedUntil: LocalDate | null
+  /** A required Session of a Week that is over: not logged yet, or logged today. */
+  late: boolean
   /** The watch's workout attached to this Session, if any. */
   activity: Activity | null
   /** Whether it can be picked to do today: not a Session pinned to another day, like the race. */
   pickable: boolean
-  /** Still to do: nothing logged, or a required Session Skipped while its Week has days left. */
+  /** Still to do: nothing logged, or a required Session of this Week Skipped while it has days left. */
   toDo: boolean
 }
 
@@ -163,10 +163,12 @@ export interface CoachDay {
    */
   week: Week | null
   /**
-   * Last Week's Key session while it is carried over, then that Week's
-   * Sessions in display order, each with its state. Empty when there is no Week.
+   * The Late sessions, oldest Week first, then the Week's Sessions in display
+   * order, each with its state. Empty when there is no Week.
    */
   bucket: BucketEntry[]
+  /** In Catch-up: how many Late sessions wait, and the oldest Week they're from. Null when nothing is late. */
+  behind: { sessions: number; week: number } | null
   /** The one Session to do today. Null before the Program starts, after it ends, and on a rest day. */
   upNext: Session | null
   /** Why `upNext` is null while in a Week. */
@@ -249,26 +251,17 @@ export function coach({
   ]
   const week = planned && adapt(planned, suggestions, logs, equipment)
 
-  const previous = position.kind === 'in-week' && week ? findWeek(program, week.number - 1) : null
-  const carried = previous ? weekOutcome(program, previous, logs, today).carried : null
   const painNow = acceptedPain(suggestions)
   const logged: Logged[] = [
-    ...(carried && previous
-      ? [
-          {
-            session: equip(
-              painNow && !logFor(logs, previous.number, carried.session.id)
-                ? painAdapted(carried.session, painNow)
-                : carried.session,
-              equipment,
-            ),
-            week: previous.number,
-            carriedUntil: carried.until,
-          },
-        ]
+    ...(position.kind === 'in-week' && week ? lateSessions(program, week.number, logs, decisions, equipment, today) : []).map(
+      // Pain is about the body today: it changes a Late session still open, like any other.
+      (entry) => (painNow && !entry.log ? { ...entry, session: painAdapted(entry.session, painNow) } : entry),
+    ),
+    ...(week
+      ? week.sessions.map((session) => ({ session, week: week.number, late: false, log: logFor(logs, week.number, session.id) }))
       : []),
-    ...(week ? week.sessions.map((session) => ({ session, week: week.number, carriedUntil: null })) : []),
-  ].map((entry) => ({ ...entry, log: logFor(logs, entry.week, entry.session.id) }))
+  ]
+  const lateOpen = logged.filter((e) => e.late && !e.log)
 
   const chosen =
     position.kind === 'in-week' && week
@@ -302,6 +295,7 @@ export function coach({
       pickable: pickableOn(entry.session, today),
       toDo: toDo(entry),
     })),
+    behind: lateOpen.length > 0 ? { sessions: lateOpen.length, week: lateOpen[0].week } : null,
     upNext: upNext?.session ?? null,
     rest,
     fiveKTest,
@@ -336,16 +330,50 @@ interface Logged {
   session: Session
   week: number
   log: SessionLog | null
-  carriedUntil: LocalDate | null
+  late: boolean
 }
 
 /**
  * A Skipped log doesn't close a required Session: it can still be done while
- * its Week (or a Key session's carry-over) has days left. The Bucket only
- * holds Sessions with days left. Skipping the Optional session closes it.
+ * its Week has days left. Skipping the Optional session closes it, and so does
+ * skipping a Late session: the athlete's own "not doing this one".
  */
-const toDo = ({ session, log }: Pick<Logged, 'session' | 'log'>) =>
-  !log || (log.status === 'skipped' && !session.optional)
+const toDo = ({ session, log, late }: Pick<Logged, 'session' | 'log' | 'late'>) =>
+  !log || (log.status === 'skipped' && !session.optional && !late)
+
+/**
+ * Catch-up (ADR-0007): the required Sessions of the Weeks before `current`
+ * with no log, oldest Week first, each with its own Week's Prescription. One
+ * logged today stays, with its log, until tomorrow. The Optional session is
+ * never Late.
+ */
+function lateSessions(
+  program: Program,
+  current: number,
+  logs: SessionLog[],
+  decisions: SuggestionDecision[],
+  equipment: readonly Equipment[],
+  today: LocalDate,
+): Logged[] {
+  return program.phases
+    .flatMap((phase) => phase.weeks)
+    .filter((week) => week.number < current)
+    .flatMap((week) => {
+      const late = week.sessions.filter((session) => {
+        if (session.optional || session.date) return false
+        const log = logFor(logs, week.number, session.id)
+        return !log || log.date === today
+      })
+      if (late.length === 0) return []
+      const prescribed = adapt(week, suggestionsFor(program, week, logs, decisions, null), logs, equipment)
+      return late.map((session) => ({
+        session: prescribed.sessions.find((s) => s.id === session.id) ?? equip(session, equipment),
+        week: week.number,
+        late: true,
+        log: logFor(logs, week.number, session.id),
+      }))
+    })
+}
 
 /** Week 1's Monday: Race week's Monday, counted back `weekCount - 1` Weeks. */
 export function programStart(program: Program): LocalDate {
@@ -415,7 +443,7 @@ const isLoad = (type: SessionType) => type === 'strength' || type === 'hyrox' ||
 
 interface UpNextInput {
   program: Program
-  /** The Bucket's entries, oldest-waiting first. */
+  /** The Bucket's entries, Late sessions first, oldest Week first. */
   logged: Logged[]
   logs: SessionLog[]
   today: LocalDate
@@ -425,6 +453,9 @@ interface UpNextInput {
 }
 
 /**
+ * In Catch-up, Up next comes from the oldest Week's Late sessions, which have
+ * no days left to rest in; the Week holding today only once nothing is late.
+ *
  * The rules, in order:
  * 1. A Session the athlete picked today wins, as long as it is still open.
  * 2. A Session pinned to today (Race day) is Up next.
@@ -436,17 +467,27 @@ interface UpNextInput {
  *    Rules 4 and 5 only suggest the rest: rule 1 taps past it.
  * 6. Of what remains, the Session waiting longest; within a Week, Bucket order.
  */
-function chooseUpNext({ program, logged, logs, today, picked, daysLeft }: UpNextInput): {
-  upNext: Logged | null
-  rest: RestReason | null
-} {
+function chooseUpNext(input: UpNextInput): { upNext: Logged | null; rest: RestReason | null } {
+  const { logged, today, picked } = input
+  const late = logged.filter((e) => e.late && !e.log)
+  if (late.length === 0) return chooseAmong(logged.filter((e) => !e.late), input)
+
+  const choice = pickedToday(logged, picked, today)
+  if (choice) return { upNext: choice, rest: null }
+  return chooseAmong(late.filter((e) => e.week === late[0].week), { ...input, daysLeft: 0 })
+}
+
+function chooseAmong(
+  logged: Logged[],
+  { program, logs, today, picked, daysLeft }: UpNextInput,
+): { upNext: Logged | null; rest: RestReason | null } {
   // Untouched Sessions first; a Skipped one comes back after them, and not the day it was Skipped.
   const skipped = logged.filter((e) => e.log && toDo(e))
   const skippedToday = skipped.filter((e) => e.log!.date === today)
   const open = [...logged.filter((e) => !e.log), ...skipped.filter((e) => e.log!.date !== today)]
   if (open.length === 0) {
     if (skippedToday.length === 0) return { upNext: null, rest: { kind: 'week-done' } }
-    const lastDay = skippedToday.every((e) => (e.carriedUntil ? e.carriedUntil === today : daysLeft === 1))
+    const lastDay = daysLeft === 1
     return { upNext: null, rest: { kind: 'skipped-today', sessions: skippedToday.map((e) => e.session), lastDay } }
   }
 
@@ -518,67 +559,32 @@ function mostHardSessions(days: number, firstDayBlocked: boolean): number {
   return Math.max(0, Math.ceil((days - (firstDayBlocked ? 1 : 0)) / 2))
 }
 
-/**
- * Every open Session of a Week has waited since its Monday, so Bucket order
- * breaks the tie. A Key session carried over from last Week comes first in
- * the Bucket: it has waited longest.
- */
+/** Every open Session of a Week has waited since its Monday, so Bucket order breaks the tie. */
 function oldestWaiting(entries: Logged[]): Logged {
   return entries[0]
 }
 
 // ---------------------------------------------------------------------------
-// Week rollover (docs/training-plan.md, "How a Week works"): the Key session
-// carries over up to three days; anything else not done by Sunday is Skipped.
-
-/** Days into the next Week a Key session stays open: Monday to Wednesday. */
-export const CARRY_DAYS = 3
-
-/**
- * The last day a Week's Key session can be done: Wednesday of the next Week.
- * Sunday where it can't carry: the last Week, and the Taper, whose Key
- * session never spills into Race week.
- */
-export function keyDeadline(program: Program, week: Week): LocalDate {
-  const sunday = addDays(week.startDate, 6)
-  const next = findWeek(program, week.number + 1)
-  return next && !next.race ? addDays(sunday, CARRY_DAYS) : sunday
-}
+// Week rollover: a Week that is over keeps its required Sessions with no log
+// as Late sessions (Catch-up, ADR-0007); only the athlete's Skips are misses.
 
 export interface WeekOutcome {
   /**
-   * Missed Sessions, once the Week (or, for the Key session, its carry-over)
-   * is over: logged Skipped by the athlete, or not done. The Optional session
-   * is never a miss.
+   * Missed Sessions, once the Week is over: logged Skipped by the athlete. The
+   * Optional session is never a miss, and a Session with no log is Late, not missed.
    */
   skipped: { session: Session; by: 'athlete' | 'coach' }[]
-  /**
-   * The Key session, not done by Sunday, while its carry-over lasts: open, or
-   * logged on one of the carry-over days.
-   */
-  carried: { session: Session; until: LocalDate } | null
 }
 
-/** Where a Week stands on `today`: what was missed, and what is still carried. */
-export function weekOutcome(program: Program, week: Week, logs: SessionLog[], today: LocalDate): WeekOutcome {
-  const sunday = addDays(week.startDate, 6)
-  const over = daysBetween(sunday, today) > 0
-  const outcome: WeekOutcome = { skipped: [], carried: null }
+/** What a Week missed, as of `today`. */
+export function weekOutcome(_program: Program, week: Week, logs: SessionLog[], today: LocalDate): WeekOutcome {
+  const over = daysBetween(addDays(week.startDate, 6), today) > 0
+  const outcome: WeekOutcome = { skipped: [] }
+  if (!over) return outcome
   for (const session of week.sessions) {
     if (session.optional) continue
-    const log = logFor(logs, week.number, session.id)
-    const until = session.key ? keyDeadline(program, week) : null
-    const carrying = over && until !== null && daysBetween(today, until) >= 0
-    if (log) {
-      const carriedLog = carrying && daysBetween(sunday, log.date) > 0
-      if (carriedLog) outcome.carried = { session, until }
-      // Skipped can still be done until the Week, or the carry-over, is over.
-      if (log.status === 'skipped' && over && !carriedLog) outcome.skipped.push({ session, by: 'athlete' })
-      continue
-    }
-    if (!over) continue
-    if (carrying) outcome.carried = { session, until }
-    else outcome.skipped.push({ session, by: 'coach' })
+    // Skipped can still be done until the Week is over.
+    if (logFor(logs, week.number, session.id)?.status === 'skipped') outcome.skipped.push({ session, by: 'athlete' })
   }
   return outcome
 }
@@ -714,10 +720,10 @@ const acceptedPain = (suggestions: Suggestion[]): PainLevel | null =>
 
 /**
  * Two or more Sessions Skipped last Week: suggest this Week a third lighter.
- * Counted as the Week closed on Sunday, so a Key session still carried over
- * isn't a miss yet, and a Session made up late, from this Monday on, doesn't
- * undo one: a late make-up never cancels the lighter Week. Deload weeks are lighter already, and the Taper follows
- * the race-week rules, so neither gets one.
+ * Counted as the Week closed on Sunday, so a Session made up late, from this
+ * Monday on, doesn't undo one: a late make-up never cancels the lighter Week.
+ * Deload weeks are lighter already, and the Taper follows the race-week rules,
+ * so neither gets one.
  */
 function reEntryFor(
   program: Program,

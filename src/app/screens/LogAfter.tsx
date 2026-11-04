@@ -88,7 +88,7 @@ export function LogAfter({
 }: {
   week: Week
   session: Session
-  /** The last day the Session can be logged on: Sunday, or later for a carried Key session. */
+  /** The last day of the Session's Week: logged after it, it is late. */
   lastDay: LocalDate
   logs: SessionLog[]
   today: LocalDate

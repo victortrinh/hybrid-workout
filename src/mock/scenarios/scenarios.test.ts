@@ -149,10 +149,11 @@ describe('each scenario falls where its name says', () => {
     expect(hard.map((l) => l.date).sort()).toEqual(['2026-11-16', '2026-11-17'])
   })
 
-  it('rollover: the Monday after a Week with misses, its Key session carried and Up next, Suggestions open', async () => {
+  it('rollover: the Monday after a Week with misses, its Key session Late and Up next, Suggestions open', async () => {
     const d = await day('rollover')
     expect(d.position).toMatchObject({ kind: 'in-week', week: 6, daysLeft: 7 })
-    expect(d.bucket[0]).toMatchObject({ week: 5, state: 'next', carriedUntil: '2026-12-02' })
+    expect(d.bucket[0]).toMatchObject({ week: 5, state: 'next', late: true })
+    expect(d.behind).toEqual({ sessions: 1, week: 5 })
     expect(d.bucket[0].session.key).toBe(true)
     const open = d.suggestions.filter((s) => s.decision === 'open').map((s) => s.kind)
     expect(open).toEqual(expect.arrayContaining(['re-entry', 'working-weight']))

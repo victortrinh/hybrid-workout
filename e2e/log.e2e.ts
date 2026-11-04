@@ -1,11 +1,12 @@
 import { expect, test } from '@playwright/test'
 import { expectNoAxeViolations } from './axe'
-import { seedLogs, weekDone } from './history'
+import { caughtUpOnServer, seedLogs, weekDone } from './history'
 
 /**
  * These tests write Session logs to the shared e2e database, so each project
  * gets Weeks no other test reads: the phone logs in Week 4, desktop in Week 6,
- * each after a Week done in full (3 and 5), so nothing carries over. Week 3 is
+ * each after a Week done in full (3 and 5), and every Week before caught up, so
+ * nothing is Late. Week 3 is
  * done on its Saturday, after the clock of every test that reads Week 3.
  */
 const SCENARIO = {
@@ -27,6 +28,7 @@ test('logging Threshold as Done strikes it through on Today and changes Up next'
   const s = SCENARIO[testInfo.project.name as keyof typeof SCENARIO]
   const week = s.week
   await seedLogs(request, testInfo.project.name, s.before)
+  await caughtUpOnServer(page, week - 1)
   await page.clock.setFixedTime(s.wednesday)
   await page.goto('/')
 
@@ -35,6 +37,7 @@ test('logging Threshold as Done strikes it through on Today and changes Up next'
   await expect(upNext).toHaveText(/^Speed, /)
 
   // A Session tapped in the Bucket, then Do it today instead, is today's; Speed goes back to planned.
+  await expect(bucket.getByRole('button', { name: /^Threshold/ })).toHaveCount(1)
   await bucket.getByRole('button', { name: /^Threshold/ }).click()
   await page.getByRole('button', { name: /^Do it today/ }).click()
   await expect(upNext).toHaveText(/^Threshold, /)

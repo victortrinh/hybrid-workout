@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { expectNoAxeViolations, WEEK_3 } from './axe'
-import { serveHistory, weekDone } from './history'
+import { caughtUp, serveHistory, weekDone } from './history'
 import { aMinuteBefore, doToday } from './today'
 
 /**
@@ -36,7 +36,7 @@ async function scan(page: Page, then?: Date) {
 const bucketOf = (page: Page) => page.getByRole('list').filter({ hasText: 'Strength' })
 
 test('a three-round HYROX session: Set up off the clock, then a lighter sled from round 1 on', async ({ page }) => {
-  const sent = await serveHistory(page, weekDone(2, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-11-04'))
+  const sent = await serveHistory(page, caughtUp(1, weekDone(2, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-11-04')))
   const start = new Date(WEEK_3.getTime() + 1000)
   await page.clock.install({ time: aMinuteBefore(WEEK_3) })
   await page.goto('/')
@@ -193,7 +193,7 @@ test('a three-round HYROX session: Set up off the clock, then a lighter sled fro
 
 test('on an iPhone SE a HYROX round fits: target, clock and action without scrolling, and each Block opens at the top', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 667 })
-  await serveHistory(page, weekDone(2, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-11-04'))
+  await serveHistory(page, caughtUp(1, weekDone(2, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-11-04')))
   await page.clock.install({ time: aMinuteBefore(WEEK_3) })
   await page.goto('/')
   await doToday(page, bucketOf(page).getByRole('button', { name: /^HYROX/ }))
@@ -249,7 +249,7 @@ test('on an iPhone SE a HYROX round fits: target, clock and action without scrol
 })
 
 test('a split too quick to be true is asked about before saving, and saved as put right', async ({ page }) => {
-  const sent = await serveHistory(page, weekDone(2, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-11-04'))
+  const sent = await serveHistory(page, caughtUp(1, weekDone(2, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-11-04')))
   await page.clock.install({ time: aMinuteBefore(WEEK_3) })
   await page.goto('/')
   await doToday(page, bucketOf(page).getByRole('button', { name: /^HYROX/ }))

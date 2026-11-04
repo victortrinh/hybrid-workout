@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { expectNoAxeViolations } from './axe'
-import { seedLogs, weekDone } from './history'
+import { caughtUpOnServer, seedLogs, weekDone } from './history'
 import { E2E_SERVICE_TOKEN, serviceTokenHeaders } from './serviceToken'
 
 /**
@@ -54,6 +54,7 @@ test('a short night with low HRV, sent by the Shortcut, shows on Today with its 
   const state = await (await request.get('/api/state')).json()
   expect(state.recoveryNights.filter((n: { date: string }) => n.date === '2027-03-24')).toHaveLength(1)
 
+  await caughtUpOnServer(page, 21)
   await page.clock.setFixedTime(WEDNESDAY)
   await page.goto('/')
 

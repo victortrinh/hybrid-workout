@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { BEFORE_WEEK_1, expectNoAxeViolations, WEEK_3 } from './axe'
-import { serveHistory, weekDone } from './history'
+import { caughtUp, serveHistory, weekDone } from './history'
 
 for (const colorScheme of ['light', 'dark'] as const) {
   test.describe(`Today, ${colorScheme}`, () => {
@@ -10,7 +10,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
       page,
     }) => {
       // Week 2 done in full: no Key session carried over, no Suggestion.
-      await serveHistory(page, weekDone(2, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-11-02'))
+      await serveHistory(page, caughtUp(1, weekDone(2, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-11-02')))
       await page.clock.setFixedTime(WEEK_3)
       await page.goto('/')
 
@@ -58,6 +58,7 @@ test('counts the day in Toronto even when the phone is set to another time zone'
   // 00:30 Monday 9 November in Tokyo is still Sunday 8 November, Week 2, in Toronto.
   const context = await browser.newContext({ timezoneId: 'Asia/Tokyo' })
   const page = await context.newPage()
+  await serveHistory(page, caughtUp(1))
   await page.clock.setFixedTime(new Date('2026-11-09T00:30:00+09:00'))
   await page.goto('/')
   await expect(page.getByText('Week 2 of 26 · Foundation')).toBeVisible()
@@ -91,7 +92,7 @@ test('phases the countdown stripes from the glyph top to the baseline', async ({
 
 test('on the phone, Start sits in the bottom bar, in the thumb’s reach without scrolling', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name === 'desktop', 'Desktop keeps Start in place, under Up next.')
-  await serveHistory(page, weekDone(2, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-11-02'))
+  await serveHistory(page, caughtUp(1, weekDone(2, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-11-02')))
   await page.clock.setFixedTime(WEEK_3)
   await page.goto('/')
 
@@ -108,11 +109,14 @@ test('on the phone, Start sits in the bottom bar, in the thumb’s reach without
 
 test('taps past a rest the spacing rules only suggest, for today', async ({ page }) => {
   // Week 3: Speed Monday, Strength Wednesday. Thursday is a suggested rest, with Threshold behind it.
-  const sent = await serveHistory(page, [
-    ...weekDone(2, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-11-02'),
-    { week: 3, sessionId: 'speed', date: '2026-11-09', status: 'done' },
-    { week: 3, sessionId: 'strength', date: '2026-11-11', status: 'done' },
-  ])
+  const sent = await serveHistory(
+    page,
+    caughtUp(1, [
+      ...weekDone(2, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-11-02'),
+      { week: 3, sessionId: 'speed', date: '2026-11-09', status: 'done' },
+      { week: 3, sessionId: 'strength', date: '2026-11-11', status: 'done' },
+    ]),
+  )
   await page.clock.setFixedTime(new Date('2026-11-12T12:00:00-05:00'))
   await page.goto('/')
 

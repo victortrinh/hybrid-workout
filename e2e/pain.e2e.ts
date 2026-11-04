@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
 import { expectNoAxeViolations, WEEK_3 } from './axe'
-import { serveHistory, weekDone } from './history'
+import { caughtUp, serveHistory, weekDone } from './history'
 import { startAsChosen } from './today'
 
 /**
@@ -33,7 +33,7 @@ const SHIN_2 = {
 
 test('pain 4 before a Speed session: the accelerations go to the bike and the reps drop', async ({ page }) => {
   const reports: Record<string, unknown>[] = [SHIN_2]
-  await serveHistory(page, [...WEEK_2], reports)
+  await serveHistory(page, caughtUp(1, [...WEEK_2]), reports)
   await page.clock.setFixedTime(WEEK_3)
   await page.goto('/')
 
@@ -83,7 +83,7 @@ test('pain 4 before a Speed session: the accelerations go to the bike and the re
 
 test('with nothing hurting on record, Start skips the pain step and starts the Session as written', async ({ page }) => {
   const reports: Record<string, unknown>[] = []
-  await serveHistory(page, [...WEEK_2], reports)
+  await serveHistory(page, caughtUp(1, [...WEEK_2]), reports)
   await page.clock.setFixedTime(WEEK_3)
   await page.goto('/')
 
@@ -96,7 +96,7 @@ test('with nothing hurting on record, Start skips the pain step and starts the S
 
 test('Something hurts from Today: pain 6 makes the day easy bike or rest once Accepted', async ({ page }) => {
   const reports: Record<string, unknown>[] = []
-  await serveHistory(page, [...WEEK_2], reports)
+  await serveHistory(page, caughtUp(1, [...WEEK_2]), reports)
   await page.clock.setFixedTime(WEEK_3)
   await page.goto('/')
 
@@ -123,7 +123,7 @@ test('Something hurts from Today: pain 6 makes the day easy bike or rest once Ac
 
 test('Gone records a 0 and starts; next time Start skips the pain step', async ({ page }) => {
   const reports: Record<string, unknown>[] = [SHIN_2]
-  await serveHistory(page, [...WEEK_2], reports)
+  await serveHistory(page, caughtUp(1, [...WEEK_2]), reports)
   await page.clock.setFixedTime(WEEK_3)
   await page.goto('/')
 
@@ -137,7 +137,7 @@ test('Gone records a 0 and starts; next time Start skips the pain step', async (
 
 test('Same repeats the standing report: pain 2 changes nothing, so it starts at once', async ({ page }) => {
   const reports: Record<string, unknown>[] = [SHIN_2]
-  await serveHistory(page, [...WEEK_2], reports)
+  await serveHistory(page, caughtUp(1, [...WEEK_2]), reports)
   await page.clock.setFixedTime(WEEK_3)
   await page.goto('/')
 
@@ -150,7 +150,7 @@ test('Same repeats the standing report: pain 2 changes nothing, so it starts at 
 
 test('Log after asks too, and links the report to the Session', async ({ page }) => {
   const reports: Record<string, unknown>[] = []
-  await serveHistory(page, [...WEEK_2], reports)
+  await serveHistory(page, caughtUp(1, [...WEEK_2]), reports)
   await page.clock.setFixedTime(WEEK_3)
   await page.goto('/log/3/strength')
 
@@ -172,7 +172,7 @@ test('with the pain Suggestion open, the step asks it once, in its own words: tw
   page,
 }) => {
   const reports: Record<string, unknown>[] = [ACHILLES_4]
-  await serveHistory(page, [...WEEK_2], reports)
+  await serveHistory(page, caughtUp(1, [...WEEK_2]), reports)
   await page.clock.setFixedTime(WEEK_3)
   await page.goto('/')
 
@@ -198,7 +198,7 @@ test('with the pain Suggestion already accepted, Same starts the Session with it
   const suggestionDecisions: Record<string, unknown>[] = [
     { id: 'pain-seed-achilles-4', decision: 'accepted', date: '2026-11-11', updatedAt: '2026-11-11T11:00:00.000Z' },
   ]
-  await serveHistory(page, [...WEEK_2], reports, { suggestionDecisions })
+  await serveHistory(page, caughtUp(1, [...WEEK_2]), reports, { suggestionDecisions })
   await page.clock.setFixedTime(WEEK_3)
   await page.goto('/')
 

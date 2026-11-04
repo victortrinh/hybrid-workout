@@ -4,7 +4,7 @@ import { addDays } from '../domain/calendar'
 import { nowDate, nowMs } from '../domain/clock'
 import { Link, RouterProvider } from 'react-aria-components'
 import { motion } from 'motion/react'
-import { coach, findWeek, keyDeadline, prescribedWeek, type CoachDay } from '../domain/coach'
+import { coach, findWeek, prescribedWeek, type CoachDay } from '../domain/coach'
 import { liftsLog, startLifts } from '../domain/lifts'
 import { liveLog, loggedSpeeds, startRun } from '../domain/live'
 import { logDays, logFor, type SessionLog } from '../domain/log'
@@ -233,7 +233,7 @@ export function App() {
   const screen: Screen =
     (route.screen === 'week' && !week) || (route.screen === 'log' && !logged) ? 'not-found' : route.screen
   useScreenChange(screen, screen === 'week' && week ? `Week ${week.number}` : TITLES[screen], route)
-  const loggableUntil = week && logged ? (logged.key ? keyDeadline(program, week) : addDays(week.startDate, 6)) : null
+  const loggableUntil = week && logged ? addDays(week.startDate, 6) : null
   // A Session logged early or late was opened from its Week, under Plan.
   const outsideWeek = week && loggableUntil ? logDays(week.startDate, loggableUntil, today).when !== null : false
   const navScreen = screen === 'log' && outsideWeek ? 'plan' : (NAV_SCREEN[screen] ?? screen)

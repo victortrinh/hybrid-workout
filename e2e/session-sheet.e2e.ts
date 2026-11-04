@@ -1,12 +1,12 @@
 import { expect, test } from '@playwright/test'
 import { expectNoAxeViolations, WEEK_3 } from './axe'
-import { serveHistory, weekDone } from './history'
+import { caughtUp, serveHistory, weekDone } from './history'
 import { startAsChosen } from './today'
 
 const WEEK_2 = weekDone(2, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-11-02')
 
 test('a Session tapped on Today opens its Prescription; Do it today instead makes it Up next', async ({ page }) => {
-  await serveHistory(page, WEEK_2)
+  await serveHistory(page, caughtUp(1, WEEK_2))
   await page.clock.setFixedTime(WEEK_3)
   await page.goto('/')
 
@@ -15,6 +15,7 @@ test('a Session tapped on Today opens its Prescription; Do it today instead make
   await expect(upNext).toHaveText(/^Speed, /)
   await expect(page.getByText(/^Tap any Session/)).toHaveCount(0)
 
+  await expect(bucket.getByRole('button', { name: /^Threshold/ })).toHaveCount(1)
   await bucket.getByRole('button', { name: /^Threshold/ }).click()
   const sheet = page.getByRole('dialog', { name: 'Threshold, 2 × 12′' })
   await expect(sheet).toBeVisible()
@@ -30,6 +31,7 @@ test('a Session tapped on Today opens its Prescription; Do it today instead make
   await expect(page).toHaveURL('/')
   await expect(upNext).toHaveText(/^Speed, /)
 
+  await expect(bucket.getByRole('button', { name: /^Threshold/ })).toHaveCount(1)
   await bucket.getByRole('button', { name: /^Threshold/ }).click()
   await sheet.getByRole('button', { name: 'Do it today instead' }).click()
   await expect(sheet).toHaveCount(0)
@@ -42,7 +44,7 @@ test('a Session tapped on Today opens its Prescription; Do it today instead make
 })
 
 test('Up next’s Prescription opens with nothing to pick, and Escape closes it', async ({ page }) => {
-  await serveHistory(page, WEEK_2)
+  await serveHistory(page, caughtUp(1, WEEK_2))
   await page.clock.setFixedTime(WEEK_3)
   await page.goto('/')
 
@@ -54,6 +56,7 @@ test('Up next’s Prescription opens with nothing to pick, and Escape closes it'
   await expect(sheet).toHaveCount(0)
 
   // The Next row opens the same sheet.
+  await expect(page.getByRole('list').filter({ hasText: 'Strength' }).getByRole('button', { name: /^Speed/ })).toHaveCount(1)
   await page.getByRole('list').filter({ hasText: 'Strength' }).getByRole('button', { name: /^Speed/ }).click()
   await expect(sheet).toBeVisible()
   await sheet.getByRole('button', { name: 'Close' }).click()
@@ -62,7 +65,7 @@ test('Up next’s Prescription opens with nothing to pick, and Escape closes it'
 })
 
 test('while a Live session runs, a Session’s sheet says to finish it first', async ({ page }) => {
-  await serveHistory(page, WEEK_2)
+  await serveHistory(page, caughtUp(1, WEEK_2))
   await page.clock.install({ time: WEEK_3 })
   await page.goto('/')
   await page.getByRole('button', { name: /^Start / }).click()
@@ -70,6 +73,7 @@ test('while a Live session runs, a Session’s sheet says to finish it first', a
   await expect(page).toHaveURL('/live')
 
   await page.goto('/')
+  await expect(page.getByRole('list').filter({ hasText: 'Strength' }).getByRole('button', { name: /^Threshold/ })).toHaveCount(1)
   await page.getByRole('list').filter({ hasText: 'Strength' }).getByRole('button', { name: /^Threshold/ }).click()
   const sheet = page.getByRole('dialog', { name: /^Threshold/ })
   await expect(sheet.getByText(/^Speed, .+ is running\. Finish it first\.$/)).toBeVisible()
@@ -77,10 +81,11 @@ test('while a Live session runs, a Session’s sheet says to finish it first', a
 })
 
 test('a logged Session still opens its log', async ({ page }) => {
-  await serveHistory(page, [...WEEK_2, ...weekDone(3, ['speed'], '2026-11-09')])
+  await serveHistory(page, caughtUp(1, [...WEEK_2, ...weekDone(3, ['speed'], '2026-11-09')]))
   await page.clock.setFixedTime(WEEK_3)
   await page.goto('/')
 
+  await expect(page.getByRole('list').filter({ hasText: 'Strength' }).getByRole('link', { name: /^Speed/ })).toHaveCount(1)
   await page.getByRole('list').filter({ hasText: 'Strength' }).getByRole('link', { name: /^Speed/ }).click()
   await expect(page).toHaveURL('/log/3/speed')
 })

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { daysBetween, isoWeekday, localDate, localDateIn, type LocalDate } from './calendar'
 import { DEFAULT_EQUIPMENT, equipWeek } from './equipment'
-import { coach, findWeek, keyDeadline, prescribedWeek, programStart, weekOutcome, type CoachInput } from './coach'
+import { coach, findWeek, prescribedWeek, programStart, weekOutcome, type CoachInput } from './coach'
 import { parseActivity } from './activity'
 import { isLive } from './lifts'
 import type { LoggedStatus, SessionLog } from './log'
@@ -12,22 +12,23 @@ import type { Program } from './program/types'
 import type { Decision, SuggestionDecision } from './suggestion'
 
 /**
- * Every Key session of the Weeks before `today` done on its Week's Monday: a
- * history with nothing carried over, too long ago to touch the spacing rules.
+ * Every Week before `today` cleared on its Monday: the Key session done, the
+ * other required Sessions Swapped, so nothing is Late (and no Working weight
+ * moves), too long ago to touch the spacing rules.
  */
-function keysDoneBefore(today: LocalDate, p: Program = program): SessionLog[] {
+function caughtUpBefore(today: LocalDate, p: Program = program): SessionLog[] {
   return p.phases
     .flatMap((phase) => phase.weeks)
     .filter((week) => daysBetween(week.startDate, today) >= 7)
     .flatMap((week) =>
       week.sessions
-        .filter((s) => s.key)
+        .filter((s) => !s.optional && !s.date)
         .map((s) => ({
           id: `key-${week.number}-${s.id}`,
           week: week.number,
           sessionId: s.id,
           date: week.startDate,
-          status: 'done' as const,
+          status: s.key ? ('done' as const) : ('swapped' as const),
           minutes: s.minutes,
           rpe: 7,
           notes: null,
@@ -44,7 +45,7 @@ function keysDoneBefore(today: LocalDate, p: Program = program): SessionLog[] {
 }
 
 const on = (iso: string, p: Program = program) =>
-  coach({ program: p, today: localDate(iso), logs: keysDoneBefore(localDate(iso), p) })
+  coach({ program: p, today: localDate(iso), logs: caughtUpBefore(localDate(iso), p) })
 /** What the Coach says at an exact instant, read on a clock in Toronto. */
 const at = (instant: string) => coach({ program, today: localDateIn(new Date(instant)) })
 
@@ -259,7 +260,7 @@ function log(week: number, sessionId: string, date: string, status: LoggedStatus
 }
 
 const withLogs = (iso: string, logs: SessionLog[], picked: CoachInput['picked'] = null) =>
-  coach({ program, today: localDate(iso), logs: [...keysDoneBefore(localDate(iso)), ...logs], picked })
+  coach({ program, today: localDate(iso), logs: [...caughtUpBefore(localDate(iso)), ...logs], picked })
 const states = (day: ReturnType<typeof coach>) => Object.fromEntries(day.bucket.map((e) => [e.session.id, e.state]))
 
 describe('the Bucket', () => {
@@ -617,95 +618,138 @@ describe('Up next with Session logs', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Week rollover. Week 3's Key session is Threshold; Week 4 runs Mon 16 – Sun 22 Nov.
-// Week 7 is a Deload week with no Key session.
+// Catch-up (ADR-0007). Week 1 runs Mon 26 Oct – Sun 1 Nov, Week 2 Mon 2 – Sun 8 Nov,
+// Week 3 Mon 9 – Sun 15 Nov. Week 6's Threshold is 3 × 8′; Week 7 is a Deload week.
 
 const week = (n: number) => findWeek(program, n)!
 const outcome = (n: number, iso: string, logs: SessionLog[] = []) =>
   weekOutcome(program, week(n), logs, localDate(iso))
 const missed = (o: ReturnType<typeof outcome>) => o.skipped.map(({ session, by }) => `${session.id} by ${by}`)
-/** Everything before Week 3 settled; Week 3's own logs as given. */
-const inWeek4 = (iso: string, logs: SessionLog[] = []) =>
-  coach({ program, today: localDate(iso), logs: [...keysDoneBefore(localDate('2026-11-09')), ...logs] })
+const rows = (day: ReturnType<typeof coach>) => day.bucket.map((e) => `${e.week}/${e.session.id}${e.late ? ' late' : ''}`)
+/** Week 1's Speed and Strength done; its Threshold (Key) and HYROX never logged. */
+const week1Half = [log(1, 'speed', '2026-10-26'), log(1, 'strength', '2026-10-28')]
 
-describe('the Key session carries over', () => {
-  it('into the next Week until Wednesday, first in the Bucket and Up next', () => {
-    for (const iso of ['2026-11-16', '2026-11-17', '2026-11-18']) {
-      const day = inWeek4(iso)
-      expect(day.bucket[0]).toMatchObject({ week: 3, session: { id: 'threshold', key: true }, carriedUntil: '2026-11-18' })
-      expect(day.bucket.slice(1).map((e) => [e.week, e.carriedUntil])).toEqual(Array(5).fill([4, null]))
-      expect(day.upNext).toMatchObject({ id: 'threshold', headline: '2 × 12′' })
-      expect(day.bucket[0].state).toBe('next')
+describe('Catch-up', () => {
+  it('serves last Week’s Late sessions first, on a Week 2 Tuesday', () => {
+    const day = coach({ program, today: localDate('2026-11-03'), logs: week1Half })
+    expect(day.position).toMatchObject({ week: 2 })
+    expect(day.upNext).toMatchObject({ id: 'threshold', headline: '3 × 7′' })
+    expect(rows(day)).toEqual([
+      '1/threshold late',
+      '1/hyrox late',
+      '2/5k-test',
+      '2/strength',
+      '2/threshold',
+      '2/hyrox',
+      '2/easy',
+    ])
+    expect(day.bucket[0]).toMatchObject({ week: 1, state: 'next', late: true, toDo: true, pickable: true })
+    expect(day.behind).toEqual({ sessions: 2, week: 1 })
+    expect(day.week?.number).toBe(2)
+  })
+
+  it('serves the oldest Week’s Late sessions first, and the next Week’s once it is cleared', () => {
+    const logs = [
+      ...['speed', 'strength', 'threshold'].map((id) => log(1, id, '2026-10-27')),
+      ...['5k-test', 'threshold', 'hyrox'].map((id) => log(2, id, '2026-11-04')),
+    ]
+    const before = coach({ program, today: localDate('2026-11-11'), logs })
+    expect(rows(before).slice(0, 2)).toEqual(['1/hyrox late', '2/strength late'])
+    expect(before.upNext?.id).toBe('hyrox')
+    expect(before.bucket[0].state).toBe('next')
+    expect(before.behind).toEqual({ sessions: 2, week: 1 })
+
+    const week1Cleared = [...logs, log(1, 'hyrox', '2026-11-09')]
+    const after = coach({ program, today: localDate('2026-11-11'), logs: week1Cleared })
+    expect(after.upNext?.id).toBe('strength')
+    expect(after.bucket.find((e) => e.state === 'next')).toMatchObject({ week: 2, late: true })
+    expect(after.behind).toEqual({ sessions: 1, week: 2 })
+
+    const caughtUp = coach({ program, today: localDate('2026-11-11'), logs: [...week1Cleared, log(2, 'strength', '2026-11-09')] })
+    expect(caughtUp.bucket.every((e) => e.week === 3 && !e.late)).toBe(true)
+    expect(caughtUp.behind).toBeNull()
+    expect(caughtUp.upNext?.id).toBe('speed')
+  })
+
+  it('lets the Optional session drop away: it is never Late', () => {
+    const logs = ['speed', 'strength', 'threshold', 'hyrox'].map((id) => log(1, id, '2026-10-27'))
+    const day = coach({ program, today: localDate('2026-11-03'), logs })
+    expect(day.bucket.map((e) => e.week)).toEqual([2, 2, 2, 2, 2])
+    expect(day.behind).toBeNull()
+    expect(missed(outcome(1, '2026-11-03', logs))).toEqual([])
+  })
+
+  it('lets the pointer pass a Session the athlete logged Skipped', () => {
+    const logs = [...week1Half, log(1, 'threshold', '2026-10-30', 'skipped')]
+    const day = coach({ program, today: localDate('2026-11-03'), logs })
+    expect(rows(day).filter((r) => r.startsWith('1/'))).toEqual(['1/hyrox late'])
+    expect(day.upNext?.id).toBe('hyrox')
+    expect(day.behind).toEqual({ sessions: 1, week: 1 })
+    expect(missed(outcome(1, '2026-11-03', logs))).toEqual(['threshold by athlete'])
+  })
+
+  it('lets a Late session Skipped today pass too', () => {
+    const logs = [...week1Half, log(1, 'threshold', '2026-11-03', 'skipped')]
+    const day = coach({ program, today: localDate('2026-11-03'), logs })
+    expect(day.bucket[0]).toMatchObject({ week: 1, state: 'skipped', toDo: false })
+    expect(day.upNext?.id).toBe('hyrox')
+  })
+
+  it('keeps each Late session’s own Week’s Prescription, a full one in a Deload week', () => {
+    const logs = [
+      ...caughtUpBefore(localDate('2026-11-30')),
+      ...['speed', 'strength', 'hyrox'].map((id) => log(6, id, '2026-12-01')),
+    ]
+    const day = coach({ program, today: localDate('2026-12-08'), logs })
+    expect(day.week?.deload).toBe(true)
+    expect(day.upNext).toMatchObject({ id: 'threshold', headline: '3 × 8′' })
+    expect(day.bucket[0]).toMatchObject({ week: 6, late: true, session: { headline: '3 × 8′' } })
+  })
+
+  it('counts a Late session logged today for its own Week, Done in the Bucket until tomorrow', () => {
+    const logs = [...week1Half, log(1, 'threshold', '2026-11-03'), log(1, 'hyrox', '2026-11-03')]
+    const day = coach({ program, today: localDate('2026-11-03'), logs })
+    expect(rows(day).slice(0, 2)).toEqual(['1/threshold late', '1/hyrox late'])
+    expect(day.bucket.slice(0, 2).map((e) => e.state)).toEqual(['done', 'done'])
+    expect(day.behind).toBeNull()
+    expect(outcome(1, '2026-11-03', logs)).toEqual({ skipped: [] })
+    expect(coach({ program, today: localDate('2026-11-04'), logs }).bucket.every((e) => e.week === 2)).toBe(true)
+  })
+
+  it('still lets a current-Week Session be picked to do today instead', () => {
+    const today = localDate('2026-11-03')
+    const day = coach({ program, today, logs: week1Half, picked: { date: today, week: 2, sessionId: 'hyrox' } })
+    expect(day.upNext?.id).toBe('hyrox')
+    expect(day.bucket.find((e) => e.state === 'next')).toMatchObject({ week: 2, late: false })
+    expect(day.bucket[0]).toMatchObject({ week: 1, state: 'planned', late: true })
+    expect(day.behind).toEqual({ sessions: 2, week: 1 })
+  })
+
+  it('carries nothing over: an undone Key session is Late like the rest, and never a miss', () => {
+    for (const iso of ['2026-11-03', '2026-11-05', '2026-11-20']) {
+      const day = coach({ program, today: localDate(iso), logs: week1Half })
+      expect(day.bucket.filter((e) => e.week === 1).map((e) => e.session.id)).toEqual(['threshold', 'hyrox'])
+      expect(day.bucket[0]).not.toHaveProperty('carriedUntil')
+      expect(outcome(1, iso, week1Half)).toEqual({ skipped: [] })
     }
   })
 
-  it('is gone on Thursday, Skipped by the Coach', () => {
-    const day = inWeek4('2026-11-19')
-    expect(day.bucket.map((e) => e.week)).toEqual([4, 4, 4, 4, 4])
-    expect(missed(outcome(3, '2026-11-19'))).toContain('threshold by coach')
-    expect(outcome(3, '2026-11-19').carried).toBeNull()
-  })
-
-  it('shows as Done once logged in the carry-over, and is no miss', () => {
-    const done = log(3, 'threshold', '2026-11-17')
-    const day = inWeek4('2026-11-18', [done])
-    expect(day.bucket[0]).toMatchObject({ week: 3, state: 'done', log: done })
-    expect(day.upNext?.id).not.toBe('threshold')
-    expect(missed(outcome(3, '2026-11-19', [done]))).not.toContain('threshold by coach')
-  })
-
   it('counts toward the spacing rules on the day it is done', () => {
-    // Week 4's Speed and Strength done, then the carried Threshold on Wednesday: Thursday
-    // rests, with Week 4's Threshold and HYROX still fitting into Friday to Sunday.
-    const logs = [log(4, 'speed', '2026-11-16'), log(4, 'strength', '2026-11-17'), log(3, 'threshold', '2026-11-18')]
-    const day = inWeek4('2026-11-19', logs)
+    // Week 2's 5K test and Strength done, Week 1's late HYROX on Wednesday: Thursday
+    // rests, with Week 2's Threshold and HYROX still fitting into Friday to Sunday.
+    const logs = [
+      ...['speed', 'strength', 'threshold'].map((id) => log(1, id, '2026-10-27')),
+      log(2, '5k-test', '2026-11-02'),
+      log(2, 'strength', '2026-11-03'),
+      log(1, 'hyrox', '2026-11-04'),
+    ]
+    const day = coach({ program, today: localDate('2026-11-05'), logs })
     expect(day.upNext).toBeNull()
-    expect(day.rest).toMatchObject({ kind: 'hard-yesterday' })
-  })
-
-  it('can be picked from the Bucket like any other Session', () => {
-    const day = coach({
-      program,
-      today: localDate('2026-11-16'),
-      logs: keysDoneBefore(localDate('2026-11-09')),
-      picked: { date: localDate('2026-11-16'), week: 4, sessionId: 'hyrox' },
-    })
-    expect(day.upNext?.id).toBe('hyrox')
-    expect(day.bucket[0]).toMatchObject({ week: 3, state: 'planned' })
-  })
-
-  it('is the only Session that carries: nothing else does, the Optional session least of all', () => {
-    const day = inWeek4('2026-11-16')
-    expect(day.bucket.filter((e) => e.carriedUntil)).toHaveLength(1)
-    expect(outcome(3, '2026-11-16').carried?.session.id).toBe('threshold')
-  })
-
-  it('stops at Wednesday whichever Week it is', () => {
-    expect(keyDeadline(program, week(1))).toBe('2026-11-04')
-    expect(keyDeadline(program, week(13))).toBe('2027-01-27')
-  })
-
-  it('never spills from the Taper into Race week', () => {
-    expect(keyDeadline(program, week(25))).toBe('2027-04-18')
-    const day = coach({ program, today: localDate('2027-04-19'), logs: keysDoneBefore(localDate('2027-04-12')) })
-    expect(day.bucket.map((e) => e.week)).toEqual([26, 26])
-    expect(missed(outcome(25, '2027-04-19'))).toContain('speed by coach')
+    expect(day.rest).toMatchObject({ kind: 'hard-yesterday', anyway: { week: 2, session: { id: 'threshold' } } })
   })
 })
 
 describe('Sessions not done by Sunday', () => {
-  it('stay open through Sunday, in America/Toronto', () => {
-    expect(outcome(3, '2026-11-15')).toEqual({ skipped: [], carried: null })
-    // 23:59 Sunday in Toronto is already Monday in UTC; the Week is still open.
-    expect(outcome(3, localDateIn(new Date('2026-11-16T04:59:59Z')))).toEqual({ skipped: [], carried: null })
-  })
-
-  it('become Skipped at the end of Sunday, apart from the Key session', () => {
-    const o = outcome(3, localDateIn(new Date('2026-11-16T05:00:00Z')))
-    expect(missed(o)).toEqual(['speed by coach', 'strength by coach', 'hyrox by coach'])
-    expect(o.carried).toEqual({ session: expect.objectContaining({ id: 'threshold' }), until: '2026-11-18' })
-  })
-
   it('leave the Optional session alone: missing it is not a miss', () => {
     expect(missed(outcome(3, '2026-11-20'))).not.toContain('easy by coach')
     expect(missed(outcome(3, '2026-11-20', [log(3, 'easy', '2026-11-10', 'skipped')]))).not.toContain('easy by athlete')
@@ -720,21 +764,13 @@ describe('Sessions not done by Sunday', () => {
     ]
     // Until Sunday a Skipped Session can still be done: not a miss yet.
     expect(missed(outcome(3, '2026-11-11', logs))).toEqual([])
-    expect(missed(outcome(3, '2026-11-15', logs))).toEqual([])
-    expect(missed(outcome(3, '2026-11-20', logs))).toEqual(['speed by athlete'])
+    expect(missed(outcome(3, localDateIn(new Date('2026-11-16T04:59:59Z')), logs))).toEqual([])
+    expect(missed(outcome(3, localDateIn(new Date('2026-11-16T05:00:00Z')), logs))).toEqual(['speed by athlete'])
   })
 
-  it('count a Key session Skipped in its carry-over only once the carry-over ends', () => {
-    const logs = [log(3, 'threshold', '2026-11-16', 'skipped')]
-    expect(missed(outcome(3, '2026-11-17', logs))).not.toContain('threshold by athlete')
-    expect(outcome(3, '2026-11-17', logs).carried?.session.id).toBe('threshold')
-    expect(missed(outcome(3, '2026-11-19', logs))).toContain('threshold by athlete')
-  })
-
-  it('leave a Deload week, with no Key session, nothing to carry', () => {
-    const o = outcome(7, '2026-12-14')
-    expect(o.carried).toBeNull()
-    expect(missed(o)).toEqual(['speed by coach', 'strength by coach', 'easy-deload by coach', 'hyrox by coach'])
+  it('are Late, not missed: the Coach Skips nothing', () => {
+    expect(missed(outcome(3, '2026-11-20'))).toEqual([])
+    expect(missed(outcome(7, '2026-12-14'))).toEqual([])
   })
 })
 
@@ -751,7 +787,7 @@ function decided(decision: Decision, date = '2026-12-29', updatedAt = '2026-12-2
 }
 
 const inWeek10 = (logs: SessionLog[], decisions: SuggestionDecision[] = [], iso = '2026-12-29') =>
-  coach({ program, today: localDate(iso), logs: [...keysDoneBefore(localDate('2026-12-21')), ...logs], decisions })
+  coach({ program, today: localDate(iso), logs: [...caughtUpBefore(localDate('2026-12-21')), ...logs], decisions })
 
 describe('the re-entry Suggestion', () => {
   it('comes with two Skipped Sessions last Week, as structured facts', () => {
@@ -781,28 +817,14 @@ describe('the re-entry Suggestion', () => {
     expect(inWeek10(week9({ ...TWO_SKIPPED, threshold: 'done' })).suggestions).toEqual([])
   })
 
-  it('counts Sessions the Coach Skipped at the end of Sunday', () => {
-    const day = inWeek10(week9({ speed: 'done', strength: 'done' }))
-    const [reEntry] = day.suggestions
-    expect(reEntry.kind === 're-entry' && reEntry.trigger.skipped.map((s) => s.sessionId)).toEqual(['threshold', 'hyrox'])
+  it('does not count Sessions never logged: they are Late, not missed', () => {
+    expect(inWeek10(week9({ speed: 'done', strength: 'done' })).suggestions).toEqual([])
+    expect(inWeek10(week9({ speed: 'done', strength: 'done' }), [], '2026-12-31').suggestions).toEqual([])
   })
 
-  it('does not count the Key session while it is carried over', () => {
-    // Speed (Key) and Strength undone: Speed carries, so only Strength is Skipped.
-    expect(inWeek10(week9({ threshold: 'done', hyrox: 'done' })).suggestions).toEqual([])
-    // Even after its carry-over runs out: the count is taken as the Week closed.
-    expect(inWeek10(week9({ threshold: 'done', hyrox: 'done' }), [], '2026-12-31').suggestions).toEqual([])
-  })
-
-  it('stays when Skipped Sessions are made up late, from Monday on', () => {
+  it('stays when Sessions Skipped by Sunday are made up late, from Monday on', () => {
     const madeUp = [log(9, 'threshold', '2026-12-28'), log(9, 'hyrox', '2026-12-29')]
-    const day = inWeek10([...week9({ speed: 'done', strength: 'done' }), ...madeUp], [], '2026-12-29')
-    expect(day.suggestions.map((s) => s.id)).toEqual(['re-entry-w10'])
-    // A Skipped log edited to Done after the Week closed still counts as Skipped.
-    const edited = week9(TWO_SKIPPED).map((l) =>
-      l.status === 'skipped' ? { ...l, status: 'done' as const, date: localDate('2026-12-29') } : l,
-    )
-    expect(inWeek10(edited).suggestions.map((s) => s.id)).toEqual(['re-entry-w10'])
+    expect(inWeek10([...week9(TWO_SKIPPED), ...madeUp]).suggestions.map((s) => s.id)).toEqual(['re-entry-w10'])
     // Done by Sunday, it was never a miss.
     expect(inWeek10(week9({ ...TWO_SKIPPED, threshold: 'done', hyrox: 'done' })).suggestions).toEqual([])
   })
@@ -817,12 +839,12 @@ describe('the re-entry Suggestion', () => {
     const deload = coach({
       program,
       today: localDate('2026-12-08'),
-      logs: [...keysDoneBefore(localDate('2026-11-30')), log(6, 'speed', '2026-11-30', 'skipped'), log(6, 'hyrox', '2026-11-30', 'skipped')],
+      logs: [...caughtUpBefore(localDate('2026-11-30')), log(6, 'speed', '2026-11-30', 'skipped'), log(6, 'hyrox', '2026-11-30', 'skipped')],
     })
     expect(deload.suggestions).toEqual([])
     // Nothing logged in Week 24 or 26.
-    expect(coach({ program, today: localDate('2027-04-13'), logs: keysDoneBefore(localDate('2027-04-13')) }).suggestions).toEqual([])
-    expect(coach({ program, today: localDate('2027-04-20'), logs: keysDoneBefore(localDate('2027-04-20')) }).suggestions).toEqual([])
+    expect(coach({ program, today: localDate('2027-04-13'), logs: caughtUpBefore(localDate('2027-04-13')) }).suggestions).toEqual([])
+    expect(coach({ program, today: localDate('2027-04-20'), logs: caughtUpBefore(localDate('2027-04-20')) }).suggestions).toEqual([])
   })
 
   it('changes nothing until it is Accepted', () => {
@@ -849,7 +871,7 @@ describe('the re-entry Suggestion', () => {
   })
 
   it('shows the lighter Week on other screens too', () => {
-    const logs = [...keysDoneBefore(localDate('2026-12-21')), ...week9(TWO_SKIPPED)]
+    const logs = [...caughtUpBefore(localDate('2026-12-21')), ...week9(TWO_SKIPPED)]
     expect(prescribedWeek(program, 10, logs, [decided('accepted')])?.sessions[0].headline).toBe('3 × 4′')
     expect(prescribedWeek(program, 10, logs, [decided('kept')])?.sessions[0].headline).toBe('4 × 4′')
     expect(prescribedWeek(program, 9, logs, [decided('accepted')])).toEqual(equipWeek(findWeek(program, 9)!, DEFAULT_EQUIPMENT))
@@ -885,7 +907,7 @@ const painDecision = (report: PainReport, decision: Decision, date = report.date
 })
 
 function withPain(iso: string, painReports: PainReport[], decisions: SuggestionDecision[] = [], logs: SessionLog[] = []) {
-  return coach({ program, today: localDate(iso), logs: [...keysDoneBefore(localDate(iso)), ...logs], painReports, decisions })
+  return coach({ program, today: localDate(iso), logs: [...caughtUpBefore(localDate(iso)), ...logs], painReports, decisions })
 }
 
 /** Only the pain Suggestions: Week 2's Sessions other than the Key one went undone, so re-entry is there too. */
@@ -1067,18 +1089,18 @@ describe('the pain rules', () => {
     expect(day.upNext).toMatchObject({ id: 'race', headline: findWeek(program, 26)!.sessions.find((s) => s.id === 'race')!.headline })
   })
 
-  it('apply to a carried Key session still open', () => {
-    // Week 3's Threshold (Key) carried into Week 4, Monday.
+  it('apply to a Late session still open', () => {
+    // Week 3's Threshold (Key) never logged: Late on Monday of Week 4.
     const logs = ['speed', 'strength', 'hyrox'].map((id) => log(3, id, '2026-11-10'))
     const report = pain('2026-11-16', 4)
     const day = coach({
       program,
       today: localDate('2026-11-16'),
-      logs: [...keysDoneBefore(localDate('2026-11-09')), ...logs],
+      logs: [...caughtUpBefore(localDate('2026-11-09')), ...logs],
       painReports: [report],
       decisions: [painDecision(report, 'accepted')],
     })
-    expect(day.bucket[0]).toMatchObject({ week: 3, carriedUntil: '2026-11-18', session: { id: 'threshold', headline: '1 × 12′' } })
+    expect(day.bucket[0]).toMatchObject({ week: 3, late: true, session: { id: 'threshold', headline: '1 × 12′' } })
   })
 
   it('show on other screens for the Week holding today only', () => {
@@ -1115,7 +1137,7 @@ function withNights(
   decisions: SuggestionDecision[] = [],
   logs: SessionLog[] = [],
 ) {
-  return coach({ program, today: localDate(iso), logs: [...keysDoneBefore(localDate(iso)), ...logs], decisions, recoveryNights })
+  return coach({ program, today: localDate(iso), logs: [...caughtUpBefore(localDate(iso)), ...logs], decisions, recoveryNights })
 }
 
 const recoveryOf = (day: ReturnType<typeof coach>) => day.suggestions.filter((s) => s.kind === 'recovery')
@@ -1170,7 +1192,7 @@ describe('the recovery rules', () => {
 
   it('take a set off every main lift and cap its sets at RPE 7 on a Strength day', () => {
     const speedYesterday: SessionLog = {
-      ...keysDoneBefore(localDate('2026-11-11'))[0],
+      ...caughtUpBefore(localDate('2026-11-11'))[0],
       id: 'speed-w3',
       week: 3,
       sessionId: 'speed',
@@ -1199,7 +1221,7 @@ describe('the recovery rules', () => {
     const day = coach({
       program,
       today: localDate('2026-11-11'),
-      logs: keysDoneBefore(localDate('2026-11-11')),
+      logs: caughtUpBefore(localDate('2026-11-11')),
       picked: { date: localDate('2026-11-11'), week: 3, sessionId: 'hyrox' },
       recoveryNights: [...baseline, night('2026-11-11', 320, 40)],
     })
@@ -1212,7 +1234,7 @@ describe('the recovery rules', () => {
   it('leave an Easy run alone', () => {
     const easyOnly = findWeek(program, 3)!.sessions
       .filter((s) => s.type !== 'easy')
-      .map((s, i) => ({ ...keysDoneBefore(localDate('2026-11-11'))[0], id: `w3-${i}`, week: 3, sessionId: s.id, date: localDate('2026-11-09') }))
+      .map((s, i) => ({ ...caughtUpBefore(localDate('2026-11-11'))[0], id: `w3-${i}`, week: 3, sessionId: s.id, date: localDate('2026-11-09') }))
     const day = withNights('2026-11-11', [...baseline, night('2026-11-11', 300, 30)], [], easyOnly)
     expect(day.upNext!.type).toBe('easy')
     expect(day.upNext).toBe(findWeek(program, 3)!.sessions.find((s) => s.type === 'easy'))
@@ -1296,7 +1318,7 @@ describe('Activities', () => {
   const run = (start: string, end: string) =>
     parseActivity({ type: 'Running', start, end, distanceKm: 8, heartRates: '150\n160' }, '2026-11-12T12:00:00.000Z')
   const today = localDate('2026-11-11')
-  const base = { program, today, logs: keysDoneBefore(today) }
+  const base = { program, today, logs: caughtUpBefore(today) }
 
   it('attaches the watch’s workout to the Session logged that day, on its Bucket row', () => {
     const activity = run('2026-11-11T07:00:00-05:00', '2026-11-11T07:45:00-05:00')
