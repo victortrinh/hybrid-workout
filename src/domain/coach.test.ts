@@ -1357,6 +1357,30 @@ describe('Activities', () => {
     expect(day.activitiesAttached).toMatchObject([{ sessionId: 'speed', by: 'coach', logged: true }])
   })
 
+  describe('in Catch-up (ADR-0007)', () => {
+    // A Week 2 Tuesday. Week 1's Threshold (Key) is Late; its other required Sessions are done.
+    const tuesday = localDate('2026-11-03')
+    const week1 = ['speed', 'strength', 'hyrox'].map((id) => log(1, id, '2026-10-27'))
+    const watchRun = run('2026-11-03T07:00:00-05:00', '2026-11-03T07:45:00-05:00')
+
+    it('attaches a run to the one Late session it fits, on its Late row', () => {
+      const week2Runs = ['5k-test', 'threshold', 'easy'].map((id) => log(2, id, '2026-11-02'))
+      const day = coach({ program, today: tuesday, logs: [...week1, ...week2Runs], activities: [watchRun] })
+      expect(day.bucket.find((e) => e.late && e.session.id === 'threshold')?.activity).toEqual(watchRun)
+      expect(day.activityQuestions).toEqual([])
+      expect(day.activitiesAttached).toMatchObject([{ week: 1, sessionId: 'threshold', by: 'coach', logged: false }])
+    })
+
+    it('asks between a Late session and one of the current Week, each with its Week', () => {
+      const week2Runs = ['5k-test', 'easy'].map((id) => log(2, id, '2026-11-02'))
+      const day = coach({ program, today: tuesday, logs: [...week1, ...week2Runs], activities: [watchRun] })
+      expect(day.activityQuestions.map((q) => q.candidates.map((c) => `${c.week}/${c.session.id}`))).toEqual([
+        ['1/threshold', '2/threshold'],
+      ])
+      expect(day.bucket.filter((e) => e.activity)).toEqual([])
+    })
+  })
+
   it('stops asking about a workout a week old', () => {
     const activity = run('2026-11-09T07:00:00-05:00', '2026-11-09T07:45:00-05:00')
     expect(coach({ ...base, today: localDate('2026-11-15'), activities: [activity] }).activityQuestions).toHaveLength(1)

@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { expectNoAxeViolations } from './axe'
-import { seedLogs } from './history'
+import { caughtUp, seedLogs } from './history'
+import { toLog } from '../src/mock/scenarios/seed'
 import { E2E_SERVICE_TOKEN, serviceTokenHeaders } from './serviceToken'
 
 /**
@@ -110,6 +111,8 @@ test('Today asks which Session an ambiguous workout was; the answer attaches it,
     return route.fulfill({
       json: {
         sessionLogs: [
+          // Nothing Late from Weeks 1 to 15 (ADR-0007): only Week 17's run Sessions fit.
+          ...caughtUp(15).map((l) => toLog(l, 'e2e-served')),
           ...['5k-test', 'strength', 'threshold', 'hyrox'].map((sessionId) => ({
             id: `served-w16-${sessionId}`,
             week: 16,

@@ -45,10 +45,13 @@ export async function caughtUpOnServer(page: Page, week: number): Promise<{ offl
   return network
 }
 
-/** What else the server holds: decisions on Suggestions, and nights from the morning Shortcut. */
+/** What else the server holds: decisions on Suggestions, nights from the morning Shortcut, and watch workouts. */
 export interface SeedExtras {
   suggestionDecisions?: Record<string, unknown>[]
   recoveryNights?: Record<string, unknown>[]
+  activities?: Record<string, unknown>[]
+  /** Where to put the answers to "Which Session was this?" the page sends; served back, as the server would. */
+  activityAnswers?: Record<string, unknown>[]
 }
 
 /** Writes Session logs to the shared e2e database, with ids that are the same on every run. */
@@ -61,15 +64,15 @@ export async function seedLogs(request: APIRequestContext, project: string, logs
  * Answers /api/state and /api/sync with this history, plus whatever the page
  * syncs, without touching the shared database. Returns the logs the page
  * sends, latest last, for tests that check what was saved. Decisions on
- * Suggestions the page sends are served back, as the server would, and so is
- * the last Starting point sent.
+ * Suggestions the page sends are served back, as the server would, and so are
+ * answers about watch workouts and the last Starting point sent.
  */
 export async function serveHistory(
   page: Page,
   logs: SeedLog[],
   /** Where to put the Pain reports the page sends, for tests that check them. */
   painReports: Record<string, unknown>[] = [],
-  { suggestionDecisions = [], recoveryNights = [] }: SeedExtras = {},
+  { suggestionDecisions = [], recoveryNights = [], activities = [], activityAnswers = [] }: SeedExtras = {},
 ): Promise<Record<string, unknown>[]> {
   const sent: Record<string, unknown>[] = []
   const history = logs.map((l) => toLog(l, 'e2e-served'))
@@ -80,6 +83,7 @@ export async function serveHistory(
       sent.push(...(body.sessionLogs ?? []))
       painReports.push(...(body.painReports ?? []))
       startingPoint = body.startingPoint ?? startingPoint
+      activityAnswers.push(...(body.activityAnswers ?? []))
       // The latest decision on a Suggestion stands, as the server keeps it.
       for (const d of body.suggestionDecisions ?? []) {
         const i = suggestionDecisions.findIndex((o) => o.id === d.id)
@@ -88,7 +92,15 @@ export async function serveHistory(
       }
     }
     return route.fulfill({
-      json: { sessionLogs: [...history, ...sent], suggestionDecisions, painReports, recoveryNights, startingPoint },
+      json: {
+        sessionLogs: [...history, ...sent],
+        suggestionDecisions,
+        painReports,
+        recoveryNights,
+        startingPoint,
+        activities,
+        activityAnswers,
+      },
     })
   })
   return sent
