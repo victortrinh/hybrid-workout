@@ -850,87 +850,109 @@ describe('Sessions not done by Sunday', () => {
 })
 
 // ---------------------------------------------------------------------------
-// The lighter re-entry Week. Week 9 (Mon 21 – Sun 27 Dec): Speed is Key.
-// Week 10 (Mon 28 Dec – Sun 3 Jan): Speed 4 × 4′, Key.
+// The lighter re-entry Week, after a gap in training (ADR-0007). Week 9 (Mon
+// 21 – Sun 27 Dec) done Monday to Thursday; Week 10 (Mon 28 Dec – Sun 3 Jan):
+// Speed 4 × 4′, Key. Week 11 is a Deload week.
 
-const week9 = (statuses: Partial<Record<string, LoggedStatus>>) =>
-  Object.entries(statuses).map(([id, status], i) => log(9, id, `2026-12-2${1 + i}`, status))
-const TWO_SKIPPED = { speed: 'done', strength: 'done', threshold: 'skipped', hyrox: 'skipped' } as const
+const CLEARED = caughtUpBefore(localDate('2026-12-21'))
+const WEEK_9 = ['speed', 'strength', 'threshold', 'hyrox'].map((id, i) => log(9, id, `2026-12-2${1 + i}`))
 
-function decided(decision: Decision, date = '2026-12-29', updatedAt = '2026-12-29T12:00:00.000Z'): SuggestionDecision {
-  return { id: 're-entry-w10', decision, date: localDate(date), updatedAt }
+function decided(decision: Decision, id = 're-entry-w10', date = '2026-12-31'): SuggestionDecision {
+  return { id, decision, date: localDate(date), updatedAt: `${date}T12:00:00.000Z` }
 }
 
-const inWeek10 = (logs: SessionLog[], decisions: SuggestionDecision[] = [], iso = '2026-12-29') =>
-  coach({ program, today: localDate(iso), logs: [...caughtUpBefore(localDate('2026-12-21')), ...logs], decisions })
+const onDay = (iso: string, logs: SessionLog[], decisions: SuggestionDecision[] = []) =>
+  coach({ program, today: localDate(iso), logs: [...CLEARED, ...logs], decisions })
+/** Back after Week 9, its last Session on Thursday 24 December. */
+const back = (iso: string, logs: SessionLog[] = [], decisions: SuggestionDecision[] = []) =>
+  onDay(iso, [...WEEK_9, ...logs], decisions)
+const ids = (day: ReturnType<typeof coach>) => day.suggestions.map((s) => s.id)
 
 describe('the re-entry Suggestion', () => {
-  it('comes with two Skipped Sessions last Week, as structured facts', () => {
-    expect(inWeek10(week9(TWO_SKIPPED)).suggestions).toEqual([
+  it('comes after 7 days with no Session, not 6, as structured facts', () => {
+    expect(back('2026-12-30').suggestions).toEqual([])
+    expect(back('2026-12-31').suggestions).toEqual([
       {
         id: 're-entry-w10',
         kind: 're-entry',
         week: 10,
         sessionId: null,
-        date: '2026-12-28',
+        date: '2026-12-31',
         from: { volumePercent: 100 },
         to: { volumePercent: 67 },
-        trigger: {
-          week: 9,
-          skipped: [
-            { sessionId: 'threshold', type: 'threshold' },
-            { sessionId: 'hyrox', type: 'hyrox' },
-          ],
-        },
+        trigger: { lastSession: '2026-12-24', days: 7 },
         decision: 'open',
         decidedOn: null,
       },
     ])
   })
 
-  it('stays away with one Skipped Session', () => {
-    expect(inWeek10(week9({ ...TWO_SKIPPED, threshold: 'done' })).suggestions).toEqual([])
+  it('counts only Done or Partial as training: Skipped or Swapped leaves the gap open', () => {
+    const notTrained = [log(10, 'speed', '2026-12-28', 'skipped'), log(10, 'strength', '2026-12-29', 'swapped')]
+    expect(ids(back('2026-12-31', notTrained))).toEqual(['re-entry-w10'])
+    expect(back('2026-12-31', [log(10, 'speed', '2026-12-28', 'partial')]).suggestions).toEqual([])
   })
 
-  it('does not count Sessions never logged: they are Late, not missed', () => {
-    expect(inWeek10(week9({ speed: 'done', strength: 'done' })).suggestions).toEqual([])
-    expect(inWeek10(week9({ speed: 'done', strength: 'done' }), [], '2026-12-31').suggestions).toEqual([])
+  it('stays for the rest of the Week once the athlete is back, then goes', () => {
+    const returned = [log(10, 'speed', '2026-12-31')]
+    for (const iso of ['2026-12-31', '2027-01-02']) {
+      expect(back(iso, returned).suggestions).toEqual([
+        expect.objectContaining({ id: 're-entry-w10', date: '2026-12-31', trigger: { lastSession: '2026-12-24', days: 7 } }),
+      ])
+    }
+    const rest = ['strength', 'threshold', 'hyrox'].map((id, i) => log(10, id, `2027-01-0${1 + i}`))
+    expect(ids(back('2027-01-04', [...returned, ...rest]))).not.toContain('re-entry-w10')
   })
 
-  it('stays when Sessions Skipped by Sunday are made up late, from Monday on', () => {
-    const madeUp = [log(9, 'threshold', '2026-12-28'), log(9, 'hyrox', '2026-12-29')]
-    expect(inWeek10([...week9(TWO_SKIPPED), ...madeUp]).suggestions.map((s) => s.id)).toEqual(['re-entry-w10'])
-    // Done by Sunday, it was never a miss.
-    expect(inWeek10(week9({ ...TWO_SKIPPED, threshold: 'done', hyrox: 'done' })).suggestions).toEqual([])
+  it('no longer comes from Skips: two Skipped Sessions while training goes on', () => {
+    const skipped = [
+      log(9, 'speed', '2026-12-21'),
+      log(9, 'strength', '2026-12-22'),
+      log(9, 'threshold', '2026-12-23', 'skipped'),
+      log(9, 'hyrox', '2026-12-24', 'skipped'),
+      log(10, 'speed', '2026-12-28'),
+    ]
+    expect(onDay('2026-12-29', skipped).suggestions).toEqual([])
   })
 
-  it('is about this Week only: gone the Week after', () => {
-    const logs = [...week9(TWO_SKIPPED), ...['speed', 'strength', 'easy-deload', 'hyrox'].map((id) => log(11, id, '2027-01-04'))]
-    expect(inWeek10(logs, [], '2027-01-04').suggestions.map((s) => s.id)).not.toContain('re-entry-w10')
+  it('lightens the rest of the Late Week Up next comes from when the gap ends in Catch-up', () => {
+    const logs = [log(9, 'speed', '2026-12-21'), log(9, 'strength', '2026-12-22')]
+    const day = onDay('2026-12-30', logs)
+    expect(day.behind).toEqual({ sessions: 2, week: 9 })
+    expect(day.suggestions).toEqual([
+      expect.objectContaining({ id: 're-entry-w9', week: 9, date: '2026-12-30', trigger: { lastSession: '2026-12-22', days: 8 } }),
+    ])
+
+    const lighter = onDay('2026-12-30', logs, [decided('accepted', 're-entry-w9', '2026-12-30')])
+    expect(lighter.upNext).toMatchObject({ id: 'threshold', headline: '2 × 8′', minutes: 30 })
+    expect(lighter.bucket.filter((e) => e.week === 10).map((e) => e.session.minutes)).toEqual([45, 45, 45, 50, 40])
+    // What was done before the gap stays as it was.
+    const week9 = prescribedWeek(program, 9, [...CLEARED, ...logs], [decided('accepted', 're-entry-w9', '2026-12-30')], DEFAULT_EQUIPMENT, {
+      reports: [],
+      today: localDate('2026-12-30'),
+    })!
+    expect(week9.sessions.map((s) => s.minutes)).toEqual([45, 45, 30, 34, 27])
   })
 
-  it('never lightens a Deload week, nor the Taper or Race week', () => {
-    // Week 6 with two Skipped, then Week 7, a Deload.
-    const deload = coach({
-      program,
-      today: localDate('2026-12-08'),
-      logs: [...caughtUpBefore(localDate('2026-11-30')), log(6, 'speed', '2026-11-30', 'skipped'), log(6, 'hyrox', '2026-11-30', 'skipped')],
-    })
-    expect(deload.suggestions).toEqual([])
-    // Nothing logged in Week 24 or 26.
-    expect(coach({ program, today: localDate('2027-04-13'), logs: caughtUpBefore(localDate('2027-04-13')) }).suggestions).toEqual([])
-    expect(coach({ program, today: localDate('2027-04-20'), logs: caughtUpBefore(localDate('2027-04-20')) }).suggestions).toEqual([])
+  it('never lightens a Deload week, nor the Taper', () => {
+    // Week 6 done Monday to Thursday, back in Week 7, a Deload.
+    const week6 = ['speed', 'strength', 'threshold', 'hyrox'].map((id, i) => log(6, id, `2026-12-0${1 + i}`))
+    expect(coach({ program, today: localDate('2026-12-11'), logs: [...caughtUpBefore(localDate('2026-11-30')), ...week6] }).suggestions).toEqual([])
+    // Week 24 done, back in Week 25.
+    const week24 = ['5k-test', 'strength', 'threshold', 'hyrox'].map((id, i) => log(24, id, `2027-04-0${5 + i}`))
+    const taper = coach({ program, today: localDate('2027-04-16'), logs: [...caughtUpBefore(localDate('2027-04-05')), ...week24] })
+    expect(taper.suggestions.filter((s) => s.kind === 're-entry')).toEqual([])
   })
 
   it('changes nothing until it is Accepted', () => {
-    const day = inWeek10(week9(TWO_SKIPPED))
+    const day = back('2026-12-31')
     expect(day.upNext).toMatchObject({ id: 'speed', headline: '4 × 4′', minutes: 45 })
     expect(day.week).toEqual(equipWeek(findWeek(program, 10)!, DEFAULT_EQUIPMENT))
   })
 
   it('lightens every Prescription of the Week by a third once Accepted', () => {
-    const day = inWeek10(week9(TWO_SKIPPED), [decided('accepted')])
-    expect(day.suggestions[0]).toMatchObject({ decision: 'accepted', decidedOn: '2026-12-29' })
+    const day = back('2026-12-31', [], [decided('accepted')])
+    expect(day.suggestions[0]).toMatchObject({ decision: 'accepted', decidedOn: '2026-12-31' })
     expect(day.upNext).toMatchObject({ id: 'speed', headline: '3 × 4′', minutes: 30 })
     expect(day.bucket.map((e) => e.session.minutes)).toEqual([30, 30, 30, 34, 27])
     const intervals = day.upNext!.blocks.find((b) => b.main)!.exercises[0].prescription
@@ -939,17 +961,21 @@ describe('the re-entry Suggestion', () => {
 
   it('keeps the Program as written when Kept, and again after Undo', () => {
     for (const d of [decided('kept'), decided('open')]) {
-      const day = inWeek10(week9(TWO_SKIPPED), [d])
+      const day = back('2026-12-31', [], [d])
       expect(day.suggestions[0].decision).toBe(d.decision)
       expect(day.upNext).toMatchObject({ headline: '4 × 4′', minutes: 45 })
     }
   })
 
   it('shows the lighter Week on other screens too', () => {
-    const logs = [...caughtUpBefore(localDate('2026-12-21')), ...week9(TWO_SKIPPED)]
-    expect(prescribedWeek(program, 10, logs, [decided('accepted')])?.sessions[0].headline).toBe('3 × 4′')
-    expect(prescribedWeek(program, 10, logs, [decided('kept')])?.sessions[0].headline).toBe('4 × 4′')
-    expect(prescribedWeek(program, 9, logs, [decided('accepted')])).toEqual(equipWeek(findWeek(program, 9)!, DEFAULT_EQUIPMENT))
+    const logs = [...CLEARED, ...WEEK_9]
+    const today = { reports: [], today: localDate('2026-12-31') }
+    expect(prescribedWeek(program, 10, logs, [decided('accepted')], DEFAULT_EQUIPMENT, today)?.sessions[0].headline).toBe('3 × 4′')
+    expect(prescribedWeek(program, 10, logs, [decided('kept')], DEFAULT_EQUIPMENT, today)?.sessions[0].headline).toBe('4 × 4′')
+    // Once back, the logs alone place the gap.
+    const returned = [...logs, log(10, 'strength', '2026-12-31')]
+    expect(prescribedWeek(program, 10, returned, [decided('accepted')])?.sessions[0].headline).toBe('3 × 4′')
+    expect(prescribedWeek(program, 9, returned, [decided('accepted')])).toEqual(equipWeek(findWeek(program, 9)!, DEFAULT_EQUIPMENT))
   })
 })
 

@@ -219,17 +219,26 @@ describe('a lighter Week', () => {
     expect(state([CALIBRATION, easyWeek6], decisions, '2026-12-18').weights['back-squat']).toBe(185)
   })
 
-  it('treats a Week made lighter by an accepted re-entry the same way', () => {
+  // An accepted re-entry, from the day the athlete came back to the Monday after.
+  const REENTRY = [{ start: localDate('2026-11-25'), landsOn: localDate('2026-11-30') }]
+
+  it('treats the days an accepted re-entry made lighter the same way, from the day it starts', () => {
     const easyWeek4 = strength(4, { 'back-squat': three(185, 5, 7) })
-    const lightened = (today: string) => strengthState(program, [CALIBRATION, easyWeek4], [], localDate(today), [5])
-    expect(lightened('2026-11-20').suggestions.map((s) => s.id)).toEqual(['ww-back-squat-w4'])
-    expect(lightened('2026-11-23').held.map((h) => h.landsOn)).toEqual(['2026-11-30'])
+    const lightened = (today: string) => strengthState(program, [CALIBRATION, easyWeek4], [], localDate(today), REENTRY)
+    expect(lightened('2026-11-24').suggestions.map((s) => s.id)).toEqual(['ww-back-squat-w4'])
+    expect(lightened('2026-11-25').held.map((h) => h.landsOn)).toEqual(['2026-11-30'])
     expect(lightened('2026-11-30').weights['back-squat']).toBe(190)
+  })
+
+  it('joins a re-entry to the Deload week after it', () => {
+    const lighter = [{ start: localDate('2026-12-03'), landsOn: localDate('2026-12-07') }]
+    const { held } = strengthState(program, [CALIBRATION, easyWeek6], [], localDate('2026-12-04'), lighter)
+    expect(held.map((h) => h.landsOn)).toEqual(['2026-12-14', '2026-12-14'])
   })
 
   it('holds an increase earned during the lighter Week until the Week after', () => {
     const easyWeek5 = strength(5, { 'back-squat': three(185, 5, 6) })
-    const { suggestions, held } = strengthState(program, [CALIBRATION, easyWeek5], [], localDate('2026-11-26'), [5])
+    const { suggestions, held } = strengthState(program, [CALIBRATION, easyWeek5], [], localDate('2026-11-26'), REENTRY)
     expect(suggestions).toEqual([])
     expect(held.map((h) => [h.suggestion.id, h.landsOn])).toEqual([['ww-back-squat-w5', '2026-11-30']])
   })

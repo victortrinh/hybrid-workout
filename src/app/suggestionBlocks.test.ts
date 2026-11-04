@@ -30,7 +30,7 @@ const reEntry: Suggestion = {
   date: TODAY,
   from: { volumePercent: 100 },
   to: { volumePercent: 67 },
-  trigger: { week: 5, skipped: [] },
+  trigger: { lastSession: localDate('2026-11-23'), days: 9 },
   decision: 'open',
   decidedOn: null,
 }

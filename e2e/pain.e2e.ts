@@ -17,7 +17,8 @@ const pick = (scope: Page | Locator, name: string) =>
 
 const WEEK_2 = [
   { week: 2, sessionId: '5k-test', date: '2026-11-03', status: 'done', resultSeconds: 23 * 60, environment: 'indoor' },
-  ...weekDone(2, ['strength', 'threshold', 'hyrox'], '2026-11-04'),
+  // Thursday: 6 days before Week 3's Wednesday, too recent for a re-entry.
+  ...weekDone(2, ['strength', 'threshold', 'hyrox'], '2026-11-05'),
 ] as const
 
 /** Shin 2 from Monday, outside any Session: still standing on Wednesday. */

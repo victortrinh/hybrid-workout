@@ -149,7 +149,7 @@ describe('each scenario falls where its name says', () => {
     expect(hard.map((l) => l.date).sort()).toEqual(['2026-11-16', '2026-11-17'])
   })
 
-  it('rollover: the Monday after a Week with misses, its Key session Late and Up next, Suggestions open', async () => {
+  it('rollover: the Monday after a week off, its Key session Late and Up next, Suggestions open', async () => {
     const d = await day('rollover')
     expect(d.position).toMatchObject({ kind: 'in-week', week: 6, daysLeft: 7 })
     expect(d.bucket[0]).toMatchObject({ week: 5, state: 'next', late: true })
@@ -173,13 +173,13 @@ describe('each scenario falls where its name says', () => {
         logs: d.state.sessionLogs,
         decisions: [
           ...d.state.suggestionDecisions,
-          { id: 're-entry-w6', decision, date: d.today, updatedAt: '2026-11-30T12:00:00.000Z' },
+          { id: 're-entry-w5', decision, date: d.today, updatedAt: '2026-11-30T12:00:00.000Z' },
         ],
       })
     const lighter = decided('accepted')
     expect(lighter.suggestions.filter((s) => s.kind === 'working-weight')).toEqual([])
     expect(lighter.heldIncreases.map((h) => h.suggestion.id)).toEqual(lifts)
-    // Week 7 is a Deload week: they land after it, on Week 8's Monday.
+    // Lighter from today to next Monday, then Week 7, a Deload week: they land after it, on Week 8's Monday.
     expect(new Set(lighter.heldIncreases.map((h) => h.landsOn))).toEqual(new Set(['2026-12-14']))
     const full = decided('kept')
     expect(full.suggestions.filter((s) => s.kind === 'working-weight').map((s) => s.id)).toEqual(lifts)

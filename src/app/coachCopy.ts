@@ -32,12 +32,11 @@ export function suggestionCopy(s: Suggestion): SuggestionCopy {
   switch (s.kind) {
     case 're-entry': {
       const cut = s.from.volumePercent - s.to.volumePercent
-      const skipped = s.trigger.skipped.map((x) => SESSION_TYPES[x.type].name)
       return {
-        line: `${plural(skipped.length, 'Session')} skipped last Week. Full volume now is how calves file complaints. Week ${s.week} goes ${cut}% lighter.`,
-        why: `Week ${s.trigger.week}: ${list(skipped)} skipped · every Prescription this Week at ${s.to.volumePercent}%`,
+        line: `Welcome back. Full volume now is how calves file complaints. The rest of Week ${s.week} goes ${cut}% lighter.`,
+        why: `${s.trigger.days} days since your last Session · every Prescription left in Week ${s.week} at ${s.to.volumePercent}%`,
         keep: 'Keep full volume',
-        accepted: `Done. Week ${s.week} is ${cut}% lighter. Ease in, then get greedy again.`,
+        accepted: `Done. The rest of Week ${s.week} is ${cut}% lighter. Ease in, then get greedy again.`,
         kept: 'Keeping full volume. Your call. Your calves.',
       }
     }

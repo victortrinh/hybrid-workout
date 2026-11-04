@@ -8,7 +8,7 @@
  */
 import { localDate, type LocalDate } from './calendar'
 import type { PainArea, PainLevel } from './pain'
-import type { LiftId, SessionType } from './program/types'
+import type { LiftId } from './program/types'
 import type { ShortSleepCut } from './recovery'
 
 export const DECISIONS = ['open', 'accepted', 'kept'] as const
@@ -26,7 +26,7 @@ export interface SuggestionDecision {
   updatedAt: string
 }
 
-/** A lighter re-entry Week after two or more Skipped Sessions. */
+/** The rest of a Week lighter, coming back after 7 or more days with no Done or Partial Session. */
 export interface ReEntrySuggestion {
   id: string
   kind: 're-entry'
@@ -34,15 +34,16 @@ export interface ReEntrySuggestion {
   week: number
   /** The Session it changes; null for every Session of the Week. */
   sessionId: string | null
-  /** The day the change applies from: the Week's Monday. */
+  /** The day the change applies from: the day the athlete came back. */
   date: LocalDate
   /** Share of the Program's volume, in percent. */
   from: { volumePercent: number }
   to: { volumePercent: number }
   trigger: {
-    /** The Week the Sessions were Skipped in. */
-    week: number
-    skipped: { sessionId: string; type: SessionType }[]
+    /** The last day trained before the gap. */
+    lastSession: LocalDate
+    /** Days from it to `date`. */
+    days: number
   }
   decision: Decision
   /** When the decision was made; null while nobody has decided. */

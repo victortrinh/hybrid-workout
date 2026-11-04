@@ -3,50 +3,48 @@ import { expectNoAxeViolations } from './axe'
 import { caughtUpOnServer, seedLogs } from './history'
 
 /**
- * Each project gets a pair of Weeks no other test reads: the phone skips two
- * Sessions in Week 11 (a Deload) and comes back in Week 12; desktop skips in
- * Week 17 and comes back in Week 18.
+ * Each project gets a pair of Weeks no other test reads: the phone trains
+ * Week 11 (a Deload) through Thursday and comes back 7 days later in Week 12;
+ * desktop does the same with Weeks 17 and 18.
  */
 const SCENARIO = {
   phone: {
-    skipped: 11,
+    before: 11,
     back: 12,
     logs: [
       { sessionId: 'speed', date: '2027-01-04', status: 'done' },
       { sessionId: 'strength', date: '2027-01-05', status: 'done' },
-      { sessionId: 'easy-deload', date: '2027-01-06', status: 'skipped' },
-      { sessionId: 'hyrox', date: '2027-01-07', status: 'skipped' },
+      { sessionId: 'easy-deload', date: '2027-01-06', status: 'done' },
+      { sessionId: 'hyrox', date: '2027-01-07', status: 'partial' },
     ],
-    names: 'Easy run and HYROX',
-    tuesday: '2027-01-12',
+    thursday: '2027-01-14',
     speed: '3 × 5′',
     lighter: '2 × 5′',
   },
   desktop: {
-    skipped: 17,
+    before: 17,
     back: 18,
     logs: [
       { sessionId: 'speed', date: '2027-02-15', status: 'done' },
-      { sessionId: 'strength', date: '2027-02-16', status: 'skipped' },
-      { sessionId: 'threshold', date: '2027-02-17', status: 'skipped' },
-      { sessionId: 'race-simulation', date: '2027-02-18', status: 'done' },
+      { sessionId: 'strength', date: '2027-02-16', status: 'done' },
+      { sessionId: 'threshold', date: '2027-02-17', status: 'done' },
+      { sessionId: 'race-simulation', date: '2027-02-18', status: 'partial' },
     ],
-    names: 'Strength and Threshold',
-    tuesday: '2027-02-23',
+    thursday: '2027-02-25',
     speed: '5 × 3′',
     lighter: '3 × 3′',
   },
 } as const
 
-test('two Skipped Sessions bring a lighter Week: Accept lightens it, Undo restores it', async ({ page, request }, testInfo) => {
+test('7 days without training bring a lighter Week: Accept lightens it, Undo restores it', async ({ page, request }, testInfo) => {
   const s = SCENARIO[testInfo.project.name as keyof typeof SCENARIO]
   await seedLogs(
     request,
     testInfo.project.name,
-    s.logs.map((l) => ({ ...l, week: s.skipped })),
+    s.logs.map((l) => ({ ...l, week: s.before })),
   )
-  await caughtUpOnServer(page, s.skipped)
-  await page.clock.setFixedTime(new Date(`${s.tuesday}T12:00:00-05:00`))
+  await caughtUpOnServer(page, s.before)
+  await page.clock.setFixedTime(new Date(`${s.thursday}T12:00:00-05:00`))
   await page.goto('/')
 
   const upNext = page.getByRole('heading', { level: 1 })
@@ -56,15 +54,15 @@ test('two Skipped Sessions bring a lighter Week: Accept lightens it, Undo restor
 
   await expect(upNext).toHaveText(`Speed, ${s.speed}`)
   await expect(suggestion).toContainText(
-    `2 Sessions skipped last Week. Full volume now is how calves file complaints. Week ${s.back} goes 33% lighter.`,
+    `Welcome back. Full volume now is how calves file complaints. The rest of Week ${s.back} goes 33% lighter.`,
   )
-  await expect(suggestion).toContainText(`Week ${s.skipped}: ${s.names} skipped`)
+  await expect(suggestion).toContainText('7 days since your last Session')
   await expectNoAxeViolations(page)
 
   await suggestion.getByRole('button', { name: 'Accept' }).click()
   await expect(upNext).toHaveText(`Speed, ${s.lighter}`)
   await expect(speedRow).toContainText(bare(s.lighter))
-  await expect(suggestion).toContainText(`Done. Week ${s.back} is 33% lighter.`)
+  await expect(suggestion).toContainText(`Done. The rest of Week ${s.back} is 33% lighter.`)
   await expectNoAxeViolations(page)
 
   // Stored and synced: it survives a reload and the API returns it.
@@ -72,7 +70,7 @@ test('two Skipped Sessions bring a lighter Week: Accept lightens it, Undo restor
   await expect(upNext).toHaveText(`Speed, ${s.lighter}`)
   const state = await (await request.get('/api/state')).json()
   expect(state.suggestionDecisions).toContainEqual(
-    expect.objectContaining({ id: `re-entry-w${s.back}`, decision: 'accepted', date: s.tuesday }),
+    expect.objectContaining({ id: `re-entry-w${s.back}`, decision: 'accepted', date: s.thursday }),
   )
 
   await suggestion.getByRole('button', { name: 'Undo' }).click()
