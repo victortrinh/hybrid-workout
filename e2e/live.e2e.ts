@@ -768,6 +768,8 @@ test('by-feel reps show the speed logged last time, and the question at the end 
   const sent = await serveHistory(page, [WEEK_1_SPEED, ...WEEK_2])
   await page.clock.install({ time: aMinuteBefore(WEEK_3) })
   await page.goto('/')
+  // The history in before the pause: skipping a minute ahead would time out a sync still on its way.
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Speed, 5 × 3′')
   await page.clock.pauseAt(WEEK_3)
   const s = await toRep1(page)
 
@@ -803,6 +805,8 @@ test('outdoors, last time reads as a pace per km, converted from the treadmill',
   await page.addInitScript(() => localStorage.setItem('compromised:environment', JSON.stringify({ '3/speed': 'outdoor' })))
   await page.clock.install({ time: aMinuteBefore(WEEK_3) })
   await page.goto('/')
+  // The history in before the pause: skipping a minute ahead would time out a sync still on its way.
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Speed, 5 × 3′')
   await page.clock.pauseAt(WEEK_3)
   const s = await toRep1(page)
 

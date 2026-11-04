@@ -26,8 +26,16 @@ A numbered Monday–Sunday period of the Program, counted back from Race day.
 _Avoid_: microcycle
 
 **Bucket**:
-The set of Sessions a Week prescribes, done on any day and in any order within that Week. A Session may also be done early or late, outside its Week; it still counts for its own Week.
+The set of Sessions a Week prescribes, done on any day and in any order within that Week. A Session may also be done early or late, outside its Week; it still counts for its own Week. In Catch-up, the Late sessions come first in it.
 _Avoid_: schedule, calendar
+
+**Catch-up**:
+While a Week that is over still holds a required Session with no log, Up next comes from the oldest such Week instead of the Week holding today, until the athlete has caught up or Race specific starts, when the ones still late are dropped as Coach-Skipped (ADR-0007).
+_Avoid_: backlog, behind mode
+
+**Late session**:
+A required Session with no log in a Week that is over. It waits in Catch-up rather than being missed; one logged Skipped is not Late.
+_Avoid_: overdue, missed (a Late session isn't missed yet)
 
 **Deload week**:
 A Week whose Prescriptions are reduced by roughly a third to let fatigue clear.
@@ -51,10 +59,10 @@ Speed, Strength, Threshold, HYROX, Easy run, 5K test or Race simulation.
 Any Session type other than Easy run; two Hard sessions should not fall on consecutive days when avoidable.
 
 **Key session**:
-The one Session in a Week that may carry over up to three days into the next Week if not done (a 5K test, a Race simulation, or the Week's designated priority).
+The one Session in a Week the Coach puts first in its Bucket (a 5K test, a Race simulation, or the Week's designated priority). Not done by Sunday, it is a Late session like any other.
 
 **Optional session**:
-The Easy run in a Bucket; it never carries over and missing it is not a miss.
+The Easy run in a Bucket; it is never a Late session and missing it is not a miss.
 
 **Session status**:
 Planned, Done, Partial, Skipped or Swapped.
