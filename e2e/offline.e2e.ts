@@ -72,9 +72,10 @@ test('a Session logged with no signal syncs once back online, and another browse
   await expect(row(page)).toHaveText(new RegExp(`^${session}.*Done, Wed$`))
   await expect(waiting).toBeVisible()
 
-  // Signal again: it syncs on its own and the indicator goes quiet.
-  await context.setOffline(false)
+  // Signal again: it syncs on its own and the indicator goes quiet. The route opens
+  // first, so the sync the `online` event starts isn't aborted (the next try is 30 s off).
   network.offline = false
+  await context.setOffline(false)
   await expect(waiting).toBeHidden()
 
   // Another browser, which has never seen this phone, gets it from the server.

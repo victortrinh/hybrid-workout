@@ -4,7 +4,7 @@
  * Sessions. Pure: no I/O, no clock.
  */
 import { addDays, daysBetween, localDateIn, type LocalDate } from './calendar'
-import { findWeek, programStart } from './coach'
+import { findWeek, programStart, raceSpecificStart } from './coach'
 import { trained, type SessionLog } from './log'
 import type { Environment } from './paces'
 import type { Program, Session, SessionType } from './program/types'
@@ -259,8 +259,8 @@ export type ActivityOutcome =
  * Matches each Activity to a Session by date and Session type. The athlete's
  * answers come first. Then, in start order, an Activity attaches to the one
  * fitting Session logged as trained on its day, of any Week (done early or
- * late), or, with none logged that day, the one fitting Session of its own
- * Week still Planned. With more than one logged that day, the one whose Live
+ * late), or, with none logged that day, the one fitting Session still
+ * Planned in its own Week or Late from an earlier one (ADR-0007). With more than one logged that day, the one whose Live
  * session overlaps the Activity in time wins; otherwise it asks. A Session
  * takes at most one Activity.
  */
@@ -299,10 +299,13 @@ export function matchActivities(
         if (overlaps(activity, l)) overlapping.set(`${l.week}/${session.id}`, { week: l.week, session })
       }
     }
+    const open = (week: number, session: Session) =>
+      fits(week, session) && !logs.some((l) => l.week === week && l.sessionId === session.id)
     const week = weekOn(program, activity.date)
-    const planned = (week?.sessions ?? [])
-      .filter((s) => fits(week!.number, s) && !logs.some((l) => l.week === week!.number && l.sessionId === s.id))
-      .map((session) => ({ week: week!.number, session }))
+    const planned = [
+      ...(week ? lateBefore(program, week.number, activity.date).filter((c) => open(c.week, c.session)) : []),
+      ...(week?.sessions ?? []).filter((s) => open(week!.number, s)).map((session) => ({ week: week!.number, session })),
+    ]
     const candidates =
       doneThatDay.size > 1 && overlapping.size === 1
         ? [...overlapping.values()]
@@ -371,6 +374,20 @@ function overlaps(activity: Activity, log: SessionLog): boolean {
   const from = Date.parse(activity.startedAt)
   const to = from + activity.minutes * 60_000
   return Number.isFinite(end) && Number.isFinite(from) && start < to && from < end
+}
+
+/**
+ * The Sessions that can be Late on `date` in the Weeks before `current`,
+ * oldest Week first: the required ones, not pinned to a day. Any log closes
+ * one, and from the first day of Race specific none is Late: the Coach
+ * Skipped them.
+ */
+function lateBefore(program: Program, current: number, date: LocalDate): Candidate[] {
+  if (daysBetween(raceSpecificStart(program), date) >= 0) return []
+  return program.phases
+    .flatMap((phase) => phase.weeks)
+    .filter((week) => week.number < current)
+    .flatMap((week) => week.sessions.filter((s) => !s.optional && !s.date).map((session) => ({ week: week.number, session })))
 }
 
 /** The Week holding `date`, if the Program has encoded it. */

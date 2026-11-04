@@ -49,6 +49,54 @@ test('serves the Late sessions first, says how far behind, and still lets a curr
   await expect(page.getByText('2 Sessions behind · Week 1')).toBeVisible()
 })
 
+/**
+ * A watch run on the Week 2 Tuesday fits both Week 1's Late Threshold and
+ * Week 2's own: Today asks, naming each with its Week, and the answer
+ * attaches it to the Late row.
+ */
+test('asks which Week’s Session a watch workout was when it fits a Late one and a current one', async ({ page }) => {
+  const activityAnswers: Record<string, unknown>[] = []
+  await serveHistory(
+    page,
+    [
+      ...['speed', 'strength', 'hyrox'].map((sessionId) => ({ week: 1, sessionId, date: '2026-10-27', status: 'done' as const })),
+      ...['5k-test', 'easy'].map((sessionId) => ({ week: 2, sessionId, date: '2026-11-02', status: 'done' as const })),
+    ],
+    [],
+    {
+      activities: [
+        {
+          id: '2026-11-03T12:00:00Z',
+          date: '2026-11-03',
+          startedAt: '2026-11-03T12:00:00Z',
+          workoutType: 'Running',
+          kind: 'run',
+          minutes: 40,
+          distanceMeters: 8000,
+          averageHeartRate: null,
+          maxHeartRate: null,
+          indoor: false,
+          receivedAt: '2026-11-03T13:00:00.000Z',
+        },
+      ],
+      activityAnswers,
+    },
+  )
+  await page.clock.setFixedTime(WEEK_2_TUESDAY)
+  await page.goto('/')
+
+  const question = page.getByRole('region', { name: 'Which Session was this?' })
+  await expect(question.getByRole('button')).toHaveText(['Threshold · Week 1', 'Threshold · Week 2', 'None of these'])
+  await expectNoAxeViolations(page)
+
+  await question.getByRole('button', { name: 'Threshold · Week 1' }).click()
+  await expect(question).toHaveCount(0)
+  await expect.poll(() => activityAnswers.at(-1)).toMatchObject({ week: 1, sessionId: 'threshold' })
+  await expect(page.getByRole('region', { name: 'From the watch' })).toContainText('Threshold it was. Not logged yet.')
+  const bucket = page.getByRole('list').filter({ hasText: '5K test' })
+  await expect(bucket.getByRole('listitem').first()).toHaveText(/^Threshold.*Week\s1\s·\sLate.*Watch/)
+})
+
 /** Monday 22 March 2027: Week 22, the first day of Race specific. */
 const RACE_SPECIFIC_MONDAY = new Date('2027-03-22T12:00:00-04:00')
 

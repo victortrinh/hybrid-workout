@@ -719,7 +719,7 @@ function WhichSession({
             // With a guess, it leads in link blue and the others step back to ink.
             className={!guess || c === guess ? linkButton : `${quietButton} underline decoration-1 underline-offset-4`}
           >
-            {SESSION_TYPES[c.session.type].name}
+            {candidateName(question, c)}
           </Button>
         ))}
         <Button onPress={() => onAnswer(null, null)} className={quietButton}>
@@ -730,12 +730,19 @@ function WhichSession({
   )
 }
 
+/** A candidate's Session type, with its Week when the question spans a Late session's Week and the current one. */
+function candidateName({ candidates }: ActivityQuestion, candidate: ActivityQuestion['candidates'][number]): string {
+  const name = SESSION_TYPES[candidate.session.type].name
+  return candidates.some((c) => c.week !== candidate.week) ? `${name} · Week ${candidate.week}` : name
+}
+
 /** Why the Coach guessed what it did: the heart rate when the watch has one, else the minutes. */
-function guessLine({ activity, candidates }: ActivityQuestion, guess: ActivityQuestion['candidates'][number]): string {
-  const name = SESSION_TYPES[guess.session.type].name
+function guessLine(question: ActivityQuestion, guess: ActivityQuestion['candidates'][number]): string {
+  const { activity, candidates } = question
+  const name = candidateName(question, guess)
   const next = candidates.find((c) => c !== guess)!
   return activity.averageHeartRate !== null
-    ? `The Coach’s guess: ${name}. ${activity.minutes} min at ${activity.averageHeartRate} bpm is no ${SESSION_TYPES[next.session.type].name}.`
+    ? `The Coach’s guess: ${name}. ${activity.minutes} min at ${activity.averageHeartRate} bpm is no ${candidateName(question, next)}.`
     : `The Coach’s guess: ${name}. ${activity.minutes} min is closest to its ${guess.session.minutes}.`
 }
 
