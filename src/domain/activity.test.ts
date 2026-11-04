@@ -355,6 +355,20 @@ describe('matchActivities in Catch-up (ADR-0007)', () => {
     ])
   })
 
+  it('offers nothing Late from the first day of Race specific: the Coach has Skipped it', () => {
+    // Week 21 (15 to 21 March 2027) never logged; Week 22 opens Race specific on 22 March.
+    const raceSpecific = (iso: string) => {
+      const weeks = Array.from({ length: 20 }, (_, i) => findWeek(program, i + 1)!)
+      const logs = weeks.flatMap((w) =>
+        w.sessions.filter((s) => !s.optional).map((s) => ({ ...log(s.id, w.startDate, 'swapped'), week: w.number })),
+      )
+      const [outcome] = matchActivities(program, [run(iso)], logs, [])
+      return outcome.state === 'ambiguous' ? outcome.candidates.map((c) => c.week) : outcome.state
+    }
+    expect(raceSpecific('2027-03-21T07:00:00-04:00')).toEqual(expect.arrayContaining([21]))
+    expect(raceSpecific('2027-03-22T07:00:00-04:00')).not.toContain(21)
+  })
+
   it('reads Late as of the workout’s day: a Week 2 Session is not Late during Week 2', () => {
     const logs = caughtUp.filter((l) => l.week === 1)
     const [outcome] = matchActivities(program, [run('2026-11-04T07:00:00-05:00')], logs, [])

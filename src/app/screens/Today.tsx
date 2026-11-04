@@ -8,6 +8,7 @@ import type {
   ActivityQuestion,
   BucketEntry,
   CoachDay,
+  Dropped,
   PhaseProgress,
   RestAnyway,
   RestReason,
@@ -24,6 +25,7 @@ import type { ServerTrouble } from '../sync/syncer'
 import type { Decision, Suggestion, WorkingWeightSuggestion } from '../../domain/suggestion'
 import { heldCopy, liftChange, liftsCopy, suggestionBlocks, VISIBLE_BLOCKS, type SuggestionBlock } from '../suggestionBlocks'
 import {
+  droppedLine,
   outsideWeekLine,
   painLine,
   recoveryWhy,
@@ -81,6 +83,7 @@ export function Today({
   onSettings,
   startingPoint,
   onDecide,
+  onDismissDropped,
   live,
   onStart,
   onSomethingHurts,
@@ -107,6 +110,8 @@ export function Today({
   onPick: (week: number, sessionId: string) => void
   /** Accepts, Keeps or (with 'open') undoes a Suggestion. */
   onDecide: (suggestions: Suggestion | Suggestion[], decision: Decision) => void
+  /** Dismisses the notice of the Late sessions Race specific dropped: it doesn't return. */
+  onDismissDropped: () => void
   /** How a Session's runs read today: exact speeds or paces once there is a 5K test. */
   runContext: (week: number, session: Session) => RunContext
   /** Overrides the month's Environment for one Session. */
@@ -189,6 +194,7 @@ export function Today({
             error={error}
             server={server}
             onDecide={onDecide}
+            onDismissDropped={onDismissDropped}
             runContext={runContext}
             onEnvironment={onEnvironment}
             live={live}
@@ -366,6 +372,7 @@ function UpNext({
   error,
   server,
   onDecide,
+  onDismissDropped,
   runContext,
   onEnvironment,
   live,
@@ -385,6 +392,7 @@ function UpNext({
   error: string | null
   server: ServerTrouble | null
   onDecide: (suggestions: Suggestion | Suggestion[], decision: Decision) => void
+  onDismissDropped: () => void
   runContext: (week: number, session: Session) => RunContext
   onEnvironment: (week: number, session: Session, environment: Environment) => void
   live: LiveSession | null
@@ -576,6 +584,7 @@ function UpNext({
       )}
       {!asking && <SomethingHurts previous={previousPain} onReport={onSomethingHurts} />}
       <SyncLine pending={pending} error={error} server={server} />
+      {day.dropped && <DroppedNote dropped={day.dropped} onDismiss={onDismissDropped} />}
       <CoachSuggestions
         // While the pain step asks, it carries the pain Suggestion: asked once, not twice.
         day={asking && painSuggestion ? { ...day, suggestions: day.suggestions.filter((s) => s !== painSuggestion) } : day}
@@ -886,6 +895,19 @@ function LiftsNote({
           ))}
         </ul>
       )}
+    </section>
+  )
+}
+
+/** Race specific starts on time: the Late sessions it dropped, said once until dismissed (ADR-0007). */
+function DroppedNote({ dropped, onDismiss }: { dropped: Dropped; onDismiss: () => void }) {
+  return (
+    <section aria-label="From the Coach" className="mt-[18px] border-t-2 border-t-ink py-3.5 desktop:border-b desktop:border-b-rule">
+      <p className="text-[17px] leading-[1.3] font-semibold">{nb(droppedLine(dropped))}</p>
+      <p className="mt-1 text-[14px] text-muted">{nb('Race day doesn’t move. From here the calendar sets the Week again.')}</p>
+      <Button onPress={onDismiss} className={`mt-2.5 ${quietButton}`}>
+        Got it
+      </Button>
     </section>
   )
 }

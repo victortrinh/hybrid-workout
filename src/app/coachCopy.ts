@@ -7,7 +7,7 @@ import { PAIN_AREA_LABEL, PAIN_REPS_PERCENT, type PainLevel } from '../domain/pa
 import { clock } from '../domain/paces'
 import { describeSession, LIFT_NAME, SESSION_TYPES } from '../domain/program/describe'
 import { program } from '../domain/program/program'
-import type { RestAnyway, RestReason } from '../domain/coach'
+import type { Dropped, RestAnyway, RestReason } from '../domain/coach'
 import type { Session } from '../domain/program/types'
 import { CUT_NOUN, EASY_DAY_MINUTES, SLEEP_RPE_CAP, sleepText, type ShortSleepCut } from '../domain/recovery'
 import { GOAL_LABEL, GOAL_SECONDS } from '../domain/progress'
@@ -147,6 +147,12 @@ export function waitingLine(session: Session, date: LocalDate, today: LocalDate)
   const what = session.id === 'race' ? 'The race' : describeSession(session).heading
   const when = daysBetween(today, date) === 1 ? 'tomorrow' : weekday(date)
   return `${what} is ${when}. Save it for that.`
+}
+
+/** Today's line, once, as Race specific drops what was still Late: "3 Sessions from Weeks 14–15 dropped…" */
+export function droppedLine({ sessions, firstWeek, lastWeek }: Dropped): string {
+  const weeks = firstWeek === lastWeek ? `Week ${firstWeek}` : `Weeks ${firstWeek}–${lastWeek}`
+  return `${plural(sessions, 'Session')} from ${weeks} dropped to keep Race specific on schedule.`
 }
 
 /** A rest from the spacing rules: the Coach suggests it, the athlete can do the Session anyway (ADR-0007). */

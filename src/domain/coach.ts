@@ -169,6 +169,8 @@ export interface CoachDay {
   bucket: BucketEntry[]
   /** In Catch-up: how many Late sessions wait, and the oldest Week they're from. Null when nothing is late. */
   behind: { sessions: number; week: number } | null
+  /** From the first day of Race specific, the Late sessions it dropped, said once: null when none, or once dismissed. */
+  dropped: Dropped | null
   /** The one Session to do today. Null before the Program starts, after it ends, and on a rest day. */
   upNext: Session | null
   /** Why `upNext` is null while in a Week. */
@@ -217,6 +219,18 @@ export interface CoachDay {
    */
   activitiesAttached: ActivityAttached[]
 }
+
+/** The Late sessions Coach-Skipped when Race specific started, and the Weeks they came from (ADR-0007). */
+export interface Dropped {
+  /** The id its dismissal is stored under, like a Suggestion's decision. */
+  id: string
+  sessions: number
+  firstWeek: number
+  lastWeek: number
+}
+
+/** The id the dismissal of the Race specific notice is stored under. */
+export const DROPPED_ID = 'dropped-race-specific'
 
 export interface StandingPain {
   report: PainReport
@@ -296,6 +310,7 @@ export function coach({
       toDo: toDo(entry),
     })),
     behind: lateOpen.length > 0 ? { sessions: lateOpen.length, week: lateOpen[0].week } : null,
+    dropped: droppedFor(program, logs, decisions, today),
     upNext: upNext?.session ?? null,
     rest,
     fiveKTest,
@@ -345,7 +360,8 @@ const toDo = ({ session, log, late }: Pick<Logged, 'session' | 'log' | 'late'>) 
  * Catch-up (ADR-0007): the required Sessions of the Weeks before `current`
  * with no log, oldest Week first, each with its own Week's Prescription. One
  * logged today stays, with its log, until tomorrow. The Optional session is
- * never Late.
+ * never Late, and from the first day of Race specific nothing is: the
+ * calendar takes over again.
  */
 function lateSessions(
   program: Program,
@@ -355,6 +371,7 @@ function lateSessions(
   equipment: readonly Equipment[],
   today: LocalDate,
 ): Logged[] {
+  if (calendarAgain(program, today)) return []
   return program.phases
     .flatMap((phase) => phase.weeks)
     .filter((week) => week.number < current)
@@ -373,6 +390,46 @@ function lateSessions(
         log: logFor(logs, week.number, session.id),
       }))
     })
+}
+
+/**
+ * Race day doesn't move, so Catch-up stops on the first Monday of Race
+ * specific: from that day a Session not done by its Week's Sunday is missed,
+ * Skipped by the Coach (ADR-0007).
+ */
+export function raceSpecificStart(program: Program): LocalDate {
+  const phase = program.phases.find((p) => p.id === 'race-specific')!
+  return addDays(programStart(program), 7 * (phase.firstWeek - 1))
+}
+
+const calendarAgain = (program: Program, today: LocalDate) => daysBetween(raceSpecificStart(program), today) >= 0
+
+/** The Late sessions Race specific dropped: the Coach's Skips in the Weeks before it. Null once dismissed. */
+function droppedFor(
+  program: Program,
+  logs: SessionLog[],
+  decisions: SuggestionDecision[],
+  today: LocalDate,
+): Dropped | null {
+  if (!calendarAgain(program, today)) return null
+  const dismissed = decisionFor(decisions, DROPPED_ID)
+  if (dismissed && dismissed.decision !== 'open') return null
+  const start = raceSpecificStart(program)
+  const weeks = program.phases
+    .flatMap((phase) => phase.weeks)
+    .filter((week) => daysBetween(week.startDate, start) > 0)
+    .map((week) => ({
+      week: week.number,
+      sessions: weekOutcome(program, week, logs, start).skipped.filter((s) => s.by === 'coach').length,
+    }))
+    .filter((w) => w.sessions > 0)
+  if (weeks.length === 0) return null
+  return {
+    id: DROPPED_ID,
+    sessions: weeks.reduce((sum, w) => sum + w.sessions, 0),
+    firstWeek: weeks[0].week,
+    lastWeek: weeks.at(-1)!.week,
+  }
 }
 
 /** Week 1's Monday: Race week's Monday, counted back `weekCount - 1` Weeks. */
@@ -566,25 +623,31 @@ function oldestWaiting(entries: Logged[]): Logged {
 
 // ---------------------------------------------------------------------------
 // Week rollover: a Week that is over keeps its required Sessions with no log
-// as Late sessions (Catch-up, ADR-0007); only the athlete's Skips are misses.
+// as Late sessions (Catch-up, ADR-0007), and only the athlete's Skips are
+// misses, until Race specific starts: from then on the Coach Skips them.
 
 export interface WeekOutcome {
   /**
-   * Missed Sessions, once the Week is over: logged Skipped by the athlete. The
-   * Optional session is never a miss, and a Session with no log is Late, not missed.
+   * Missed Sessions, once the Week is over: logged Skipped by the athlete, or,
+   * from the first day of Race specific, never logged and Skipped by the Coach.
+   * The Optional session is never a miss; before Race specific a Session with
+   * no log is Late, not missed.
    */
   skipped: { session: Session; by: 'athlete' | 'coach' }[]
 }
 
 /** What a Week missed, as of `today`. */
-export function weekOutcome(_program: Program, week: Week, logs: SessionLog[], today: LocalDate): WeekOutcome {
+export function weekOutcome(program: Program, week: Week, logs: SessionLog[], today: LocalDate): WeekOutcome {
   const over = daysBetween(addDays(week.startDate, 6), today) > 0
   const outcome: WeekOutcome = { skipped: [] }
   if (!over) return outcome
+  const calendar = calendarAgain(program, today)
   for (const session of week.sessions) {
     if (session.optional) continue
+    const log = logFor(logs, week.number, session.id)
     // Skipped can still be done until the Week is over.
-    if (logFor(logs, week.number, session.id)?.status === 'skipped') outcome.skipped.push({ session, by: 'athlete' })
+    if (log?.status === 'skipped') outcome.skipped.push({ session, by: 'athlete' })
+    else if (!log && calendar) outcome.skipped.push({ session, by: 'coach' })
   }
   return outcome
 }

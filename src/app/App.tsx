@@ -4,7 +4,7 @@ import { addDays } from '../domain/calendar'
 import { nowDate, nowMs } from '../domain/clock'
 import { Link, RouterProvider } from 'react-aria-components'
 import { motion } from 'motion/react'
-import { coach, findWeek, prescribedWeek, type CoachDay } from '../domain/coach'
+import { coach, DROPPED_ID, findWeek, prescribedWeek, type CoachDay } from '../domain/coach'
 import { liftsLog, startLifts } from '../domain/lifts'
 import { liveLog, loggedSpeeds, startRun } from '../domain/live'
 import { logDays, logFor, type SessionLog } from '../domain/log'
@@ -218,6 +218,11 @@ export function App() {
       }),
     )
   }
+  /** The notice of the Late sessions Race specific dropped, stored like a decision so it stays dismissed on every device. */
+  const dismissDropped = () => {
+    const previous = decisions.find((d) => d.id === DROPPED_ID)
+    decide({ id: DROPPED_ID, decision: 'kept', date: today, updatedAt: editedAt(previous?.updatedAt) })
+  }
   const route = useRoute()
   const entrances = useEntrances()
   /** The watch's workout attached to a Session, from the same matching Today shows. */
@@ -309,6 +314,7 @@ export function App() {
               server={server}
               onPick={(weekNumber, sessionId) => pick(weekNumber, sessionId, today)}
               onDecide={decideSuggestion}
+              onDismissDropped={dismissDropped}
               runContext={runContext}
               onEnvironment={setEnvironment}
               settings={settings}

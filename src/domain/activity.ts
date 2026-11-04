@@ -4,7 +4,7 @@
  * Sessions. Pure: no I/O, no clock.
  */
 import { addDays, daysBetween, localDateIn, type LocalDate } from './calendar'
-import { findWeek, programStart } from './coach'
+import { findWeek, programStart, raceSpecificStart } from './coach'
 import { trained, type SessionLog } from './log'
 import type { Environment } from './paces'
 import type { Program, Session, SessionType } from './program/types'
@@ -303,7 +303,7 @@ export function matchActivities(
       fits(week, session) && !logs.some((l) => l.week === week && l.sessionId === session.id)
     const week = weekOn(program, activity.date)
     const planned = [
-      ...(week ? lateBefore(program, week.number).filter((c) => open(c.week, c.session)) : []),
+      ...(week ? lateBefore(program, week.number, activity.date).filter((c) => open(c.week, c.session)) : []),
       ...(week?.sessions ?? []).filter((s) => open(week!.number, s)).map((session) => ({ week: week!.number, session })),
     ]
     const candidates =
@@ -377,10 +377,13 @@ function overlaps(activity: Activity, log: SessionLog): boolean {
 }
 
 /**
- * The Sessions that can be Late in the Weeks before `current`, oldest Week
- * first: the required ones, not pinned to a day. Any log closes one.
+ * The Sessions that can be Late on `date` in the Weeks before `current`,
+ * oldest Week first: the required ones, not pinned to a day. Any log closes
+ * one, and from the first day of Race specific none is Late: the Coach
+ * Skipped them.
  */
-function lateBefore(program: Program, current: number): Candidate[] {
+function lateBefore(program: Program, current: number, date: LocalDate): Candidate[] {
+  if (daysBetween(raceSpecificStart(program), date) >= 0) return []
   return program.phases
     .flatMap((phase) => phase.weeks)
     .filter((week) => week.number < current)

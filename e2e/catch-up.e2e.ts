@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { expectNoAxeViolations } from './axe'
-import { serveHistory } from './history'
+import { caughtUp, serveHistory } from './history'
 import { doToday } from './today'
 
 /** Tuesday 3 November 2026, Week 2. */
@@ -95,4 +95,47 @@ test('asks which Week’s Session a watch workout was when it fits a Late one an
   await expect(page.getByRole('region', { name: 'From the watch' })).toContainText('Threshold it was. Not logged yet.')
   const bucket = page.getByRole('list').filter({ hasText: '5K test' })
   await expect(bucket.getByRole('listitem').first()).toHaveText(/^Threshold.*Week\s1\s·\sLate.*Watch/)
+})
+
+/** Monday 22 March 2027: Week 22, the first day of Race specific. */
+const RACE_SPECIFIC_MONDAY = new Date('2027-03-22T12:00:00-04:00')
+
+/**
+ * Race day doesn't move (ADR-0007): on the first Monday of Race specific the
+ * Sessions still Late are dropped, said once, and Up next is Week 22's.
+ */
+test('drops what is still Late as Race specific starts, and says so once', async ({ page }) => {
+  // Week 20's Threshold and Race simulation and Week 21's HYROX never logged.
+  const decisions: Record<string, unknown>[] = []
+  await serveHistory(
+    page,
+    caughtUp(19, [
+      { week: 20, sessionId: 'speed', date: '2027-03-08', status: 'done' },
+      { week: 20, sessionId: 'strength', date: '2027-03-10', status: 'done' },
+      ...['speed', 'strength', 'easy-deload'].map((sessionId) => ({
+        week: 21,
+        sessionId,
+        date: '2027-03-16',
+        status: 'done' as const,
+      })),
+    ]),
+    [],
+    { suggestionDecisions: decisions },
+  )
+  await page.clock.setFixedTime(RACE_SPECIFIC_MONDAY)
+  await page.goto('/')
+
+  const notice = page.getByText('3 Sessions from Weeks 20–21 dropped to keep Race specific on schedule.')
+  await expect(notice).toBeVisible()
+  await expect(page.getByText(/Sessions? behind/)).toHaveCount(0)
+  await expect(page.locator('p', { hasText: /· Late/ })).toHaveCount(0)
+  const bucket = page.getByRole('list').filter({ hasText: 'Strength' })
+  await expect(bucket.getByRole('listitem').first()).toHaveText(/^Speed.*Next$/)
+  await expectNoAxeViolations(page)
+
+  await page.getByRole('button', { name: 'Got it' }).click()
+  await expect(notice).toHaveCount(0)
+  await page.reload()
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+  await expect(notice).toHaveCount(0)
 })
