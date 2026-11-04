@@ -1,11 +1,12 @@
 import { expect, test } from '@playwright/test'
 import { expectNoAxeViolations } from './axe'
+import { caughtUpOnServer } from './history'
 
 /**
  * Logs a 5K test to the shared e2e database. Paces come from the latest test
  * on or before today, so each project takes a 5K test Week no other test
- * reaches: the phone Week 16, desktop Week 24. Thursday, so last Week's Key
- * session has stopped carrying over and the 5K test is Up next.
+ * reaches: the phone Week 16, desktop Week 24, every Week before caught up so
+ * the 5K test is Up next.
  */
 const WEEK = { phone: 16, desktop: 24 } as Record<string, number>
 /** Thursday noon in Toronto of Week 16 (Mon 8 Feb) or Week 24 (Mon 5 Apr). */
@@ -16,6 +17,7 @@ const THURSDAY = { 16: new Date('2027-02-11T12:00:00-05:00'), 24: new Date('2027
 
 test('logging a 23:00 5K test sets Threshold’s speed, and mph updates every speed', async ({ page }, testInfo) => {
   const week = WEEK[testInfo.project.name]
+  await caughtUpOnServer(page, week - 1)
   await page.clock.setFixedTime(THURSDAY[week])
   await page.goto('/')
 
@@ -41,6 +43,7 @@ test('logging a 23:00 5K test sets Threshold’s speed, and mph updates every sp
   await expect(page).toHaveURL('/')
 
   // Threshold now has an exact treadmill speed: 4:52/km is 12.3 km/h.
+  await expect(bucket.getByRole('button', { name: /^Threshold/ })).toHaveCount(1)
   await bucket.getByRole('button', { name: /^Threshold/ }).click()
   await page.getByRole('button', { name: /^Do it today/ }).click()
   await expect(upNext).toHaveText(/^Threshold, /)

@@ -1,4 +1,4 @@
-import type { Locator, Page } from '@playwright/test'
+import { expect, type Locator, type Page } from '@playwright/test'
 
 /**
  * Makes a Bucket row today's: its sheet, then Do it today. On a touch screen
@@ -6,6 +6,8 @@ import type { Locator, Page } from '@playwright/test'
  * frames: pick first, then pause.
  */
 export async function doToday(page: Page, row: Locator) {
+  // Until the server's logs are in, a fresh browser shows earlier Weeks' Sessions as Late, under the same names.
+  await expect(row).toHaveCount(1)
   await row.click()
   await page.getByRole('dialog').getByRole('button', { name: /^Do it today/ }).click()
 }

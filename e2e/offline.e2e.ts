@@ -1,11 +1,12 @@
 import { expect, test, type Page } from '@playwright/test'
 import { expectNoAxeViolations, WEEK_3 } from './axe'
-import { seedLogs, serveHistory, weekDone } from './history'
+import { caughtUp, caughtUpOnServer, seedLogs, serveHistory, weekDone } from './history'
 
 /**
  * These tests write Session logs to the shared e2e database, so each project
  * gets a Week no other test reads: the phone logs in Week 9, desktop in Week 14,
- * each after a Week done in full (8 and 13), so nothing carries over.
+ * each after a Week done in full (8 and 13), and every Week before caught up, so
+ * nothing is Late.
  */
 const WEEK = { phone: 9, desktop: 14 } as Record<string, number>
 const BEFORE = {
@@ -36,24 +37,28 @@ test('a Session logged with no signal syncs once back online, and another browse
 }, testInfo) => {
   const week = WEEK[testInfo.project.name]
   await seedLogs(request, testInfo.project.name, BEFORE[week])
+  const network = await caughtUpOnServer(page, week - 1)
   await page.clock.setFixedTime(WEDNESDAY[week])
   await page.goto('/')
   await shellCached(page)
 
   const upNext = page.getByRole('heading', { level: 1 })
+  // The server's logs are in once nothing reads as behind.
+  await expect(page.getByText(/ behind · Week /)).toHaveCount(0)
   const session = (await upNext.textContent())!.split(',')[0]
   const waiting = page.getByText('1 log on this phone, waiting to sync.')
-  // This Week's row only: until a fresh browser has loaded the logs, last Week's Key session shows as carried over.
+  // This Week's row only: until a fresh browser has loaded the logs, every earlier Week's Sessions show as Late.
   const row = (p: Page) =>
     p
       .getByRole('list')
       .filter({ hasText: 'Strength' })
       .getByRole('listitem')
-      .filter({ hasText: session, hasNotText: /’s Key session/ })
+      .filter({ hasText: session, hasNotText: /Late/ })
 
   // In the gym: no signal. The log saves on the phone and Today moves on.
   await page.goto(`/log/${week}/${session.toLowerCase().replace(/ /g, '-')}`)
   await context.setOffline(true)
+  network.offline = true
   await page.getByRole('radio', { name: '8', exact: true }).check({ force: true })
   await page.getByRole('button', { name: 'Save log' }).click()
   await expect(page).toHaveURL('/')
@@ -69,11 +74,13 @@ test('a Session logged with no signal syncs once back online, and another browse
 
   // Signal again: it syncs on its own and the indicator goes quiet.
   await context.setOffline(false)
+  network.offline = false
   await expect(waiting).toBeHidden()
 
   // Another browser, which has never seen this phone, gets it from the server.
   const other = await browser.newContext()
   const elsewhere = await other.newPage()
+  await caughtUpOnServer(elsewhere, week - 1)
   await elsewhere.clock.setFixedTime(WEDNESDAY[week])
   await elsewhere.goto('/')
   await expect(row(elsewhere)).toHaveText(new RegExp(`^${session}.*Done, Wed$`))
@@ -82,7 +89,7 @@ test('a Session logged with no signal syncs once back online, and another browse
 
 test('the installed app opens offline on any screen', async ({ context, page, request }) => {
   // Week 2 done in full, kept on the phone from the first visit: Week 3 opens on its own Up next.
-  await serveHistory(page, weekDone(2, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-11-02'))
+  await serveHistory(page, caughtUp(1, weekDone(2, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-11-02')))
   await page.clock.setFixedTime(WEEK_3)
   await page.goto('/')
   await shellCached(page)

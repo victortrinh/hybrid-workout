@@ -200,7 +200,7 @@ describe('logDays', () => {
     expect(logDays(monday, sunday, localDate('2026-11-20'))).toEqual({ days: week, outside: '2026-11-20', when: 'late' })
   })
 
-  it('keeps a carried Key session in its window through the carry-over', () => {
+  it('stretches the window to any last day it is given', () => {
     const wednesday = localDate('2026-11-11')
     const days = logDays(monday, wednesday, localDate('2026-11-10'))
     expect(days.days).toHaveLength(10)

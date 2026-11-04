@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { expectNoAxeViolations } from './axe'
-import { seedLogs } from './history'
+import { caughtUpOnServer, seedLogs } from './history'
 
 /**
  * Each project gets a pair of Weeks no other test reads: the phone skips two
@@ -45,6 +45,7 @@ test('two Skipped Sessions bring a lighter Week: Accept lightens it, Undo restor
     testInfo.project.name,
     s.logs.map((l) => ({ ...l, week: s.skipped })),
   )
+  await caughtUpOnServer(page, s.skipped)
   await page.clock.setFixedTime(new Date(`${s.tuesday}T12:00:00-05:00`))
   await page.goto('/')
 

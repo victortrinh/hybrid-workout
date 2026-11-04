@@ -73,7 +73,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
     const completion = main.getByRole('region', { name: 'Weekly completion' })
     await expect(completion.getByRole('link')).toHaveCount(3)
     await expect(completion.getByRole('link', { name: /^Week 1: 4 of 4 done/ })).toBeVisible()
-    await expect(completion.getByRole('link', { name: /^Week 2: 2 of 4 done, 2 missed, 5K test/ })).toBeVisible()
+    await expect(completion.getByRole('link', { name: /^Week 2: 2 of 4 done, 1 missed, 5K test/ })).toBeVisible()
     await expect(completion.getByRole('link', { name: /^Week 3, this Week: 1 of 4 done/ })).toHaveAttribute(
       'aria-current',
       'date',

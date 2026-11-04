@@ -47,7 +47,7 @@ export const toLog = (seed: SeedLog, prefix: string) =>
     updatedAt: `${seed.date}T20:00:00.000Z`,
   }) as unknown as SessionLog
 
-/** Every Session of a Week but the Optional one, Done on `date`: nothing carried, nothing Skipped. */
+/** Every Session of a Week but the Optional one, Done on `date`: nothing Late, nothing Skipped. */
 export const weekDone = (week: number, sessionIds: string[], date: string): SeedLog[] =>
   sessionIds.map((sessionId) => ({ week, sessionId, date, status: 'done' }))
 

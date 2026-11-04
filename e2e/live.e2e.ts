@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { expectNoAxeViolations, WEEK_3 } from './axe'
-import { serveHistory, weekDone } from './history'
+import { caughtUp, serveHistory, weekDone } from './history'
 import { aMinuteBefore, doToday, startAsChosen } from './today'
 
 /**
@@ -41,7 +41,7 @@ async function scan(page: Page, then?: Date) {
 const minutes = (from: Date, m: number) => new Date(from.getTime() + m * 60_000)
 
 test('a full Threshold Session from Start to logged', async ({ page }) => {
-  const sent = await serveHistory(page, [...WEEK_2])
+  const sent = await serveHistory(page, caughtUp(1, [...WEEK_2]))
   const start = new Date(WEEK_3.getTime() + 1000)
   await page.clock.install({ time: aMinuteBefore(WEEK_3) })
   await page.goto('/')
@@ -169,7 +169,7 @@ test('a full Threshold Session from Start to logged', async ({ page }) => {
 })
 
 test('Start asks Treadmill or outside: the answer is the run’s Environment and the Session’s', async ({ page }) => {
-  const sent = await serveHistory(page, [...WEEK_2])
+  const sent = await serveHistory(page, caughtUp(1, [...WEEK_2]))
   // Every month outside, as October is: nothing says treadmill until Start asks.
   await page.addInitScript(() =>
     localStorage.setItem('compromised:settings', JSON.stringify({ environmentByMonth: Array(12).fill('outdoor') })),
@@ -218,7 +218,7 @@ test('Start asks Treadmill or outside: the answer is the run’s Environment and
 })
 
 test('a Session set Outdoor on Today comes to Start with Outside chosen', async ({ page }) => {
-  await serveHistory(page, [...WEEK_2])
+  await serveHistory(page, caughtUp(1, [...WEEK_2]))
   // November is a treadmill month by default; the Session's own Outdoor wins.
   await page.addInitScript(() => localStorage.setItem('compromised:environment', JSON.stringify({ '3/speed': 'outdoor' })))
   await page.clock.setFixedTime(WEEK_3)
@@ -232,9 +232,10 @@ test('a Session set Outdoor on Today comes to Start with Outside chosen', async 
 })
 
 test('the target speed fits its column on a phone', async ({ page }) => {
-  await serveHistory(page, [...WEEK_2])
+  await serveHistory(page, caughtUp(1, [...WEEK_2]))
   await page.clock.install({ time: WEEK_3 })
   await page.goto('/')
+  await expect(page.getByRole('list').filter({ hasText: 'Strength' }).getByRole('button', { name: /^Threshold/ })).toHaveCount(1)
   await page.getByRole('list').filter({ hasText: 'Strength' }).getByRole('button', { name: /^Threshold/ }).click()
   await page.getByRole('button', { name: /^Do it today/ }).click()
   await page.getByRole('button', { name: /^Start / }).click()
@@ -326,7 +327,7 @@ test('a 5K test Live session records the time and updates the Training paces', a
 })
 
 test('Speed: a rest between jump and acceleration sets, none between drills', async ({ page }) => {
-  await serveHistory(page, [...WEEK_2])
+  await serveHistory(page, caughtUp(1, [...WEEK_2]))
   await page.clock.install({ time: WEEK_3 })
   await page.goto('/')
   await page.clock.pauseAt(new Date(WEEK_3.getTime() + 1000))
@@ -382,7 +383,7 @@ test('Speed: a rest between jump and acceleration sets, none between drills', as
 })
 
 test('Speed: Done, the checklists, Start, Undo, going back, and a Partial flipped to Done', async ({ page }) => {
-  const sent = await serveHistory(page, [...WEEK_2])
+  const sent = await serveHistory(page, caughtUp(1, [...WEEK_2]))
   const start = new Date(WEEK_3.getTime() + 1000)
   await page.clock.install({ time: WEEK_3 })
   await page.goto('/')
@@ -507,7 +508,7 @@ async function expectNoPageScroll(page: Page) {
 const onScreen = (locator: ReturnType<Page['locator']>) => expect(locator).toBeInViewport({ ratio: 1 })
 
 test('on its side, a Threshold rep: the target and the clock on the field, the rep, the Coach and what’s next beside', async ({ page }) => {
-  const sent = await serveHistory(page, [...WEEK_2])
+  const sent = await serveHistory(page, caughtUp(1, [...WEEK_2]))
   const start = new Date(WEEK_3.getTime() + 1000)
   await page.setViewportSize(SIDEWAYS)
   await page.clock.install({ time: aMinuteBefore(WEEK_3) })
@@ -572,7 +573,7 @@ test('on its side, a Threshold rep: the target and the clock on the field, the r
 })
 
 test('on its side, the Plyometrics checklist, its rest and every control fit and work', async ({ page }) => {
-  await serveHistory(page, [...WEEK_2])
+  await serveHistory(page, caughtUp(1, [...WEEK_2]))
   await page.setViewportSize(SIDEWAYS)
   await page.clock.install({ time: WEEK_3 })
   await page.goto('/')
@@ -621,7 +622,7 @@ test('on its side, the Plyometrics checklist, its rest and every control fit and
 })
 
 test('on its side, Today and Live lifts have no sideways scroll', async ({ page }) => {
-  await serveHistory(page, [...WEEK_2])
+  await serveHistory(page, caughtUp(1, [...WEEK_2]))
   await page.setViewportSize(SIDEWAYS)
   await page.clock.install({ time: WEEK_3 })
   await page.goto('/')
@@ -653,7 +654,7 @@ async function toRep1(page: Page) {
 }
 
 test('by-feel reps ask nothing as they go, and the speeds once at the end, on the treadmill', async ({ page }) => {
-  const sent = await serveHistory(page, [...WEEK_2])
+  const sent = await serveHistory(page, caughtUp(1, [...WEEK_2]))
   await page.clock.install({ time: WEEK_3 })
   await page.goto('/')
   await page.clock.pauseAt(new Date(WEEK_3.getTime() + 1000))
@@ -697,7 +698,7 @@ test('by-feel reps ask nothing as they go, and the speeds once at the end, on th
 })
 
 test('outdoors, the by-feel question asks pace per km, and skipping it still saves the log', async ({ page }) => {
-  const sent = await serveHistory(page, [...WEEK_2])
+  const sent = await serveHistory(page, caughtUp(1, [...WEEK_2]))
   await page.addInitScript(() => localStorage.setItem('compromised:environment', JSON.stringify({ '3/speed': 'outdoor' })))
   await page.clock.install({ time: WEEK_3 })
   await page.goto('/')
@@ -724,7 +725,7 @@ test('outdoors, the by-feel question asks pace per km, and skipping it still sav
 })
 
 test('a by-feel pace that can’t be right holds the save until it’s put right', async ({ page }) => {
-  const sent = await serveHistory(page, [...WEEK_2])
+  const sent = await serveHistory(page, caughtUp(1, [...WEEK_2]))
   await page.addInitScript(() => localStorage.setItem('compromised:environment', JSON.stringify({ '3/speed': 'outdoor' })))
   await page.clock.install({ time: WEEK_3 })
   await page.goto('/')
@@ -765,7 +766,7 @@ const WEEK_1_SPEED = {
 } as const
 
 test('by-feel reps show the speed logged last time, and the question at the end starts from it', async ({ page }) => {
-  const sent = await serveHistory(page, [WEEK_1_SPEED, ...WEEK_2])
+  const sent = await serveHistory(page, caughtUp(1, [WEEK_1_SPEED, ...WEEK_2]))
   await page.clock.install({ time: aMinuteBefore(WEEK_3) })
   await page.goto('/')
   // The history in before the pause: skipping a minute ahead would time out a sync still on its way.
@@ -801,7 +802,7 @@ test('by-feel reps show the speed logged last time, and the question at the end 
 })
 
 test('outdoors, last time reads as a pace per km, converted from the treadmill', async ({ page }) => {
-  await serveHistory(page, [WEEK_1_SPEED, ...WEEK_2])
+  await serveHistory(page, caughtUp(1, [WEEK_1_SPEED, ...WEEK_2]))
   await page.addInitScript(() => localStorage.setItem('compromised:environment', JSON.stringify({ '3/speed': 'outdoor' })))
   await page.clock.install({ time: aMinuteBefore(WEEK_3) })
   await page.goto('/')
@@ -820,10 +821,10 @@ test('outdoors, last time reads as a pace per km, converted from the treadmill',
 
 test('with no Training paces, the jog suggestion is the jog logged last time', async ({ page }) => {
   // No 5K test yet: every run is RPE only, but Week 1's jogs were logged at 6 km/h.
-  await serveHistory(page, [WEEK_1_SPEED])
+  await serveHistory(page, caughtUp(1, [WEEK_1_SPEED, ...weekDone(2, ['strength', 'threshold', 'hyrox'], '2026-11-04')]))
   await page.clock.install({ time: aMinuteBefore(WEEK_3) })
   await page.goto('/')
-  // The baseline 5K test leads Today: Speed is picked from the Bucket.
+  // The baseline 5K test, Late, leads Today: Speed is picked from the Bucket.
   await doToday(page, page.getByRole('list').filter({ hasText: 'Strength' }).getByRole('button', { name: /^Speed/ }))
   await page.clock.pauseAt(WEEK_3)
   const s = await toRep1(page)

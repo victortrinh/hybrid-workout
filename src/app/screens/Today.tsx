@@ -417,7 +417,12 @@ function UpNext({
       run?.paces?.estimate && describeSession(upNext, { ...run, paces: null }, day.workingWeights).target !== target
     // Skipped earlier and back as Up next: say so, or it reads like the Coach forgot.
     const skippedOn = upNextEntry?.log?.status === 'skipped' ? upNextEntry.log.date : null
-    meta = [skippedOn && `Skipped ${weekday(skippedOn)}, still counts`, description.meta, estimated && 'Estimated paces']
+    meta = [
+      upNextEntry?.late && lateLine(upNextEntry),
+      skippedOn && `Skipped ${weekday(skippedOn)}, still counts`,
+      description.meta,
+      estimated && 'Estimated paces',
+    ]
       .filter(Boolean)
       .join(' · ')
   } else if (position.kind === 'before-start') {
@@ -1042,7 +1047,7 @@ function ThisWeek({
   const inWeek = position.kind === 'in-week'
   // Before the Program, Week 1's Sessions can be opened and picked to do early.
   const interactive = inWeek || position.kind === 'before-start'
-  const left = bucket.filter((e) => !e.session.optional && e.toDo).length
+  const left = bucket.filter((e) => !e.late && !e.session.optional && e.toDo).length
   const aside = inWeek
     ? `${plural(left, 'Session')} left · ${plural(position.daysLeft, 'day')}`
     : `from ${shortDay(week.startDate)}`
@@ -1053,6 +1058,12 @@ function ThisWeek({
         {inWeek ? 'This Week' : `Week ${week.number}`}
         <small className="text-[14px] font-medium tracking-normal text-muted font-stretch-100%">{aside}</small>
       </h2>
+      {/* Catch-up: a count, said quietly, never a nudge (ADR-0007). */}
+      {day.behind && (
+        <p className="mt-1 text-[14px] text-muted">
+          {`${plural(day.behind.sessions, 'Session')} behind · Week ${day.behind.week}`}
+        </p>
+      )}
       <ul className="mt-1.5">
         {bucket.map((entry) => (
           <BucketRow
@@ -1086,7 +1097,7 @@ function BucketRow({
   onOpen: () => void
   treadmill: (activity: Activity) => boolean
 }) {
-  const { session, state, log, week, carriedUntil, activity } = entry
+  const { session, state, log, week, activity } = entry
   const type = SESSION_TYPES[session.type]
   const content = (
     <>
@@ -1099,9 +1110,7 @@ function BucketRow({
         </span>
         <span className="text-[14px] text-muted">
           {nb(
-            carriedUntil
-              ? `Week ${week}’s Key session, until ${shortWeekday(carriedUntil)} · ${describeSession(session).summary}`
-              : describeSession(session).summary,
+            entry.late ? `${lateLine(entry)} · ${describeSession(session).summary}` : describeSession(session).summary,
           )}
         </span>
         {activity && (
@@ -1148,7 +1157,9 @@ function BucketRow({
   )
 }
 
-/** Carried over from last Week, the sheet says until when; Key and Optional are already in its meta. */
-function bucketLine({ week, carriedUntil }: BucketEntry): string | undefined {
-  return carriedUntil ? `Week ${week}’s Key session, until ${shortWeekday(carriedUntil)}` : undefined
+/** A Late session, from an earlier Week: the sheet says which; Key and Optional are already in its meta. */
+function bucketLine(entry: BucketEntry): string | undefined {
+  return entry.late ? lateLine(entry) : undefined
 }
+
+const lateLine = ({ week }: BucketEntry) => `Week ${week} · Late`

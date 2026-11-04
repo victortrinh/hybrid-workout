@@ -122,19 +122,14 @@ describe('weekly completion', () => {
       ['speed', 'done'],
       ['strength', 'partial'],
       ['threshold', 'skipped'],
-      ['hyrox', 'missed'],
+      // Never logged, it is a Late session (ADR-0007): still open, not missed.
+      ['hyrox', 'open'],
       // The Optional session is never a miss.
       ['easy', 'open'],
     ])
-    expect(one).toMatchObject({ done: 2, required: 4, missed: 2 })
-    // Week 2's Key session (the 5K test) carries until Wednesday of Week 3, and today is Wednesday.
-    expect(two.cells.find((c) => c.session.type === '5k-test')?.state).toBe('open')
-    expect(two.cells.filter((c) => c.state === 'missed').map((c) => c.session.type)).toEqual([
-      'strength',
-      'threshold',
-      'hyrox',
-    ])
-    expect(two).toMatchObject({ done: 0, missed: 3 })
+    expect(one).toMatchObject({ done: 2, required: 4, missed: 1 })
+    expect(two.cells.every((c) => c.state === 'open')).toBe(true)
+    expect(two).toMatchObject({ done: 0, missed: 0 })
     expect(three.cells.every((c) => c.state === 'open')).toBe(true)
     expect(three).toMatchObject({ done: 0, missed: 0 })
   })
@@ -160,7 +155,7 @@ describe('weekly completion', () => {
     const logs = [log(1, 'easy', '2026-10-27', { status: 'skipped' })]
     const one = weeklyCompletion(program, logs, localDate('2026-11-11'))[0]
     expect(one.cells.find((c) => c.session.id === 'easy')?.state).toBe('skipped')
-    expect(one.missed).toBe(4)
+    expect(one.missed).toBe(0)
   })
 
   it('is empty before Week 1 and stops at the last Week after the Program', () => {
@@ -187,7 +182,7 @@ describe('Training load', () => {
     ])
   })
 
-  it('counts a carried Key session in the Week it was done', () => {
+  it('counts a Late session in the Week it was done', () => {
     const load = trainingLoad(program, [test5k(2, '2026-11-10', 1380)], localDate('2026-11-11'))
     expect(load.map((w) => w.total)).toEqual([0, 0, 405])
   })

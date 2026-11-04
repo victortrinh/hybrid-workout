@@ -32,7 +32,7 @@ export function SessionSheet({
   onClose,
 }: {
   session: Session
-  /** Why it is in the Bucket, when the meta doesn’t say: a Key session carried over. */
+  /** Why it is in the Bucket, when the meta doesn’t say: a Late session, from an earlier Week. */
   line?: string
   stations: Record<StationId, Station>
   run?: RunContext

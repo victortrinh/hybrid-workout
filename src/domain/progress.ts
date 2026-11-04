@@ -145,8 +145,8 @@ export function weeklyCompletion(program: Program, logs: SessionLog[], today: Lo
 
 /**
  * Training load per Week so far: RPE × minutes of every Session trained,
- * counted in the Week it was done (a carried Key session counts where it
- * landed). A log without RPE or minutes adds nothing.
+ * counted in the Week it was done (a Late session counts where it landed).
+ * A log without RPE or minutes adds nothing.
  */
 export function trainingLoad(program: Program, logs: SessionLog[], today: LocalDate): WeekLoad[] {
   const weeks = weeksSoFar(program, today)
