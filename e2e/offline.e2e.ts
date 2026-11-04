@@ -5,13 +5,13 @@ import { caughtUp, caughtUpOnServer, seedLogs, serveHistory, weekDone } from './
 /**
  * These tests write Session logs to the shared e2e database, so each project
  * gets a Week no other test reads: the phone logs in Week 9, desktop in Week 14,
- * each after a Week done in full (8 and 13), and every Week before caught up, so
- * nothing is Late.
+ * each after a Week done in full by Thursday (8 and 13), too recent for a
+ * re-entry, and every Week before caught up, so nothing is Late.
  */
 const WEEK = { phone: 9, desktop: 14 } as Record<string, number>
 const BEFORE = {
-  9: weekDone(8, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-12-14'),
-  14: weekDone(13, ['speed', 'strength', 'threshold', 'hyrox'], '2027-01-18'),
+  9: weekDone(8, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-12-17'),
+  14: weekDone(13, ['speed', 'strength', 'threshold', 'hyrox'], '2027-01-21'),
 } as Record<number, ReturnType<typeof weekDone>>
 /** Wednesday noon in Toronto of Week 9 (Mon 21 Dec) or Week 14 (Mon 25 Jan). */
 const WEDNESDAY = { 9: new Date('2026-12-23T12:00:00-05:00'), 14: new Date('2027-01-27T12:00:00-05:00') } as Record<

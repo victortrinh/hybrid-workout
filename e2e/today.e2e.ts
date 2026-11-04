@@ -9,8 +9,8 @@ for (const colorScheme of ['light', 'dark'] as const) {
     test('shows the countdown, the Phases, the Week and Up next, with no accessibility violations', async ({
       page,
     }) => {
-      // Week 2 done in full: no Key session carried over, no Suggestion.
-      await serveHistory(page, caughtUp(1, weekDone(2, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-11-02')))
+      // Week 2 done in full, by Thursday: nothing Late, and too recent for a re-entry, so no Suggestion.
+      await serveHistory(page, caughtUp(1, weekDone(2, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-11-05')))
       await page.clock.setFixedTime(WEEK_3)
       await page.goto('/')
 
