@@ -396,7 +396,7 @@ describe('Up next with Session logs', () => {
       // Thursday: Threshold and HYROX left, four days to fit them in.
       const day = withLogs('2026-11-12', [log(3, 'speed', '2026-11-09'), log(3, 'strength', '2026-11-11')])
       expect(day.upNext).toBeNull()
-      expect(day.rest).toEqual({ kind: 'hard-yesterday' })
+      expect(day.rest).toMatchObject({ kind: 'hard-yesterday', anyway: { week: 3, session: { id: 'threshold' } } })
     })
 
     it('goes Hard anyway when resting would leave too few days', () => {
@@ -409,7 +409,7 @@ describe('Up next with Session logs', () => {
     it('stops at one Hard session a day when the Week has room', () => {
       const day = withLogs('2026-11-09', [log(3, 'speed', '2026-11-09')])
       expect(day.upNext).toBeNull()
-      expect(day.rest).toEqual({ kind: 'hard-today' })
+      expect(day.rest).toMatchObject({ kind: 'hard-today', anyway: { week: 3, session: { id: 'strength' } } })
     })
 
     it('allows a second Hard session today when the Week runs out otherwise', () => {
@@ -436,7 +436,7 @@ describe('Up next with Session logs', () => {
 
     it('counts a Partial Session as a Hard day', () => {
       const day = withLogs('2026-11-12', [log(3, 'speed', '2026-11-09'), log(3, 'strength', '2026-11-11', 'partial')])
-      expect(day.rest).toEqual({ kind: 'hard-yesterday' })
+      expect(day.rest).toMatchObject({ kind: 'hard-yesterday' })
     })
   })
 
@@ -466,12 +466,12 @@ describe('Up next with Session logs', () => {
       ]
       const day = withLogs('2026-11-15', logs)
       expect(day.upNext).toBeNull()
-      expect(day.rest).toEqual({ kind: 'speed-after-load' })
+      expect(day.rest).toMatchObject({ kind: 'speed-after-load', anyway: { week: 3, session: { id: 'speed' } } })
     })
 
     it('keeps Speed off the same day as Strength too', () => {
       const logs = [log(3, 'threshold', '2026-11-09'), log(3, 'hyrox', '2026-11-11'), log(3, 'strength', '2026-11-15')]
-      expect(withLogs('2026-11-15', logs).rest).toEqual({ kind: 'speed-after-load' })
+      expect(withLogs('2026-11-15', logs).rest).toMatchObject({ kind: 'speed-after-load' })
     })
 
     it('allows Speed the day after Threshold', () => {
@@ -513,6 +513,42 @@ describe('Up next with Session logs', () => {
       const day = withLogs('2026-11-15', logs)
       expect(day.upNext).toBeNull()
       expect(day.rest).toEqual({ kind: 'week-done' })
+    })
+  })
+
+  describe('a suggested rest from the spacing rules', () => {
+    const doItAnyway = (day: ReturnType<typeof coach>) => {
+      const rest = day.rest!
+      if (!('anyway' in rest)) throw new Error(`${rest.kind} is a real rest`)
+      return { date: day.today, week: rest.anyway.week, sessionId: rest.anyway.session.id }
+    }
+
+    it('names the Session that Do it anyway makes Up next, for today', () => {
+      const logs = [log(3, 'speed', '2026-11-09'), log(3, 'strength', '2026-11-11')]
+      const anyway = doItAnyway(withLogs('2026-11-12', logs))
+      expect(withLogs('2026-11-12', logs, anyway).upNext?.id).toBe('threshold')
+      expect(withLogs('2026-11-12', logs, anyway).rest).toBeNull()
+    })
+
+    it('lets Speed go after Strength anyway', () => {
+      const logs = [log(3, 'threshold', '2026-11-09'), log(3, 'hyrox', '2026-11-11'), log(3, 'strength', '2026-11-14')]
+      const anyway = doItAnyway(withLogs('2026-11-15', logs))
+      expect(withLogs('2026-11-15', logs, anyway).upNext?.id).toBe('speed')
+    })
+
+    it('is a suggestion again the next day: tapping past counts only for today', () => {
+      const logs = [log(3, 'speed', '2026-11-09'), log(3, 'strength', '2026-11-11')]
+      const anyway = doItAnyway(withLogs('2026-11-12', logs))
+      const friday = withLogs('2026-11-13', [...logs, log(3, 'threshold', '2026-11-12')], anyway)
+      expect(friday.upNext).toBeNull()
+      expect(friday.rest).toMatchObject({ kind: 'hard-yesterday', anyway: { session: { id: 'hyrox' } } })
+    })
+
+    it('leaves the real rests without a way past', () => {
+      const done = ['speed', 'strength', 'threshold', 'hyrox', 'easy'].map((id) => log(3, id, '2026-11-09'))
+      expect(withLogs('2026-11-12', done).rest).toEqual({ kind: 'week-done' })
+      const skipped = withLogs('2026-11-12', [...done.slice(0, 4), log(3, 'easy', '2026-11-12', 'skipped')])
+      expect(skipped.rest).not.toHaveProperty('anyway')
     })
   })
 
@@ -709,7 +745,7 @@ describe('Catch-up', () => {
     ]
     const day = coach({ program, today: localDate('2026-11-05'), logs })
     expect(day.upNext).toBeNull()
-    expect(day.rest).toEqual({ kind: 'hard-yesterday' })
+    expect(day.rest).toMatchObject({ kind: 'hard-yesterday' })
   })
 })
 

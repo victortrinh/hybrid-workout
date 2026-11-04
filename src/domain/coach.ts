@@ -106,12 +106,24 @@ export type RestReason =
    * day, closes the Week as a miss.
    */
   | { kind: 'skipped-today'; sessions: Session[]; lastDay: boolean }
-  /** A Hard session was done yesterday, or already today, and the Week has room to wait a day. */
-  | { kind: 'hard-yesterday' | 'hard-today' }
-  /** Only Speed is left, and Strength or HYROX was done yesterday or today. */
-  | { kind: 'speed-after-load' }
+  /**
+   * A Hard session was done yesterday, or already today, and the Week has room
+   * to wait a day. Only suggested: `anyway` is the Session to do instead.
+   */
+  | { kind: 'hard-yesterday' | 'hard-today'; anyway: RestAnyway }
+  /** Only Speed is left, and Strength or HYROX was done yesterday or today. Only suggested, like the above. */
+  | { kind: 'speed-after-load'; anyway: RestAnyway }
   /** What's left is pinned to a later day: the race. */
   | { kind: 'waiting'; session: Session; date: LocalDate }
+
+/**
+ * The Session a suggested rest stands in front of: Do it anyway picks it for
+ * today, as a Bucket pick does (ADR-0007).
+ */
+export interface RestAnyway {
+  week: number
+  session: Session
+}
 
 /** Where today falls in the Program. */
 export type ProgramPosition =
@@ -452,6 +464,7 @@ interface UpNextInput {
  * 4. Never Speed the day after Strength or HYROX (or later the same day).
  * 5. No Hard session the day after another (or a second one the same day) when
  *    the Week has room to rest today and still fit the Hard sessions left.
+ *    Rules 4 and 5 only suggest the rest: rule 1 taps past it.
  * 6. Of what remains, the Session waiting longest; within a Week, Bucket order.
  */
 function chooseUpNext(input: UpNextInput): { upNext: Logged | null; rest: RestReason | null } {
@@ -497,7 +510,7 @@ function chooseAmong(
   const before = [...typesOn(yesterday), ...typesOn(today)]
 
   const allowed = before.some(isLoad) ? pool.filter((e) => !isSpeed(e.session.type)) : pool
-  if (allowed.length === 0) return { upNext: null, rest: { kind: 'speed-after-load' } }
+  if (allowed.length === 0) return { upNext: null, rest: { kind: 'speed-after-load', anyway: anyway(pool) } }
 
   const hardToday = typesOn(today).some(isHard)
   const hardYesterday = typesOn(yesterday).some(isHard)
@@ -508,11 +521,17 @@ function chooseAmong(
     const hardLeft = available.filter((e) => isHard(e.session.type)).length
     // Resting today leaves `daysLeft - 1` days from tomorrow; tomorrow can't be Hard after a Hard today.
     if (hardLeft <= mostHardSessions(daysLeft - 1, hardToday)) {
-      return { upNext: null, rest: { kind: hardToday ? 'hard-today' : 'hard-yesterday' } }
+      return { upNext: null, rest: { kind: hardToday ? 'hard-today' : 'hard-yesterday', anyway: anyway(allowed) } }
     }
   }
 
   return { upNext: oldestWaiting(allowed), rest: null }
+}
+
+/** What a suggested rest gives way to when tapped past: the Session waiting longest. */
+function anyway(entries: Logged[]): RestAnyway {
+  const { week, session } = oldestWaiting(entries)
+  return { week, session }
 }
 
 /** The Session picked today, while it is still open and can be done today. */

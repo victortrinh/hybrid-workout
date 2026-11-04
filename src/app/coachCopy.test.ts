@@ -6,7 +6,7 @@ import type { ShortSleepCut } from '../domain/recovery'
 import type { RecoverySuggestion } from '../domain/suggestion'
 import type { SessionLog } from '../domain/log'
 import type { ProgramRecap } from '../domain/recap'
-import { raceCopy, shortSleepLine, suggestionCopy, waitingLine } from './coachCopy'
+import { raceCopy, shortSleepLine, suggestedRestCopy, suggestionCopy, waitingLine } from './coachCopy'
 
 const recovery = (cut: ShortSleepCut | null): RecoverySuggestion => ({
   id: 'recovery-2026-11-11',
@@ -66,6 +66,30 @@ describe('waitingLine', () => {
   it('uses the Session’s heading for any other pinned Session', () => {
     const pinned = { ...shakeout, date: localDate('2027-04-20') }
     expect(waitingLine(pinned, localDate('2027-04-20'), localDate('2027-04-19'))).toMatch(/^\S.* is tomorrow\. Save it for that\.$/)
+  })
+})
+
+describe('a rest the spacing rules only suggest', () => {
+  const threshold = findWeek(program, 3)!.sessions.find((s) => s.id === 'threshold')!
+  const speed = findWeek(program, 3)!.sessions.find((s) => s.id === 'speed')!
+
+  it('says the rest is suggested, with the reason first', () => {
+    expect(suggestedRestCopy({ kind: 'hard-yesterday', anyway: { week: 3, session: threshold } })).toEqual({
+      heading: 'Rest suggested.',
+      target: 'Hard session yesterday. The Week has room, so legs up. Your call.',
+      meta: 'Threshold if you go anyway',
+    })
+  })
+
+  it('gives each spacing rule its reason', () => {
+    expect(suggestedRestCopy({ kind: 'hard-today', anyway: { week: 3, session: threshold } }).target).toMatch(
+      /^Hard session already today\./,
+    )
+    expect(suggestedRestCopy({ kind: 'speed-after-load', anyway: { week: 3, session: speed } })).toMatchObject({
+      heading: 'Rest suggested.',
+      target: expect.stringMatching(/^Speed on legs that just lifted or pushed a sled\?/),
+      meta: 'Speed if you go anyway',
+    })
   })
 })
 

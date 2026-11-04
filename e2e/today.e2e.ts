@@ -106,3 +106,29 @@ test('on the phone, Start sits in the bottom bar, in the thumb’s reach without
   await page.getByRole('heading', { name: 'This Week' }).scrollIntoViewIfNeeded()
   await expect(start).toBeInViewport()
 })
+
+test('taps past a rest the spacing rules only suggest, for today', async ({ page }) => {
+  // Week 3: Speed Monday, Strength Wednesday. Thursday is a suggested rest, with Threshold behind it.
+  const sent = await serveHistory(page, [
+    ...weekDone(2, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-11-02'),
+    { week: 3, sessionId: 'speed', date: '2026-11-09', status: 'done' },
+    { week: 3, sessionId: 'strength', date: '2026-11-11', status: 'done' },
+  ])
+  await page.clock.setFixedTime(new Date('2026-11-12T12:00:00-05:00'))
+  await page.goto('/')
+
+  const upNext = page.getByRole('heading', { level: 1 })
+  await expect(upNext).toHaveText('Rest suggested.')
+  await expect(page.getByText('Hard session yesterday. The Week has room, so legs up. Your call.')).toBeVisible()
+  await expect(page.getByText('Threshold if you go anyway')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Do it anyway' }).click()
+  await expect(upNext).toHaveText(/^Threshold/)
+  await expect(upNext).toBeFocused()
+  await expect(page.getByRole('button', { name: 'Do it anyway' })).toHaveCount(0)
+
+  // Today only, and nothing saved: a reload keeps it, and the server heard nothing.
+  await page.reload()
+  await expect(upNext).toHaveText(/^Threshold/)
+  expect(sent).toEqual([])
+})
