@@ -44,7 +44,7 @@ Every Station is preceded by a 1 km run: 8 km of running in total.
 
 - Each Week is a **Bucket**: Speed, Strength, Threshold, HYROX, plus an Optional Easy run. Do them on any day, in any order, inside Monday–Sunday.
 - The Coach picks **Up next** each day: no two Hard sessions on consecutive days when avoidable; never Speed the day after HYROX or Strength; Strength + Easy run on the same day is fine.
-- A required Session not done by Sunday is **Late**, not missed: Up next comes from the oldest Week with a Late session until it's caught up (Catch-up, ADR-0007). Each Session keeps its own Week's Prescription and counts for that Week. The Optional session never waits. Two or more Skipped → the Coach suggests a lighter restart week; a Session made up late doesn't cancel it.
+- A required Session not done by Sunday is **Late**, not missed: Up next comes from the oldest Week with a Late session until it's caught up (Catch-up, ADR-0007). Each Session keeps its own Week's Prescription and counts for that Week. The Optional session never waits. 7 or more days with no Done or Partial Session → the Coach suggests the rest of the Week Up next comes from a third lighter (never a Deload week or the Taper).
 - Holidays (Fri Dec 25, Fri Jan 1) need no special handling: the Bucket just gets done on other days.
 
 ## Session templates

@@ -6,7 +6,7 @@
  * every time, which is what makes it testable.
  */
 import { matchActivities, type Activity, type ActivityAnswer, type ActivityOutcome } from './activity'
-import { lightenWeek, RE_ENTRY_PERCENT } from './adapt'
+import { lighten, RE_ENTRY_PERCENT } from './adapt'
 import { addDays, daysBetween, mondayOf, type LocalDate } from './calendar'
 import { DEFAULT_EQUIPMENT, equip, equipWeek, type Equipment } from './equipment'
 import { logFor, trained, type LoggedStatus, type SessionLog } from './log'
@@ -34,7 +34,7 @@ import {
   type SuggestionDecision,
 } from './suggestion'
 import { startingWeights, type StartingPoint } from './startingPoint'
-import { strengthState, type HeldIncrease, type WorkingWeightChange, type WorkingWeights } from './weights'
+import { strengthState, type HeldIncrease, type LighterSpan, type WorkingWeightChange, type WorkingWeights } from './weights'
 
 export interface CoachInput {
   program: Program
@@ -242,10 +242,10 @@ export function coach({
   const shownWeek =
     position.kind === 'in-week' ? position.week : position.kind === 'before-start' ? 1 : null
   const planned = shownWeek === null ? null : findWeek(program, shownWeek)
-  const strength = strengthState(program, logs, decisions, today, lightenedWeeks(program, logs, decisions, today))
+  const strength = strengthState(program, logs, decisions, today, lighterSpans(program, logs, decisions, today))
   const suggestions = [
     ...(position.kind === 'in-week' && planned
-      ? suggestionsFor(program, planned, logs, decisions, { reports: painReports, today })
+      ? suggestionsFor(program, planned, logs, decisions, { reports: painReports, today }, today)
       : []),
     ...(position.kind === 'in-week' ? strength.suggestions : []),
   ]
@@ -262,6 +262,9 @@ export function coach({
       : []),
   ]
   const lateOpen = logged.filter((e) => e.late && !e.log)
+  // A re-entry for a Late Week: Today offers it alongside the current Week's.
+  const lateWeeks = [...new Set(logged.filter((e) => e.late).map((e) => e.week))]
+  suggestions.unshift(...lateWeeks.flatMap((n) => reEntryFor(program, findWeek(program, n)!, logs, decisions, today) ?? []))
 
   const chosen =
     position.kind === 'in-week' && week
@@ -365,7 +368,7 @@ function lateSessions(
         return !log || log.date === today
       })
       if (late.length === 0) return []
-      const prescribed = adapt(week, suggestionsFor(program, week, logs, decisions, null), logs, equipment)
+      const prescribed = adapt(week, suggestionsFor(program, week, logs, decisions, null, today), logs, equipment)
       return late.map((session) => ({
         session: prescribed.sessions.find((s) => s.id === session.id) ?? equip(session, equipment),
         week: week.number,
@@ -593,8 +596,8 @@ export function weekOutcome(_program: Program, week: Week, logs: SessionLog[], t
 // Suggestions. Each is derived from the logs; only the decision is stored.
 // Working weight Suggestions are replayed in weights.ts.
 
-/** Skipped Sessions in a Week that make the next one a lighter re-entry. */
-export const RE_ENTRY_SKIPS = 2
+/** Days since the last Done or Partial Session that make the rest of a Week a lighter re-entry. */
+export const RE_ENTRY_DAYS = 7
 
 /** Pain reports, and the day they are read on: pain only changes the Week holding today. */
 interface PainInput {
@@ -610,8 +613,10 @@ function suggestionsFor(
   logs: SessionLog[],
   decisions: SuggestionDecision[],
   pain: PainInput | null,
+  /** Null when no day is given: a gap still open today isn't seen then, only one a log has closed. */
+  today: LocalDate | null,
 ): Suggestion[] {
-  const reEntry = reEntryFor(program, week, logs, decisions)
+  const reEntry = reEntryFor(program, week, logs, decisions, today)
   const painful = pain && painFor(week, pain, decisions)
   return [...(reEntry ? [reEntry] : []), ...(painful ? [painful] : [])]
 }
@@ -706,37 +711,75 @@ function recoveryFor(
     : { upNext: { ...upNext, session }, suggestion, change: 'short-sleep', cut }
 }
 
-/** The Weeks begun by `today` that an accepted re-entry made lighter. */
-function lightenedWeeks(program: Program, logs: SessionLog[], decisions: SuggestionDecision[], today: LocalDate): number[] {
-  return program.phases
-    .flatMap((p) => p.weeks)
-    .filter((week) => daysBetween(week.startDate, today) >= 0)
-    .filter((week) => reEntryFor(program, week, logs, decisions)?.decision === 'accepted')
-    .map((week) => week.number)
+/**
+ * The days an accepted re-entry made lighter, up to `today`: from the day the
+ * athlete came back to the Monday after.
+ */
+function lighterSpans(program: Program, logs: SessionLog[], decisions: SuggestionDecision[], today: LocalDate): LighterSpan[] {
+  return returns(program, logs, today)
+    .filter((r) => r.week !== null && reEntryFor(program, findWeek(program, r.week)!, logs, decisions, today)?.date === r.date)
+    .filter((r) => decisionFor(decisions, reEntryId(r.week!))?.decision === 'accepted')
+    .map((r) => ({ start: r.date, landsOn: addDays(mondayOf(r.date), 7) }))
 }
 
 const acceptedPain = (suggestions: Suggestion[]): PainLevel | null =>
   suggestions.find((s): s is PainSuggestion => s.kind === 'pain' && s.decision === 'accepted')?.level ?? null
 
+/** Coming back to training after a gap of `RE_ENTRY_DAYS` or more. */
+interface Return {
+  /** The first day trained after the gap; today, while the athlete hasn't trained yet. */
+  date: LocalDate
+  /** The last day trained before it. */
+  since: LocalDate
+  /** The Week Up next came from on `date`: the oldest Late Week, or the Week holding it. Null outside the Program. */
+  week: number | null
+}
+
+/** Every return to training by `today`, oldest first. Without `today`, only those a log has closed. */
+function returns(program: Program, logs: SessionLog[], today: LocalDate | null): Return[] {
+  const days = [...new Set(logs.filter(trained).map((l) => l.date))]
+    .filter((d) => today === null || d <= today)
+    .sort()
+  if (today !== null && days.length > 0 && days.at(-1) !== today) days.push(today)
+  return days.flatMap((date, i) =>
+    i > 0 && daysBetween(days[i - 1], date) >= RE_ENTRY_DAYS
+      ? [{ date, since: days[i - 1], week: weekOnReturn(program, logs, date) }]
+      : [],
+  )
+}
+
+/** The Week Up next comes from on `date`, from what was logged before it (ADR-0007). */
+function weekOnReturn(program: Program, logs: SessionLog[], date: LocalDate): number | null {
+  const position = positionOf(program, date)
+  if (position.kind !== 'in-week') return null
+  const loggedBefore = (week: number, sessionId: string) =>
+    logs.some((l) => l.week === week && l.sessionId === sessionId && l.date < date)
+  const late = program.phases
+    .flatMap((phase) => phase.weeks)
+    .find(
+      (week) =>
+        week.number < position.week &&
+        week.sessions.some((s) => !s.optional && !s.date && !loggedBefore(week.number, s.id)),
+    )
+  return late?.number ?? position.week
+}
+
 /**
- * Two or more Sessions Skipped last Week: suggest this Week a third lighter.
- * Counted as the Week closed on Sunday, so a Session made up late, from this
- * Monday on, doesn't undo one: a late make-up never cancels the lighter Week.
- * Deload weeks are lighter already, and the Taper follows the race-week rules,
- * so neither gets one.
+ * 7 or more days with no Done or Partial log: suggest the rest of the Week Up
+ * next comes from on return a third lighter (ADR-0007). It stands for the
+ * latest such return to this Week. Deload weeks are lighter already, and the
+ * Taper follows the race-week rules, so neither gets one.
  */
 function reEntryFor(
   program: Program,
   week: Week,
   logs: SessionLog[],
   decisions: SuggestionDecision[],
+  today: LocalDate | null,
 ): ReEntrySuggestion | null {
-  const previous = findWeek(program, week.number - 1)
-  if (!previous || week.deload || phaseOfWeek(program, week.number).id === 'taper') return null
-
-  const closed = logs.filter((log) => !trained(log) || daysBetween(log.date, week.startDate) > 0)
-  const { skipped } = weekOutcome(program, previous, closed, week.startDate)
-  if (skipped.length < RE_ENTRY_SKIPS) return null
+  if (week.deload || phaseOfWeek(program, week.number).id === 'taper') return null
+  const back = returns(program, logs, today).findLast((r) => r.week === week.number)
+  if (!back) return null
 
   const id = reEntryId(week.number)
   const decided = decisionFor(decisions, id)
@@ -745,13 +788,10 @@ function reEntryFor(
     kind: 're-entry',
     week: week.number,
     sessionId: null,
-    date: week.startDate,
+    date: back.date,
     from: { volumePercent: 100 },
     to: { volumePercent: RE_ENTRY_PERCENT },
-    trigger: {
-      week: previous.number,
-      skipped: skipped.map(({ session }) => ({ sessionId: session.id, type: session.type })),
-    },
+    trigger: { lastSession: back.since, days: daysBetween(back.since, back.date) },
     decision: decided?.decision ?? 'open',
     decidedOn: decided?.date ?? null,
   }
@@ -768,7 +808,14 @@ function adapt(week: Week, suggestions: Suggestion[], logs: SessionLog[], equipm
       if (s.decision !== 'accepted' || s.week !== adapted.number) return adapted
       switch (s.kind) {
         case 're-entry':
-          return lightenWeek(adapted, s.to.volumePercent)
+          // The rest of the Week: a Session done before the athlete came back stays as it was.
+          return {
+            ...adapted,
+            sessions: adapted.sessions.map((session) => {
+              const log = logFor(logs, adapted.number, session.id)
+              return log && trained(log) && log.date < s.date ? session : lighten(session, s.to.volumePercent)
+            }),
+          }
         case 'pain':
           return {
             ...adapted,
@@ -802,5 +849,5 @@ export function prescribedWeek(
   pain: PainInput | null = null,
 ): Week | null {
   const week = findWeek(program, number)
-  return week && adapt(week, suggestionsFor(program, week, logs, decisions, pain), logs, equipment)
+  return week && adapt(week, suggestionsFor(program, week, logs, decisions, pain, pain?.today ?? null), logs, equipment)
 }

@@ -4,7 +4,7 @@
  * Adaptation never edits the Program. It is recomputed from the decisions
  * every time, so Undo is just a decision going back to Open.
  */
-import type { Exercise, Prescription, Session, Week } from './program/types'
+import type { Exercise, Prescription, Session } from './program/types'
 
 /** A lighter re-entry Week keeps about two thirds of the volume, like a Deload week. */
 export const RE_ENTRY_PERCENT = 67
@@ -37,10 +37,6 @@ export function lighten(session: Session, percent: number): Session {
       exercises: block.exercises.map((exercise) => lightenExercise(exercise, scale)),
     })),
   }
-}
-
-export function lightenWeek(week: Week, percent: number): Week {
-  return { ...week, sessions: week.sessions.map((s) => lighten(s, percent)) }
 }
 
 function lightenExercise(exercise: Exercise, scale: number): Exercise {

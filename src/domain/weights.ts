@@ -79,15 +79,15 @@ export interface HeldIncrease {
   landsOn: LocalDate
 }
 
-/** Lighter Weeks back to back, from the first one's Monday to the Monday after the last. */
-interface LighterRun {
+/** Lighter days back to back, from the first one to the day increases land: always a Monday. */
+export interface LighterSpan {
   start: LocalDate
   landsOn: LocalDate
 }
 
 /**
  * Every lift's Working weight on `today`, replayed from the Strength sessions
- * logged by then. `lightened` lists the Weeks an accepted re-entry made lighter;
+ * logged by then. `lightened` lists the days an accepted re-entry made lighter;
  * Deload weeks are lighter already.
  */
 export function strengthState(
@@ -95,7 +95,7 @@ export function strengthState(
   logs: SessionLog[],
   decisions: SuggestionDecision[],
   today: LocalDate,
-  lightened: number[] = [],
+  lightened: LighterSpan[] = [],
 ): StrengthState {
   const weights: WorkingWeights = {}
   const changes: WorkingWeightChange[] = []
@@ -199,15 +199,18 @@ export function strengthState(
   return { weights, changes, suggestions: [...latest.values()], held: [...held.values()] }
 }
 
-/** Deload weeks and lightened ones, joined where they follow each other. */
-function lighterRuns(program: Program, lightened: number[]): LighterRun[] {
-  const runs: LighterRun[] = []
-  for (const week of program.phases.flatMap((p) => p.weeks)) {
-    if (!week.deload && !lightened.includes(week.number)) continue
-    const landsOn = addDays(week.startDate, 7)
+/** Deload weeks and the days a re-entry lightened, joined where they meet or overlap. */
+function lighterRuns(program: Program, lightened: LighterSpan[]): LighterSpan[] {
+  const deloads = program.phases
+    .flatMap((p) => p.weeks)
+    .filter((week) => week.deload)
+    .map((week) => ({ start: week.startDate, landsOn: addDays(week.startDate, 7) }))
+  const runs: LighterSpan[] = []
+  for (const span of [...deloads, ...lightened].sort((a, b) => a.start.localeCompare(b.start))) {
     const last = runs.at(-1)
-    if (last && last.landsOn === week.startDate) last.landsOn = landsOn
-    else runs.push({ start: week.startDate, landsOn })
+    if (last && span.start <= last.landsOn) {
+      if (span.landsOn > last.landsOn) last.landsOn = span.landsOn
+    } else runs.push({ ...span })
   }
   return runs
 }
