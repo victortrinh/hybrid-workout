@@ -30,13 +30,13 @@ function log(week: number, sessionId: string, date: string, extra: Partial<Sessi
 }
 
 const change = (lift: WorkingWeightChange['lift'], week: number, pounds: number, reason: WorkingWeightChange['reason']) =>
-  ({ lift, week, pounds, reason, date: localDate('2026-10-26') }) as WorkingWeightChange
+  ({ lift, week, pounds, reason, date: localDate('2026-11-09') }) as WorkingWeightChange
 
-const DAY_AFTER = localDate('2027-04-22')
+const DAY_AFTER = localDate('2027-04-23')
 
 describe('after Race day', () => {
   it('starts the day after Race day, not on it', () => {
-    expect(afterRace(program, localDate('2027-04-21'))).toBe(false)
+    expect(afterRace(program, localDate('2027-04-22'))).toBe(false)
     expect(afterRace(program, DAY_AFTER)).toBe(true)
     expect(afterRace(program, localDate('2027-05-30'))).toBe(true)
   })
@@ -48,18 +48,18 @@ describe('the race result', () => {
   })
 
   it('asks for the finish time when the race was logged without one', () => {
-    const race = log(26, RACE_SESSION_ID, '2027-04-21', { minutes: 84, rpe: 10 })
+    const race = log(24, RACE_SESSION_ID, '2027-04-22', { minutes: 84, rpe: 10 })
     expect(raceResult(program, [race], DAY_AFTER)).toEqual({ state: 'ask', log: race })
   })
 
   it('has the finish time once it is logged, the latest edit standing', () => {
-    const first = log(26, RACE_SESSION_ID, '2027-04-21', { resultSeconds: 5100 })
-    const edit = { ...first, resultSeconds: 5047, updatedAt: '2027-04-22T12:00:00.000Z' }
+    const first = log(24, RACE_SESSION_ID, '2027-04-22', { resultSeconds: 5100 })
+    const edit = { ...first, resultSeconds: 5047, updatedAt: '2027-04-23T12:00:00.000Z' }
     expect(raceResult(program, [first, edit], DAY_AFTER)).toEqual({ state: 'finished', log: edit, seconds: 5047 })
   })
 
   it('says the race was Skipped instead of asking', () => {
-    const race = log(26, RACE_SESSION_ID, '2027-04-21', { status: 'skipped', minutes: null, rpe: null })
+    const race = log(24, RACE_SESSION_ID, '2027-04-22', { status: 'skipped', minutes: null, rpe: null })
     expect(raceResult(program, [race], DAY_AFTER)).toEqual({ state: 'skipped', log: race })
   })
 
@@ -67,27 +67,27 @@ describe('the race result', () => {
     expect(RACE_SECONDS).toEqual([30 * 60, 4 * 60 * 60])
   })
 
-  it('bounds a result time by its Session: a 5K test or the race, nothing else', () => {
-    expect(resultRange('5k-test')).toEqual([12 * 60, 60 * 60])
+  it('bounds a result time by its Session: the race, nothing else', () => {
     expect(resultRange(RACE_SESSION_ID)).toEqual(RACE_SECONDS)
-    expect(resultRange('speed')).toBeNull()
+    expect(resultRange('compromised-run-test')).toBeNull()
+    expect(resultRange('run')).toBeNull()
   })
 })
 
 describe('the Program recap', () => {
-  it('runs the 5K tests from the first to the last', () => {
+  it('runs the tests with a result time from the first to the last', () => {
     const logs = [
-      log(2, '5k-test', '2026-11-04', { resultSeconds: 1380 }),
-      log(8, '5k-test', '2026-12-16', { resultSeconds: 1335 }),
-      log(24, '5k-test', '2027-04-07', { resultSeconds: 1315 }),
+      log(2, 'compromised-run-test', '2026-11-18', { resultSeconds: 1380 }),
+      log(9, 'compromised-run-test', '2027-01-06', { resultSeconds: 1335 }),
+      log(19, 'compromised-run-test', '2027-03-17', { resultSeconds: 1315 }),
     ]
     const { fiveK } = programRecap(program, logs, [], DAY_AFTER)
-    expect(fiveK).toEqual({ first: { week: 2, seconds: 1380 }, last: { week: 24, seconds: 1315 }, underGoal: true })
+    expect(fiveK).toEqual({ first: { week: 2, seconds: 1380 }, last: { week: 19, seconds: 1315 }, underGoal: true })
   })
 
-  it('has no 5K line without a test, and one test is both ends', () => {
+  it('has no test line without a test, and one test is both ends', () => {
     expect(programRecap(program, [], [], DAY_AFTER).fiveK).toBeNull()
-    const one = [log(2, '5k-test', '2026-11-04', { resultSeconds: 1380 })]
+    const one = [log(2, 'compromised-run-test', '2026-11-18', { resultSeconds: 1380 })]
     expect(programRecap(program, one, [], DAY_AFTER).fiveK).toEqual({
       first: { week: 2, seconds: 1380 },
       last: { week: 2, seconds: 1380 },
@@ -109,10 +109,10 @@ describe('the Program recap', () => {
 
   it('counts Sessions done against the required ones, the Easy runs on top', () => {
     const logs = [
-      log(1, 'speed', '2026-10-26'),
-      log(1, 'strength', '2026-10-28', { status: 'partial' }),
-      log(1, 'threshold', '2026-10-30', { status: 'skipped', minutes: null, rpe: null }),
-      log(1, 'easy', '2026-10-31'),
+      log(1, 'hyrox-a', '2026-11-09'),
+      log(1, 'strength', '2026-11-11', { status: 'partial' }),
+      log(1, 'run', '2026-11-13', { status: 'skipped', minutes: null, rpe: null }),
+      log(1, 'easy', '2026-11-14'),
     ]
     const { sessions } = programRecap(program, logs, [], DAY_AFTER)
     const required = program.phases
@@ -124,12 +124,12 @@ describe('the Program recap', () => {
 
   it('adds up the Training load of the whole Program, the race included', () => {
     const logs = [
-      log(1, 'speed', '2026-10-26', { minutes: 50, rpe: 8 }),
-      log(26, RACE_SESSION_ID, '2027-04-21', { minutes: 84, rpe: 10 }),
+      log(1, 'run', '2026-11-09', { minutes: 50, rpe: 8 }),
+      log(24, RACE_SESSION_ID, '2027-04-22', { minutes: 84, rpe: 10 }),
     ]
     expect(programRecap(program, logs, [], DAY_AFTER).trainingLoad).toEqual({
       total: 50 * 8 + 84 * 10,
-      byLane: { speed: 50 * 8, hyrox: 84 * 10 },
+      byLane: { run: 50 * 8, hyrox: 84 * 10 },
     })
   })
 })
@@ -160,23 +160,23 @@ describe('the finish time as typed', () => {
 
 describe('logging the finish time in one step', () => {
   it('logs the race Done on Race day, its minutes from the time', () => {
-    const made = finishLog(program, null, 5047, { id: 'new', updatedAt: '2027-04-22T14:00:00.000Z' })
+    const made = finishLog(program, null, 5047, { id: 'new', updatedAt: '2027-04-23T14:00:00.000Z' })
     expect(made).toMatchObject({
       id: 'new',
-      week: 26,
+      week: 24,
       sessionId: RACE_SESSION_ID,
-      date: '2027-04-21',
+      date: '2027-04-22',
       status: 'done',
       minutes: 84,
       rpe: null,
       resultSeconds: 5047,
-      updatedAt: '2027-04-22T14:00:00.000Z',
+      updatedAt: '2027-04-23T14:00:00.000Z',
     })
   })
 
   it('adds the time to a race already logged, keeping the rest of it', () => {
-    const race = log(26, RACE_SESSION_ID, '2027-04-21', { minutes: 90, rpe: 10, notes: 'Wall balls. Never again.' })
-    const made = finishLog(program, race, 5047, { id: 'ignored', updatedAt: '2027-04-22T14:00:00.000Z' })
-    expect(made).toEqual({ ...race, status: 'done', resultSeconds: 5047, updatedAt: '2027-04-22T14:00:00.000Z' })
+    const race = log(24, RACE_SESSION_ID, '2027-04-22', { minutes: 90, rpe: 10, notes: 'Wall balls. Never again.' })
+    const made = finishLog(program, race, 5047, { id: 'ignored', updatedAt: '2027-04-23T14:00:00.000Z' })
+    expect(made).toEqual({ ...race, status: 'done', resultSeconds: 5047, updatedAt: '2027-04-23T14:00:00.000Z' })
   })
 })

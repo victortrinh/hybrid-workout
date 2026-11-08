@@ -1,38 +1,56 @@
 import { describe, expect, it } from 'vitest'
 import { addDays, isoWeekday } from '../calendar'
 import { programStart } from '../coach'
-import { describeExercise, SESSION_TYPES, stationLoad } from './describe'
+import { describeExercise, describeSession, SESSION_TYPES, stationLoad } from './describe'
 import { program } from './program'
-import type { Exercise, Session, Week } from './types'
+import type { Exercise, Session, StationId, Week } from './types'
 
 const weeks: Week[] = program.phases.flatMap((p) => p.weeks)
 const weekNumbers = (match: (w: Week) => boolean) => weeks.filter(match).map((w) => w.number)
 const byNumber = (n: number) => weeks.find((w) => w.number === n)!
 const session = (n: number, id: string) => byNumber(n).sessions.find((s) => s.id === id)!
 const exercises = (s: Session): Exercise[] => s.blocks.flatMap((b) => b.exercises)
+/** A Session's rounds as "Station volume → run", in order. */
+const rounds = (s: Session) =>
+  s.blocks
+    .filter((b) => b.main)
+    .map((b) =>
+      b.exercises
+        .map(({ prescription: rx }) =>
+          rx.kind === 'station' ? `${rx.station} ${rx.meters ?? rx.reps}` : rx.kind === 'run' ? `run ${rx.meters}` : rx.kind,
+        )
+        .join(' → '),
+    )
 
 describe('Program invariants', () => {
-  it('has 26 Weeks, numbered in order, each starting on the Monday after the last', () => {
-    expect(weeks.map((w) => w.number)).toEqual(Array.from({ length: 26 }, (_, i) => i + 1))
-    expect(program.weekCount).toBe(26)
+  it('has 24 Weeks, numbered in order, from Monday 9 November 2026, each starting on the Monday after the last', () => {
+    expect(weeks.map((w) => w.number)).toEqual(Array.from({ length: 24 }, (_, i) => i + 1))
+    expect(program.weekCount).toBe(24)
     weeks.forEach((week, i) => {
       expect(isoWeekday(week.startDate)).toBe(1)
       expect(week.startDate).toBe(addDays(programStart(program), 7 * i))
     })
-    expect(weeks[0].startDate).toBe('2026-10-26')
+    expect(weeks[0].startDate).toBe('2026-11-09')
   })
 
-  it('puts Race day, Wednesday 21 April 2027, in the last Week', () => {
-    expect(program.raceDay).toBe('2027-04-21')
-    expect(isoWeekday(program.raceDay)).toBe(3)
+  it('puts Race day, Thursday 22 April 2027, in Week 24', () => {
+    expect(program.raceDay).toBe('2027-04-22')
+    expect(isoWeekday(program.raceDay)).toBe(4)
     const last = weeks.at(-1)!
+    expect(last.number).toBe(24)
     expect(last.race).toBe(true)
-    expect(last.startDate).toBe(addDays(program.raceDay, -2))
+    expect(last.startDate).toBe('2027-04-19')
     expect(last.sessions.find((s) => s.date === program.raceDay)).toMatchObject({ id: 'race', key: true })
-    expect(weekNumbers((w) => w.race)).toEqual([26])
+    expect(weekNumbers((w) => w.race)).toEqual([24])
   })
 
-  it('groups the Weeks into Phases that cover 1–26 without gaps', () => {
+  it('groups the Weeks into Foundation 1–5, Build 6–15, Race specific 16–21 and Taper 22–24, without gaps', () => {
+    expect(program.phases.map((p) => [p.name, p.firstWeek, p.lastWeek])).toEqual([
+      ['Foundation', 1, 5],
+      ['Build', 6, 15],
+      ['Race specific', 16, 21],
+      ['Taper', 22, 24],
+    ])
     let next = 1
     for (const phase of program.phases) {
       expect(phase.firstWeek).toBe(next)
@@ -41,7 +59,11 @@ describe('Program invariants', () => {
       )
       next = phase.lastWeek + 1
     }
-    expect(next).toBe(27)
+    expect(next).toBe(25)
+  })
+
+  it('deloads Weeks 5, 10, 15 and 20', () => {
+    expect(weekNumbers((w) => w.deload)).toEqual([5, 10, 15, 20])
   })
 
   it('has one Key session in every non-Deload Week and none in a Deload', () => {
@@ -49,6 +71,36 @@ describe('Program invariants', () => {
       const keys = week.sessions.filter((s) => s.key)
       expect({ week: week.number, keys: keys.length }).toEqual({ week: week.number, keys: week.deload ? 0 : 1 })
     }
+  })
+
+  it('puts the plan’s Key session first: the Run, a test, HYROX A or B, or a Race simulation', () => {
+    const key = (n: number) => byNumber(n).sessions.find((s) => s.key)?.id ?? null
+    expect(Object.fromEntries(weeks.map((w) => [w.number, key(w.number)]))).toEqual({
+      1: 'run',
+      2: 'compromised-run-test',
+      3: 'hyrox-a',
+      4: 'hyrox-b',
+      5: null,
+      6: 'hyrox-a',
+      7: 'hyrox-b',
+      8: 'run',
+      9: 'compromised-run-test',
+      10: null,
+      11: 'hyrox-a',
+      12: 'hyrox-b',
+      13: 'run',
+      14: 'compromised-run-test',
+      15: null,
+      16: 'race-simulation',
+      17: 'hyrox-a',
+      18: 'race-simulation',
+      19: 'compromised-run-test',
+      20: null,
+      21: 'race-simulation',
+      22: 'hyrox-a',
+      23: 'run',
+      24: 'race',
+    })
   })
 
   it('gives every Session a Session type, a unique id and something to do', () => {
@@ -63,51 +115,63 @@ describe('Program invariants', () => {
     }
   })
 
-  it('never makes an Optional session Key, and keeps Optional sessions to Easy runs', () => {
-    for (const s of weeks.flatMap((w) => w.sessions).filter((s) => s.optional)) {
+  it('keeps every Optional session to an Easy run, but for Race week’s Station touch', () => {
+    for (const s of weeks.flatMap((w) => w.sessions).filter((s) => s.optional && s.id !== 'station-touch')) {
       expect(s.type).toBe('easy')
     }
   })
 
-  it('holds the Bucket of Speed, Strength, Threshold, HYROX and an Optional Easy run until the Taper', () => {
-    for (const week of weeks.filter((w) => w.number <= 24)) {
+  it('holds a Bucket of HYROX A, HYROX B, Run, Strength and an Optional Easy run in every Week before Race week', () => {
+    for (const week of weeks.filter((w) => !w.race)) {
       const lanes = week.sessions.map((s) => SESSION_TYPES[s.type].lane)
-      const expected = week.deload
-        ? ['speed', 'strength', 'easy', 'hyrox', 'easy']
-        : ['speed', 'strength', 'threshold', 'hyrox', 'easy']
-      expect({ week: week.number, lanes }).toEqual({ week: week.number, lanes: expected })
-      expect(week.sessions.at(-1)!.optional).toBe(true)
+      const run = week.compromisedRunTest ? 'test' : 'run'
+      expect({ week: week.number, lanes }).toEqual({ week: week.number, lanes: ['hyrox', 'hyrox', run, 'strength', 'easy'] })
+      expect(week.sessions.map((s) => s.optional)).toEqual([false, false, false, false, true])
+      if (!week.raceSimulation) expect(week.sessions.slice(0, 2).map((s) => s.name)).toEqual(['HYROX A', 'HYROX B'])
     }
+  })
+
+  it('keeps every required Session inside the 45-minute Session cap, Set up excluded, but the Race simulations', () => {
+    for (const s of weeks.flatMap((w) => w.sessions).filter((s) => !s.date && !s.optional)) {
+      if (s.type === 'race-simulation') expect(s.minutes).toBeGreaterThan(45)
+      else expect({ id: s.id, minutes: s.minutes <= 45 }).toEqual({ id: s.id, minutes: true })
+      const timed = s.blocks.filter((b) => !b.setup && b.minutes !== undefined).reduce((sum, b) => sum + b.minutes!, 0)
+      expect(timed).toBeLessThanOrEqual(s.minutes + 0.001)
+    }
+  })
+
+  it('has no Speed, Threshold or 5K test Session type', () => {
+    const types = new Set(weeks.flatMap((w) => w.sessions).map((s) => s.type as string))
+    expect([...types].sort()).toEqual(['compromised-run-test', 'easy', 'hyrox', 'race-simulation', 'run', 'strength'])
   })
 })
 
 describe('the plan’s marked Weeks', () => {
-  it('deloads Weeks 7, 11, 15 and 21, with Threshold swapped for easy running', () => {
-    expect(weekNumbers((w) => w.deload)).toEqual([7, 11, 15, 21])
-    for (const n of [7, 11, 15, 21]) {
-      expect(byNumber(n).sessions.some((s) => s.type === 'threshold')).toBe(false)
-      expect(session(n, 'speed').headline).toBe('4 × 2′ controlled')
-      expect(session(n, 'hyrox').headline).toBe('technique circuit')
+  it('tests in Weeks 2, 9, 14 and 19 with the Compromised run test, in place of the Run', () => {
+    expect(weekNumbers((w) => w.compromisedRunTest)).toEqual([2, 9, 14, 19])
+    for (const n of [2, 9, 14, 19]) {
+      expect(byNumber(n).sessions.some((s) => s.type === 'run')).toBe(false)
+      expect(session(n, 'compromised-run-test')).toMatchObject({ key: true, minutes: 45 })
+    }
+    expect(session(2, 'compromised-run-test').headline).toBe('baseline')
+  })
+
+  it('runs the test as 4 × (1 km at full effort → Station at Race load, half race volume)', () => {
+    const test = session(2, 'compromised-run-test')
+    expect(rounds(test)).toEqual(['run 1000 → skierg 500', 'run 1000 → sled-push 25', 'run 1000 → row 500', 'run 1000 → wall-balls 50'])
+    for (const block of test.blocks.filter((b) => b.main)) {
+      expect(block.exercises[0].prescription).toMatchObject({ kind: 'run', effort: { feel: 'all-out' } })
     }
   })
 
-  it('tests the 5K in Weeks 2, 8, 16 and 24, in place of Speed', () => {
-    expect(weekNumbers((w) => w.fiveKTest)).toEqual([2, 8, 16, 24])
-    for (const n of [2, 8, 16, 24]) {
-      const week = byNumber(n)
-      expect(week.sessions.some((s) => s.type === 'speed')).toBe(false)
-      expect(session(n, '5k-test')).toMatchObject({ key: true })
+  it('simulates the race in Weeks 16 (half A), 18 (half B) and 21 (full run), in place of HYROX A', () => {
+    expect(weekNumbers((w) => w.raceSimulation)).toEqual([16, 18, 21])
+    for (const n of [16, 18, 21]) {
+      expect(byNumber(n).sessions.some((s) => s.id === 'hyrox-a')).toBe(false)
+      expect(session(n, 'race-simulation')).toMatchObject({ key: true })
+      expect(session(n, 'hyrox-b').name).toBe('HYROX B')
     }
-    expect(session(2, '5k-test').headline).toBe('baseline')
-    expect(session(24, '5k-test').headline).toBe('final')
-  })
-
-  it('simulates the race in Weeks 17, 20 and 23, in place of HYROX', () => {
-    expect(weekNumbers((w) => w.raceSimulation)).toEqual([17, 20, 23])
-    for (const n of [17, 20, 23]) {
-      expect(byNumber(n).sessions.some((s) => s.type === 'hyrox')).toBe(false)
-      expect(session(n, 'race-simulation').key).toBe(true)
-    }
+    expect([16, 18, 21].map((n) => session(n, 'race-simulation').headline)).toEqual(['half A', 'half B', 'full run'])
   })
 
   it('runs half simulation A over Stations 1–4 and B over 5–8, at race volume', () => {
@@ -115,13 +179,13 @@ describe('the plan’s marked Weeks', () => {
       exercises(session(n, 'race-simulation')).flatMap((e) =>
         e.prescription.kind === 'station' ? [[e.prescription.station, e.prescription.meters ?? e.prescription.reps]] : [],
       )
-    expect(stationsOf(17)).toEqual([
+    expect(stationsOf(16)).toEqual([
       ['skierg', 1000],
       ['sled-push', 50],
       ['sled-pull', 50],
       ['burpee-broad-jumps', 80],
     ])
-    expect(stationsOf(20)).toEqual([
+    expect(stationsOf(18)).toEqual([
       ['row', 1000],
       ['farmers-carry', 200],
       ['sandbag-lunges', 100],
@@ -129,137 +193,214 @@ describe('the plan’s marked Weeks', () => {
     ])
   })
 
-  it('runs Week 23 as eight full 1 km runs with every Station at half race volume and Race load', () => {
-    const sim = session(23, 'race-simulation')
-    const main = sim.blocks.filter((b) => b.main)
-    expect(main).toHaveLength(8)
-    for (const block of main) {
-      const [run, station] = block.exercises.map((e) => e.prescription)
-      expect(run).toMatchObject({ kind: 'run', meters: 1000 })
-      expect(station.kind).toBe('station')
-      if (station.kind !== 'station') continue
-      const race = program.stations[station.station].raceLoad
-      expect(station.meters ?? station.reps).toBe((race.meters ?? race.reps!) / 2)
-      if (race.pounds !== undefined && !race.fixedLoad) expect(station.raceLoadPercent).toBe(100)
-    }
-    expect(main.map((b) => b.exercises[1].name)).toEqual([
-      'SkiErg',
-      'Sled push',
-      'Sled pull',
-      'Burpee broad jumps',
-      'Row',
-      'Farmers carry',
-      'Sandbag lunges',
-      'Wall balls',
+  it('runs Week 21 as eight 1 km runs with every Station at half race volume', () => {
+    expect(rounds(session(21, 'race-simulation'))).toEqual([
+      'run 1000 → skierg 500',
+      'run 1000 → sled-push 25',
+      'run 1000 → sled-pull 25',
+      'run 1000 → burpee-broad-jumps 40',
+      'run 1000 → row 500',
+      'run 1000 → farmers-carry 100',
+      'run 1000 → sandbag-lunges 50',
+      'run 1000 → wall-balls 50',
     ])
   })
 
-  it('tapers in Week 25 with no Threshold and a short Station touch, then races in Week 26', () => {
-    const taper = byNumber(25)
-    expect(taper.sessions.map((s) => s.type)).toEqual(['speed', 'strength', 'easy', 'hyrox', 'easy'])
-    expect(taper.sessions.filter((s) => !s.optional).map((s) => s.id)).toEqual(['speed', 'strength', 'easy-strides', 'hyrox'])
-    const touch = session(25, 'hyrox')
-    expect(touch.minutes).toBe(25)
-    expect(touch.blocks.filter((b) => b.main).map((b) => b.exercises.map((e) => e.name))).toEqual([
-      ['Run', 'Sled push', 'Wall balls'],
-      ['Run', 'Sled push', 'Wall balls'],
+  it('tapers in Weeks 22 and 23 with every Session type kept and each shorter, then races in Week 24', () => {
+    for (const n of [22, 23]) {
+      expect(byNumber(n).sessions.map((s) => s.type)).toEqual(['hyrox', 'hyrox', 'run', 'strength', 'easy'])
+    }
+    expect(byNumber(22).sessions.map((s) => s.minutes)).toEqual([30, 30, 30, 30, 30])
+    expect(byNumber(23).sessions.map((s) => s.minutes)).toEqual([20, 20, 25, 20, 20])
+    expect(rounds(session(22, 'hyrox-a'))).toEqual(['sled-push 25 → run 600', 'sled-pull 25 → run 600', 'sandbag-lunges 50 → run 600'])
+    expect(rounds(session(23, 'hyrox-b'))).toEqual(['skierg 500 → run 400', 'wall-balls 50 → run 400'])
+    expect(describeSession(session(22, 'run')).heading).toBe('Run, 3 × 5′')
+    expect(describeSession(session(23, 'run')).heading).toBe('Run, 20′ easy + 4 × 1′')
+    expect(byNumber(24).sessions.map((s) => s.id)).toEqual(['shakeout', 'station-touch', 'race'])
+    expect(rounds(session(24, 'station-touch'))).toEqual(['sled-push 25 → wall-balls 20'])
+    expect(byNumber(24).notes).toEqual([
+      'Wednesday 21 April: rest. Prepare kit; familiar meals and hydration; confirm the start time.',
+      'Thursday 22 April: race.',
+      'Friday: recovery, walking only as comfortable.',
     ])
-    expect(byNumber(26).sessions.map((s) => s.id)).toEqual(['shakeout', 'race'])
   })
 
-  it('grows the Easy run into a 60-minute long run by Week 22', () => {
-    expect(session(22, 'easy').minutes).toBe(60)
-    expect(Math.max(...weeks.flatMap((w) => w.sessions).filter((s) => s.type === 'easy').map((s) => s.minutes))).toBe(60)
-  })
-})
-
-describe('warm-ups', () => {
-  const all = weeks.flatMap((w) => w.sessions)
-  /** The first `n` Blocks, as "name minutes′: exercise, exercise". */
-  const warmUp = (s: Session, n = 2) =>
-    s.blocks
-      .slice(0, n)
-      .map((b) => `${b.name} ${b.minutes}′: ${b.exercises.map((e) => describeExercise(e, program.stations)).map((l) => `${l.name} ${l.detail}`.trim()).join(', ')}`)
-
-  it('splits every Speed warm-up, Deload and Taper too, into a 7′ jog and 3′ of Drills to tick', () => {
-    const speeds = all.filter((s) => s.type === 'speed')
-    expect(speeds.map((s) => s.minutes)).toEqual(expect.arrayContaining([45, 35, 40]))
-    for (const s of speeds) {
-      expect(warmUp(s)).toEqual([
-        'Warm-up 7′: Easy jog 7 min · Easy, RPE 2–4',
-        'Drills 3′: Leg swings 10 / leg, A-skips 2 × 20 m, B-skips 2 × 20 m, High knees 20 m, Butt kicks 20 m',
-      ])
-    }
-  })
-
-  it('splits the 5K test warm-up into a 10′ jog and 2′ of Strides', () => {
-    for (const s of all.filter((s) => s.type === '5k-test')) {
-      expect(warmUp(s)).toEqual(['Warm-up 10′: Easy jog 10 min · Easy, RPE 2–4', 'Strides 2′: Strides 4 × 15″'])
-    }
-  })
-
-  it('splits the HYROX warm-up into a 5′ jog and 2′ of Lunges, with nothing left in a note', () => {
-    const circuits = all.filter((s) => s.id === 'hyrox')
-    expect(circuits).toHaveLength(22)
-    for (const s of circuits) {
-      expect(warmUp(s)).toEqual(['Warm-up 5′: Easy jog 5 min · Easy, RPE 2–4', 'Lunges 2′: Lunges 2 × 10'])
-    }
-  })
-
-  it('leaves Threshold, the Easy run and the Race simulation as they were', () => {
-    expect(warmUp(session(3, 'threshold'), 1)).toEqual(['Warm-up 10′: Easy jog 10 min · Easy, RPE 2–4'])
-    expect(session(3, 'easy').blocks.map((b) => b.name)).toEqual(['Easy run'])
-    expect(warmUp(session(17, 'race-simulation'), 1)).toEqual(['Warm-up 10′: Easy jog 7 min · Easy, RPE 2–4, Station prep'])
+  it('grows the Easy run into a 60-minute long run by Week 17', () => {
+    const easy = weeks.filter((w) => !w.race).map((w) => session(w.number, 'easy').minutes)
+    expect(easy).toEqual([25, 25, 30, 30, 25, 35, 35, 40, 40, 30, 45, 45, 50, 50, 35, 55, 60, 50, 60, 35, 40, 30, 20])
+    expect(weeks.find((w) => session(w.number, 'easy')?.minutes === 60)!.number).toBe(17)
   })
 })
 
-describe('HYROX Set up', () => {
-  const setUp = (n: number) => session(n, 'hyrox').blocks.find((b) => b.setup)!
-  const loads = (n: number) => setUp(n).exercises.map((e) => describeExercise(e, program.stations)).map((l) => `${l.name}: ${l.detail}`)
+describe('HYROX A and HYROX B', () => {
+  it('trains the sleds and carries in A and the ergs, the jumps and the ball in B, in race order, wall balls last', () => {
+    expect(rounds(session(1, 'hyrox-a'))).toEqual([
+      'sled-push 25 → run 400',
+      'sled-pull 25 → run 400',
+      'farmers-carry 100 → run 400',
+      'sandbag-lunges 25 → run 400',
+    ])
+    expect(rounds(session(1, 'hyrox-b'))).toEqual(['skierg 250 → run 400', 'burpee-broad-jumps 20 → run 400', 'row 250 → run 400', 'wall-balls 25 → run 400'])
+    for (const s of weeks.flatMap((w) => w.sessions).filter((s) => s.id === 'hyrox-b')) {
+      expect(rounds(s).at(-1)).toMatch(/^wall-balls/)
+    }
+  })
 
-  it('comes right before round 1, untimed, so it’s in neither the minutes nor the Training load', () => {
-    const blocks = session(1, 'hyrox').blocks
+  it('climbs the Station volume table Phase by Phase, with the run after each Station', () => {
+    const volumes = (n: number, id: string) => rounds(session(n, id))
+    expect(volumes(6, 'hyrox-a')).toEqual(['sled-push 25 → run 600', 'sled-pull 25 → run 600', 'farmers-carry 100 → run 600', 'sandbag-lunges 50 → run 600'])
+    expect(volumes(6, 'hyrox-b')).toEqual(['skierg 500 → run 600', 'burpee-broad-jumps 40 → run 600', 'row 500 → run 600', 'wall-balls 50 → run 600'])
+    expect(volumes(11, 'hyrox-a')).toEqual(['sled-push 50 → run 800', 'sled-pull 50 → run 800', 'farmers-carry 200 → run 800', 'sandbag-lunges 75 → run 800'])
+    expect(volumes(11, 'hyrox-b')).toEqual(['skierg 750 → run 800', 'burpee-broad-jumps 60 → run 800', 'row 750 → run 800', 'wall-balls 75 → run 800'])
+    expect(volumes(17, 'hyrox-a')).toEqual([
+      'sled-push 50 → run 1000',
+      'sled-pull 50 → run 1000',
+      'farmers-carry 200 → run 1000',
+      'sandbag-lunges 100 → run 1000',
+    ])
+    // B's runs stay at 600 m in Race specific so the Session fits the cap.
+    expect(volumes(17, 'hyrox-b')).toEqual(['skierg 1000 → run 600', 'burpee-broad-jumps 80 → run 600', 'row 1000 → run 600', 'wall-balls 100 → run 600'])
+  })
+
+  it('is four rounds in a normal Week and three in a Deload, Race load kept; Week 20 at half volume', () => {
+    for (const week of weeks.filter((w) => w.number <= 21)) {
+      for (const s of week.sessions.filter((s) => s.type === 'hyrox')) {
+        const expected = week.deload || (week.number === 21 && s.id === 'hyrox-b') ? 3 : 4
+        expect({ week: week.number, id: s.id, rounds: rounds(s).length }).toEqual({ week: week.number, id: s.id, rounds: expected })
+      }
+    }
+    expect(rounds(session(5, 'hyrox-a'))).toEqual(['sled-push 25 → run 400', 'sled-pull 25 → run 400', 'sandbag-lunges 25 → run 400'])
+    expect(rounds(session(20, 'hyrox-b'))).toEqual(['skierg 500 → run 600', 'burpee-broad-jumps 40 → run 600', 'wall-balls 50 → run 600'])
+  })
+
+  it('reads as rounds of a Station then a run, at Race load', () => {
+    expect(describeSession(session(1, 'hyrox-a'))).toMatchObject({
+      heading: 'HYROX A, 4 rounds',
+      summary: '4 × (Station + 400 m)',
+      target: 'Station, then 400 m, each round · Race load',
+      meta: '45 min + ~5′ setup',
+    })
+  })
+
+  it('sets up once, untimed, before round 1, so it’s in neither the minutes nor the Training load', () => {
+    const blocks = session(1, 'hyrox-a').blocks
     expect(blocks.map((b) => [b.name, b.minutes])).toEqual([
       ['Warm-up', 5],
-      ['Lunges', 2],
       ['Set up', undefined],
-      ['Round 1', 11],
-      ['Round 2', 11],
-      ['Round 3', 11],
-      ['Cooldown', 5],
+      ['Round 1', 9],
+      ['Round 2', 9],
+      ['Round 3', 9],
+      ['Round 4', 9],
+      ['Cooldown', 4],
     ])
-    expect(session(1, 'hyrox').minutes).toBe(45)
+    expect(session(1, 'hyrox-a').minutes).toBe(45)
   })
 
-  it('lists every Station the Session loads once, in the order they come up, with its load', () => {
-    expect(loads(1)).toEqual([
-      'Sled push: 200 lb plates · 60% of Race load',
-      'Sled pull: 135 lb plates · 60% of Race load',
-      'Farmers carry: 2 × 30 lb · 60% of Race load',
-      'Sandbag lunges: 25 lb · 60% of Race load',
+  it('lists every Station the Session loads once, at Race load, and says when the rest have nothing to load', () => {
+    const setUp = (n: number, id: string) => session(n, id).blocks.find((b) => b.setup)!
+    const loads = (n: number, id: string) =>
+      setUp(n, id)
+        .exercises.map((e) => describeExercise(e, program.stations))
+        .map((l) => `${l.name}: ${l.detail}`)
+    expect(loads(1, 'hyrox-a')).toEqual([
+      'Sled push: 335 lb plates',
+      'Sled pull: 225 lb plates',
+      'Farmers carry: 2 × 55 lb',
+      'Sandbag lunges: 45 lb',
     ])
-    expect(loads(2)).toEqual(['Wall balls: 13 lb ball'])
-    expect(loads(22)).toEqual(['Sled push: 335 lb plates', 'Sled pull: 225 lb plates', 'Sandbag lunges: 45 lb'])
+    expect(setUp(1, 'hyrox-a').note).toBeUndefined()
+    expect(loads(1, 'hyrox-b')).toEqual(['Wall balls: 13 lb ball'])
+    expect(setUp(1, 'hyrox-b').note).toBe('Nothing else to load.')
   })
 
-  it('leaves out the Stations with nothing to load, and says so once', () => {
-    expect(setUp(1).note).toBeUndefined()
-    expect(setUp(2).note).toBe('Nothing else to load.')
-    const all = weeks.flatMap((w) => w.sessions).filter((s) => s.id === 'hyrox')
-    const loaded = all.flatMap((s) => s.blocks.filter((b) => b.setup)).flatMap((b) => b.exercises)
-    expect(loaded.map((e) => describeExercise(e, program.stations).detail).filter((d) => !d)).toEqual([])
-    expect(all.every((s) => s.blocks.some((b) => b.setup && b.exercises.length > 0))).toBe(true)
-  })
-
-  it('is in every HYROX circuit, and in no other Session', () => {
+  it('is the only Session type with a Set up', () => {
     const all = weeks.flatMap((w) => w.sessions)
-    expect(all.filter((s) => s.blocks.some((b) => b.setup)).every((s) => s.id === 'hyrox')).toBe(true)
-    expect(all.filter((s) => s.id === 'hyrox').every((s) => s.blocks.some((b) => b.setup))).toBe(true)
+    expect(all.filter((s) => s.blocks.some((b) => b.setup)).every((s) => s.type === 'hyrox')).toBe(true)
+    expect(all.filter((s) => s.type === 'hyrox' && !s.date).every((s) => s.blocks.some((b) => b.setup))).toBe(true)
   })
 })
 
-describe('Race loads and Substitutions', () => {
-  it('holds the Men’s Open Race loads in pounds, with sled loads as plate weight', () => {
+describe('the Run', () => {
+  it('is Threshold intervals in Foundation, then alternates with Compromised intervals from Build', () => {
+    const runs = weeks.filter((w) => w.number <= 21).map((w) => [w.number, byNumber(w.number).sessions.find((s) => s.type === 'run')?.headline ?? null])
+    expect(Object.fromEntries(runs)).toEqual({
+      1: '3 × 7′',
+      2: null,
+      3: '3 × 8′',
+      4: '4 × 6′',
+      5: '35′ easy',
+      6: '4 × (1 km + 20 wall balls)',
+      7: '3 × 8′',
+      8: '4 × (1 km + 20 wall balls)',
+      9: null,
+      10: '35′ easy',
+      11: '5 × (1 km + 20 wall balls)',
+      12: '4 × 7′',
+      13: '5 × (1 km + 20 wall balls)',
+      14: null,
+      15: '35′ easy',
+      16: '3 × 8′',
+      17: '5 × (1 km + 20 wall balls)',
+      18: '4 × 6′',
+      19: null,
+      20: '35′ easy',
+      21: '3 × 6′',
+    })
+  })
+
+  it('runs Threshold reps at Threshold pace with a 90″ jog, never racing', () => {
+    expect(describeExercise(exercises(session(1, 'run')).find((e) => e.name === 'Threshold reps')!, program.stations)).toMatchObject({
+      detail: '3 × 7′ / 90″ jog · Threshold effort, RPE 6–7',
+      note: 'Never racing.',
+    })
+  })
+
+  it('runs Compromised intervals as 1 km at Race run pace, then 20 wall balls at 13 lb', () => {
+    const run = session(6, 'run')
+    expect(rounds(run)).toEqual(Array(4).fill('run 1000 → wall-balls 20'))
+    expect(run.blocks.find((b) => b.main)!.exercises[0].prescription).toMatchObject({ effort: { pace: 'race-run' } })
+    expect(describeSession(run).summary).toBe('4 × (1 km + Wall balls)')
+    expect(describeExercise(exercises(run).find((e) => e.name === 'Wall balls')!, program.stations).detail).toBe('20 reps · 13 lb ball')
+  })
+})
+
+describe('Strength', () => {
+  const names = (n: number) => exercises(session(n, 'strength')).map((e) => e.name)
+  const line = (n: number, name: string) => describeExercise(exercises(session(n, 'strength')).find((e) => e.name === name)!, program.stations)
+
+  it('carries the heavy farmers carry in place of the pull-up and push-up superset', () => {
+    expect(names(2)).toEqual([
+      'Bike, movement prep and ramp-up sets',
+      'Back squat',
+      'Romanian deadlift',
+      'Bulgarian split squat',
+      'Heavy farmers carry',
+      'Standing calf raise',
+      'Seated calf raise',
+    ])
+    expect(line(2, 'Heavy farmers carry').detail).toBe('3 × 40 m · RPE 7')
+  })
+
+  it('calibrates every lift in Week 1', () => {
+    for (const { prescription: rx } of exercises(session(1, 'strength')).filter((e) => e.prescription.kind === 'sets')) {
+      expect(rx.kind === 'sets' && rx.load.kind).toBe('find-working-weight')
+    }
+  })
+
+  it('switches to 2 × 4 at RPE 7–8 without the split squat from Week 16', () => {
+    expect(line(15, 'Back squat').detail).toBe('2 × 5 · 85–90% of Working weight · RPE ≤ 6 · 90–120″ rest')
+    expect(line(14, 'Back squat').detail).toBe('3 × 5 · RPE 7 · 90–120″ rest')
+    for (const n of [16, 17, 18, 19, 21]) {
+      expect(line(n, 'Back squat').detail).toBe('2 × 4 · RPE 7–8 · 90–120″ rest')
+      expect(line(n, 'Romanian deadlift').detail).toBe('2 × 4 · RPE 7–8')
+      expect(line(n, 'Heavy farmers carry').detail).toBe('2 × 40 m · RPE 7')
+      expect(names(n)).not.toContain('Bulgarian split squat')
+    }
+  })
+})
+
+describe('Race loads', () => {
+  it('holds the Men’s Open Race loads, with sled loads as plate weight', () => {
     const { stations } = program
     expect(stations['sled-push'].raceLoad).toEqual({ meters: 50, pounds: 335 })
     expect(stations['sled-pull'].raceLoad).toEqual({ meters: 50, pounds: 227 })
@@ -268,47 +409,17 @@ describe('Race loads and Substitutions', () => {
     expect(stations['wall-balls'].raceLoad).toEqual({ reps: 100, pounds: 13, fixedLoad: true })
   })
 
-  it('rounds every Station load to the nearest 5 lb, Race load included, and never scales the wall ball', () => {
+  it('prescribes every Station at Race load in pounds, rounded to 5 lb, sled loads as plates, the ball as it is', () => {
     const { stations } = program
-    expect(stationLoad(stations['sled-push'], 60)).toBe('200 lb plates')
-    expect(stationLoad(stations['sled-pull'], 60)).toBe('135 lb plates')
-    expect(stationLoad(stations['farmers-carry'], 60)).toBe('2 × 30 lb')
+    expect(stationLoad(stations['sled-push'])).toBe('335 lb plates')
+    expect(stationLoad(stations['sled-pull'])).toBe('225 lb plates')
     expect(stationLoad(stations['farmers-carry'])).toBe('2 × 55 lb')
-    expect(stationLoad(stations['wall-balls'], 60)).toBe('13 lb ball')
+    expect(stationLoad(stations['sandbag-lunges'])).toBe('45 lb')
+    expect(stationLoad(stations['wall-balls'])).toBe('13 lb ball')
     expect(stationLoad(stations.skierg)).toBe('')
-  })
-
-  it('offers sled or bike sprints for every jump and acceleration', () => {
-    for (const s of weeks.flatMap((w) => w.sessions).filter((s) => s.type === 'speed')) {
-      for (const e of exercises(s).filter((e) => /jumps|Accelerations/.test(e.name))) {
-        expect(e.substitutions?.[0].options.map((o) => o.name)).toEqual(['Sled push sprints', 'Bike sprints'])
-      }
-    }
-  })
-})
-
-describe('describeExercise', () => {
-  const line = (n: number, id: string, name: string, nth = 0) =>
-    describeExercise(exercises(session(n, id)).filter((e) => e.name === name)[nth], program.stations)
-
-  it('reads Stations with distance and pounds', () => {
-    expect(line(1, 'hyrox', 'Sled push', 1).detail).toBe('25 m · 200 lb plates · 60% of Race load')
-    expect(line(20, 'race-simulation', 'Farmers carry').detail).toBe('200 m · 2 × 55 lb')
-    expect(line(2, 'hyrox', 'Wall balls', 1).detail).toBe('20 reps · 13 lb ball')
-  })
-
-  it('reads lifts, Deload lifts and Substitutions', () => {
-    expect(line(2, 'strength', 'Back squat').detail).toBe('3 × 5 · RPE 7 · 90–120″ rest')
-    expect(line(14, 'strength', 'Back squat').detail).toBe('2 × 4 · RPE 7–8 · 90–120″ rest')
-    expect(line(7, 'strength', 'Back squat').detail).toBe('2 × 5 · 85–90% of Working weight · RPE ≤ 6 · 90–120″ rest')
-    expect(line(3, 'speed', 'Accelerations')).toMatchObject({
-      detail: '4 × 15 m · 80–90% of max · 45″ rest',
-      substitutions: ['No floor space or Readiness says no jumps: Sled push sprints 10–15 m, light, or Bike sprints 8–10″'],
-    })
-  })
-
-  it('reads intervals with their pace and recovery', () => {
-    expect(line(13, 'speed', 'Intervals').detail).toBe('6 × 2′ / 90″ jog · 5K effort −5 s/km')
-    expect(line(6, 'threshold', 'Threshold reps').detail).toBe('3 × 8′ / 90″ jog · Threshold effort, RPE 6–7')
+    const detail = (id: StationId) =>
+      describeExercise(session(17, 'hyrox-a').blocks.filter((b) => b.main).flatMap((b) => b.exercises).find((e) => e.prescription.kind === 'station' && e.prescription.station === id)!, program.stations).detail
+    expect(detail('sled-push')).toBe('50 m · 335 lb plates')
+    expect(detail('farmers-carry')).toBe('200 m · 2 × 55 lb')
   })
 })

@@ -398,7 +398,7 @@ function parseLogs(raw: unknown): SessionLog[] {
       if (!session) throw new Error(`Week ${log.week} has no Session "${log.sessionId}"`)
       if (log.resultSeconds !== null) {
         const range = resultRange(log.sessionId)
-        if (!range) throw new Error('Only a 5K test and the race have a result time')
+        if (!range) throw new Error('Only the race has a result time')
         if (log.resultSeconds < range[0] || log.resultSeconds > range[1]) {
           throw new Error(`resultSeconds must be between ${range[0]} and ${range[1]}`)
         }

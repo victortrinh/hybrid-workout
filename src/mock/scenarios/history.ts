@@ -11,7 +11,7 @@ import { startLifts } from '../../domain/lifts'
 import { byFeelRep, liveBlocks, liveTarget, roundLegs, startRun, stationLogs, type LiveBlock } from '../../domain/live'
 import { RACE_SESSION_ID, type IntervalLog, type LoggedStatus, type SessionLog, type StationPart } from '../../domain/log'
 import type { PainArea, PainReport } from '../../domain/pain'
-import { latestFiveKTest, trainingPaces, type Environment } from '../../domain/paces'
+import type { Environment, TrainingPaces } from '../../domain/paces'
 import { program } from '../../domain/program/program'
 import type { LiftId, Session, SessionType, StationId } from '../../domain/program/types'
 import { DEFAULT_SETTINGS, environmentOn } from '../../domain/settings'
@@ -20,9 +20,6 @@ import { strengthState } from '../../domain/weights'
 
 /** Days after Monday a Week's Sessions fall on, in Bucket order: never two Hard sessions back to back. */
 const HARD_DAYS = [0, 2, 4, 6]
-
-/** Each 5K test's time when a scenario doesn't say: 23:00 at baseline down to 19:55. */
-const FIVE_K: Record<number, number> = { 2: 1380, 9: 1335, 17: 1265, 25: 1195 }
 
 /** By-feel speeds as the first Live session ran them: 14 km/h reps, 6 km/h jogs. */
 const BY_FEEL_PACE = 257
@@ -33,6 +30,7 @@ const CALIBRATED: Record<LiftId, number> = {
   'back-squat': 185,
   'romanian-deadlift': 135,
   'bulgarian-split-squat': 40,
+  'heavy-farmers-carry': 70,
   'single-leg-calf-raise': 35,
   'seated-calf-raise': 70,
   'standing-calf-raise-machine': 140,
@@ -53,12 +51,11 @@ const STATION_SECONDS: Record<StationId, number> = {
 
 /** What a Session of each type usually feels like overall. */
 const RPE: Record<SessionType, number> = {
-  speed: 8,
   strength: 7,
-  threshold: 7,
+  run: 7,
   hyrox: 8,
   easy: 4,
-  '5k-test': 10,
+  'compromised-run-test': 10,
   'race-simulation': 9,
 }
 
@@ -66,7 +63,7 @@ export interface LogOptions {
   minutes?: number
   rpe?: number
   notes?: string
-  /** A 5K test's time, or the race's finish time. */
+  /** The race's finish time. */
   resultSeconds?: number
   environment?: Environment
   /** Strength: each set's RPE. 7, the default, moves a Working weight up; 8 holds it; 9 counts toward a reduction. */
@@ -202,13 +199,14 @@ function build(
   const environment = options.environment ?? environmentOn(date, DEFAULT_SETTINGS)
   const blocks = liveBlocks(session)
 
-  if (session.type === 'hyrox' || session.type === 'race-simulation') {
+  // Rounds of runs and Stations: HYROX, Compromised intervals, the test and the Race simulations.
+  if (blocks.some((b) => b.round !== null)) {
     const timed = blocks.map((b, i) => ({ b, i })).filter(({ b }) => b.round !== null)
     const rounds = Math.max(...timed.map(({ b }) => b.round!))
     const reached = partial ? Math.ceil(rounds * 0.6) : rounds
     const seconds = (b: LiveBlock) =>
       options.splitSeconds ??
-      (b.kind === 'round' ? 540 : b.kind === 'distance' ? 285 : session.type === 'race-simulation' ? simulationSplit(b) : 260)
+      (b.kind === 'round' ? 540 : b.kind === 'distance' ? 285 : b.kind === 'station' ? simulationSplit(b) : 260)
     const finished = timed.filter(({ b }) => b.round! <= reached)
     // A HYROX round is timed leg by leg; the round is what they add up to.
     const legs = finished.flatMap(({ b, i }) => roundLegs(b).map((part) => ({ block: i, seconds: legSeconds(b, part) })))
@@ -222,7 +220,7 @@ function build(
     return { ...done, environment, stations: stationLogs(live), resultSeconds: finish }
   }
 
-  const context = { paces: paces(so.logs, date), environment, unit: 'kmh' as const }
+  const context = { paces: NO_PACES, environment, unit: 'kmh' as const }
   const reps = blocks.map((b, block) => ({ b, block })).filter(({ b }) => b.rep !== null)
   const kept = partial ? reps.slice(0, Math.ceil(reps.length * 0.6)) : reps
   const missed = options.missedReps ?? 0
@@ -238,7 +236,7 @@ function build(
     environment,
     recoveryPace: blocks.some(byFeelRep) ? JOG_PACE : null,
     intervals,
-    resultSeconds: session.type === '5k-test' && status === 'done' ? (options.resultSeconds ?? FIVE_K[week] ?? 1380) : null,
+    resultSeconds: null,
   }
 }
 
@@ -251,10 +249,8 @@ function simulationSplit(block: LiveBlock): number {
   return Math.round(STATION_SECONDS[station.station] * share)
 }
 
-const paces = (logs: SessionLog[], date: LocalDate) => {
-  const test = latestFiveKTest(logs, date)
-  return test?.resultSeconds ? trainingPaces(test.resultSeconds) : null
-}
+/** Scenario histories log their runs by RPE: their Training paces are the Starting point's, which they don't set. */
+const NO_PACES: TrainingPaces | null = null
 
 /** The athlete accepted every Working weight going up: the Progress table climbs Week by Week. */
 function acceptIncreases(so: History, log: SessionLog) {

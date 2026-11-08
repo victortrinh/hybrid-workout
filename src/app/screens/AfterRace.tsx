@@ -258,10 +258,10 @@ function LoadLane({ byLane, total }: { byLane: Partial<Record<Lane, number>>; to
 }
 
 const LANE_FILL: Record<Lane, string> = {
-  speed: 'bg-speed',
-  strength: 'bg-strength',
-  threshold: 'bg-threshold',
   hyrox: 'bg-hyrox',
+  run: 'bg-threshold',
+  test: 'bg-speed',
+  strength: 'bg-strength',
   easy: 'bg-easy',
 }
 

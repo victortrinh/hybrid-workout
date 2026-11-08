@@ -4,9 +4,10 @@ import type { LocalDate } from '../calendar'
  * The Program as data: Phase → Week → Session → Block → Exercise.
  *
  * Prescriptions are relative. A run points at a Training pace (or RPE), a lift
- * at its Working weight, a Station at a percentage of its Race load. The Coach
- * turns them into absolute speeds and pounds once there is a 5K test and a
- * calibrated Working weight to resolve them against.
+ * at its Working weight. A Station is always at its Race load; only its
+ * Station volume changes. The Coach turns them into absolute speeds and pounds
+ * once there are Training paces and a calibrated Working weight to resolve
+ * them against.
  */
 export interface Program {
   version: number
@@ -18,7 +19,7 @@ export interface Program {
   phases: Phase[]
 }
 
-export type PhaseId = 'foundation' | '5k-development' | 'hyrox-build' | 'race-specific' | 'taper'
+export type PhaseId = 'foundation' | 'build' | 'race-specific' | 'taper'
 
 export interface Phase {
   id: PhaseId
@@ -34,33 +35,29 @@ export interface Week {
   /** Always a Monday. */
   startDate: LocalDate
   deload: boolean
-  fiveKTest: boolean
+  /** The Week's Key session is a Compromised run test, in place of the Run. */
+  compromisedRunTest: boolean
   raceSimulation: boolean
   /** Race week: the Week holding Race day. */
   race: boolean
   /** Things the Week asks for that aren't Sessions: rest days, kit, recovery. */
   notes?: string[]
-  /** The Bucket, in display order: Speed, Strength, Threshold, HYROX, then the Optional session. */
+  /** The Bucket, in display order: HYROX A, HYROX B, Run, Strength, then the Optional session. */
   sessions: Session[]
 }
 
-export type SessionType =
-  | 'speed'
-  | 'strength'
-  | 'threshold'
-  | 'hyrox'
-  | 'easy'
-  | '5k-test'
-  | 'race-simulation'
+export type SessionType = 'strength' | 'run' | 'hyrox' | 'easy' | 'compromised-run-test' | 'race-simulation'
 
-/** The five lane colours. A 5K test runs in the Speed lane, a Race simulation in the HYROX lane. */
-export type Lane = 'speed' | 'strength' | 'threshold' | 'hyrox' | 'easy'
+/** The five lane colours. A Race simulation runs in the HYROX lane. */
+export type Lane = 'hyrox' | 'run' | 'test' | 'strength' | 'easy'
 
 export interface Session {
   /** Unique within its Week. */
   id: string
   type: SessionType
-  /** What follows the Session type in a heading: "5 × 2′" in "Speed, 5 × 2′". */
+  /** The name it goes by where the Session type alone doesn't say which: "HYROX A". */
+  name?: string
+  /** What follows the Session type in a heading: "3 × 7′" in "Run, 3 × 7′", "A" in "HYROX A". */
   headline: string
   minutes: number
   key: boolean
@@ -74,9 +71,9 @@ export interface Session {
 
 export interface Block {
   name: string
-  /** Absent where the Program doesn't time the Block (lifting, a 5 km test). */
+  /** Absent where the Program doesn't time the Block (lifting, a test's 1 km at full effort). */
   minutes?: number
-  /** The Block that carries the Session's point (the intervals, the main lifts, the 5 km). */
+  /** The Block that carries the Session's point (the intervals, the main lifts, the rounds). */
   main?: boolean
   /**
    * HYROX's Set up: every Station the Session loads, at its load, set up once
@@ -120,6 +117,8 @@ export type Prescription =
       kind: 'sets'
       sets: number
       reps: number | Range
+      /** A carry's distance each set: "3 × 40 m". Its `reps` is then 1, one carry a set. */
+      meters?: number
       perLeg?: boolean
       load: StrengthLoad
       rpe?: Range
@@ -127,8 +126,8 @@ export type Prescription =
       /** A ceiling rather than a target: Deload sets stay at or under it. */
       rpeCap?: number
     }
-  /** `raceLoadPercent` only where the Station carries a load that scales (not SkiErg, row, burpees or wall balls). */
-  | { kind: 'station'; station: StationId; meters?: number; reps?: number; raceLoadPercent?: number }
+  /** One Station at its Station volume, always at Race load. */
+  | { kind: 'station'; station: StationId; meters?: number; reps?: number }
   /** A warm-up drill, counted rather than timed: "A-skips 2 × 20 m", "Leg swings 10 / leg". */
   | { kind: 'drill'; sets: number; reps?: number; meters?: number; perLeg?: boolean }
   /** Sprints on a bike or a sled, as many as the Exercise they replace. */
@@ -138,14 +137,14 @@ export type Prescription =
 
 export type Range = readonly [low: number, high: number]
 
-export type PaceRef = 'easy' | 'threshold' | '5k' | 'goal'
+export type PaceRef = 'easy' | 'threshold' | 'race-run'
 
 export type RunEffort =
-  /** At a Training pace. Until the first 5K test sets the paces, `rpe` is the whole target. */
+  /** At a Training pace. Until there are Training paces, `rpe` is the whole target. */
   | {
       pace: PaceRef
       rpe?: Range
-      /** Faster than the pace by this much: "5K −5 s/km". */
+      /** Faster than the pace by this much. */
       secondsPerKmFaster?: number
     }
   /** By feel, with no pace to resolve. */
@@ -155,6 +154,7 @@ export const LIFTS = [
   'back-squat',
   'romanian-deadlift',
   'bulgarian-split-squat',
+  'heavy-farmers-carry',
   'single-leg-calf-raise',
   'seated-calf-raise',
   'standing-calf-raise-machine',

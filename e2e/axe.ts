@@ -15,8 +15,8 @@ export async function expectNoAxeViolations(page: Page) {
   expect(summary).toEqual([])
 }
 
-/** Wednesday 11 November 2026, noon in Toronto: Week 3, the day the prototype shows. */
-export const WEEK_3 = new Date('2026-11-11T12:00:00-05:00')
+/** Wednesday 25 November 2026, noon in Toronto: Week 3. */
+export const WEEK_3 = new Date('2026-11-25T12:00:00-05:00')
 
-/** Tuesday 20 October 2026: six days before Week 1. */
-export const BEFORE_WEEK_1 = new Date('2026-10-20T12:00:00-04:00')
+/** Tuesday 3 November 2026: six days before Week 1. */
+export const BEFORE_WEEK_1 = new Date('2026-11-03T12:00:00-05:00')

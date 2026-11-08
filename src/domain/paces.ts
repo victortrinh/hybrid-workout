@@ -1,17 +1,16 @@
 /**
  * Training paces and run targets.
  *
- * The latest 5K test gives a VDOT (Daniels and Gilbert's oxygen-cost and
- * time-to-exhaustion equations, the ones behind Daniels' tables), and each
- * Training pace is the speed that costs a fixed share of it. Before the
- * baseline test the Starting point's estimated 5K time stands in, marked as
- * an estimate; with neither, run Prescriptions stay RPE only.
+ * For now the Training paces come from the Starting point's estimate alone,
+ * always marked as an estimate: the estimated 5K time gives a VDOT (Daniels
+ * and Gilbert's oxygen-cost and time-to-exhaustion equations), Threshold and
+ * Easy pace are the speeds that cost a fixed share of it, and Race run pace
+ * sits 15 s/km slower than Threshold, the Program's offset. With no estimate,
+ * run Prescriptions stay RPE only.
  *
  * Paces are seconds per km. Indoor runs read as treadmill speed, then the pace
  * per km, then the incline; Outdoor runs as pace per km alone.
  */
-import { daysBetween, type LocalDate } from './calendar'
-import type { SessionLog } from './log'
 import type { PaceRef, Range, RunEffort } from './program/types'
 
 export const ENVIRONMENTS = ['indoor', 'outdoor'] as const
@@ -29,21 +28,21 @@ export const GOAL_PACE = 264
 export const KM_PER_MILE = 1.609344
 
 export interface TrainingPaces {
-  /** The 5K test time these paces come from, in seconds. */
+  /** The estimated time these paces come from, in seconds. */
   fromSeconds: number
   vdot: number
-  /** Seconds per km. */
-  fiveK: number
+  /** Seconds per km: the pace held between Stations. */
+  raceRun: number
   threshold: number
   /** Easy is a range: the faster end first. */
   easy: Range
-  /** From the Starting point's estimated 5K time, not a 5K test. */
+  /** From the Starting point's estimate, not a test. */
   estimate: boolean
 }
 
 /** What a run Prescription is resolved against. */
 export interface RunContext {
-  /** Null with no 5K test and no estimated 5K time: then every run is RPE only. */
+  /** Null with no estimate: then every run is RPE only. */
   paces: TrainingPaces | null
   environment: Environment
   unit: SpeedUnit
@@ -88,14 +87,18 @@ export function vdot(fiveKSeconds: number): number {
 
 const secondsPerKm = (metresPerMinute: number) => Math.round(60_000 / metresPerMinute)
 
+/** Race run pace is Threshold pace plus this, in seconds per km (training-plan.md, "Paces and treadmill"). */
+export const THRESHOLD_OFFSET = 15
+
 export function trainingPaces(fiveKSeconds: number, { estimate = false } = {}): TrainingPaces {
   const v = vdot(fiveKSeconds)
   const at = (share: number) => secondsPerKm(speedAtCost(v * share))
+  const threshold = at(THRESHOLD_SHARE)
   return {
     fromSeconds: fiveKSeconds,
     vdot: v,
-    fiveK: Math.round(fiveKSeconds / 5),
-    threshold: at(THRESHOLD_SHARE),
+    raceRun: threshold + THRESHOLD_OFFSET,
+    threshold,
     easy: [at(EASY_SHARES[0]), at(EASY_SHARES[1])],
     estimate,
   }
@@ -104,29 +107,8 @@ export function trainingPaces(fiveKSeconds: number, { estimate = false } = {}): 
 /** A 5K test time from 12:00 to 60:00 is believable; anything else is a typo. */
 export const FIVE_K_SECONDS: Range = [12 * 60, 60 * 60]
 
-/**
- * The 5K test the Training paces come from: the latest one logged as Done
- * with a time, on or before `today`. A later date wins, then a later edit.
- */
-export function latestFiveKTest(logs: SessionLog[], today: LocalDate): SessionLog | null {
-  let latest: SessionLog | null = null
-  for (const log of logs) {
-    if (log.sessionId !== '5k-test' || log.status !== 'done' || log.resultSeconds === null) continue
-    if (daysBetween(log.date, today) < 0) continue
-    if (!latest || log.date > latest.date || (log.date === latest.date && log.updatedAt > latest.updatedAt)) {
-      latest = log
-    }
-  }
-  return latest
-}
-
-/**
- * The Training paces on `today`: from the latest 5K test, or else from the
- * Starting point's estimated 5K time, or none.
- */
-export function currentPaces(logs: SessionLog[], today: LocalDate, estimatedSeconds: number | null): TrainingPaces | null {
-  const test = latestFiveKTest(logs, today)
-  if (test?.resultSeconds) return trainingPaces(test.resultSeconds)
+/** The Training paces today: estimated from the Starting point, or none. */
+export function currentPaces(estimatedSeconds: number | null): TrainingPaces | null {
   return estimatedSeconds === null ? null : trainingPaces(estimatedSeconds, { estimate: true })
 }
 
@@ -136,14 +118,13 @@ export const isByFeel = (effort: RunEffort) => 'feel' in effort && effort.feel !
 /** The pace range a run effort asks for, in seconds per km, or null where it goes by feel. */
 export function paceFor(effort: RunEffort, paces: TrainingPaces): Range | null {
   if ('feel' in effort) {
-    // Deload Speed reps are "controlled": Threshold pace, never 5K pace.
+    // Controlled reps are Threshold pace.
     return effort.feel === 'controlled' ? [paces.threshold, paces.threshold] : null
   }
   const base: Record<PaceRef, Range> = {
-    '5k': [paces.fiveK, paces.fiveK],
+    'race-run': [paces.raceRun, paces.raceRun],
     threshold: [paces.threshold, paces.threshold],
     easy: paces.easy,
-    goal: [GOAL_PACE, GOAL_PACE],
   }
   const faster = effort.secondsPerKmFaster ?? 0
   const [fast, slow] = base[effort.pace]

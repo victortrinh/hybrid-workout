@@ -1,11 +1,12 @@
 /**
- * The approved Program (docs/training-plan.md, approved 13 Oct 2026) as data.
+ * The approved Program (docs/training-plan.md, approved 7 Nov 2026) as data.
  *
- * All 26 Weeks, built from the Session templates in the plan. Where the plan
- * leaves a detail open (which Stations go in which round, the Deload volumes
- * of accessory lifts) the choice is made once here and commented.
+ * All 24 Weeks, built from the Session templates in the plan. Where the plan
+ * leaves a detail open (which Station a three-round HYROX Session drops, the
+ * Deload volumes of the accessory lifts) the choice is made once here and
+ * commented.
  */
-import { localDate } from '../calendar'
+import { addDays, localDate } from '../calendar'
 import type {
   Block,
   Exercise,
@@ -18,12 +19,11 @@ import type {
   Station,
   StationId,
   StrengthLoad,
-  Substitution,
   Week,
 } from './types'
 
 // ---------------------------------------------------------------------------
-// Race loads: Men's Open 2025/26, in pounds. Verify on hyrox.com before race day.
+// Race loads: Men's Open and Doubles, verified on hyrox.com 7 Nov 2026, in pounds.
 
 export const stations: Record<StationId, Station> = {
   skierg: { id: 'skierg', name: 'SkiErg', order: 1, raceLoad: { meters: 1000 } },
@@ -76,209 +76,221 @@ const walk = (minutes: number | undefined, name: string, note?: string): Exercis
   note,
 })
 
-const drill = (name: string, sets: number, amount: { reps?: number; meters?: number; perLeg?: boolean }): Exercise => ({
-  name,
-  prescription: { kind: 'drill', sets, ...amount },
+const strides = (reps: number): Exercise => ({
+  name: 'Strides',
+  prescription: { kind: 'strides', reps, seconds: 15 },
+  note: 'Relaxed',
 })
 
-/** Speed's warm-up: a jog, then the drills ticked off one by one. Same 10 minutes as ever. */
-const speedWarmUp: Block[] = [
-  { name: 'Warm-up', minutes: 7, exercises: [easyJog(7)] },
-  {
-    name: 'Drills',
-    minutes: 3,
-    exercises: [
-      drill('Leg swings', 1, { reps: 10, perLeg: true }),
-      drill('A-skips', 2, { meters: 20 }),
-      drill('B-skips', 2, { meters: 20 }),
-      drill('High knees', 1, { meters: 20 }),
-      drill('Butt kicks', 1, { meters: 20 }),
-    ],
+type Volume = { meters?: number; reps?: number }
+
+/** One Station at a Station volume, at Race load: the load never changes, only the volume. */
+const station = (id: StationId, volume: Volume): Exercise => ({
+  name: stations[id].name,
+  prescription: { kind: 'station', station: id, ...volume },
+})
+
+const raceVolume = (id: StationId): Volume => {
+  const { meters, reps } = stations[id].raceLoad
+  return { meters, reps }
+}
+
+const halfRaceVolume = (id: StationId): Volume => {
+  const { meters, reps } = stations[id].raceLoad
+  return { meters: meters && meters / 2, reps: reps && reps / 2 }
+}
+
+// ---------------------------------------------------------------------------
+// HYROX A and HYROX B: four rounds of a Station, then a run.
+
+type Rotation = 'A' | 'B'
+
+/** HYROX A loads the sleds and carries; HYROX B the ergs, the jumps and the ball. Each in race order, wall balls last. */
+const ROTATION: Record<Rotation, StationId[]> = {
+  A: ['sled-push', 'sled-pull', 'farmers-carry', 'sandbag-lunges'],
+  B: ['skierg', 'burpee-broad-jumps', 'row', 'wall-balls'],
+}
+
+/** The Station volume table's four columns (training-plan.md, "Station volume per Session"). */
+export type VolumeTier = 'foundation' | 'build-early' | 'build-late' | 'race-specific'
+
+/** Each Station's volume per round, by tier. */
+export const STATION_VOLUME: Record<VolumeTier, Record<StationId, Volume>> = {
+  foundation: {
+    skierg: { meters: 250 },
+    'sled-push': { meters: 25 },
+    'sled-pull': { meters: 25 },
+    'burpee-broad-jumps': { meters: 20 },
+    row: { meters: 250 },
+    'farmers-carry': { meters: 100 },
+    'sandbag-lunges': { meters: 25 },
+    'wall-balls': { reps: 25 },
   },
-]
-
-/** No floor space, or Readiness says no jumps: sprint on the sled or the bike instead. */
-const floorSubstitution: Substitution = {
-  when: ['no-floor-space', 'readiness'],
-  options: [
-    { name: 'Sled push sprints', prescription: { kind: 'sprints', meters: [10, 15], light: true } },
-    { name: 'Bike sprints', prescription: { kind: 'sprints', seconds: [8, 10] } },
-  ],
+  'build-early': {
+    skierg: { meters: 500 },
+    'sled-push': { meters: 25 },
+    'sled-pull': { meters: 25 },
+    'burpee-broad-jumps': { meters: 40 },
+    row: { meters: 500 },
+    'farmers-carry': { meters: 100 },
+    'sandbag-lunges': { meters: 50 },
+    'wall-balls': { reps: 50 },
+  },
+  'build-late': {
+    skierg: { meters: 750 },
+    'sled-push': { meters: 50 },
+    'sled-pull': { meters: 50 },
+    'burpee-broad-jumps': { meters: 60 },
+    row: { meters: 750 },
+    'farmers-carry': { meters: 200 },
+    'sandbag-lunges': { meters: 75 },
+    'wall-balls': { reps: 75 },
+  },
+  'race-specific': Object.fromEntries(RACE_ORDER.map((id) => [id, raceVolume(id)])) as Record<StationId, Volume>,
 }
 
-const pogo = (sets: number, reps: number): Exercise => ({
-  name: 'Pogo jumps',
-  prescription: { kind: 'sets', sets, reps, load: { kind: 'bodyweight' }, restSeconds: [60, 60] },
-  note: 'Ground contacts',
-  substitutions: [floorSubstitution],
-})
-
-const broadJumps = (sets: number, reps: number): Exercise => ({
-  name: 'Broad jumps',
-  prescription: { kind: 'sets', sets, reps, load: { kind: 'bodyweight' }, restSeconds: [20, 20] },
-  note: 'Full reset between jumps',
-  substitutions: [floorSubstitution],
-})
-
-/** Accelerations start at 80–90% and build to 90–95% from the 5K development Phase on, each after a 45″ walk back. */
-const accelerations = (reps: number, percentOfMax: Range, note: string): Exercise => ({
-  name: 'Accelerations',
-  prescription: { kind: 'accelerations', reps, meters: 15, percentOfMax, restSeconds: [45, 45] },
-  note,
-  substitutions: [floorSubstitution],
-})
-
-/** 120 → "2′", 90 → "90″" */
-const minutesMark = (seconds: number) => (seconds % 60 === 0 ? `${seconds / 60}′` : `${seconds}″`)
-
-interface Intervals {
-  reps: number
-  workSeconds: number
-  recoverySeconds: number
-  effort: RunEffort
+/**
+ * The run after each Station, by tier. HYROX B's stay at 600 m in Race
+ * specific: its Stations take about twice as long as A's.
+ */
+export const RUN_METERS: Record<VolumeTier, Record<Rotation, number>> = {
+  foundation: { A: 400, B: 400 },
+  'build-early': { A: 600, B: 600 },
+  'build-late': { A: 800, B: 800 },
+  'race-specific': { A: 1000, B: 600 },
 }
 
-const HARD: RunEffort = { feel: 'hard' }
-const AT_5K: RunEffort = { pace: '5k' }
+/**
+ * Three rounds drop one Station. Until the Coach picks it from the logs, the
+ * one dropped is the middle Station that is least technical: the farmers
+ * carry in A, the row in B. Wall balls stay last.
+ */
+const THREE_ROUNDS: Record<Rotation, StationId[]> = {
+  A: ['sled-push', 'sled-pull', 'sandbag-lunges'],
+  B: ['skierg', 'burpee-broad-jumps', 'wall-balls'],
+}
 
-function speed(intervals: Intervals, accels: number, week: number, key = false): Session {
-  const early = week <= 5
+/** The Taper's last Week: two rounds, the first and last Station of each. */
+const TWO_ROUNDS: Record<Rotation, StationId[]> = {
+  A: ['sled-push', 'sandbag-lunges'],
+  B: ['skierg', 'wall-balls'],
+}
+
+const HYROX_WARM_UP: Block = { name: 'Warm-up', minutes: 5, exercises: [easyJog(5)] }
+
+const HYROX_COOLDOWN: Block = {
+  name: 'Cooldown',
+  minutes: 4,
+  exercises: [walk(4, 'Walk, relaxed breathing', 'No extra finisher.')],
+}
+
+/**
+ * Every Station the rounds load, once, in the order they come up, at Race
+ * load. They stay set up for the whole Session. Stations with nothing to
+ * load (SkiErg, row, burpee broad jumps) are left out, and the note says so once.
+ */
+function setUp(ids: StationId[]): Block {
+  const loaded = ids.filter((id) => stations[id].raceLoad.pounds !== undefined)
   return {
-    id: 'speed',
-    type: 'speed',
-    headline: `${intervals.reps} × ${minutesMark(intervals.workSeconds)}`,
-    minutes: 45,
+    name: 'Set up',
+    setup: true,
+    exercises: loaded.map((id) => ({ name: stations[id].name, prescription: { kind: 'station', station: id } })),
+    ...(loaded.length < ids.length && { note: 'Nothing else to load.' }),
+  }
+}
+
+interface Circuit {
+  rotation: Rotation
+  ids: StationId[]
+  volume: (id: StationId) => Volume
+  runMeters: number
+  key?: boolean
+  minutes?: number
+  note?: string
+}
+
+/** A round is one Station at its Station volume, then the run: every run a Compromised run. */
+function hyrox({ rotation, ids, volume, runMeters, key = false, minutes = 45, note }: Circuit): Session {
+  const roundMinutes = (minutes - HYROX_WARM_UP.minutes! - HYROX_COOLDOWN.minutes!) / ids.length
+  return {
+    id: rotation === 'A' ? 'hyrox-a' : 'hyrox-b',
+    type: 'hyrox',
+    name: `HYROX ${rotation}`,
+    headline: `${ids.length} rounds`,
+    minutes,
     key,
     optional: false,
-    note: 'Finish fresh enough for the next Hard session.',
+    note,
     blocks: [
-      ...speedWarmUp,
-      { name: 'Plyometrics', minutes: 5, exercises: [pogo(2, 15), broadJumps(3, 3)] },
-      {
-        name: 'Accelerations',
-        minutes: 5,
-        exercises: [
-          early
-            ? accelerations(accels, [80, 90], 'Walk back. Never maximal this early.')
-            : accelerations(accels, [90, 95], 'Walk back. Fast, not maximal.'),
-        ],
-      },
-      {
-        name: 'Intervals',
-        minutes: 20,
-        main: true,
-        exercises: [{ name: 'Intervals', prescription: { kind: 'intervals', ...intervals, recovery: 'jog' } }],
-      },
-      { name: 'Cooldown', minutes: 5, exercises: [easyJog(5, 'Jog or walk')] },
+      HYROX_WARM_UP,
+      setUp(ids),
+      ...ids.map(
+        (id, i): Block => ({
+          name: `Round ${i + 1}`,
+          minutes: roundMinutes,
+          main: true,
+          exercises: [station(id, volume(id)), { name: 'Run', prescription: { kind: 'run', meters: runMeters } }],
+        }),
+      ),
+      HYROX_COOLDOWN,
     ],
   }
 }
 
-/** Deload Speed: 4 × 2′ controlled, half the jump contacts, two easy accelerations. */
-const speedDeload: Session = {
-  id: 'speed',
-  type: 'speed',
-  headline: '4 × 2′ controlled',
-  minutes: 35,
-  key: false,
-  optional: false,
-  blocks: [
-    ...speedWarmUp,
-    { name: 'Plyometrics', minutes: 3, exercises: [pogo(1, 15), broadJumps(2, 2)] },
-    {
-      name: 'Accelerations',
-      minutes: 3,
-      exercises: [accelerations(2, [80, 85], 'Walk back. Easy speed.')],
-    },
-    {
-      name: 'Intervals',
-      minutes: 14,
-      main: true,
-      exercises: [
-        {
-          name: 'Intervals',
-          prescription: {
-            kind: 'intervals',
-            reps: 4,
-            workSeconds: 120,
-            recoverySeconds: 120,
-            recovery: 'jog',
-            effort: { feel: 'controlled' },
-          },
-        },
-      ],
-    },
-    { name: 'Cooldown', minutes: 5, exercises: [easyJog(5, 'Jog or walk')] },
-  ],
-}
+/** A normal Week's HYROX: four rounds at the tier's Station volume. */
+const fourRounds = (rotation: Rotation, tier: VolumeTier, key = false): Session =>
+  hyrox({
+    rotation,
+    ids: ROTATION[rotation],
+    volume: (id) => STATION_VOLUME[tier][id],
+    runMeters: RUN_METERS[tier][rotation],
+    key,
+    note: tier === 'foundation' ? 'Technique before speed.' : undefined,
+  })
 
-/** Taper Speed: short and sharp, no maximal sprinting, no broad jumps. */
-const speedTaper: Session = {
-  id: 'speed',
-  type: 'speed',
-  headline: '4 × 2′',
-  minutes: 40,
-  key: true,
-  optional: false,
-  note: 'Last speed before the race. No max sprinting, no broad jumps.',
-  blocks: [
-    ...speedWarmUp,
-    { name: 'Plyometrics', minutes: 2, exercises: [pogo(1, 10)] },
-    {
-      name: 'Intervals',
-      minutes: 14,
-      main: true,
-      exercises: [
-        {
-          name: 'Intervals',
-          prescription: { kind: 'intervals', reps: 4, workSeconds: 120, recoverySeconds: 120, recovery: 'jog', effort: AT_5K },
-        },
-      ],
-    },
-    { name: 'Cooldown', minutes: 10, exercises: [easyJog(10, 'Jog or walk')] },
-  ],
-}
+/** A Deload week's HYROX: three rounds, Race load and volume kept. Week 20 halves the volume too. */
+const threeRounds = (rotation: Rotation, tier: VolumeTier, { half = false } = {}): Session =>
+  hyrox({
+    rotation,
+    ids: THREE_ROUNDS[rotation],
+    volume: half ? halfRaceVolume : (id) => STATION_VOLUME[tier][id],
+    runMeters: RUN_METERS[tier][rotation],
+    minutes: 36,
+    note: 'Race load kept. Smooth, no pushing.',
+  })
 
-const FIVE_K_TEST_NAMES = { 2: 'baseline', 8: 'second', 16: 'third', 24: 'final' } as const
+/** The Taper's HYROX: Stations at half race volume, fewer rounds and shorter runs, Race load kept. */
+const taperRounds = (rotation: Rotation, rounds: 3 | 2, key = false): Session =>
+  hyrox({
+    rotation,
+    ids: rounds === 3 ? THREE_ROUNDS[rotation] : TWO_ROUNDS[rotation],
+    volume: halfRaceVolume,
+    runMeters: rounds === 3 ? 600 : 400,
+    minutes: rounds === 3 ? 30 : 20,
+    key,
+    note: 'Race load, short. Stop well before tired.',
+  })
 
-function fiveKTest(week: keyof typeof FIVE_K_TEST_NAMES): Session {
+// ---------------------------------------------------------------------------
+// Run: Threshold intervals, or Compromised intervals from Build on.
+
+const AT_THRESHOLD: RunEffort = { pace: 'threshold', rpe: THRESHOLD_RPE }
+const AT_RACE_RUN: RunEffort = { pace: 'race-run' }
+
+function thresholdRun(reps: number, repMinutes: number, key = false): Session {
+  const work = reps * repMinutes + ((reps - 1) * 90) / 60
+  // Longer sets warm up for 7 minutes, so the whole Run still fits the Session cap.
+  const warmUp = work > 28 ? 7 : 10
+  const cooldown = 45 - warmUp - work
   return {
-    id: '5k-test',
-    type: '5k-test',
-    headline: FIVE_K_TEST_NAMES[week],
-    minutes: 45,
-    key: true,
-    optional: false,
-    blocks: [
-      { name: 'Warm-up', minutes: 10, exercises: [easyJog(10)] },
-      { name: 'Strides', minutes: 2, exercises: [{ name: 'Strides', prescription: { kind: 'strides', reps: 4, seconds: 15 } }] },
-      {
-        name: '5 km',
-        main: true,
-        exercises: [
-          {
-            name: '5 km time trial',
-            prescription: { kind: 'run', meters: 5000, effort: { feel: 'all-out' } },
-            note: 'Indoors: treadmill at 1% incline. The time resets the Training paces.',
-          },
-        ],
-      },
-      { name: 'Cooldown', minutes: 8, exercises: [easyJog(8)] },
-    ],
-  }
-}
-
-function threshold(reps: number, repMinutes: number, recoverySeconds: number, key: boolean): Session {
-  const work = reps * repMinutes + ((reps - 1) * recoverySeconds) / 60
-  return {
-    id: 'threshold',
-    type: 'threshold',
+    id: 'run',
+    type: 'run',
     headline: `${reps} × ${repMinutes}′`,
     minutes: 45,
     key,
     optional: false,
     blocks: [
-      { name: 'Warm-up', minutes: 10, exercises: [easyJog(10)] },
+      { name: 'Warm-up', minutes: warmUp, exercises: [easyJog(warmUp)] },
       {
         name: 'Threshold',
         minutes: work,
@@ -286,52 +298,154 @@ function threshold(reps: number, repMinutes: number, recoverySeconds: number, ke
         exercises: [
           {
             name: 'Threshold reps',
-            prescription: {
-              kind: 'intervals',
-              reps,
-              workSeconds: repMinutes * 60,
-              recoverySeconds,
-              recovery: 'jog',
-              effort: { pace: 'threshold', rpe: THRESHOLD_RPE },
-            },
+            prescription: { kind: 'intervals', reps, workSeconds: repMinutes * 60, recoverySeconds: 90, recovery: 'jog', effort: AT_THRESHOLD },
             note: 'Never racing.',
           },
         ],
       },
-      { name: 'Easy and cooldown', minutes: 45 - 10 - work, exercises: [easyJog(45 - 10 - work)] },
+      { name: 'Cooldown', minutes: cooldown, exercises: [easyJog(cooldown)] },
     ],
   }
 }
 
-/** A Bucket's Easy run, Optional or (in Deload and Taper Weeks) in Threshold's place. */
-function easyRun(
-  minutes: number,
-  { id = 'easy', optional = true, note = 'Full sentences. No tempo, no hills.', extra = [] as Exercise[] } = {},
-): Session {
+/** Compromised intervals: 1 km at Race run pace, then 20 wall balls, 60″ rest between. */
+function compromisedIntervals(reps: number, key = false): Session {
+  const repMinutes = 6
+  const work = reps * repMinutes
+  const warmUp = reps > 4 ? 7 : 10
+  const cooldown = 45 - warmUp - work
   return {
-    id,
-    type: 'easy',
-    headline: `${minutes}′`,
-    minutes,
-    key: false,
-    optional,
+    id: 'run',
+    type: 'run',
+    headline: `${reps} × (1 km + 20 wall balls)`,
+    minutes: 45,
+    key,
+    optional: false,
+    note: 'No ball at hand: 20 air squats + 10 burpees for the wall balls.',
+    blocks: [
+      { name: 'Warm-up', minutes: warmUp, exercises: [easyJog(warmUp)] },
+      ...Array.from(
+        { length: reps },
+        (_, i): Block => ({
+          name: `Rep ${i + 1}`,
+          minutes: repMinutes,
+          main: true,
+          note: i < reps - 1 ? '60″ rest after.' : undefined,
+          exercises: [
+            { name: 'Run', prescription: { kind: 'run', meters: 1000, effort: AT_RACE_RUN } },
+            station('wall-balls', { reps: 20 }),
+          ],
+        }),
+      ),
+      { name: 'Cooldown', minutes: cooldown, exercises: [easyJog(cooldown)] },
+    ],
+  }
+}
+
+/** A Deload week's Run: 35 minutes easy. */
+const deloadRun: Session = {
+  id: 'run',
+  type: 'run',
+  headline: '35′ easy',
+  minutes: 35,
+  key: false,
+  optional: false,
+  blocks: [
+    {
+      name: 'Easy run',
+      minutes: 35,
+      main: true,
+      exercises: [{ ...easyJog(35, 'Easy run'), note: 'Deload: easy in place of the intervals. Full sentences.' }],
+    },
+  ],
+}
+
+/** Week 23's Run: 20 minutes easy, then four 1′ pickups at Race run pace. */
+const taperPickups: Session = {
+  id: 'run',
+  type: 'run',
+  headline: '20′ easy + 4 × 1′',
+  minutes: 25,
+  key: true,
+  optional: false,
+  blocks: [
+    { name: 'Easy run', minutes: 20, exercises: [easyJog(20, 'Easy run')] },
+    {
+      name: 'Pickups',
+      minutes: 5,
+      main: true,
+      exercises: [
+        {
+          name: 'Pickups',
+          prescription: { kind: 'intervals', reps: 4, workSeconds: 60, recoverySeconds: 20, recovery: 'jog', effort: AT_RACE_RUN },
+        },
+      ],
+    },
+  ],
+}
+
+/** Week 22's Run: 3 × 5′ at Threshold, about 30′. */
+const taperThreshold: Session = {
+  ...thresholdRun(3, 5),
+  minutes: 30,
+  blocks: [
+    { name: 'Warm-up', minutes: 8, exercises: [easyJog(8)] },
+    {
+      name: 'Threshold',
+      minutes: 18,
+      main: true,
+      exercises: [
+        {
+          name: 'Threshold reps',
+          prescription: { kind: 'intervals', reps: 3, workSeconds: 300, recoverySeconds: 90, recovery: 'jog', effort: AT_THRESHOLD },
+          note: 'Never racing.',
+        },
+      ],
+    },
+    { name: 'Cooldown', minutes: 4, exercises: [easyJog(4)] },
+  ],
+}
+
+// ---------------------------------------------------------------------------
+// Compromised run test: four rounds of 1 km at full effort, then a Station at half race volume.
+
+const TEST_STATIONS = ['skierg', 'sled-push', 'row', 'wall-balls'] as const satisfies readonly StationId[]
+
+const TEST_NAMES = { 2: 'baseline', 9: 'second', 14: 'third', 19: 'final' } as const
+
+function compromisedRunTest(week: keyof typeof TEST_NAMES): Session {
+  return {
+    id: 'compromised-run-test',
+    type: 'compromised-run-test',
+    headline: TEST_NAMES[week],
+    minutes: 45,
+    key: true,
+    optional: false,
+    note: 'Indoors: treadmill at 1% incline. The average of the four runs becomes Race run pace.',
     blocks: [
       {
-        name: 'Easy run',
-        minutes,
-        main: true,
-        exercises: [{ ...easyJog(minutes, 'Easy run'), note }, ...extra],
+        name: 'Warm-up',
+        minutes: 8,
+        exercises: [easyJog(8), { name: 'Station prep', prescription: { kind: 'note' }, note: 'Set up every Station before the first run.' }],
       },
+      { name: 'Strides', minutes: 2, exercises: [strides(2)] },
+      ...TEST_STATIONS.map(
+        (id, i): Block => ({
+          name: `Run and ${stations[id].name}`,
+          main: true,
+          exercises: [
+            { name: 'Run', prescription: { kind: 'run', meters: 1000, effort: { feel: 'all-out' } }, note: i === 0 ? 'Full effort.' : undefined },
+            station(id, halfRaceVolume(id)),
+          ],
+        }),
+      ),
+      { name: 'Cooldown', minutes: 4, exercises: [easyJog(4)] },
     ],
   }
 }
 
-/** Deload Weeks replace Threshold with 35–40 minutes of easy running. */
-const easyInsteadOfThreshold = easyRun(40, {
-  id: 'easy-deload',
-  optional: false,
-  note: 'Deload: easy running in place of Threshold. Full sentences.',
-})
+// ---------------------------------------------------------------------------
+// Strength: squat, RDL, split squat, the heavy carry and the calves.
 
 type StrengthPhase = 'build' | 'maintenance'
 type Sets = Extract<Prescription, { kind: 'sets' }>
@@ -343,9 +457,8 @@ function onLift(rx: Sets, lift: LiftId): Sets {
 
 /**
  * Calf raises as the Program writes them, on the machines. The athlete's gym
- * has none (training-plan.md, "Resolved during approval"), so the Equipment
- * profile swaps in the dumbbell single-leg raise and the loaded seated raise.
- * `rx` is written for the dumbbell lift.
+ * has none, so the Equipment profile swaps in the dumbbell single-leg raise
+ * and the loaded seated raise. `rx` is written for the dumbbell lift.
  */
 function standingCalfRaise(rx: Sets): Exercise {
   return {
@@ -375,6 +488,18 @@ function seatedCalfRaise(rx: Sets): Exercise {
   }
 }
 
+const heavyCarry = (sets: number, load: StrengthLoad, rpe?: Range, rpeCap?: number): Exercise => ({
+  name: 'Heavy farmers carry',
+  prescription: { kind: 'sets', sets, reps: 1, meters: 40, load, rpe, rpeCap },
+  note: 'Dumbbells, heavier than Race load when possible',
+})
+
+const STRENGTH_WARM_UP: Block = {
+  name: 'Warm-up',
+  minutes: 6,
+  exercises: [{ name: 'Bike, movement prep and ramp-up sets', prescription: { kind: 'note', minutes: 6 } }],
+}
+
 function strength(phase: StrengthPhase, { calibration = false, deload = false } = {}): Session {
   const load = (lift: LiftId): StrengthLoad =>
     calibration
@@ -394,20 +519,13 @@ function strength(phase: StrengthPhase, { calibration = false, deload = false } 
   return {
     id: 'strength',
     type: 'strength',
-    headline: calibration
-      ? 'find Working weights'
-      : deload
-        ? 'deload'
-        : `squat ${squat.sets} × ${squat.reps}`,
+    headline: calibration ? 'find Working weights' : deload ? 'deload' : `squat ${squat.sets} × ${squat.reps}`,
     minutes: deload ? 30 : 45,
     key: false,
     optional: false,
+    note: 'At least 3 hours from any run, and first when they share a day.',
     blocks: [
-      {
-        name: 'Warm-up',
-        minutes: 6,
-        exercises: [{ name: 'Bike, movement prep and ramp-up sets', prescription: { kind: 'note', minutes: 6 } }],
-      },
+      STRENGTH_WARM_UP,
       {
         name: 'Strength',
         main: true,
@@ -431,15 +549,21 @@ function strength(phase: StrengthPhase, { calibration = false, deload = false } 
           },
         ],
       },
-      {
-        name: 'Unilateral',
-        exercises: [
-          {
-            name: 'Bulgarian split squat',
-            prescription: { kind: 'sets', sets: sets(2), reps: 6, perLeg: true, load: load('bulgarian-split-squat'), rpe: rpe7, rpeCap },
-          },
-        ],
-      },
+      // From Race specific the split squat is dropped: strength kept without the fatigue.
+      ...(build
+        ? [
+            {
+              name: 'Unilateral',
+              exercises: [
+                {
+                  name: 'Bulgarian split squat',
+                  prescription: { kind: 'sets', sets: sets(2), reps: 6, perLeg: true, load: load('bulgarian-split-squat'), rpe: rpe7, rpeCap },
+                } satisfies Exercise,
+              ],
+            },
+          ]
+        : []),
+      { name: 'Carry', exercises: [heavyCarry(sets(build ? 3 : 2), load('heavy-farmers-carry'), rpe7, rpeCap)] },
       {
         name: 'Tendon',
         exercises: [
@@ -447,258 +571,84 @@ function strength(phase: StrengthPhase, { calibration = false, deload = false } 
           seatedCalfRaise({ kind: 'sets', sets: sets(2), reps: 10, load: load('seated-calf-raise') }),
         ],
       },
-      {
-        name: 'Upper',
-        exercises: [
-          {
-            name: 'Pull-ups and push-ups',
-            prescription: { kind: 'sets', sets: sets(2), reps: [6, 10], load: { kind: 'bodyweight' } },
-            note: 'Superset, each',
-          },
-        ],
-      },
     ],
   }
 }
 
-/** Taper Strength: light technique only. */
+/** Week 22: squat and RDL 2 × 4 at RPE 7, carries 2 × 40 m, calves 2 × 8. */
 const strengthTaper: Session = {
   id: 'strength',
   type: 'strength',
-  headline: 'light technique',
+  headline: 'squat 2 × 4',
   minutes: 30,
+  key: false,
+  optional: false,
+  blocks: [
+    STRENGTH_WARM_UP,
+    {
+      name: 'Strength',
+      main: true,
+      exercises: [
+        { name: 'Back squat', prescription: { kind: 'sets', sets: 2, reps: 4, load: { kind: 'working-weight', lift: 'back-squat' }, rpe: [7, 7] } },
+        {
+          name: 'Romanian deadlift',
+          prescription: { kind: 'sets', sets: 2, reps: 4, load: { kind: 'working-weight', lift: 'romanian-deadlift' }, rpe: [7, 7] },
+        },
+      ],
+    },
+    { name: 'Carry', exercises: [heavyCarry(2, { kind: 'working-weight', lift: 'heavy-farmers-carry' })] },
+    {
+      name: 'Tendon',
+      exercises: [standingCalfRaise({ kind: 'sets', sets: 2, reps: 8, perLeg: true, load: { kind: 'working-weight', lift: 'single-leg-calf-raise' } })],
+    },
+  ],
+}
+
+/** Week 23: light technique only, no heavy lowering. */
+const strengthLight: Session = {
+  id: 'strength',
+  type: 'strength',
+  headline: 'light technique',
+  minutes: 20,
   key: false,
   optional: false,
   note: 'No heavy lowering.',
   blocks: [
-    {
-      name: 'Warm-up',
-      minutes: 6,
-      exercises: [{ name: 'Bike and movement prep', prescription: { kind: 'note', minutes: 6 } }],
-    },
+    { name: 'Warm-up', minutes: 5, exercises: [{ name: 'Bike and movement prep', prescription: { kind: 'note', minutes: 5 } }] },
     {
       name: 'Strength',
       main: true,
       exercises: [
         { name: 'Back squat', prescription: { kind: 'sets', sets: 2, reps: 3, load: { kind: 'light', lift: 'back-squat' } } },
-        {
-          name: 'Romanian deadlift',
-          prescription: { kind: 'sets', sets: 2, reps: 3, load: { kind: 'light', lift: 'romanian-deadlift' } },
-        },
+        { name: 'Romanian deadlift', prescription: { kind: 'sets', sets: 2, reps: 3, load: { kind: 'light', lift: 'romanian-deadlift' } } },
       ],
     },
     {
       name: 'Tendon',
-      exercises: [
-        standingCalfRaise({ kind: 'sets', sets: 2, reps: 8, perLeg: true, load: { kind: 'light', lift: 'single-leg-calf-raise' } }),
-      ],
+      exercises: [standingCalfRaise({ kind: 'sets', sets: 2, reps: 8, perLeg: true, load: { kind: 'light', lift: 'single-leg-calf-raise' } })],
     },
   ],
 }
 
 // ---------------------------------------------------------------------------
-// HYROX: three rounds of a run and Stations, by Phase and Rotation.
+// The Easy run, Optional, growing into the long run.
 
-type Rotation = 'A' | 'B'
-type Volume = { meters?: number; reps?: number }
-
-/** One Station at a share of Race load. Only Stations whose load scales carry the percentage. */
-function station(id: StationId, volume: Volume, percent: number): Exercise {
-  const scales = stations[id].raceLoad.pounds !== undefined && !stations[id].raceLoad.fixedLoad
+function easyRun(minutes: number, { note = 'Full sentences. No tempo, no hills.', extra = [] as Exercise[], id = 'easy' } = {}): Session {
   return {
-    name: stations[id].name,
-    prescription: { kind: 'station', station: id, ...volume, raceLoadPercent: scales ? percent : undefined },
-  }
-}
-
-/** Station volume per round, by Phase (training-plan.md, HYROX table). */
-const VOLUME: Record<'foundation' | 'development' | 'build', Record<StationId, Volume>> = {
-  foundation: {
-    'sled-push': { meters: 25 },
-    'sled-pull': { meters: 25 },
-    'farmers-carry': { meters: 50 },
-    'sandbag-lunges': { meters: 25 },
-    skierg: { meters: 250 },
-    row: { meters: 250 },
-    'burpee-broad-jumps': { meters: 10 },
-    'wall-balls': { reps: 20 },
-  },
-  development: {
-    'sled-push': { meters: 25 },
-    'sled-pull': { meters: 25 },
-    'farmers-carry': { meters: 100 },
-    'sandbag-lunges': { meters: 50 },
-    skierg: { meters: 300 },
-    row: { meters: 300 },
-    'burpee-broad-jumps': { meters: 20 },
-    'wall-balls': { reps: 30 },
-  },
-  build: {
-    'sled-push': { meters: 50 },
-    'sled-pull': { meters: 50 },
-    'farmers-carry': { meters: 100 },
-    'sandbag-lunges': { meters: 50 },
-    skierg: { meters: 500 },
-    row: { meters: 500 },
-    'burpee-broad-jumps': { meters: 40 },
-    'wall-balls': { reps: 50 },
-  },
-}
-
-/**
- * Which Stations go in each of the three rounds. The plan gives the count per
- * round by Phase (2, then 2–3, then 1–2); the pairing is chosen here so every
- * Station of the Rotation appears each Session.
- */
-const ROUNDS: Record<'foundation' | 'development' | 'build', Record<Rotation, StationId[][]>> = {
-  foundation: {
-    A: [['sled-push', 'sled-pull'], ['farmers-carry', 'sandbag-lunges'], ['sled-push', 'sled-pull']],
-    B: [['skierg', 'burpee-broad-jumps'], ['row', 'wall-balls'], ['skierg', 'burpee-broad-jumps']],
-  },
-  development: {
-    A: [['sled-push', 'sled-pull', 'farmers-carry'], ['sandbag-lunges', 'sled-push'], ['sled-pull', 'farmers-carry', 'sandbag-lunges']],
-    B: [['skierg', 'burpee-broad-jumps', 'wall-balls'], ['row', 'wall-balls'], ['skierg', 'row', 'burpee-broad-jumps']],
-  },
-  build: {
-    A: [['sled-push', 'sled-pull'], ['farmers-carry', 'sandbag-lunges'], ['sled-push']],
-    B: [['skierg', 'burpee-broad-jumps'], ['row', 'wall-balls'], ['skierg']],
-  },
-}
-
-const PHASE_RUN = { foundation: 600, development: 700, build: 800 } as const
-
-/** A jog, then lunges ticked off: the same 7 minutes. Station prep is the Set up's. */
-const hyroxWarmUp: Block[] = [
-  { name: 'Warm-up', minutes: 5, exercises: [easyJog(5)] },
-  { name: 'Lunges', minutes: 2, exercises: [drill('Lunges', 2, { reps: 10 })] },
-]
-
-/**
- * Every Station the rounds load, once, in the order they come up, at the load
- * the first round asks for. They stay set up for the whole Session. Stations
- * with nothing to load (SkiErg, Row, Burpee broad jumps) are left out, and the
- * note says so once.
- */
-function setUp(rounds: { stations: Exercise[] }[]): Block {
-  const seen = new Map<StationId, Exercise | null>()
-  for (const { prescription: rx } of rounds.flatMap((r) => r.stations)) {
-    if (rx.kind !== 'station' || seen.has(rx.station)) continue
-    seen.set(
-      rx.station,
-      stations[rx.station].raceLoad.pounds === undefined
-        ? null
-        : {
-            name: stations[rx.station].name,
-            prescription: { kind: 'station', station: rx.station, raceLoadPercent: rx.raceLoadPercent },
-          },
-    )
-  }
-  const exercises = [...seen.values()].filter((e): e is Exercise => e !== null)
-  return {
-    name: 'Set up',
-    setup: true,
-    exercises,
-    ...(exercises.length < seen.size && { note: 'Nothing else to load.' }),
-  }
-}
-
-const hyroxCooldown: Block = {
-  name: 'Cooldown',
-  minutes: 5,
-  exercises: [walk(5, 'Walk, relaxed breathing', 'No extra finisher.')],
-}
-
-function circuit(
-  rounds: { runMeters: number; stations: Exercise[] }[],
-  roundMinutes: number,
-  { key = false, minutes = 45, headline = `${rounds.length} rounds`, note = 'Technique before speed.' } = {},
-): Session {
-  return {
-    id: 'hyrox',
-    type: 'hyrox',
-    headline,
+    id,
+    type: 'easy',
+    headline: `${minutes}′`,
     minutes,
-    key,
-    optional: false,
-    note,
-    blocks: [
-      ...hyroxWarmUp,
-      setUp(rounds),
-      ...rounds.map((round, i) => ({
-        name: `Round ${i + 1}`,
-        minutes: roundMinutes,
-        main: true,
-        exercises: [{ name: 'Run', prescription: { kind: 'run' as const, meters: round.runMeters } }, ...round.stations],
-      })),
-      hyroxCooldown,
-    ],
+    key: false,
+    optional: true,
+    blocks: [{ name: 'Easy run', minutes, main: true, exercises: [{ ...easyJog(minutes, 'Easy run'), note }, ...extra] }],
   }
 }
 
-function hyrox(
-  phase: 'foundation' | 'development' | 'build',
-  rotation: Rotation,
-  percent: number,
-  key = false,
-): Session {
-  const rounds = ROUNDS[phase][rotation].map((ids) => ({
-    runMeters: PHASE_RUN[phase],
-    stations: ids.map((id) => station(id, VOLUME[phase][id], percent)),
-  }))
-  return circuit(rounds, phase === 'foundation' ? 11 : 12, { key, minutes: phase === 'foundation' ? 45 : 50 })
-}
+const LONG_RUN = 'The long run. Full sentences. No tempo, no hills.'
 
-/** Deload: a technique circuit at about two thirds of the Phase's volume, light. */
-function hyroxTechnique(phase: 'foundation' | 'development' | 'build', rotation: Rotation): Session {
-  const rounds = ROUNDS[phase][rotation].slice(0, 2).map((ids) => ({
-    runMeters: PHASE_RUN[phase],
-    stations: ids.map((id) => station(id, VOLUME[phase][id], 60)),
-  }))
-  return circuit(rounds, 10, { headline: 'technique circuit', minutes: 32, note: 'Deload: smooth technique, no pushing.' })
-}
-
-const raceVolume = (id: StationId): Volume => {
-  const { meters, reps } = stations[id].raceLoad
-  return { meters, reps }
-}
-
-const halfRaceVolume = (id: StationId): Volume => {
-  const { meters, reps } = stations[id].raceLoad
-  return { meters: meters && meters / 2, reps: reps && reps / 2 }
-}
-
-/** Race specific: 1 km and one full Station at Race load, three rounds. */
-const hyroxRaceSpecific = circuit(
-  (['sled-push', 'sled-pull', 'sandbag-lunges'] as const).map((id) => ({
-    runMeters: 1000,
-    stations: [station(id, raceVolume(id), 100)],
-  })),
-  11,
-  { key: true, minutes: 50, note: 'Full race volume of each Station.' },
-)
-
-/** Week 25: 800 m and one Station at Race load, controlled, ahead of the final 5K test. */
-const hyroxControlled = circuit(
-  (['sled-push', 'farmers-carry', 'sandbag-lunges'] as const).map((id) => ({
-    runMeters: 800,
-    stations: [station(id, VOLUME.build[id], 100)],
-  })),
-  10,
-  { minutes: 42, note: 'Race load, controlled. Save the legs for the 5K test.' },
-)
-
-/**
- * Taper: two short rounds at Race load so the sled and the ball still feel
- * familiar on Race day. Volume drops, frequency doesn't.
- */
-const hyroxTaper = circuit(
-  [0, 1].map(() => ({
-    runMeters: 500,
-    stations: [station('sled-push', { meters: 25 }, 100), station('wall-balls', { reps: 25 }, 100)],
-  })),
-  6,
-  { headline: 'Station touch', minutes: 25, note: 'Race load, short. Stop well before tired.' },
-)
+// ---------------------------------------------------------------------------
+// Race simulations: race order, Race load, exempt from the Session cap.
 
 function raceSimulation(headline: string, ids: readonly StationId[], volume: (id: StationId) => Volume, minutes: number): Session {
   return {
@@ -708,25 +658,27 @@ function raceSimulation(headline: string, ids: readonly StationId[], volume: (id
     minutes,
     key: true,
     optional: false,
-    note: 'Race order and Race load. Conservative first run, RPE 8, not all-out.',
+    note: 'Race order and Race load. Conservative first run, RPE 8, not all-out. With the partner when possible, each taking half of every Station.',
     blocks: [
       {
         name: 'Warm-up',
         minutes: 10,
         exercises: [easyJog(7), { name: 'Station prep', prescription: { kind: 'note' }, note: 'Set up every Station before the first run.' }],
       },
-      ...ids.map((id, i) => ({
-        name: `Run and Station ${stations[id].order}`,
-        main: true,
-        exercises: [
-          {
-            name: 'Run',
-            prescription: { kind: 'run' as const, meters: 1000, effort: { feel: 'hard', rpe: [8, 8] } as RunEffort },
-            note: i === 0 ? 'Conservative.' : undefined,
-          },
-          station(id, volume(id), 100),
-        ],
-      })),
+      ...ids.map(
+        (id, i): Block => ({
+          name: `Run and Station ${stations[id].order}`,
+          main: true,
+          exercises: [
+            {
+              name: 'Run',
+              prescription: { kind: 'run', meters: 1000, effort: { feel: 'hard', rpe: [8, 8] } },
+              note: i === 0 ? 'Conservative.' : undefined,
+            },
+            station(id, volume(id)),
+          ],
+        }),
+      ),
       { name: 'Cooldown', minutes: 5, exercises: [walk(5, 'Walk, relaxed breathing')] },
     ],
   }
@@ -734,212 +686,13 @@ function raceSimulation(headline: string, ids: readonly StationId[], volume: (id
 
 const halfSimulationA = raceSimulation('half A', RACE_ORDER.slice(0, 4), raceVolume, 65)
 const halfSimulationB = raceSimulation('half B', RACE_ORDER.slice(4), raceVolume, 65)
-/** Week 24: all eight 1 km runs, every Station at half race volume and full Race load. */
+/** Week 21: all eight 1 km runs, every Station at half race volume and Race load. */
 const fullRunSimulation = raceSimulation('full run', RACE_ORDER, halfRaceVolume, 80)
 
 // ---------------------------------------------------------------------------
-// Week by week.
+// Race week.
 
-const week = (
-  number: number,
-  startDate: string,
-  sessions: Session[],
-  flags: Partial<Pick<Week, 'deload' | 'fiveKTest' | 'raceSimulation' | 'race' | 'notes'>> = {},
-): Week => ({
-  number,
-  startDate: localDate(startDate),
-  deload: false,
-  fiveKTest: sessions.some((s) => s.type === '5k-test'),
-  raceSimulation: sessions.some((s) => s.type === 'race-simulation'),
-  race: false,
-  ...flags,
-  sessions,
-})
-
-const iv = (reps: number, workSeconds: number, recoverySeconds: number, effort: RunEffort = AT_5K): Intervals => ({
-  reps,
-  workSeconds,
-  recoverySeconds,
-  effort,
-})
-
-const foundation: Week[] = [
-  week(1, '2026-10-26', [
-    speed(iv(5, 120, 120, HARD), 2, 1),
-    strength('build', { calibration: true }),
-    threshold(3, 7, 120, true),
-    hyrox('foundation', 'A', 60),
-    easyRun(20),
-  ]),
-  week(2, '2026-11-02', [
-    fiveKTest(2),
-    strength('build'),
-    threshold(3, 7, 120, false),
-    hyrox('foundation', 'B', 60),
-    easyRun(20),
-  ]),
-  week(3, '2026-11-09', [
-    speed(iv(5, 180, 90, HARD), 4, 3),
-    strength('build'),
-    threshold(2, 12, 120, true),
-    hyrox('foundation', 'A', 60),
-    easyRun(25),
-  ]),
-  week(4, '2026-11-16', [
-    speed(iv(5, 180, 90), 4, 4),
-    strength('build'),
-    threshold(2, 12, 120, true),
-    hyrox('foundation', 'A', 60),
-    easyRun(30),
-  ]),
-  week(5, '2026-11-23', [
-    speed(iv(4, 240, 120), 4, 5),
-    strength('build'),
-    threshold(2, 12, 120, true),
-    hyrox('foundation', 'B', 60),
-    easyRun(30),
-  ]),
-]
-
-const development: Week[] = [
-  week(6, '2026-11-30', [
-    speed(iv(4, 240, 90), 4, 6, true),
-    strength('build'),
-    threshold(3, 8, 90, false),
-    hyrox('development', 'A', 70),
-    easyRun(35),
-  ]),
-  week(
-    7,
-    '2026-12-07',
-    [speedDeload, strength('build', { deload: true }), easyInsteadOfThreshold, hyroxTechnique('development', 'B'), easyRun(30)],
-    { deload: true },
-  ),
-  week(8, '2026-12-14', [
-    fiveKTest(8),
-    strength('build'),
-    threshold(3, 8, 90, false),
-    hyrox('development', 'A', 70),
-    easyRun(35),
-  ]),
-  week(9, '2026-12-21', [
-    speed(iv(5, 180, 90), 4, 9, true),
-    strength('build'),
-    threshold(3, 8, 90, false),
-    hyrox('development', 'B', 75),
-    easyRun(40),
-  ]),
-  week(10, '2026-12-28', [
-    speed(iv(4, 240, 90), 4, 10, true),
-    strength('build'),
-    threshold(3, 8, 90, false),
-    hyrox('development', 'A', 75),
-    easyRun(40),
-  ]),
-  week(
-    11,
-    '2027-01-04',
-    [speedDeload, strength('build', { deload: true }), easyInsteadOfThreshold, hyroxTechnique('development', 'B'), easyRun(30)],
-    { deload: true },
-  ),
-  week(12, '2027-01-11', [
-    speed(iv(3, 300, 120), 4, 12, true),
-    strength('build'),
-    threshold(4, 6, 60, false),
-    hyrox('development', 'A', 80),
-    easyRun(45),
-  ]),
-  week(13, '2027-01-18', [
-    speed(iv(6, 120, 90, { pace: '5k', secondsPerKmFaster: 5 }), 4, 13, true),
-    strength('build'),
-    threshold(4, 6, 60, false),
-    hyrox('development', 'B', 80),
-    easyRun(45),
-  ]),
-]
-
-const build: Week[] = [
-  week(14, '2027-01-25', [
-    speed(iv(4, 180, 120), 3, 14),
-    strength('maintenance'),
-    threshold(2, 10, 120, false),
-    hyrox('build', 'A', 90, true),
-    easyRun(50),
-  ]),
-  week(
-    15,
-    '2027-02-01',
-    [speedDeload, strength('maintenance', { deload: true }), easyInsteadOfThreshold, hyroxTechnique('build', 'B'), easyRun(35)],
-    { deload: true },
-  ),
-  week(16, '2027-02-08', [
-    fiveKTest(16),
-    strength('maintenance'),
-    threshold(2, 10, 120, false),
-    hyrox('build', 'A', 90),
-    easyRun(50),
-  ]),
-  week(17, '2027-02-15', [
-    speed(iv(4, 180, 120), 3, 17),
-    strength('maintenance'),
-    threshold(2, 10, 120, false),
-    halfSimulationA,
-    easyRun(45),
-  ]),
-  week(18, '2027-02-22', [
-    speed(iv(5, 180, 120), 3, 18),
-    strength('maintenance'),
-    threshold(2, 10, 120, false),
-    hyrox('build', 'B', 95, true),
-    easyRun(55),
-  ]),
-  week(19, '2027-03-01', [
-    speed(iv(4, 180, 120), 3, 19),
-    strength('maintenance'),
-    threshold(2, 10, 120, false),
-    hyrox('build', 'A', 100, true),
-    easyRun(55),
-  ]),
-  week(20, '2027-03-08', [
-    speed(iv(5, 180, 120), 3, 20),
-    strength('maintenance'),
-    threshold(2, 10, 120, false),
-    halfSimulationB,
-    easyRun(45),
-  ]),
-  week(
-    21,
-    '2027-03-15',
-    [speedDeload, strength('maintenance', { deload: true }), easyInsteadOfThreshold, hyroxTechnique('build', 'B'), easyRun(40)],
-    { deload: true },
-  ),
-]
-
-const raceSpecific: Week[] = [
-  week(22, '2027-03-22', [
-    speed(iv(4, 180, 120), 3, 22),
-    strength('maintenance'),
-    threshold(2, 10, 120, false),
-    hyroxRaceSpecific,
-    easyRun(60, { note: 'The long run. Full sentences. No tempo, no hills.' }),
-  ]),
-  week(23, '2027-03-29', [
-    speed(iv(4, 180, 120), 3, 23),
-    strength('maintenance'),
-    threshold(2, 10, 120, false),
-    fullRunSimulation,
-    easyRun(45),
-  ]),
-  week(24, '2027-04-05', [
-    fiveKTest(24),
-    strength('maintenance'),
-    threshold(2, 8, 120, false),
-    hyroxControlled,
-    easyRun(45),
-  ]),
-]
-
-const RACE_DAY = localDate('2027-04-21')
+const RACE_DAY = localDate('2027-04-22')
 
 const race: Session = {
   id: 'race',
@@ -949,69 +702,135 @@ const race: Session = {
   key: true,
   optional: false,
   date: RACE_DAY,
-  note: 'Men’s Open. Pace the first run conservatively.',
+  note: 'HYROX Doubles. Pace the first run conservatively; agree the Station split with the partner beforehand.',
   blocks: [
     { name: 'Warm-up', minutes: 15, exercises: [easyJog(10), walk(5, 'Station prep and strides')] },
     {
       name: 'Race',
       main: true,
-      exercises: RACE_ORDER.flatMap((id) => [
-        { name: 'Run', prescription: { kind: 'run' as const, meters: 1000 } },
-        station(id, raceVolume(id), 100),
-      ]),
+      exercises: RACE_ORDER.flatMap((id) => [{ name: 'Run', prescription: { kind: 'run' as const, meters: 1000 } }, station(id, raceVolume(id))]),
     },
   ],
 }
 
-const taper: Week[] = [
+/** Tuesday's Station touch: a sled push and a few wall balls at Race load, or rest. */
+const stationTouch: Session = {
+  id: 'station-touch',
+  type: 'hyrox',
+  name: 'Station touch',
+  headline: 'sled push + wall balls',
+  minutes: 15,
+  key: false,
+  optional: true,
+  note: 'Tuesday, or rest. Race load; stop well before tired.',
+  blocks: [
+    { name: 'Warm-up', minutes: 5, exercises: [easyJog(5)] },
+    setUp(['sled-push', 'wall-balls']),
+    { name: 'Station touch', minutes: 10, main: true, exercises: [station('sled-push', { meters: 25 }), station('wall-balls', { reps: 20 })] },
+  ],
+}
+
+// ---------------------------------------------------------------------------
+// Week by week.
+
+const PROGRAM_START = localDate('2026-11-09')
+
+const week = (
+  number: number,
+  sessions: Session[],
+  flags: Partial<Pick<Week, 'deload' | 'race' | 'notes'>> = {},
+): Week => ({
+  number,
+  startDate: addDays(PROGRAM_START, 7 * (number - 1)),
+  deload: false,
+  compromisedRunTest: sessions.some((s) => s.type === 'compromised-run-test'),
+  raceSimulation: sessions.some((s) => s.type === 'race-simulation'),
+  race: false,
+  ...flags,
+  sessions,
+})
+
+/** A normal Week: HYROX A, HYROX B, the Run, Strength and the Easy run. */
+const bucket = (a: Session, b: Session, run: Session, lift: Session, easy: Session) => [a, b, run, lift, easy]
+
+const foundation: Week[] = [
+  week(1, bucket(fourRounds('A', 'foundation'), fourRounds('B', 'foundation'), thresholdRun(3, 7, true), strength('build', { calibration: true }), easyRun(25))),
+  week(2, bucket(fourRounds('A', 'foundation'), fourRounds('B', 'foundation'), compromisedRunTest(2), strength('build'), easyRun(25))),
+  week(3, bucket(fourRounds('A', 'foundation', true), fourRounds('B', 'foundation'), thresholdRun(3, 8), strength('build'), easyRun(30))),
+  week(4, bucket(fourRounds('A', 'foundation'), fourRounds('B', 'foundation', true), thresholdRun(4, 6), strength('build'), easyRun(30))),
+  week(5, bucket(threeRounds('A', 'foundation'), threeRounds('B', 'foundation'), deloadRun, strength('build', { deload: true }), easyRun(25)), {
+    deload: true,
+  }),
+]
+
+const build: Week[] = [
+  week(6, bucket(fourRounds('A', 'build-early', true), fourRounds('B', 'build-early'), compromisedIntervals(4), strength('build'), easyRun(35))),
+  week(7, bucket(fourRounds('A', 'build-early'), fourRounds('B', 'build-early', true), thresholdRun(3, 8), strength('build'), easyRun(35))),
+  week(8, bucket(fourRounds('A', 'build-early'), fourRounds('B', 'build-early'), compromisedIntervals(4, true), strength('build'), easyRun(40))),
+  week(9, bucket(fourRounds('A', 'build-early'), fourRounds('B', 'build-early'), compromisedRunTest(9), strength('build'), easyRun(40))),
+  week(10, bucket(threeRounds('A', 'build-early'), threeRounds('B', 'build-early'), deloadRun, strength('build', { deload: true }), easyRun(30)), {
+    deload: true,
+  }),
+  week(11, bucket(fourRounds('A', 'build-late', true), fourRounds('B', 'build-late'), compromisedIntervals(5), strength('build'), easyRun(45))),
+  week(12, bucket(fourRounds('A', 'build-late'), fourRounds('B', 'build-late', true), thresholdRun(4, 7), strength('build'), easyRun(45))),
+  week(13, bucket(fourRounds('A', 'build-late'), fourRounds('B', 'build-late'), compromisedIntervals(5, true), strength('build'), easyRun(50))),
+  week(14, bucket(fourRounds('A', 'build-late'), fourRounds('B', 'build-late'), compromisedRunTest(14), strength('build'), easyRun(50))),
+  week(15, bucket(threeRounds('A', 'build-late'), threeRounds('B', 'build-late'), deloadRun, strength('build', { deload: true }), easyRun(35)), {
+    deload: true,
+  }),
+]
+
+/** Race specific: full Station volume; the Race simulations take HYROX A's place. */
+const raceSpecific: Week[] = [
+  week(16, bucket(halfSimulationA, fourRounds('B', 'race-specific'), thresholdRun(3, 8), strength('maintenance'), easyRun(55))),
+  week(17, bucket(fourRounds('A', 'race-specific', true), fourRounds('B', 'race-specific'), compromisedIntervals(5), strength('maintenance'), easyRun(60, { note: LONG_RUN }))),
+  week(18, bucket(halfSimulationB, fourRounds('B', 'race-specific'), thresholdRun(4, 6), strength('maintenance'), easyRun(50))),
+  week(19, bucket(fourRounds('A', 'race-specific'), fourRounds('B', 'race-specific'), compromisedRunTest(19), strength('maintenance'), easyRun(60, { note: LONG_RUN }))),
   week(
-    25,
-    '2027-04-12',
-    [
-      speedTaper,
-      strengthTaper,
-      easyRun(30, {
-        id: 'easy-strides',
-        optional: false,
-        note: 'In place of Threshold. No threshold work.',
-        extra: [{ name: 'Strides', prescription: { kind: 'strides', reps: 4, seconds: 15 }, note: 'Relaxed' }],
-      }),
-      hyroxTaper,
-      easyRun(20, { note: 'Only if fresh.' }),
-    ],
+    20,
+    bucket(
+      threeRounds('A', 'race-specific', { half: true }),
+      threeRounds('B', 'race-specific', { half: true }),
+      deloadRun,
+      strength('maintenance', { deload: true }),
+      easyRun(35),
+    ),
+    { deload: true },
   ),
+  week(21, bucket(fullRunSimulation, threeRounds('B', 'race-specific', { half: true }), thresholdRun(3, 6), strength('maintenance'), easyRun(40))),
+]
+
+const taper: Week[] = [
+  week(22, bucket(taperRounds('A', 3, true), taperRounds('B', 3), taperThreshold, strengthTaper, easyRun(30))),
+  week(23, bucket(taperRounds('A', 2), taperRounds('B', 2), taperPickups, strengthLight, easyRun(20, { note: 'Only if fresh.' }))),
   week(
-    26,
-    '2027-04-19',
+    24,
     [
-      easyRun(20, {
-        id: 'shakeout',
-        note: 'Monday, or rest if tired.',
-        extra: [{ name: 'Strides', prescription: { kind: 'strides', reps: 3, seconds: 15 }, note: 'Relaxed' }],
-      }),
+      easyRun(20, { id: 'shakeout', note: 'Monday: an easy jog, or rest if tired.', extra: [strides(3)] }),
+      stationTouch,
       race,
     ],
     {
       race: true,
       notes: [
-        'Tuesday: rest. Prepare kit; familiar meals and hydration.',
-        'Wednesday 21 April: race.',
-        'Thursday: recovery, walking only as comfortable.',
+        'Wednesday 21 April: rest. Prepare kit; familiar meals and hydration; confirm the start time.',
+        'Thursday 22 April: race.',
+        'Friday: recovery, walking only as comfortable.',
       ],
     },
   ),
 ]
 
 export const program: Program = {
-  version: 2,
+  version: 3,
   raceDay: RACE_DAY,
-  weekCount: 26,
+  weekCount: 24,
   stations,
   phases: [
     { id: 'foundation', name: 'Foundation', firstWeek: 1, lastWeek: 5, weeks: foundation },
-    { id: '5k-development', name: '5K development', firstWeek: 6, lastWeek: 13, weeks: development },
-    { id: 'hyrox-build', name: 'HYROX build', firstWeek: 14, lastWeek: 21, weeks: build },
-    { id: 'race-specific', name: 'Race specific', firstWeek: 22, lastWeek: 24, weeks: raceSpecific },
-    { id: 'taper', name: 'Taper', firstWeek: 25, lastWeek: 26, weeks: taper },
+    { id: 'build', name: 'Build', firstWeek: 6, lastWeek: 15, weeks: build },
+    { id: 'race-specific', name: 'Race specific', firstWeek: 16, lastWeek: 21, weeks: raceSpecific },
+    // Race week stays inside the Taper Phase: the two Taper Weeks, then Week 24.
+    { id: 'taper', name: 'Taper', firstWeek: 22, lastWeek: 24, weeks: taper },
   ],
 }

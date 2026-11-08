@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import type { SessionLog } from './log'
 import {
   laterStartingPoint,
   parseStartingPoint,
@@ -51,19 +50,17 @@ describe('startingWeights', () => {
 })
 
 describe('startingFields', () => {
-  const test = { resultSeconds: 23 * 60 } as SessionLog
-
   it('show the estimates, editable, until a real result replaces each', () => {
-    expect(startingFields(POINT, null, {})).toEqual({
+    expect(startingFields(POINT, {})).toEqual({
       fiveK: { value: 21 * 60, real: false },
       lifts: { 'back-squat': { value: 225, real: false }, 'romanian-deadlift': { value: 185, real: false } },
     })
-    expect(startingFields(null, null, {}).fiveK).toEqual({ value: null, real: false })
+    expect(startingFields(null, {}).fiveK).toEqual({ value: null, real: false })
   })
 
-  it('show the real value, read-only, once a 5K test is logged or a lift calibrated', () => {
-    expect(startingFields(POINT, test, { 'back-squat': 190 })).toEqual({
-      fiveK: { value: 23 * 60, real: true },
+  it('show a lift’s real value, read-only, once it is calibrated', () => {
+    expect(startingFields(POINT, { 'back-squat': 190 })).toEqual({
+      fiveK: { value: 21 * 60, real: false },
       lifts: { 'back-squat': { value: 190, real: true }, 'romanian-deadlift': { value: 185, real: false } },
     })
   })

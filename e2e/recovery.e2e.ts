@@ -5,23 +5,24 @@ import { E2E_SERVICE_TOKEN, serviceTokenHeaders } from './serviceToken'
 
 /**
  * Recovery data from the morning Shortcut, through the real Worker and D1.
- * Weeks 21 and 22 are read by no other test: Week 21 is done in full, so
- * Wednesday of Week 22 has Speed, 4 × 3′ Up next. Both projects send the
+ * Weeks 21 and 22 are read by no other test: Week 21 is done in full and
+ * Week 22's HYROX and Strength on its Monday, so Wednesday of Week 22 has
+ * the Run, 3 × 5′ Up next. Both projects send the
  * same nights, which the endpoint takes idempotently, and neither decides
  * the Suggestion, so they can run side by side.
  */
-const WEDNESDAY = new Date('2027-03-24T12:00:00-04:00')
+const WEDNESDAY = new Date('2027-04-07T12:00:00-04:00')
 
 /** A normal week of nights, HRV averaging 52, then a short one with HRV 27% down. */
 const NIGHTS = [
-  ...['2027-03-17', '2027-03-18', '2027-03-19', '2027-03-20', '2027-03-21', '2027-03-22', '2027-03-23'].map((date, i) => ({
+  ...['2027-03-31', '2027-04-01', '2027-04-02', '2027-04-03', '2027-04-04', '2027-04-05', '2027-04-06'].map((date, i) => ({
     date,
     sleepMinutes: 450,
     hrvMs: [50, 54, 52, 51, 53, 52, 52][i],
     restingHeartRate: 48,
     source: 'Ultrahuman',
   })),
-  { date: '2027-03-24', sleepMinutes: 341, hrvMs: 38, restingHeartRate: 52, source: 'Ultrahuman' },
+  { date: '2027-04-07', sleepMinutes: 341, hrvMs: 38, restingHeartRate: 52, source: 'Ultrahuman' },
 ]
 
 test('the recovery endpoint only takes the Access service token', async ({ request }) => {
@@ -38,12 +39,15 @@ test('the recovery endpoint only takes the Access service token', async ({ reque
   })
   expect(idOnly.status()).toBe(401)
 
-  const bad = await request.post('/api/recovery', { data: { ...night, date: '24/03/2027' }, headers: serviceTokenHeaders() })
+  const bad = await request.post('/api/recovery', { data: { ...night, date: '07/04/2027' }, headers: serviceTokenHeaders() })
   expect(bad.status()).toBe(400)
 })
 
 test('a short night with low HRV, sent by the Shortcut, shows on Today with its numbers', async ({ page, request }, testInfo) => {
-  await seedLogs(request, testInfo.project.name, weekDone(21, ['speed', 'strength', 'easy-deload', 'hyrox'], '2027-03-20'))
+  await seedLogs(request, testInfo.project.name, [
+    ...weekDone(21, ['race-simulation', 'hyrox-b', 'run', 'strength'], '2027-04-03'),
+    ...weekDone(22, ['hyrox-a', 'hyrox-b', 'strength'], '2027-04-05'),
+  ])
   for (const night of NIGHTS) {
     const response = await request.post('/api/recovery', { data: night, headers: serviceTokenHeaders() })
     expect(response.status(), await response.text()).toBe(200)
@@ -52,14 +56,14 @@ test('a short night with low HRV, sent by the Shortcut, shows on Today with its 
   const again = await request.post('/api/recovery', { data: NIGHTS.at(-1), headers: serviceTokenHeaders() })
   expect(again.status()).toBe(200)
   const state = await (await request.get('/api/state')).json()
-  expect(state.recoveryNights.filter((n: { date: string }) => n.date === '2027-03-24')).toHaveLength(1)
+  expect(state.recoveryNights.filter((n: { date: string }) => n.date === '2027-04-07')).toHaveLength(1)
 
   await caughtUpOnServer(page, 21)
   await page.clock.setFixedTime(WEDNESDAY)
   await page.goto('/')
 
   // Short sleep: one rep fewer, RPE capped.
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Speed, 3 × 3′')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Run, 2 × 5′')
   await expect(page.getByText('Slept 5 h 41. Bold of you. One fewer rep, nothing past RPE 7.')).toBeVisible()
 
   // Low HRV on top: the Suggestion, with the numbers that triggered it.

@@ -5,8 +5,8 @@ import { startAsChosen } from './today'
 
 /**
  * Pain reports and the pain rules. The server is stood in for, so nothing
- * here touches the shared database; Week 2 is done with a 23:00 5K test on
- * the treadmill, so Wednesday of Week 3 has Speed, 5 × 3′ Up next.
+ * here touches the shared database; Week 2 is done and Week 3's HYROX A and
+ * B were done on Monday, so Wednesday of Week 3 has the Run, 3 × 8′ Up next.
  */
 /**
  * Picks a toggle by its label. The radio's input sits visually hidden under
@@ -16,29 +16,29 @@ const pick = (scope: Page | Locator, name: string) =>
   scope.locator('label').filter({ hasText: new RegExp(`^${name}$`) }).click()
 
 const WEEK_2 = [
-  { week: 2, sessionId: '5k-test', date: '2026-11-03', status: 'done', resultSeconds: 23 * 60, environment: 'indoor' },
-  // Thursday: 6 days before Week 3's Wednesday, too recent for a re-entry.
-  ...weekDone(2, ['strength', 'threshold', 'hyrox'], '2026-11-05'),
+  ...weekDone(2, ['hyrox-a', 'hyrox-b', 'compromised-run-test', 'strength'], '2026-11-19'),
+  // Monday of Week 3: HYROX A and B, so the Run is what's left that isn't Strength.
+  ...weekDone(3, ['hyrox-a', 'hyrox-b'], '2026-11-23'),
 ] as const
 
 /** Shin 2 from Monday, outside any Session: still standing on Wednesday. */
 const SHIN_2 = {
   id: 'seed-shin-2',
-  date: '2026-11-09',
+  date: '2026-11-23',
   score: 2,
   area: 'shin',
   week: null,
   sessionId: null,
-  updatedAt: '2026-11-09T12:00:00.000Z',
+  updatedAt: '2026-11-23T12:00:00.000Z',
 }
 
-test('pain 4 before a Speed session: the accelerations go to the bike and the reps drop', async ({ page }) => {
+test('pain 4 before the Run: the interval reps drop', async ({ page }) => {
   const reports: Record<string, unknown>[] = [SHIN_2]
   await serveHistory(page, caughtUp(1, [...WEEK_2]), reports)
   await page.clock.setFixedTime(WEEK_3)
   await page.goto('/')
 
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Speed, 5 × 3′')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Run, 3 × 8′')
   await page.getByRole('button', { name: /^Start / }).click()
 
   // Pain stands, so Start asks whether it still does, with Gone one tap away.
@@ -53,32 +53,18 @@ test('pain 4 before a Speed session: the accelerations go to the bike and the re
   await step.getByRole('button', { name: 'Start with that' }).click()
   await startAsChosen(page)
 
-  // The Live session has it already: bike sprints for the jumps and accelerations, four reps for five.
+  // The Live session has it already: two reps for three.
   await expect(page).toHaveURL('/live')
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Speed, 4 × 3′')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Run, 2 × 8′')
   const blocks = page.getByRole('list', { name: 'Blocks' }).getByRole('listitem')
-  await expect(blocks).toHaveText([
-    /^Warm-up/,
-    /^Drills/,
-    /^Bike sprints/,
-    /^Bike sprints/,
-    /^Rep 1 of 4/,
-    /^Jog/,
-    /^Rep 2 of 4/,
-    /^Jog/,
-    /^Rep 3 of 4/,
-    /^Jog/,
-    /^Rep 4 of 4/,
-    /^Cooldown/,
-  ])
-  await expect(blocks.filter({ hasText: 'Accelerations' })).toHaveCount(0)
+  await expect(blocks).toHaveText([/^Warm-up/, /^Rep 1 of 2/, /^Jog/, /^Rep 2 of 2/, /^Cooldown/])
 
   await expect.poll(() => reports.at(-1)).toMatchObject({
-    date: '2026-11-11',
+    date: '2026-11-25',
     score: 4,
     area: 'achilles-calf',
     week: 3,
-    sessionId: 'speed',
+    sessionId: 'run',
   })
 })
 
@@ -91,8 +77,8 @@ test('with nothing hurting on record, Start skips the pain step and starts the S
   await page.getByRole('button', { name: /^Start / }).click()
   await startAsChosen(page)
   await expect(page).toHaveURL('/live')
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Speed, 5 × 3′')
-  await expect.poll(() => reports.at(-1)).toMatchObject({ score: 0, area: null, week: 3, sessionId: 'speed' })
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Run, 3 × 8′')
+  await expect.poll(() => reports.at(-1)).toMatchObject({ score: 0, area: null, week: 3, sessionId: 'run' })
 })
 
 test('Something hurts from Today: pain 6 makes the day easy bike or rest once Accepted', async ({ page }) => {
@@ -112,11 +98,11 @@ test('Something hurts from Today: pain 6 makes the day easy bike or rest once Ac
   await expect(suggestion).toContainText('Pain 6. Today becomes easy bike or rest. Not negotiable.')
   await expect(suggestion).toContainText('Pain 6 · Knee · every Session easy and low-impact')
   // Nothing changes until it's Accepted.
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Speed, 5 × 3′')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Run, 3 × 8′')
   await expectNoAxeViolations(page)
 
   await suggestion.getByRole('button', { name: 'Accept' }).click()
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Speed, easy bike 30′ or rest')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Run, easy bike 30′ or rest')
   // Nothing to run: Log after it instead.
   await expect(page.getByRole('button', { name: /^Start / })).toHaveCount(0)
   await expect(page.getByRole('link', { name: 'Log after' })).toBeVisible()
@@ -132,8 +118,8 @@ test('Gone records a 0 and starts; next time Start skips the pain step', async (
   await page.getByRole('region', { name: 'Up next' }).getByRole('button', { name: 'Gone' }).click()
   await startAsChosen(page)
   await expect(page).toHaveURL('/live')
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Speed, 5 × 3′')
-  await expect.poll(() => reports.at(-1)).toMatchObject({ score: 0, area: null, week: 3, sessionId: 'speed' })
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Run, 3 × 8′')
+  await expect.poll(() => reports.at(-1)).toMatchObject({ score: 0, area: null, week: 3, sessionId: 'run' })
 })
 
 test('Same repeats the standing report: pain 2 changes nothing, so it starts at once', async ({ page }) => {
@@ -146,7 +132,7 @@ test('Same repeats the standing report: pain 2 changes nothing, so it starts at 
   await page.getByRole('region', { name: 'Up next' }).getByRole('button', { name: 'Same' }).click()
   await startAsChosen(page)
   await expect(page).toHaveURL('/live')
-  await expect.poll(() => reports.at(-1)).toMatchObject({ score: 2, area: 'shin', week: 3, sessionId: 'speed' })
+  await expect.poll(() => reports.at(-1)).toMatchObject({ score: 2, area: 'shin', week: 3, sessionId: 'run' })
 })
 
 test('Log after asks too, and links the report to the Session', async ({ page }) => {
@@ -191,27 +177,27 @@ test('with the pain Suggestion open, the step asks it once, in its own words: tw
   await startAsChosen(page)
 
   await expect(page).toHaveURL('/live')
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Speed, 4 × 3′')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Run, 2 × 8′')
 })
 
 test('with the pain Suggestion already accepted, Same starts the Session with it', async ({ page }) => {
   const reports: Record<string, unknown>[] = [ACHILLES_4]
   const suggestionDecisions: Record<string, unknown>[] = [
-    { id: 'pain-seed-achilles-4', decision: 'accepted', date: '2026-11-11', updatedAt: '2026-11-11T11:00:00.000Z' },
+    { id: 'pain-seed-achilles-4', decision: 'accepted', date: '2026-11-25', updatedAt: '2026-11-25T11:00:00.000Z' },
   ]
   await serveHistory(page, caughtUp(1, [...WEEK_2]), reports, { suggestionDecisions })
   await page.clock.setFixedTime(WEEK_3)
   await page.goto('/')
 
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Speed, 4 × 3′')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Run, 2 × 8′')
   await page.getByRole('button', { name: /^Start / }).click()
   await page.getByRole('region', { name: 'Up next' }).getByRole('button', { name: 'Same' }).click()
   await startAsChosen(page)
 
   await expect(page).toHaveURL('/live')
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Speed, 4 × 3′')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Run, 2 × 8′')
   // Same is a new report for this Session, and the decision carries over to it.
-  await expect.poll(() => reports.at(-1)).toMatchObject({ score: 4, area: 'achilles-calf', week: 3, sessionId: 'speed' })
+  await expect.poll(() => reports.at(-1)).toMatchObject({ score: 4, area: 'achilles-calf', week: 3, sessionId: 'run' })
   await expect
     .poll(() => suggestionDecisions.find((d) => d.id === `pain-${reports.at(-1)!.id}`))
     .toMatchObject({ decision: 'accepted' })

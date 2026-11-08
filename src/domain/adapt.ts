@@ -11,12 +11,12 @@ export const RE_ENTRY_PERCENT = 67
 
 /**
  * Cuts a Session's volume to `percent`: fewer reps and sets, shorter runs,
- * less Station work, fewer minutes. Intensity stays as written. A 5K test
- * and anything pinned to a day (the race) stay whole: a shorter test isn't
- * a test.
+ * less Station work, fewer minutes. Intensity stays as written. A
+ * Compromised run test and anything pinned to a day (the race) stay whole: a
+ * shorter test isn't a test.
  */
 export function lighten(session: Session, percent: number): Session {
-  if (session.type === '5k-test' || session.date) return session
+  if (session.type === 'compromised-run-test' || session.date) return session
   const scale = percent / 100
   const mainReps = session.blocks
     .filter((b) => b.main)

@@ -11,32 +11,31 @@ const session = (week: number, id: string) => {
 }
 
 describe('describeSession', () => {
-  it('reads intervals as reps, effort and recovery, with no paces before the first 5K test', () => {
-    expect(session(1, 'speed')).toEqual({
-      heading: 'Speed, 5 × 2′',
-      summary: '5 × 2′ hard / 2′ jog',
-      target: 'Hard, by feel · 2′ jog · 2 accelerations first',
-      meta: '45 min',
-    })
-    expect(session(3, 'speed').summary).toBe('5 × 3′ hard / 90″ jog')
-  })
-
-  it('reads Threshold as effort and RPE and marks the Key session', () => {
-    expect(session(1, 'threshold')).toEqual({
-      heading: 'Threshold, 3 × 7′',
-      summary: '3 × 7′ at Threshold / 2′ jog',
-      target: 'Threshold effort, RPE 6–7 · 2′ jog',
+  it('reads the Run as reps, effort and RPE with no paces yet, and marks the Key session', () => {
+    expect(session(1, 'run')).toEqual({
+      heading: 'Run, 3 × 7′',
+      summary: '3 × 7′ at Threshold / 90″ jog',
+      target: 'Threshold effort, RPE 6–7 · 90″ jog',
       meta: '45 min · Key session this Week',
     })
-    expect(session(2, 'threshold').meta).toBe('45 min')
+    expect(session(3, 'run').meta).toBe('45 min')
+  })
+
+  it('reads Compromised intervals as rounds of 1 km and wall balls', () => {
+    expect(session(6, 'run')).toEqual({
+      heading: 'Run, 4 × (1 km + 20 wall balls)',
+      summary: '4 × (1 km + Wall balls)',
+      target: '1 km, then Wall balls, each round · Race load · Race run effort',
+      meta: '45 min',
+    })
   })
 
   it('drops the recovery when a cut leaves a single rep', () => {
-    const threshold = findWeek(program, 1)?.sessions.find((s) => s.id === 'threshold')
-    if (!threshold) throw new Error('No Threshold in Week 1')
+    const run = findWeek(program, 1)?.sessions.find((s) => s.id === 'run')
+    if (!run) throw new Error('No Run in Week 1')
     const oneRep: Session = {
-      ...threshold,
-      blocks: threshold.blocks.map((b) => ({
+      ...run,
+      blocks: run.blocks.map((b) => ({
         ...b,
         exercises: b.exercises.map((e) =>
           e.prescription.kind === 'intervals' ? { ...e, prescription: { ...e.prescription, reps: 1 } } : e,
@@ -47,7 +46,7 @@ describe('describeSession', () => {
     expect(described.summary).toBe('1 × 7′ at Threshold')
     expect(described.target).toBe('Threshold effort, RPE 6–7')
     const intervals = oneRep.blocks.flatMap((b) => b.exercises).find((e) => e.prescription.kind === 'intervals')
-    if (!intervals) throw new Error('No intervals in Threshold')
+    if (!intervals) throw new Error('No intervals in the Run')
     expect(describeExercise(intervals, program.stations).detail).toBe('1 × 7′ · Threshold effort, RPE 6–7')
   })
 
@@ -63,34 +62,34 @@ describe('describeSession', () => {
     })
   })
 
-  it('reads HYROX as rounds, mentioning Race load only where a load scales', () => {
-    expect(session(1, 'hyrox')).toMatchObject({
-      heading: 'HYROX, 3 rounds',
-      summary: '3 × (600 m + 2 Stations)',
-      target: '600 m run + 2 Stations a round · about 60% of Race load',
+  it('reads HYROX A and B as rounds of a Station then a run, at Race load', () => {
+    expect(session(1, 'hyrox-a')).toMatchObject({
+      heading: 'HYROX A, 4 rounds',
+      summary: '4 × (Station + 400 m)',
+      target: 'Station, then 400 m, each round · Race load',
     })
-    expect(session(2, 'hyrox').target).toBe('600 m run + 2 Stations a round')
+    expect(session(17, 'hyrox-b')).toMatchObject({ heading: 'HYROX B, 4 rounds', summary: '4 × (Station + 600 m)' })
   })
 
   it('adds the HYROX Set up to the minutes as an estimate, outside them', () => {
-    expect(session(1, 'hyrox').meta).toBe('45 min + ~5′ setup')
-    expect(session(6, 'hyrox').meta).toBe('50 min + ~5′ setup')
-    expect(session(22, 'hyrox').meta).toBe('50 min + ~5′ setup · Key session this Week')
-    expect(session(17, 'race-simulation').meta).toBe('65 min · Key session this Week')
+    expect(session(1, 'hyrox-a').meta).toBe('45 min + ~5′ setup')
+    expect(session(3, 'hyrox-a').meta).toBe('45 min + ~5′ setup · Key session this Week')
+    expect(session(5, 'hyrox-b').meta).toBe('36 min + ~5′ setup')
+    expect(session(16, 'race-simulation').meta).toBe('65 min · Key session this Week')
   })
 
-  it('reads the 5K test and the Optional Easy run', () => {
-    expect(session(2, '5k-test')).toEqual({
-      heading: '5K test, baseline',
-      summary: '5 km all-out',
-      target: '5 km all-out · 4 strides first',
+  it('reads the Compromised run test and the Optional Easy run', () => {
+    expect(session(2, 'compromised-run-test')).toEqual({
+      heading: 'Compromised run test, baseline',
+      summary: '4 × (1 km + Station)',
+      target: '1 km, then Station, each round · Race load · all-out',
       meta: '45 min · Key session this Week',
     })
     expect(session(3, 'easy')).toEqual({
-      heading: 'Easy run, 25′',
-      summary: '25 min easy',
+      heading: 'Easy run, 30′',
+      summary: '30 min easy',
       target: 'Easy, RPE 2–4',
-      meta: '25 min · Optional',
+      meta: '30 min · Optional',
     })
   })
 })

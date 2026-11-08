@@ -7,7 +7,7 @@ import { createSyncer, type Send, type SendResult, type ServerTrouble } from './
 const log = (id: string, change: Partial<SessionLog> = {}): SessionLog => ({
   id: `log-${id}-0000`,
   week: 3,
-  sessionId: 'speed',
+  sessionId: 'run',
   date: localDate('2026-11-11'),
   status: 'done',
   minutes: 40,
@@ -92,7 +92,7 @@ describe('the syncer', () => {
   })
 
   it('takes logs written on another device', async () => {
-    const elsewhere = log('x', { sessionId: 'hyrox' })
+    const elsewhere = log('x', { sessionId: 'hyrox-a' })
     const syncer = createSyncer(memoryStore(), fakeServer([elsewhere]).send)
     await syncer.start()
     expect(syncer.snapshot().logs).toEqual([elsewhere])

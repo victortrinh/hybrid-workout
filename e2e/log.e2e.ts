@@ -9,22 +9,23 @@ import { caughtUpOnServer, seedLogs, weekDone } from './history'
  * nothing is Late. Week 3 is
  * done on its Saturday, after the clock of every test that reads Week 3.
  */
+const BUCKET = ['hyrox-a', 'hyrox-b', 'run', 'strength']
 const SCENARIO = {
   phone: {
     week: 4,
-    before: weekDone(3, ['speed', 'strength', 'threshold', 'hyrox'], '2026-11-14'),
-    wednesday: new Date('2026-11-18T12:00:00-05:00'),
-    days: { wed: 'Wed 18 November', thu: 'Thu 19 November' },
-  },
-  desktop: {
-    week: 6,
-    before: weekDone(5, ['speed', 'strength', 'threshold', 'hyrox'], '2026-11-23'),
+    before: weekDone(3, BUCKET, '2026-11-28'),
     wednesday: new Date('2026-12-02T12:00:00-05:00'),
     days: { wed: 'Wed 2 December', thu: 'Thu 3 December' },
   },
+  desktop: {
+    week: 6,
+    before: weekDone(5, BUCKET, '2026-12-07'),
+    wednesday: new Date('2026-12-16T12:00:00-05:00'),
+    days: { wed: 'Wed 16 December', thu: 'Thu 17 December' },
+  },
 }
 
-test('logging Threshold as Done strikes it through on Today and changes Up next', async ({ page, request }, testInfo) => {
+test('logging the Run as Done strikes it through on Today and changes Up next', async ({ page, request }, testInfo) => {
   const s = SCENARIO[testInfo.project.name as keyof typeof SCENARIO]
   const week = s.week
   await seedLogs(request, testInfo.project.name, s.before)
@@ -34,20 +35,20 @@ test('logging Threshold as Done strikes it through on Today and changes Up next'
 
   const upNext = page.getByRole('heading', { level: 1 })
   const bucket = page.getByRole('list').filter({ hasText: 'Strength' })
-  await expect(upNext).toHaveText(/^Speed, /)
+  await expect(upNext).toHaveText(/^HYROX A, /)
 
-  // A Session tapped in the Bucket, then Do it today instead, is today's; Speed goes back to planned.
-  await expect(bucket.getByRole('button', { name: /^Threshold/ })).toHaveCount(1)
-  await bucket.getByRole('button', { name: /^Threshold/ }).click()
+  // A Session tapped in the Bucket, then Do it today instead, is today's; HYROX A goes back to planned.
+  await expect(bucket.getByRole('button', { name: /^Run/ })).toHaveCount(1)
+  await bucket.getByRole('button', { name: /^Run/ }).click()
   await page.getByRole('button', { name: /^Do it today/ }).click()
-  await expect(upNext).toHaveText(/^Threshold, /)
-  await expect(bucket.getByRole('listitem')).toHaveText([/^Speed/, /^Strength/, /^Threshold.*Next$/, /^HYROX/, /^Easy run.*Optional$/])
+  await expect(upNext).toHaveText(/^Run, /)
+  await expect(bucket.getByRole('listitem')).toHaveText([/^HYROX A/, /^HYROX B/, /^Run.*Next$/, /^Strength/, /^Easy run.*Optional$/])
   await expect(bucket.getByRole('listitem').first()).not.toContainText('Next')
 
-  await page.goto(`/log/${week}/threshold`)
-  await expect(page).toHaveURL(`/log/${week}/threshold`)
+  await page.goto(`/log/${week}/run`)
+  await expect(page).toHaveURL(`/log/${week}/run`)
   await expect(page).toHaveTitle('Log after · Compromised')
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^Threshold, /)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^Run, /)
   await expect(page.getByRole('radio', { name: 'Done' })).toBeChecked()
   await expect(page.getByRole('radio', { name: s.days.wed })).toBeChecked()
   await expect(page.getByRole('radio', { name: s.days.thu })).toBeDisabled()
@@ -61,20 +62,20 @@ test('logging Threshold as Done strikes it through on Today and changes Up next'
   // Back on Today: struck through, the day it was done, and a new Up next.
   await expect(page).toHaveURL('/')
   const threshold = bucket.getByRole('listitem').nth(2)
-  await expect(threshold).toHaveText(/^Threshold.*Done, Wed$/)
-  await expect(threshold.getByText('Threshold', { exact: true })).toHaveCSS('text-decoration-line', 'line-through')
-  await expect(upNext).toHaveText(/^Speed, /)
+  await expect(threshold).toHaveText(/^Run.*Done, Wed$/)
+  await expect(threshold.getByText('Run', { exact: true })).toHaveCSS('text-decoration-line', 'line-through')
+  await expect(upNext).toHaveText(/^HYROX A, /)
   await expect(page.getByText('3 Sessions left · 5 days')).toBeVisible()
   await expectNoAxeViolations(page)
 
   // Stored in D1: it survives a reload and the API returns it.
   await page.reload()
-  await expect(threshold).toHaveText(/^Threshold.*Done, Wed$/)
+  await expect(threshold).toHaveText(/^Run.*Done, Wed$/)
   const state = await (await request.get('/api/state')).json()
   expect(state.sessionLogs).toContainEqual(
     expect.objectContaining({
       week,
-      sessionId: 'threshold',
+      sessionId: 'run',
       date: s.wednesday.toISOString().slice(0, 10),
       status: 'done',
       minutes: 45,
@@ -88,7 +89,7 @@ test('logging Threshold as Done strikes it through on Today and changes Up next'
   await expect(page.getByText(`Edit log · Week ${week}`)).toBeVisible()
   await page.getByRole('radio', { name: 'Partial' }).check({ force: true })
   await page.getByRole('button', { name: 'Save log' }).click()
-  await expect(threshold).toHaveText(/^Threshold.*Partial$/)
+  await expect(threshold).toHaveText(/^Run.*Partial$/)
 })
 
 test.describe('the sync endpoint', () => {
@@ -96,8 +97,8 @@ test.describe('the sync endpoint', () => {
   const entry = (project: string, change: Record<string, unknown> = {}) => ({
     id: `e2e-sync-${project}`,
     week: 19,
-    sessionId: project === 'phone' ? 'speed' : 'strength',
-    date: '2027-03-08',
+    sessionId: project === 'phone' ? 'easy' : 'strength',
+    date: '2027-03-17',
     status: 'done',
     minutes: 40,
     rpe: 8,
@@ -109,7 +110,7 @@ test.describe('the sync endpoint', () => {
     intervals: [],
     sets: [],
     stations: [],
-    updatedAt: '2027-03-08T20:00:00.000Z',
+    updatedAt: '2027-03-17T20:00:00.000Z',
     ...change,
   })
 
@@ -124,7 +125,7 @@ test.describe('the sync endpoint', () => {
 
     expect(await mine(await sync(entry(project)))).toEqual([entry(project)])
 
-    const later = entry(project, { status: 'partial', updatedAt: '2027-03-09T08:00:00.000Z' })
+    const later = entry(project, { status: 'partial', updatedAt: '2027-03-18T08:00:00.000Z' })
     expect(await mine(await sync(later))).toEqual([later])
 
     // An older edit arriving late changes nothing; replaying the same edit is harmless.
@@ -138,7 +139,7 @@ test.describe('the sync endpoint', () => {
     const id = `e2e-live-${testInfo.project.name}`
     const run = entry(testInfo.project.name, {
       id,
-      sessionId: 'threshold',
+      sessionId: 'easy',
       environment: 'indoor',
       distanceMeters: 9400,
       intervals: [
@@ -155,7 +156,7 @@ test.describe('the sync endpoint', () => {
     expect(await stored(run)).toEqual([run])
     // By-feel speeds: a rep with no target at the speed run, and the jogs' recovery pace.
     const byFeel = { block: 5, rep: 3, targetPace: null, held: false, actualPace: 257 }
-    const edited = { ...run, recoveryPace: 600, intervals: [run.intervals[1], byFeel], updatedAt: '2027-03-09T08:00:00.000Z' }
+    const edited = { ...run, recoveryPace: 600, intervals: [run.intervals[1], byFeel], updatedAt: '2027-03-18T08:00:00.000Z' }
     expect(await stored(edited)).toEqual([edited])
     // An older copy arriving late doesn't bring its reps back.
     expect(await stored(run)).toEqual([edited])
@@ -179,7 +180,7 @@ test.describe('the sync endpoint', () => {
     }
 
     expect(await stored(lifted)).toEqual([lifted])
-    const edited = { ...lifted, sets: lifted.sets.slice(0, 1), updatedAt: '2027-03-09T08:00:00.000Z' }
+    const edited = { ...lifted, sets: lifted.sets.slice(0, 1), updatedAt: '2027-03-18T08:00:00.000Z' }
     expect(await stored(edited)).toEqual([edited])
     // An older copy arriving late doesn't bring its sets back.
     expect(await stored(lifted)).toEqual([edited])
@@ -189,12 +190,12 @@ test.describe('the sync endpoint', () => {
     const id = `e2e-hyrox-${testInfo.project.name}`
     const circuit = entry(testInfo.project.name, {
       id,
-      sessionId: 'hyrox',
+      sessionId: 'hyrox-b',
       stations: [
-        { round: 1, part: 'run', pounds: null, meters: 1000, reps: null, seconds: 290 },
-        { round: 1, part: 'row', pounds: null, meters: 1000, reps: null, seconds: 245 },
-        { round: 2, part: 'run', pounds: null, meters: 1000, reps: null, seconds: 301 },
-        { round: 2, part: 'farmers-carry', pounds: 55, meters: 200, reps: null, seconds: 120 },
+        { round: 1, part: 'skierg', pounds: null, meters: 1000, reps: null, seconds: 245 },
+        { round: 1, part: 'run', pounds: null, meters: 600, reps: null, seconds: 170 },
+        { round: 2, part: 'burpee-broad-jumps', pounds: null, meters: 80, reps: null, seconds: 280 },
+        { round: 2, part: 'run', pounds: null, meters: 600, reps: null, seconds: 181 },
       ],
     })
     const stored = async (log: Record<string, unknown>) => {
@@ -204,7 +205,7 @@ test.describe('the sync endpoint', () => {
     }
 
     expect(await stored(circuit)).toEqual([circuit])
-    const edited = { ...circuit, stations: circuit.stations.slice(0, 2), updatedAt: '2027-03-09T08:00:00.000Z' }
+    const edited = { ...circuit, stations: circuit.stations.slice(0, 2), updatedAt: '2027-03-18T08:00:00.000Z' }
     expect(await stored(edited)).toEqual([edited])
     expect(await stored(circuit)).toEqual([edited])
   })
@@ -216,13 +217,13 @@ test.describe('the sync endpoint', () => {
       [entry(project, { status: 'planned' })],
       [entry(project, { rpe: 12 })],
       [entry(project, { sessionId: 'yoga' })],
-      [entry(project, { week: 27 })],
-      // Only a 5K test has a result time.
+      [entry(project, { week: 25 })],
+      // Only the race has a result time.
       [entry(project, { resultSeconds: 1380 })],
       // Only a run Session has reps.
       [entry(project, { sessionId: 'strength', intervals: [{ block: 1, rep: 1, targetPace: null, held: true, actualPace: null }] })],
       // Only a Strength session has sets, and only on the 5 lb step.
-      [entry(project, { sessionId: 'speed', sets: [{ exercise: 0, set: 1, lift: 'back-squat', pounds: 185, reps: 5, rpe: 7 }] })],
+      [entry(project, { sessionId: 'easy', sets: [{ exercise: 0, set: 1, lift: 'back-squat', pounds: 185, reps: 5, rpe: 7 }] })],
       [entry(project, { sessionId: 'strength', sets: [{ exercise: 0, set: 1, lift: 'back-squat', pounds: 187, reps: 5, rpe: 7 }] })],
       // Only HYROX and a Race simulation have Station logs.
       [entry(project, { stations: [{ round: 1, part: 'round', pounds: null, meters: null, reps: null, seconds: 600 }] })],

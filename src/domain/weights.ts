@@ -37,8 +37,9 @@ export const HOLD_RPE = 9
 /** Holds in a row before the Coach suggests going lighter. */
 export const HOLDS_TO_REDUCE = 2
 
-/** Calves go up by a share of the load; everything else by the smallest plate step. */
-const CALVES: readonly LiftId[] = [
+/** Calves and the heavy carry go up by a share of the load; everything else by the smallest plate step. */
+const BY_SHARE: readonly LiftId[] = [
+  'heavy-farmers-carry',
   'single-leg-calf-raise',
   'seated-calf-raise',
   'standing-calf-raise-machine',
@@ -287,9 +288,9 @@ export function judge(sets: SetLog[], rx: Sets, current: number, done: boolean):
   return done && sets.every((s) => s.rpe <= EASY_RPE) ? 'increase' : 'steady'
 }
 
-/** +5 lb; calves +5%, to the nearest 5 lb and never less than 5 lb. */
+/** +5 lb; calves and the heavy carry +5%, to the nearest 5 lb and never less than 5 lb. */
 export function increase(lift: LiftId, current: number): number {
-  return CALVES.includes(lift) ? Math.max(STEP, roundToFive((current * CALF_PERCENT) / 100)) : STEP
+  return BY_SHARE.includes(lift) ? Math.max(STEP, roundToFive((current * CALF_PERCENT) / 100)) : STEP
 }
 
 /** −5%, to the nearest 5 lb: at least 5 lb lighter, never under 5 lb. */

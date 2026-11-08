@@ -18,8 +18,8 @@ const ACHILLES_3: PainReport = {
 }
 
 describe('asksWhere', () => {
-  it('asks Treadmill or outside for a Speed, Threshold, Easy run or 5K test', () => {
-    for (const [week, id] of [[3, 'speed'], [3, 'threshold'], [3, 'easy'], [2, '5k-test']] as const) {
+  it('asks Treadmill or outside for the Run, Threshold or Compromised intervals, an Easy run or a Compromised run test', () => {
+    for (const [week, id] of [[3, 'run'], [6, 'run'], [3, 'easy'], [2, 'compromised-run-test']] as const) {
       expect(asksWhere(session(week, id)), id).toBe(true)
     }
   })
@@ -29,7 +29,7 @@ describe('asksWhere', () => {
       .flatMap((p) => p.weeks)
       .flatMap((w) => w.sessions)
       .find((s) => s.type === 'race-simulation')!
-    for (const s of [session(3, 'strength'), session(3, 'hyrox'), simulation]) {
+    for (const s of [session(3, 'strength'), session(3, 'hyrox-a'), session(3, 'hyrox-b'), simulation]) {
       expect(asksWhere(s), s.id).toBe(false)
     }
   })
@@ -37,7 +37,7 @@ describe('asksWhere', () => {
 
 describe('asksAtStart', () => {
   it('asks a run even with nothing hurting, and Strength only when pain stands', () => {
-    expect(asksAtStart(session(3, 'speed'), null)).toBe(true)
+    expect(asksAtStart(session(3, 'run'), null)).toBe(true)
     expect(asksAtStart(session(3, 'strength'), null)).toBe(false)
     expect(asksAtStart(session(3, 'strength'), { ...ACHILLES_3, score: 0 })).toBe(false)
     expect(asksAtStart(session(3, 'strength'), ACHILLES_3)).toBe(true)

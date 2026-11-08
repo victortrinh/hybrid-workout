@@ -9,7 +9,7 @@
 import type { LocalDate } from './calendar'
 import { isLive as isLiveRunOrCircuit, parseLiveRun, type LiveRun } from './live'
 import { POUNDS, type SessionLog, type SetLog } from './log'
-import { SESSION_TYPES } from './program/describe'
+import { sessionHeading } from './program/describe'
 import type { Block, LiftId, Prescription, Range, Session } from './program/types'
 import type { Suggestion, WorkingWeightSuggestion } from './suggestion'
 import { CALIBRATION_RPE, prescribedPounds, targetReps, type WorkingWeights } from './weights'
@@ -24,6 +24,7 @@ const START_POUNDS: Record<LiftId, number> = {
   'back-squat': 45,
   'romanian-deadlift': 45,
   'bulgarian-split-squat': 15,
+  'heavy-farmers-carry': 50,
   'single-leg-calf-raise': 15,
   'seated-calf-raise': 25,
   'standing-calf-raise-machine': 45,
@@ -118,7 +119,7 @@ export function startLifts(
     week,
     sessionId: session.id,
     type: 'strength',
-    heading: `${SESSION_TYPES[session.type].name}, ${session.headline}`,
+    heading: sessionHeading(session),
     date,
     exercises,
     sets: lifts.map(({ exercise: e, pounds }) =>
@@ -181,7 +182,7 @@ function liveExercise(name: string, note: string | null, rx: Sets, block: Block,
     lift,
     sets: rx.sets,
     reps: targetReps(rx.reps),
-    repsWords: `${reps}${rx.perLeg ? ' / leg' : ''}${rx.load.kind === 'bodyweight' && typeof rx.reps !== 'number' ? ' each' : ''}`,
+    repsWords: rx.meters ? `${rx.meters} m` : `${reps}${rx.perLeg ? ' / leg' : ''}${rx.load.kind === 'bodyweight' && typeof rx.reps !== 'number' ? ' each' : ''}`,
     rpe,
     rpeWords: calibrate
       ? `ramp to RPE ${CALIBRATION_RPE}`

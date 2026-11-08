@@ -54,9 +54,9 @@ const station = (round: number, id: StationId, seconds: number | null, volume: {
   } satisfies StationLog
 }
 
-/** Week 17: the first four Stations at full race volume. */
-const halfA = (date = '2027-02-20') =>
-  simulation(17, date, [
+/** Week 16: the first four Stations at full race volume. */
+const halfA = (date = '2027-02-27') =>
+  simulation(16, date, [
     run(1, 290),
     station(1, 'skierg', 250),
     run(2, 300),
@@ -67,9 +67,9 @@ const halfA = (date = '2027-02-20') =>
     station(4, 'burpee-broad-jumps', 280),
   ])
 
-/** Week 20: the last four. */
+/** Week 18: the last four. */
 const halfB = (date = '2027-03-13') =>
-  simulation(20, date, [
+  simulation(18, date, [
     run(1, 285),
     station(1, 'row', 255),
     run(2, 295),
@@ -80,7 +80,7 @@ const halfB = (date = '2027-03-13') =>
     station(4, 'wall-balls', 330),
   ])
 
-const RACE_EVE = localDate('2027-04-20')
+const RACE_EVE = localDate('2027-04-21')
 
 describe('when the race plan shows', () => {
   it('shows the day before Race day and on Race day, not before or after', () => {
@@ -113,11 +113,11 @@ describe('the race plan', () => {
   it('takes each Station from the Race simulation that timed it, and the run pace from the latest', () => {
     const plan = racePlan(program, [halfA(), halfB()], RACE_EVE)
     expect(plan.legs.map((l) => l.split?.seconds)).toEqual([250, 200, 230, 280, 255, 110, 240, 330])
-    expect(plan.legs[0].split).toEqual({ seconds: 250, week: 17, scaled: false })
-    expect(plan.legs[7].split).toEqual({ seconds: 330, week: 20, scaled: false })
-    // Week 20's four 1 km runs: 285, 295, 300, 300.
-    expect(plan.run).toEqual({ secondsPerKm: 295, week: 20 })
-    expect(plan.simulations).toEqual([17, 20])
+    expect(plan.legs[0].split).toEqual({ seconds: 250, week: 16, scaled: false })
+    expect(plan.legs[7].split).toEqual({ seconds: 330, week: 18, scaled: false })
+    // Week 18's four 1 km runs: 285, 295, 300, 300.
+    expect(plan.run).toEqual({ secondsPerKm: 295, week: 18 })
+    expect(plan.simulations).toEqual([16, 18])
   })
 
   it('estimates the finish: eight runs at the pace, every Station, and the Roxzone', () => {
@@ -129,12 +129,12 @@ describe('the race plan', () => {
   it('has no finish estimate while a Station has no split', () => {
     const plan = racePlan(program, [halfA()], RACE_EVE)
     expect(plan.legs.slice(4).every((l) => l.split === null)).toBe(true)
-    expect(plan.run).toEqual({ secondsPerKm: 301, week: 17 })
+    expect(plan.run).toEqual({ secondsPerKm: 301, week: 16 })
     expect(plan.finish).toBeNull()
   })
 
   it('doubles a half-volume split, but a full-volume one wins', () => {
-    const fullRun = simulation(23, '2027-04-03', [
+    const fullRun = simulation(21, '2027-04-03', [
       run(1, 280),
       station(1, 'skierg', 120, { meters: 500 }),
       run(2, 282),
@@ -153,29 +153,29 @@ describe('the race plan', () => {
       station(8, 'wall-balls', 150, { reps: 50 }),
     ])
     const onlyFullRun = racePlan(program, [fullRun], RACE_EVE)
-    expect(onlyFullRun.legs[0].split).toEqual({ seconds: 240, week: 23, scaled: true })
-    expect(onlyFullRun.legs[7].split).toEqual({ seconds: 300, week: 23, scaled: true })
-    expect(onlyFullRun.run).toEqual({ secondsPerKm: 287, week: 23 })
+    expect(onlyFullRun.legs[0].split).toEqual({ seconds: 240, week: 21, scaled: true })
+    expect(onlyFullRun.legs[7].split).toEqual({ seconds: 300, week: 21, scaled: true })
+    expect(onlyFullRun.run).toEqual({ secondsPerKm: 287, week: 21 })
 
     const all = racePlan(program, [halfA(), halfB(), fullRun], RACE_EVE)
-    expect(all.legs[0].split).toEqual({ seconds: 250, week: 17, scaled: false })
+    expect(all.legs[0].split).toEqual({ seconds: 250, week: 16, scaled: false })
     // The latest Race simulation sets the run pace, whatever its Station volume.
-    expect(all.run).toEqual({ secondsPerKm: 287, week: 23 })
-    expect(all.simulations).toEqual([17, 20, 23])
+    expect(all.run).toEqual({ secondsPerKm: 287, week: 21 })
+    expect(all.simulations).toEqual([16, 18, 21])
   })
 
   it('reads only the latest edit of a Race simulation log', () => {
-    const again = simulation(17, '2027-02-27', [run(1, 280), station(1, 'skierg', 240)])
+    const again = simulation(16, '2027-02-28', [run(1, 280), station(1, 'skierg', 240)])
     // A later edit of the same log replaces it.
-    const plan = racePlan(program, [halfA(), { ...again, id: 'sim-edit', updatedAt: '2027-02-28T20:00:00.000Z' }], RACE_EVE)
-    expect(plan.legs[0].split).toEqual({ seconds: 240, week: 17, scaled: false })
+    const plan = racePlan(program, [halfA(), { ...again, id: 'sim-edit', updatedAt: '2027-03-01T20:00:00.000Z' }], RACE_EVE)
+    expect(plan.legs[0].split).toEqual({ seconds: 240, week: 16, scaled: false })
     expect(plan.legs[1].split).toBeNull()
   })
 
   it('leaves out Skipped Race simulations and splits not timed', () => {
-    const skipped = simulation(17, '2027-02-20', [run(1, 290), station(1, 'skierg', 250)], 'skipped')
+    const skipped = simulation(16, '2027-02-27', [run(1, 290), station(1, 'skierg', 250)], 'skipped')
     expect(racePlan(program, [skipped], RACE_EVE).legs[0].split).toBeNull()
-    const untimed = simulation(17, '2027-02-20', [run(1, null), station(1, 'skierg', null)])
+    const untimed = simulation(16, '2027-02-27', [run(1, null), station(1, 'skierg', null)])
     const plan = racePlan(program, [untimed], RACE_EVE)
     expect(plan.legs[0].split).toBeNull()
     expect(plan.run).toBeNull()
@@ -183,7 +183,7 @@ describe('the race plan', () => {
   })
 
   it('ignores HYROX sessions: a round is not a Station split', () => {
-    const hyrox = { ...simulation(22, '2027-03-25', [station(1, 'sled-push', 200)]), sessionId: 'hyrox' }
+    const hyrox = { ...simulation(17, '2027-03-03', [station(1, 'sled-push', 200)]), sessionId: 'hyrox-a' }
     expect(racePlan(program, [hyrox], RACE_EVE).legs[1].split).toBeNull()
   })
 })

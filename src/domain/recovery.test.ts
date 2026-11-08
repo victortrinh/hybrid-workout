@@ -189,10 +189,10 @@ describe('the short-sleep rule on each Session type', () => {
   const mainBlocks = (s: Session) => s.blocks.filter((b) => b.main)
 
   it('takes a rep off intervals', () => {
-    const written = first('speed', '5 × 3′')
+    const written = first('run', '4 × 6′')
     expect(shortSleepCut(written)).toBe('rep')
     const after = shortSleepAdapted(written, short)
-    expect(after.headline).toBe('4 × 3′')
+    expect(after.headline).toBe('3 × 6′')
     expect(after.note).toMatch(/^Short sleep \(5 h 20\): one rep fewer, nothing past RPE 7\./)
   })
 

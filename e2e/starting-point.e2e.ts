@@ -8,6 +8,7 @@ import { serveHistory } from './history'
  */
 test.use({ storageState: { cookies: [], origins: [] } })
 
+
 const heading = (page: Page) => page.getByRole('heading', { level: 1 })
 
 /** Week 1's Strength session, started early from its Week: the calibration's first load. */
@@ -33,7 +34,7 @@ test('shows once; skipping both leaves runs RPE only and calibrations from the b
   await expect(heading(page)).toHaveText('Week 1 starts Monday.')
 
   await page.goto('/plan/week/1')
-  await expect(page.getByText('Runs go by RPE until the baseline 5K test sets the Training paces')).toBeVisible()
+  await expect(page.getByText('Runs go by RPE until there are Training paces')).toBeVisible()
   await expect(await firstSquat(page)).toHaveText('45')
 })
 
@@ -55,9 +56,9 @@ test('estimates set estimated paces and the calibration start, editable in Setti
   await page.getByRole('button', { name: 'Save and start' }).click()
   await expect(heading(page)).toHaveText('Week 1 starts Monday.')
 
-  // A 21:00 estimate reads as estimated Training paces: easy running at 5:22–5:55/km outdoors in October.
+  // A 21:00 estimate reads as estimated Training paces: easy running at 5:22–5:55/km.
   await page.goto('/plan/week/1')
-  await expect(page.getByText('Estimated paces from your 21:00 5K estimate, until the first 5K test')).toBeVisible()
+  await expect(page.getByText('Estimated paces from your Starting point')).toBeVisible()
   await page.getByRole('button', { name: 'Show the Prescription' }).first().click()
   await expect(page.getByText(/5:22–5:55\/km/).first()).toBeVisible()
 
@@ -80,9 +81,7 @@ test('estimates set estimated paces and the calibration start, editable in Setti
   await expect(await firstSquat(page)).toHaveText('170')
 })
 
-test('a real 5K test and calibration replace the estimates, which Settings then shows read-only', async ({
-  page,
-}) => {
+test('a real calibration replaces the lift estimate, which Settings then shows read-only', async ({ page }) => {
   await serveHistory(page, [])
   await page.clock.setFixedTime(BEFORE_WEEK_1)
   await page.goto('/')
@@ -91,28 +90,28 @@ test('a real 5K test and calibration replace the estimates, which Settings then 
   await page.getByRole('button', { name: 'Save and start' }).click()
   await expect(heading(page)).toHaveText('Week 1 starts Monday.')
 
-  // Three weeks on, the same device: a 23:00 test in Week 2 and the squat calibrated at 185 lb.
+  // Two weeks on, the same device: the squat calibrated at 185 lb in Week 1.
   const later = await page.context().newPage()
   await serveHistory(later, [
     {
       week: 1,
       sessionId: 'strength',
-      date: '2026-10-27',
+      date: '2026-11-10',
       status: 'done',
       sets: [{ exercise: 0, set: 1, lift: 'back-squat', pounds: 185, reps: 5, rpe: 7 }],
     },
-    { week: 2, sessionId: '5k-test', date: '2026-11-04', status: 'done', resultSeconds: 23 * 60, environment: 'indoor' },
   ])
-  await later.clock.setFixedTime(new Date('2026-11-11T12:00:00-05:00'))
+  await later.clock.setFixedTime(new Date('2026-11-25T12:00:00-05:00'))
   await later.goto('/plan/week/3')
-  await expect(later.getByText(/^Paces from the 23:00 5K test/)).toBeVisible()
+  await expect(later.getByText('Estimated paces from your Starting point')).toBeVisible()
 
   await later.goto('/')
   await later.getByRole('button', { name: 'Settings' }).click()
   const settings = later.getByRole('dialog', { name: 'Settings' })
+  // No test replaces the estimate yet: it stays editable.
   const fiveK = settings.getByRole('textbox', { name: '5 km time' })
-  await expect(fiveK).toHaveValue('23:00')
-  await expect(fiveK).toHaveAttribute('readonly')
+  await expect(fiveK).toHaveValue('21:00')
+  await expect(fiveK).not.toHaveAttribute('readonly')
   const squat = settings.getByRole('textbox', { name: 'Back squat, lb' })
   await expect(squat).toHaveValue('185 lb')
   await expect(squat).toHaveAttribute('readonly')

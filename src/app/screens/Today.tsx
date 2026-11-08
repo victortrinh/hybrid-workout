@@ -16,7 +16,7 @@ import type {
 import { isLive, type LiveSession } from '../../domain/lifts'
 import type { Environment, RunContext } from '../../domain/paces'
 import { painLevel, type PainArea } from '../../domain/pain'
-import { describeSession, LIFT_NAME, SESSION_TYPES } from '../../domain/program/describe'
+import { describeSession, LIFT_NAME, SESSION_TYPES, sessionName } from '../../domain/program/describe'
 import { finishClock } from '../../domain/recap'
 import type { Program, Session, Station, StationId } from '../../domain/program/types'
 import type { RacePlan } from '../../domain/racePlan'
@@ -112,7 +112,7 @@ export function Today({
   onDecide: (suggestions: Suggestion | Suggestion[], decision: Decision) => void
   /** Dismisses the notice of the Late sessions Race specific dropped: it doesn't return. */
   onDismissDropped: () => void
-  /** How a Session's runs read today: exact speeds or paces once there is a 5K test. */
+  /** How a Session's runs read today: exact speeds or paces once there are Training paces. */
   runContext: (week: number, session: Session) => RunContext
   /** Overrides the month's Environment for one Session. */
   onEnvironment: (week: number, session: Session, environment: Environment) => void
@@ -571,7 +571,7 @@ function UpNext({
                   onPress={() => (asksAtStart(upNext, standing) ? setAsking(true) : onStart(upNextWeek, upNext, { ...PAIN_FREE }, null))}
                   className={primaryAction}
                 >
-                  {nb(`Start ${SESSION_TYPES[upNext.type].name}`)}
+                  {nb(`Start ${sessionName(upNext)}`)}
                 </Button>
               ) : (
                 <Link href={logPath(upNextWeek, upNext.id)} className={`${primaryAction} no-underline`}>
@@ -660,7 +660,7 @@ function AttachedNote({
   onDetach: () => void
 }) {
   const { activity, session, week, by, logged } = attached
-  const name = SESSION_TYPES[session.type].name
+  const name = sessionName(session)
   return (
     <section
       aria-label="From the watch"
@@ -732,7 +732,7 @@ function WhichSession({
 
 /** A candidate's Session type, with its Week when the question spans a Late session's Week and the current one. */
 function candidateName({ candidates }: ActivityQuestion, candidate: ActivityQuestion['candidates'][number]): string {
-  const name = SESSION_TYPES[candidate.session.type].name
+  const name = sessionName(candidate.session)
   return candidates.some((c) => c.week !== candidate.week) ? `${name} · Week ${candidate.week}` : name
 }
 
@@ -753,7 +753,7 @@ function ConsoleDistance({ entry }: { entry: BucketEntry }) {
   return (
     <section aria-label="Console distance" className="mt-[18px] border-t-2 border-t-ink py-3.5 desktop:border-b desktop:border-b-rule">
       <p className="text-[17px] leading-[1.3] font-semibold">
-        {nb(`${SESSION_TYPES[session.type].name} on the treadmill, ${shortWeekday(activity.date)}. What did the console say?`)}
+        {nb(`${sessionName(session)} on the treadmill, ${shortWeekday(activity.date)}. What did the console say?`)}
       </p>
       <p className="mt-1 text-[14px] text-muted">
         {nb(`The watch guesses distance indoors. Kept its ${activitySummary(activity, true)}.`)}
@@ -1056,7 +1056,7 @@ function restCopy(
       }
     case 'hard-yesterday':
     case 'hard-today':
-    case 'speed-after-load':
+    case 'run-after-load':
       return suggestedRestCopy(rest)
     case 'skipped-today':
       return {
@@ -1151,7 +1151,7 @@ function BucketRow({
         <span
           className={`block text-[17px] font-bold ${state === 'done' ? 'text-muted line-through decoration-2' : ''} group-hover:underline group-hover:decoration-2 group-hover:underline-offset-4`}
         >
-          {type.name}
+          {sessionName(session)}
         </span>
         <span className="text-[14px] text-muted">
           {nb(

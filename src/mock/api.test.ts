@@ -8,10 +8,10 @@ import { openDatabase } from './database'
 const SQL = await initSqlJs()
 
 const log = (change: Partial<SessionLog> = {}): SessionLog => ({
-  id: 'log-speed-0001',
+  id: 'log-run-0001',
   week: 3,
-  sessionId: 'speed',
-  date: '2026-11-11' as SessionLog['date'],
+  sessionId: 'run',
+  date: '2026-11-25' as SessionLog['date'],
   status: 'done',
   minutes: 40,
   rpe: 7,
@@ -23,7 +23,7 @@ const log = (change: Partial<SessionLog> = {}): SessionLog => ({
   intervals: [{ block: 0, rep: 1, targetPace: 240, held: true, actualPace: null }],
   sets: [],
   stations: [],
-  updatedAt: '2026-11-11T20:00:00.000Z',
+  updatedAt: '2026-11-25T20:00:00.000Z',
   ...change,
 })
 
@@ -54,7 +54,7 @@ describe('the Worker in the browser', () => {
     const later = log({
       rpe: 9,
       intervals: [{ block: 0, rep: 1, targetPace: 240, held: false, actualPace: 250 }],
-      updatedAt: '2026-11-11T21:00:00.000Z',
+      updatedAt: '2026-11-25T21:00:00.000Z',
     })
     await sync({ sessionLogs: [later] })
     await sync({ sessionLogs: [log()] })
@@ -66,18 +66,18 @@ describe('the Worker in the browser', () => {
     return sync({ sessionLogs: [byFeel] }).then(async () => expect((await state()).sessionLogs).toEqual([byFeel]))
   })
 
-  it('keeps the race’s finish time, past the hour a 5K test is held to', async () => {
-    const race = log({ id: 'log-race-0001', week: 26, sessionId: 'race', date: '2027-04-21' as SessionLog['date'], minutes: 85, rpe: null, resultSeconds: 5047, intervals: [] })
+  it('keeps the race’s finish time, past the hour', async () => {
+    const race = log({ id: 'log-race-0001', week: 24, sessionId: 'race', date: '2027-04-22' as SessionLog['date'], minutes: 85, rpe: null, resultSeconds: 5047, intervals: [] })
     await sync({ sessionLogs: [race] })
     expect((await state()).sessionLogs).toEqual([race])
   })
 
-  it('refuses a result time on any Session but a 5K test and the race, or past what it can take', async () => {
+  it('refuses a result time on any Session but the race, or past what it can take', async () => {
     const post = (sessionLogs: SessionLog[]) =>
       api(new Request('http://localhost/api/sync', { method: 'POST', body: JSON.stringify({ sessionLogs }) }))
     expect((await post([log({ resultSeconds: 1380 })])).status).toBe(400)
-    expect((await post([log({ sessionId: '5k-test', week: 2, intervals: [], resultSeconds: 5047 })])).status).toBe(400)
-    expect((await post([log({ week: 26, sessionId: 'race', intervals: [], resultSeconds: 600 })])).status).toBe(400)
+    expect((await post([log({ sessionId: 'compromised-run-test', week: 2, intervals: [], resultSeconds: 1380 })])).status).toBe(400)
+    expect((await post([log({ week: 24, sessionId: 'race', intervals: [], resultSeconds: 600 })])).status).toBe(400)
   })
 
   it('keeps the Starting point, a later edit winning, and refuses an unbelievable one', async () => {
@@ -98,7 +98,7 @@ describe('the Worker in the browser', () => {
   })
 
   it('lets the Shortcut in with the mock service token, and nobody else', async () => {
-    const night = { date: '2026-11-11', sleepMinutes: 420, hrvMs: 60, restingHeartRate: 50, source: 'Ring' }
+    const night = { date: '2026-11-25', sleepMinutes: 420, hrvMs: 60, restingHeartRate: 50, source: 'Ring' }
     const post = (headers: Record<string, string>) =>
       api(new Request('http://localhost/api/recovery', { method: 'POST', headers, body: JSON.stringify(night) }))
     expect((await post({})).status).toBe(401)
@@ -115,12 +115,12 @@ describe('the Worker in the browser', () => {
     const response = await api(new Request('http://localhost/api/export.json'))
     expect(response.headers.get('content-disposition')).toMatch(/attachment; filename="compromised-.*\.json"/)
     const { tables } = (await response.json()) as { tables: Record<string, unknown[]> }
-    expect(tables.session_logs).toEqual([expect.objectContaining({ id: 'log-speed-0001', recovery_pace: 600 })])
+    expect(tables.session_logs).toEqual([expect.objectContaining({ id: 'log-run-0001', recovery_pace: 600 })])
     expect(tables.interval_logs).toHaveLength(1)
     expect(tables.starting_point).toEqual([])
     const zip = await api(new Request('http://localhost/api/export.zip'))
     expect(zip.headers.get('content-type')).toBe('application/zip')
     const files = new TextDecoder().decode(await zip.arrayBuffer())
-    expect(files).toMatch(/session_logs\.csvid,week,session_id,.*,recovery_pace\r\nlog-speed-0001,.*,600\r\n/)
+    expect(files).toMatch(/session_logs\.csvid,week,session_id,.*,recovery_pace\r\nlog-run-0001,.*,600\r\n/)
   })
 })

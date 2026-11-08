@@ -1,21 +1,19 @@
 /**
- * What a Session log says happened, in one line: the 5K test's time, each
- * lift's top set, a HYROX session's round times, the reps held on target,
+ * What a Session log says happened, in one line: each lift's top set, a HYROX session's round times, the reps held on target,
  * then the time and RPE. The Week page leads a logged Session with it.
  */
 import { trained, type SessionLog, type SetLog } from './log'
 import { clock } from './paces'
-import { LIFT_NAME } from './program/describe'
+import { LIFT_NAME, SESSION_TYPES } from './program/describe'
 import type { LiftId, SessionType } from './program/types'
 
-/** "5K test, 23:00 · RPE 9", or null when the log says nothing about this Session's work. */
+/** "Squat 185 lb × 5 · 45 min · RPE 7", or null when the log says nothing about this Session's work. */
 export function logSummary(log: SessionLog, type: SessionType): string | null {
   // A Skipped Session wasn't done, a Swapped one was something else: its minutes aren't this Session's.
   if (!trained(log)) return null
   const parts = [
-    type === '5k-test' && log.resultSeconds !== null && `5K test, ${clock(log.resultSeconds)}`,
     topSets(log.sets),
-    type === 'race-simulation' ? simulationTotal(log) : roundTimes(log),
+    type === 'race-simulation' || type === 'compromised-run-test' ? simulationTotal(log, SESSION_TYPES[type].name) : roundTimes(log),
     repsOnTarget(log),
     log.minutes !== null && `${log.minutes} min`,
     log.rpe !== null && `RPE ${log.rpe}`,
@@ -45,13 +43,14 @@ function roundTimes(log: SessionLog): string | null {
   return `${times.length === 1 ? 'Round' : 'Rounds'} ${times.join(', ')}`
 }
 
-function simulationTotal(log: SessionLog): string | null {
+/** "Race simulation, 1:12:40": every run and Station split added up. */
+function simulationTotal(log: SessionLog, name: string): string | null {
   const splits = log.stations.filter((line) => line.part !== 'round' && line.seconds !== null)
   if (splits.length === 0) return null
   const total = splits.reduce((sum, line) => sum + line.seconds!, 0)
   const hours = Math.floor(total / 3600)
   const rest = clock(total % 3600)
-  return `Race simulation, ${hours > 0 ? `${hours}:${rest.padStart(5, '0')}` : rest}`
+  return `${name}, ${hours > 0 ? `${hours}:${rest.padStart(5, '0')}` : rest}`
 }
 
 /** Only reps run against a target pace count: RPE-only reps have nothing to hold. */

@@ -101,17 +101,19 @@ export function shortSleepCut(session: Session): ShortSleepCut | null {
     case 'strength':
       return rxs.some((rx) => rx.kind === 'sets' && rx.sets > 1) ? 'set' : null
     default:
+      // Compromised intervals are rounds of a run and wall balls: one round fewer.
+      if (main.length > 1 && main.every((b) => b.exercises.some((e) => e.prescription.kind === 'station'))) return 'round'
       return rxs.some((rx) => rx.kind === 'intervals' && rx.reps > 1) ? 'rep' : null
   }
 }
 
 /**
  * The short-sleep rule: the main Block loses what `shortSleepCut` names and
- * nothing goes past RPE 7. A 5K test and anything pinned to a day (the race)
- * stay as they are: a capped test isn't a test.
+ * nothing goes past RPE 7. A Compromised run test and anything pinned to a
+ * day (the race) stay as they are: a capped test isn't a test.
  */
 export function shortSleepAdapted(session: Session, night: RecoveryNight): Session {
-  if (session.type === '5k-test' || session.date) return session
+  if (session.type === 'compromised-run-test' || session.date) return session
   const cut = shortSleepCut(session)
   const what = cut ? `one ${CUT_NOUN[cut]} fewer, nothing` : 'nothing'
   const why = `Short sleep (${sleepText(night.sleepMinutes)}): ${what} past RPE ${SLEEP_RPE_CAP}.`

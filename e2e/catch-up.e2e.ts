@@ -3,37 +3,37 @@ import { expectNoAxeViolations } from './axe'
 import { caughtUp, serveHistory } from './history'
 import { doToday } from './today'
 
-/** Tuesday 3 November 2026, Week 2. */
-const WEEK_2_TUESDAY = new Date('2026-11-03T12:00:00-05:00')
+/** Tuesday 17 November 2026, Week 2. */
+const WEEK_2_TUESDAY = new Date('2026-11-17T12:00:00-05:00')
 
 /**
- * Catch-up (ADR-0007): Week 1's Threshold (Key) and HYROX were never logged,
+ * Catch-up (ADR-0007): Week 1's HYROX B and Run (Key) were never logged,
  * so they wait, Late, ahead of Week 2, and Up next is the oldest of them.
  */
 test('serves the Late sessions first, says how far behind, and still lets a current-Week Session be picked', async ({
   page,
 }) => {
   await serveHistory(page, [
-    { week: 1, sessionId: 'speed', date: '2026-10-26', status: 'done' },
-    { week: 1, sessionId: 'strength', date: '2026-10-28', status: 'done' },
+    { week: 1, sessionId: 'hyrox-a', date: '2026-11-09', status: 'done' },
+    { week: 1, sessionId: 'strength', date: '2026-11-11', status: 'done' },
   ])
   await page.clock.setFixedTime(WEEK_2_TUESDAY)
   await page.goto('/')
 
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^Threshold, 3\s×\s7′/)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^HYROX B, 4\srounds/)
   // Up next's meta line says where it's from.
   const lateMeta = page.locator('p', { hasText: /^Week 1 · Late/ })
   await expect(lateMeta).toBeVisible()
   await expect(page.getByText('2 Sessions behind · Week 1')).toBeVisible()
 
-  const bucket = page.getByRole('list').filter({ hasText: '5K test' })
+  const bucket = page.getByRole('list').filter({ hasText: 'Compromised run test' })
   await expect(bucket.getByRole('listitem')).toHaveText([
-    /^Threshold.*Week\s1\s·\sLate.*Next$/,
-    /^HYROX.*Week\s1\s·\sLate.*/,
-    /^5K test/,
+    /^HYROX B.*Week\s1\s·\sLate.*Next$/,
+    /^Run.*Week\s1\s·\sLate.*Key$/,
+    /^HYROX A/,
+    /^HYROX B/,
+    /^Compromised run test/,
     /^Strength/,
-    /^Threshold/,
-    /^HYROX/,
     /^Easy run.*Optional$/,
   ])
   // Week 2's own count leaves the Late sessions out.
@@ -41,34 +41,35 @@ test('serves the Late sessions first, says how far behind, and still lets a curr
   await expect(page.getByText('4 Sessions left · 6 days')).toBeVisible()
   await expectNoAxeViolations(page)
 
-  // Week 2's HYROX instead, today: the Late sessions stay, still counted.
-  await doToday(page, bucket.getByRole('listitem').nth(5).getByRole('button'))
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^HYROX/)
+  // Week 2's HYROX A instead, today: the Late sessions stay, still counted.
+  await doToday(page, bucket.getByRole('listitem').nth(2).getByRole('button'))
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^HYROX A/)
   await expect(lateMeta).toHaveCount(0)
-  await expect(bucket.getByRole('listitem').first()).toHaveText(/^Threshold.*Week\s1\s·\sLate.*Key$/)
+  await expect(bucket.getByRole('listitem').first()).toHaveText(/^HYROX B.*Week\s1\s·\sLate/)
+  await expect(bucket.getByRole('listitem').nth(1)).toHaveText(/^Run.*Week\s1\s·\sLate.*Key$/)
   await expect(page.getByText('2 Sessions behind · Week 1')).toBeVisible()
 })
 
 /**
- * A watch run on the Week 2 Tuesday fits both Week 1's Late Threshold and
- * Week 2's own: Today asks, naming each with its Week, and the answer
- * attaches it to the Late row.
+ * A watch run on the Week 2 Tuesday fits both Week 1's Late Run and Week
+ * 2's Compromised run test: Today asks, naming each with its Week, and the
+ * answer attaches it to the Late row.
  */
 test('asks which Week’s Session a watch workout was when it fits a Late one and a current one', async ({ page }) => {
   const activityAnswers: Record<string, unknown>[] = []
   await serveHistory(
     page,
     [
-      ...['speed', 'strength', 'hyrox'].map((sessionId) => ({ week: 1, sessionId, date: '2026-10-27', status: 'done' as const })),
-      ...['5k-test', 'easy'].map((sessionId) => ({ week: 2, sessionId, date: '2026-11-02', status: 'done' as const })),
+      ...['hyrox-a', 'hyrox-b', 'strength'].map((sessionId) => ({ week: 1, sessionId, date: '2026-11-10', status: 'done' as const })),
+      ...['hyrox-a', 'easy'].map((sessionId) => ({ week: 2, sessionId, date: '2026-11-16', status: 'done' as const })),
     ],
     [],
     {
       activities: [
         {
-          id: '2026-11-03T12:00:00Z',
-          date: '2026-11-03',
-          startedAt: '2026-11-03T12:00:00Z',
+          id: '2026-11-17T12:00:00Z',
+          date: '2026-11-17',
+          startedAt: '2026-11-17T12:00:00Z',
           workoutType: 'Running',
           kind: 'run',
           minutes: 40,
@@ -76,7 +77,7 @@ test('asks which Week’s Session a watch workout was when it fits a Late one an
           averageHeartRate: null,
           maxHeartRate: null,
           indoor: false,
-          receivedAt: '2026-11-03T13:00:00.000Z',
+          receivedAt: '2026-11-17T13:00:00.000Z',
         },
       ],
       activityAnswers,
@@ -86,36 +87,36 @@ test('asks which Week’s Session a watch workout was when it fits a Late one an
   await page.goto('/')
 
   const question = page.getByRole('region', { name: 'Which Session was this?' })
-  await expect(question.getByRole('button')).toHaveText(['Threshold · Week 1', 'Threshold · Week 2', 'None of these'])
+  await expect(question.getByRole('button')).toHaveText(['Run · Week 1', 'Compromised run test · Week 2', 'None of these'])
   await expectNoAxeViolations(page)
 
-  await question.getByRole('button', { name: 'Threshold · Week 1' }).click()
+  await question.getByRole('button', { name: 'Run · Week 1' }).click()
   await expect(question).toHaveCount(0)
-  await expect.poll(() => activityAnswers.at(-1)).toMatchObject({ week: 1, sessionId: 'threshold' })
-  await expect(page.getByRole('region', { name: 'From the watch' })).toContainText('Threshold it was. Not logged yet.')
-  const bucket = page.getByRole('list').filter({ hasText: '5K test' })
-  await expect(bucket.getByRole('listitem').first()).toHaveText(/^Threshold.*Week\s1\s·\sLate.*Watch/)
+  await expect.poll(() => activityAnswers.at(-1)).toMatchObject({ week: 1, sessionId: 'run' })
+  await expect(page.getByRole('region', { name: 'From the watch' })).toContainText('Run it was. Not logged yet.')
+  const bucket = page.getByRole('list').filter({ hasText: 'Compromised run test' })
+  await expect(bucket.getByRole('listitem').first()).toHaveText(/^Run.*Week\s1\s·\sLate.*Watch/)
 })
 
-/** Monday 22 March 2027: Week 22, the first day of Race specific. */
-const RACE_SPECIFIC_MONDAY = new Date('2027-03-22T12:00:00-04:00')
+/** Monday 22 February 2027: Week 16, the first day of Race specific. */
+const RACE_SPECIFIC_MONDAY = new Date('2027-02-22T12:00:00-05:00')
 
 /**
  * Race day doesn't move (ADR-0007): on the first Monday of Race specific the
- * Sessions still Late are dropped, said once, and Up next is Week 22's.
+ * Sessions still Late are dropped, said once, and Up next is Week 16's.
  */
 test('drops what is still Late as Race specific starts, and says so once', async ({ page }) => {
-  // Week 20's Threshold and Race simulation and Week 21's HYROX never logged.
+  // Week 14's Compromised run test and Strength and Week 15's Strength never logged.
   const decisions: Record<string, unknown>[] = []
   await serveHistory(
     page,
-    caughtUp(19, [
-      { week: 20, sessionId: 'speed', date: '2027-03-08', status: 'done' },
-      { week: 20, sessionId: 'strength', date: '2027-03-10', status: 'done' },
-      ...['speed', 'strength', 'easy-deload'].map((sessionId) => ({
-        week: 21,
+    caughtUp(13, [
+      { week: 14, sessionId: 'hyrox-a', date: '2027-02-08', status: 'done' },
+      { week: 14, sessionId: 'hyrox-b', date: '2027-02-10', status: 'done' },
+      ...['hyrox-a', 'hyrox-b', 'run'].map((sessionId) => ({
+        week: 15,
         sessionId,
-        date: '2027-03-16',
+        date: '2027-02-16',
         status: 'done' as const,
       })),
     ]),
@@ -125,12 +126,12 @@ test('drops what is still Late as Race specific starts, and says so once', async
   await page.clock.setFixedTime(RACE_SPECIFIC_MONDAY)
   await page.goto('/')
 
-  const notice = page.getByText('3 Sessions from Weeks 20–21 dropped to keep Race specific on schedule.')
+  const notice = page.getByText('3 Sessions from Weeks 14–15 dropped to keep Race specific on schedule.')
   await expect(notice).toBeVisible()
   await expect(page.getByText(/Sessions? behind/)).toHaveCount(0)
   await expect(page.locator('p', { hasText: /· Late/ })).toHaveCount(0)
   const bucket = page.getByRole('list').filter({ hasText: 'Strength' })
-  await expect(bucket.getByRole('listitem').first()).toHaveText(/^Speed.*Next$/)
+  await expect(bucket.getByRole('listitem').first()).toHaveText(/^Race simulation.*Next$/)
   await expectNoAxeViolations(page)
 
   await page.getByRole('button', { name: 'Got it' }).click()

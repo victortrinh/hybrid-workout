@@ -37,12 +37,21 @@ describe('liveLine', () => {
   }
 
   it('has a line for each part of a split warm-up, and for Set up', () => {
-    expect(lines(3, 'speed').slice(0, 2)).toEqual(['Warm-up. Easy. Nobody is watching.', 'Drills. Sharp, not tired.'])
-    expect(lines(2, '5k-test')[1]).toBe('Quick and relaxed. Not a sprint.')
-    expect(lines(3, 'hyrox')).toEqual([
+    expect(lines(2, 'compromised-run-test').slice(0, 2)).toEqual(['Warm-up. Easy. Nobody is watching.', 'Quick and relaxed. Not a sprint.'])
+    expect(lines(3, 'hyrox-a').slice(0, 2)).toEqual([
       'Warm-up. Easy. Nobody is watching.',
-      'Lunges. Wake the legs up, don’t tire them.',
       'Load every Station now. This clock isn’t training. Tap Done when it’s all set.',
     ])
+  })
+
+  it('says Threshold reps are never raced', () => {
+    expect(lines(3, 'run')[1]).toBe('Rep 1. Threshold. Do not race it.')
+  })
+
+  it('runs the Compromised run test at full effort', () => {
+    const session = findWeek(program, 2)!.sessions.find((s) => s.id === 'compromised-run-test')!
+    const run = startRun({ week: 2, session, date: localDate('2026-11-18'), environment: 'indoor' }, 0)
+    const first = run.blocks.find((b) => b.kind === 'distance')!
+    expect(liveLine(first, run)).toBe('Run 1. Full effort, but even. The Station is waiting.')
   })
 })

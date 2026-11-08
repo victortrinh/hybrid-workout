@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { Link } from 'react-aria-components'
 import type { CoachDay } from '../../domain/coach'
 import type { SessionLog } from '../../domain/log'
-import { SESSION_TYPES } from '../../domain/program/describe'
+import { sessionName } from '../../domain/program/describe'
 import type { Program, Week } from '../../domain/program/types'
 import { weeklyCompletion, type WeekCompletion } from '../../domain/progress'
 import { LaneLegend } from '../components/LaneChip'
@@ -54,11 +54,11 @@ export function Plan({ program, day, logs }: { program: Program; day: CoachDay; 
   )
 }
 
-/** "Deload", "5K test", "Simulation", "Race", or nothing for an ordinary Week. */
+/** "Deload", "Test", "Simulation", "Race", or nothing for an ordinary Week. */
 export function weekMark(week: Week): string {
   if (week.race) return 'Race'
   if (week.deload) return 'Deload'
-  if (week.fiveKTest) return '5K test'
+  if (week.compromisedRunTest) return 'Test'
   if (week.raceSimulation) return 'Simulation'
   return ''
 }
@@ -78,7 +78,7 @@ function WeekRow({ week, current, completion }: { week: Week; current: boolean; 
       <span className="sr-only">
         Week {week.number}, from {shortDay(week.startDate)}
         {current && ', this Week'}
-        {key && `, Key session ${SESSION_TYPES[key.type].name}`}
+        {key && `, Key session ${sessionName(key)}`}
         {completion && `, ${completionLabel(completion)}`}
         {mark && ', '}
       </span>

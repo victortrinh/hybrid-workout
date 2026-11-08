@@ -25,7 +25,7 @@ export function liveLine(block: LiveBlock, run: LiveRun): string {
       if (block.effort && 'feel' in block.effort && block.effort.feel === 'controlled') {
         return `Rep ${block.rep}. Controlled. It’s a Deload week, remember.`
       }
-      if (run.type === 'threshold') {
+      if (block.effort && 'pace' in block.effort && block.effort.pace === 'threshold') {
         if (block.rep === 1) return 'Rep 1. Threshold. Do not race it.'
         return last ? 'Last rep. Same speed. Same face.' : `Rep ${block.rep}. Same speed. Same face.`
       }
@@ -39,9 +39,12 @@ export function liveLine(block: LiveBlock, run: LiveRun): string {
       if (run.type === 'race-simulation') {
         return block.round === 1 ? 'Run 1. Conservative. The race is long.' : `Run ${block.round}. RPE 8, not all-out.`
       }
+      if (run.type === 'compromised-run-test') {
+        return block.round === 1 ? 'Run 1. Full effort, but even. The Station is waiting.' : `Run ${block.round}. Full effort on tired legs. That’s the test.`
+      }
       return run.environment === 'indoor'
-        ? 'All-out, but even. Tap Finished when the console says 5.00.'
-        : 'All-out, but even. Tap Finished when the watch says 5 km.'
+        ? 'Even effort. Tap Finished when the console says the distance.'
+        : 'Even effort. Tap Finished when the watch says the distance.'
     case 'round': {
       const last = !run.blocks.slice(run.block + 1).some((b) => b.kind === 'round')
       if (block.round === 1) return 'Tap Finished at the end of every leg. Technique before speed.'
