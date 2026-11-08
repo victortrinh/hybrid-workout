@@ -119,7 +119,7 @@ export function SettingsPopover({
           <div className="grid gap-1 border-t border-rule pt-3">
             <span className="text-[18px] font-bold">Starting point</span>
             <Text className="text-[12px] text-muted">
-              Estimates until a real result replaces each: a 5K test, or that lift calibrated.
+              Estimates until a real result replaces each: a Compromised run test, or that lift calibrated.
             </Text>
             <StartingPointFields
               fields={startingPoint.fields}

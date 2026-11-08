@@ -157,6 +157,16 @@ describe('weekly completion', () => {
     expect(one.missed).toBe(0)
   })
 
+  it('shows the second Easy run only in a Week it was offered, and never as a miss', () => {
+    const week6 = ['hyrox-a', 'hyrox-b', 'run', 'strength'].map((id, i) => log(6, id, `2026-12-1${4 + i}`))
+    const ids = (week: number, logs: SessionLog[]) =>
+      weeklyCompletion(program, logs, localDate('2026-12-29')).find((w) => w.week === week)!.cells.map((c) => c.session.id)
+    expect(ids(7, week6)).toEqual(['hyrox-a', 'hyrox-b', 'run', 'strength', 'easy', 'easy-2'])
+    expect(ids(7, week6.slice(1))).toEqual(['hyrox-a', 'hyrox-b', 'run', 'strength', 'easy'])
+    const seven = weeklyCompletion(program, week6, localDate('2026-12-29')).find((w) => w.week === 7)!
+    expect(seven).toMatchObject({ required: 4, missed: 0 })
+  })
+
   it('is empty before Week 1 and stops at the last Week after the Program', () => {
     expect(weeklyCompletion(program, [], localDate('2026-11-01'))).toEqual([])
     expect(weeklyCompletion(program, [], localDate('2027-06-01')).at(-1)?.week).toBe(program.weekCount)

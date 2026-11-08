@@ -178,7 +178,7 @@ export function suggestedRestCopy(rest: SuggestedRest): { heading: string; targe
   const reason = {
     'hard-yesterday': 'Hard session yesterday. The Week has room, so legs up.',
     'hard-today': 'Hard session already today. The rest of the Week fits.',
-    'run-after-load': 'The Run on legs that just lifted or pushed a sled? Better tomorrow.',
+    'run-after-load': 'The Run on legs that just lifted? Better tomorrow.',
   }[rest.kind]
   return {
     heading: 'Rest suggested.',

@@ -6,12 +6,12 @@
  * later `updatedAt` wins, per log.
  */
 import { addDays, daysBetween, localDate, type LocalDate } from './calendar'
-import { ENVIRONMENTS, FIVE_K_SECONDS, type Environment } from './paces'
+import { ENVIRONMENTS, type Environment } from './paces'
 import type { Activity, ActivityAnswer } from './activity'
 import type { PainReport } from './pain'
 import type { RecoveryNight } from './recovery'
 import type { StartingPoint } from './startingPoint'
-import { LIFTS, type LiftId, type Range } from './program/types'
+import { LIFTS, type LiftId, type Program, type Range, type Week } from './program/types'
 import { stations } from './program/program'
 import type { StationId } from './program/types'
 import type { SuggestionDecision } from './suggestion'
@@ -45,22 +45,25 @@ export interface SessionLog {
   /** Overall RPE, 1–10. */
   rpe: number | null
   notes: string | null
-  /** A 5K test's time in seconds, which sets the Training paces, or the race's finish time. Null for every other Session. */
+  /** The race's finish time in seconds. Null for every other Session: a Compromised run test's result is its Station logs. */
   resultSeconds: number | null
-  /** Where a run happened. Recorded with each 5K test result and each Live run session. */
+  /** Where a run happened. Recorded with each Compromised run test and each Live run session. */
   environment: Environment | null
   /** The treadmill console's distance in metres: the watch guesses wrong indoors. */
   distanceMeters: number | null
   /**
    * The recovery jogs' pace in seconds per km, from a Live run's By-feel speeds.
-   * Never a Training pace: only a 5K test sets those (ADR-0002).
+   * Never a Training pace: only a Compromised run test sets those (ADR-0002).
    */
   recoveryPace: number | null
   /** One per interval rep of a Live session: held the target, or what was run instead. */
   intervals: IntervalLog[]
   /** One per set logged in a Live Strength session, in Exercise and set order. */
   sets: SetLog[]
-  /** A HYROX session's rounds or a Race simulation's splits: times, and the loads and distances actually done. */
+  /**
+   * A HYROX session's rounds, or a Race simulation's or Compromised run test's splits: times, and the loads and
+   * distances actually done. A Compromised run test's four run splits set the Training paces.
+   */
   stations: StationLog[]
   /** ISO instant of the last edit. */
   updatedAt: string
@@ -182,7 +185,7 @@ export function parseSessionLog(value: unknown): SessionLog {
     throw new Error(`notes must be text of at most ${NOTES_MAX} characters`)
   }
   // Each Session's own range is the Worker's to check (resultRange): this only bounds what any result can be.
-  const resultSeconds = optionalInteger(v.resultSeconds, 'resultSeconds', FIVE_K_SECONDS[0], RACE_SECONDS[1])
+  const resultSeconds = optionalInteger(v.resultSeconds, 'resultSeconds', ...RACE_SECONDS)
   const environment = v.environment ?? null
   if (environment !== null && !ENVIRONMENTS.includes(environment as Environment)) {
     throw new Error(`environment must be one of ${ENVIRONMENTS.join(', ')}`)
@@ -317,6 +320,24 @@ export function logFor(logs: SessionLog[], week: number, sessionId: string): Ses
     if (!latest || log.updatedAt > latest.updatedAt) latest = log
   }
   return latest
+}
+
+/**
+ * A Week with the Sessions the Coach offers in it: the second Easy run only
+ * when the Week before had every required Session Done. Partial, Swapped,
+ * Skipped or not logged keeps it out; the first Easy run doesn't count.
+ * A second Easy run already logged stays.
+ */
+export function offeredSessions<W extends Pick<Week, 'number' | 'sessions'>>(program: Program, week: W, logs: SessionLog[]): W {
+  if (!week.sessions.some((s) => s.afterFullWeek)) return week
+  const before = program.phases.flatMap((p) => p.weeks).find((w) => w.number === week.number - 1)
+  const full =
+    !!before &&
+    before.sessions
+      .filter((s) => !s.optional && !s.date)
+      .every((s) => logFor(logs, before.number, s.id)?.status === 'done')
+  // Once logged, it stays: the log is the athlete's, whatever the Week before turned into.
+  return full ? week : { ...week, sessions: week.sessions.filter((s) => !s.afterFullWeek || logFor(logs, week.number, s.id)) }
 }
 
 /** Whether a required (non-optional) Session of the Week is still Planned: nothing logged for it yet. */

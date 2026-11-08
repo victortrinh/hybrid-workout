@@ -1,90 +1,133 @@
 import { describe, expect, it } from 'vitest'
 import { localDate } from './calendar'
 import { coach, findWeek } from './coach'
+import type { SessionLog, StationLog } from './log'
 import {
   clock,
   clockInput,
   consoleDistance,
   consoleMeters,
   currentPaces,
+  fade,
   formatPace,
+  latestRunTest,
   paceFor,
   parseClock,
   runTarget,
+  runTestResult,
   speedFor,
   trainingPaces,
-  vdot,
   type RunContext,
 } from './paces'
 import { describeExercise, describeSession } from './program/describe'
 import { program } from './program/program'
 import type { Session } from './program/types'
 
-describe('VDOT from a 5K time', () => {
-  // Daniels' Running Formula tables: 5K time → VDOT.
-  it.each([
-    ['30:40', 30],
-    ['25:12', 38],
-    ['23:00', 42.3],
-    ['20:03', 49.7],
-    ['19:57', 50],
-    ['17:03', 60],
-  ])('%s is VDOT %d', (time, expected) => {
-    expect(vdot(parseClock(time)!)).toBeCloseTo(expected, 0)
-  })
+const TEST_STATIONS = ['skierg', 'sled-push', 'row', 'wall-balls'] as const
 
-  it('rises as the time drops', () => {
-    expect(vdot(19 * 60)).toBeGreaterThan(vdot(20 * 60))
-  })
-})
+/** A Compromised run test's Station logs as Live writes them: each round a 1 km run, then its Station. */
+function testLines(splits: (number | null)[], stationSeconds = 150): StationLog[] {
+  return splits.flatMap((seconds, i): StationLog[] => [
+    { round: i + 1, part: 'run', pounds: null, meters: 1000, reps: null, seconds },
+    { round: i + 1, part: TEST_STATIONS[i], pounds: null, meters: null, reps: null, seconds: stationSeconds },
+  ])
+}
+
+function testLog(week: number, date: string, splits: (number | null)[], extra: Partial<SessionLog> = {}): SessionLog {
+  return {
+    id: `log-test-${week}-${date}`,
+    week,
+    sessionId: 'compromised-run-test',
+    date: localDate(date),
+    status: 'done',
+    minutes: 45,
+    rpe: 9,
+    notes: null,
+    resultSeconds: null,
+    environment: 'indoor',
+    distanceMeters: null,
+    recoveryPace: null,
+    intervals: [],
+    sets: [],
+    stations: testLines(splits),
+    updatedAt: `${date}T20:00:00.000Z`,
+    ...extra,
+  }
+}
 
 describe('Training paces', () => {
-  it('give a 23:00 estimate about 4:52 Threshold, Race run pace 15 s/km slower, and 5:51–6:26 easy', () => {
-    const paces = trainingPaces(23 * 60)
-    expect(paces.threshold).toBeGreaterThanOrEqual(4 * 60 + 50)
-    expect(paces.threshold).toBeLessThanOrEqual(4 * 60 + 55)
-    expect(speedFor(paces.threshold, 'kmh')).toBeCloseTo(12.2, 0)
-    expect(paces.raceRun).toBe(paces.threshold + 15)
-    expect(paces.easy.map(clock)).toEqual(['5:51', '6:26'])
-  })
-
-  // Daniels' tables: threshold pace per km for VDOT 50 is 4:15, for VDOT 60 3:40.
-  it.each([
-    ['19:57', '4:15'],
-    ['17:03', '3:40'],
-  ])('a %s estimate gives Threshold pace of about %s/km', (time, expected) => {
-    expect(Math.abs(trainingPaces(parseClock(time)!).threshold - parseClock(expected)!)).toBeLessThanOrEqual(2)
-  })
-
-  it('are ordered: Threshold faster than Race run pace faster than Easy', () => {
-    for (const minutes of [17, 20, 23, 26, 30]) {
-      const p = trainingPaces(minutes * 60)
-      expect(p.threshold).toBeLessThan(p.raceRun)
-      expect(p.raceRun).toBeLessThan(p.easy[0])
-      expect(p.easy[0]).toBeLessThan(p.easy[1])
-    }
+  it('take Race run pace as the base: Threshold 15 s/km faster, Easy 60 to 90 s/km slower', () => {
+    const paces = trainingPaces(5 * 60 + 7)
+    expect(clock(paces.raceRun)).toBe('5:07')
+    expect(clock(paces.threshold)).toBe('4:52')
+    expect(paces.easy.map(clock)).toEqual(['6:07', '6:37'])
+    expect(speedFor(paces.threshold, 'kmh')).toBe(12.3)
+    expect(paces.estimate).toBe(false)
   })
 })
 
-describe('estimated Training paces', () => {
-  it('come from the Starting point’s estimate, marked as an estimate', () => {
-    expect(currentPaces(21 * 60)).toEqual({ ...trainingPaces(21 * 60), estimate: true })
+describe('the Compromised run test', () => {
+  const splits = [290, 300, 305, 313]
+
+  it('sets Race run pace to the mean of its four run splits, to the second', () => {
+    expect(runTestResult(testLog(2, '2026-11-18', splits))).toEqual({
+      week: 2,
+      date: '2026-11-18',
+      splits,
+      raceRun: 302,
+      fade: 23,
+    })
   })
 
-  it('stay null without one, so runs go by RPE', () => {
-    expect(currentPaces(null)).toBeNull()
+  it('shows the Fade, the fourth split less the first: negative when the last run was the fastest', () => {
+    expect(runTestResult(testLog(2, '2026-11-18', [300, 298, 296, 294]))!.fade).toBe(-6)
+    expect(fade(testLines(splits))).toBe(23)
+    expect(fade(testLines([300]))).toBeNull()
+  })
+
+  it('counts only a Done test with all four runs timed', () => {
+    expect(runTestResult(testLog(2, '2026-11-18', splits, { status: 'partial' }))).toBeNull()
+    expect(runTestResult(testLog(2, '2026-11-18', [290, 300, 305, null]))).toBeNull()
+    expect(runTestResult(testLog(2, '2026-11-18', [290, 300, 305]))).toBeNull()
+    expect(runTestResult({ ...testLog(2, '2026-11-18', splits), sessionId: 'hyrox-a' })).toBeNull()
+  })
+
+  it('is the latest Done one on or before today', () => {
+    const logs = [testLog(9, '2027-01-06', [280, 285, 290, 295]), testLog(2, '2026-11-18', splits)]
+    expect(latestRunTest(logs, localDate('2026-11-17'))).toBeNull()
+    expect(latestRunTest(logs, localDate('2026-11-18'))!.week).toBe(2)
+    expect(latestRunTest(logs, localDate('2027-01-05'))!.week).toBe(2)
+    expect(latestRunTest(logs, localDate('2027-01-06'))!.raceRun).toBe(288)
+  })
+})
+
+describe('current Training paces', () => {
+  it('come from the latest Done test, from its day on, whatever the estimate', () => {
+    const logs = [testLog(2, '2026-11-18', [290, 300, 305, 313])]
+    expect(currentPaces(logs, 330, localDate('2026-11-18'))).toEqual(trainingPaces(302))
+    expect(currentPaces(logs, 330, localDate('2026-11-17'))).toEqual(trainingPaces(330, { estimate: true }))
+  })
+
+  it('before any test, are estimated from the Starting point’s split exactly as from a test', () => {
+    expect(currentPaces([], 330, localDate('2026-11-10'))).toEqual({ ...trainingPaces(330), estimate: true })
+  })
+
+  it('stay null without a test or an estimate, so runs go by RPE', () => {
+    expect(currentPaces([], null, localDate('2026-11-10'))).toBeNull()
   })
 
   it('reach the Coach, which shows them for the runs', () => {
     const week2 = localDate('2026-11-17')
-    const day = coach({ program, today: week2, startingPoint: { fiveKSeconds: 21 * 60, weights: {}, updatedAt: 'x' } })
-    expect(day.paces).toEqual({ ...trainingPaces(21 * 60), estimate: true })
+    const startingPoint = { splitSeconds: 330, weights: {}, updatedAt: 'x' }
+    expect(coach({ program, today: week2, startingPoint }).paces).toEqual(trainingPaces(330, { estimate: true }))
     expect(coach({ program, today: week2 }).paces).toBeNull()
+    const logs = [testLog(2, '2026-11-17', [290, 300, 305, 313])]
+    expect(coach({ program, today: week2, startingPoint, logs }).paces).toEqual(trainingPaces(302))
   })
 })
 
 describe('paceFor', () => {
-  const paces = trainingPaces(23 * 60)
+  const paces = trainingPaces(307)
 
   it('reads each pace reference, and faster-than offsets', () => {
     expect(paceFor({ pace: 'race-run' }, paces)).toEqual([paces.raceRun, paces.raceRun])
@@ -151,8 +194,8 @@ describe('Indoor versus Outdoor', () => {
   })
 
   it('reads a range slow to fast on the treadmill and fast to slow outside', () => {
-    expect(formatPace([351, 386], 'indoor', 'kmh')).toBe('9.3–10.3 km/h · 5:51–6:26/km · 1% incline')
-    expect(formatPace([351, 386], 'outdoor', 'kmh')).toBe('5:51–6:26/km')
+    expect(formatPace([367, 397], 'indoor', 'kmh')).toBe('9.1–9.8 km/h · 6:07–6:37/km · 1% incline')
+    expect(formatPace([367, 397], 'outdoor', 'kmh')).toBe('6:07–6:37/km')
   })
 
   it('has nothing exact to say without Training paces', () => {
@@ -164,8 +207,8 @@ describe('Indoor versus Outdoor', () => {
 // The Coach and Session descriptions with paces.
 
 const session = (week: number, id: string): Session => findWeek(program, week)!.sessions.find((s) => s.id === id)!
-const indoor = (minutes: number): RunContext => ({ paces: trainingPaces(minutes * 60), environment: 'indoor', unit: 'kmh' })
-const outdoor = (minutes: number): RunContext => ({ ...indoor(minutes), environment: 'outdoor' })
+const indoor = (raceRun: number): RunContext => ({ paces: trainingPaces(raceRun), environment: 'indoor', unit: 'kmh' })
+const outdoor = (raceRun: number): RunContext => ({ ...indoor(raceRun), environment: 'outdoor' })
 
 describe('without an estimate', () => {
   it('sets no paces, and the Run goes by effort and RPE', () => {
@@ -179,37 +222,37 @@ describe('without an estimate', () => {
 
 describe('run Prescriptions with Training paces', () => {
   it('give Threshold reps an exact speed indoors and pace outdoors', () => {
-    expect(describeSession(session(3, 'run'), indoor(23)).target).toBe('12.3 km/h · 4:52/km · 1% incline · RPE 6–7 · 90″ jog')
-    expect(describeSession(session(3, 'run'), { ...indoor(23), unit: 'mph' }).target).toBe(
+    expect(describeSession(session(3, 'run'), indoor(307)).target).toBe('12.3 km/h · 4:52/km · 1% incline · RPE 6–7 · 90″ jog')
+    expect(describeSession(session(3, 'run'), { ...indoor(307), unit: 'mph' }).target).toBe(
       '7.7 mph · 4:52/km · 1% incline · RPE 6–7 · 90″ jog',
     )
-    expect(describeSession(session(3, 'run'), outdoor(23)).target).toBe('4:52/km · RPE 6–7 · 90″ jog')
+    expect(describeSession(session(3, 'run'), outdoor(307)).target).toBe('4:52/km · RPE 6–7 · 90″ jog')
   })
 
   it('give Compromised intervals Race run pace', () => {
-    expect(describeSession(session(6, 'run'), outdoor(23)).target).toBe('1 km, then Wall balls, each round · Race load · 5:07/km')
-    expect(describeSession(session(6, 'run'), indoor(23)).target).toBe(
+    expect(describeSession(session(6, 'run'), outdoor(307)).target).toBe('1 km, then Wall balls, each round · Race load · 5:07/km')
+    expect(describeSession(session(6, 'run'), indoor(307)).target).toBe(
       '1 km, then Wall balls, each round · Race load · 11.7 km/h · 5:07/km · 1% incline',
     )
   })
 
   it('give the Easy run an easy range', () => {
-    expect(describeSession(session(3, 'easy'), indoor(23)).target).toBe('9.3–10.3 km/h · 5:51–6:26/km · 1% incline · RPE 2–4')
+    expect(describeSession(session(3, 'easy'), indoor(307)).target).toBe('9.1–9.8 km/h · 6:07–6:37/km · 1% incline · RPE 2–4')
   })
 
   it('leave efforts by feel as they are: the test’s runs are all-out', () => {
-    expect(describeSession(session(2, 'compromised-run-test'), indoor(23)).target).toBe('1 km, then Station, each round · Race load · all-out')
+    expect(describeSession(session(2, 'compromised-run-test'), indoor(307)).target).toBe('1 km, then Station, each round · Race load · all-out')
   })
 
   it('reach every run in a Week’s Session list, warm-ups included', () => {
     const warmUp = session(3, 'run').blocks[0].exercises[0]
-    expect(describeExercise(warmUp, program.stations, outdoor(23)).detail).toBe('10 min · 5:51–6:26/km · RPE 2–4')
+    expect(describeExercise(warmUp, program.stations, outdoor(307)).detail).toBe('10 min · 6:07–6:37/km · RPE 2–4')
   })
 })
 
 describe('Deload weeks', () => {
   it('replace the Run with 35 minutes at Easy pace', () => {
     expect(findWeek(program, 5)!.deload).toBe(true)
-    expect(describeSession(session(5, 'run'), outdoor(23))).toMatchObject({ summary: '35 min easy', target: '5:51–6:26/km · RPE 2–4' })
+    expect(describeSession(session(5, 'run'), outdoor(307))).toMatchObject({ summary: '35 min easy', target: '6:07–6:37/km · RPE 2–4' })
   })
 })

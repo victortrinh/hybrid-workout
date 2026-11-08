@@ -9,7 +9,7 @@ import { matchActivities, type Activity, type ActivityAnswer, type ActivityOutco
 import { lighten, RE_ENTRY_PERCENT } from './adapt'
 import { addDays, daysBetween, mondayOf, type LocalDate } from './calendar'
 import { DEFAULT_EQUIPMENT, equip, equipWeek, type Equipment } from './equipment'
-import { logFor, trained, type LoggedStatus, type SessionLog } from './log'
+import { logFor, offeredSessions, trained, type LoggedStatus, type SessionLog } from './log'
 import { inOrder, painAdapted, painLevel, standingPain, type PainLevel, type PainReport } from './pain'
 import { currentPaces, type TrainingPaces } from './paces'
 import {
@@ -116,7 +116,7 @@ export type RestReason =
    * to wait a day. Only suggested: `anyway` is the Session to do instead.
    */
   | { kind: 'hard-yesterday' | 'hard-today'; anyway: RestAnyway }
-  /** Only the Run is left, and Strength or HYROX was done yesterday or today. Only suggested, like the above. */
+  /** Only the Run is left, and Strength was done yesterday or today. Only suggested, like the above. */
   | { kind: 'run-after-load'; anyway: RestAnyway }
   /** What's left is pinned to a later day: the race. */
   | { kind: 'waiting'; session: Session; date: LocalDate }
@@ -255,7 +255,8 @@ export function coach({
   const position = positionOf(program, today)
   const shownWeek =
     position.kind === 'in-week' ? position.week : position.kind === 'before-start' ? 1 : null
-  const planned = shownWeek === null ? null : findWeek(program, shownWeek)
+  const listed = shownWeek === null ? null : findWeek(program, shownWeek)
+  const planned = listed && offeredSessions(program, listed, logs)
   const readiness: ReadinessInput = { reports: painReports, nights: recoveryNights, today }
   const strength = strengthState(program, logs, decisions, today, lighterSpans(program, logs, decisions, today, readiness))
   const suggestions = [
@@ -316,7 +317,7 @@ export function coach({
     dropped: droppedFor(program, logs, decisions, today),
     upNext: upNext?.session ?? null,
     rest,
-    paces: currentPaces(startingPoint?.fiveKSeconds ?? null),
+    paces: currentPaces(logs, startingPoint?.splitSeconds ?? null, today),
     suggestions,
     heldIncreases: position.kind === 'in-week' ? strength.held : [],
     workingWeights: strength.weights,
@@ -497,8 +498,8 @@ function phaseProgress(phase: Phase, position: ProgramPosition): PhaseProgress {
 export const isHard = (type: SessionType) => type !== 'easy'
 /** The Compromised run test takes the Run's place, so it follows the Run's rule. */
 const isRun = (type: SessionType) => type === 'run' || type === 'compromised-run-test'
-/** What makes the legs too heavy for the Run the next day. */
-const isLoad = (type: SessionType) => type === 'strength' || type === 'hyrox' || type === 'race-simulation'
+/** What makes the legs too heavy for the Run the next day: Strength only, not HYROX. */
+const isLoad = (type: SessionType) => type === 'strength'
 
 interface UpNextInput {
   program: Program
@@ -520,7 +521,7 @@ interface UpNextInput {
  * 2. A Session pinned to today (Race day) is Up next.
  * 3. The Optional session waits until nothing else is left to do before
  *    Sunday (Race week's shakeout only waits for nothing but the race).
- * 4. Never the Run the day after Strength or HYROX (or later the same day).
+ * 4. Never the Run the day after Strength (or later the same day).
  * 5. No Hard session the day after another (or a second one the same day) when
  *    the Week has room to rest today and still fit the Hard sessions left.
  *    Rules 4 and 5 only suggest the rest: rule 1 taps past it.
@@ -992,6 +993,7 @@ export function prescribedWeek(
   equipment: readonly Equipment[] = DEFAULT_EQUIPMENT,
   readiness: ReadinessInput | null = null,
 ): Week | null {
-  const week = findWeek(program, number)
+  const listed = findWeek(program, number)
+  const week = listed && offeredSessions(program, listed, logs)
   return week && adapt(week, suggestionsFor(program, week, logs, decisions, readiness, readiness?.today ?? null), logs, equipment)
 }
