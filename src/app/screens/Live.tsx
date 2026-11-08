@@ -22,7 +22,6 @@ import {
   canKeepGoing,
   canUndo,
   currentLeg,
-  distanceSeconds,
   end,
   endRest,
   goBack,
@@ -73,7 +72,6 @@ import { blockChangeCue, keepAwake, letSleep, unlockSound } from '../liveCues'
 import { finishLine, liveLine } from '../liveCopy'
 import { navigate, SCREEN_PATH } from '../router'
 import { useSideways } from '../useSideways'
-import { validateTime } from './LogAfter'
 import { Lifting, type LiftsFinish } from './LiveLifts'
 import {
   DiscardButton,
@@ -91,7 +89,6 @@ import {
 export interface LiveFinish {
   rpe: number
   distanceMeters: number | null
-  resultSeconds: number | null
   /** Splits too quick to be true, put right or left untimed. */
   fixes: SplitFix[]
   /** By-feel speeds in seconds per km, each null when left blank. */
@@ -106,10 +103,10 @@ const INSET_RIGHT = 'pr-[max(var(--pad),env(safe-area-inset-right))]'
 const BLEED_RIGHT = '-mr-[max(var(--pad),env(safe-area-inset-right))]'
 
 const LANE_BG: Record<Lane, string> = {
-  speed: 'bg-speed',
-  strength: 'bg-strength',
-  threshold: 'bg-threshold',
   hyrox: 'bg-hyrox',
+  run: 'bg-threshold',
+  test: 'bg-speed',
+  strength: 'bg-strength',
   easy: 'bg-easy',
 }
 
@@ -669,11 +666,13 @@ function feelWords(block: LiveBlock, context: RunContext): string {
   return block.kind === 'drills' ? 'Drills' : 'Walk'
 }
 
-/** "12 min", "90 s", "5 km", "600 m + 2 Stations", "50 m", "4 Stations" */
+/** "12 min", "90 s", "1 km", "1 Station + 400 m", "1 km + 1 Station", "50 m", "4 Stations" */
 function blockLength(block: LiveBlock): string {
   if (block.kind === 'round') {
     const n = block.stations.length
-    return `${km(block.meters ?? 0)} + ${n} ${n === 1 ? 'Station' : 'Stations'}`
+    const stations = `${n} ${n === 1 ? 'Station' : 'Stations'}`
+    const run = km(block.meters ?? 0)
+    return block.runFirst ? `${run} + ${stations}` : `${stations} + ${run}`
   }
   if (block.kind === 'setup') return `${block.stations.length} ${block.stations.length === 1 ? 'Station' : 'Stations'}`
   if (block.kind === 'station') return volume(block.stations[0])
@@ -1121,7 +1120,7 @@ function paceFromSpeed(speed: number, unit: RunContext['unit']): number | null {
 }
 
 /**
- * The end: a 5K test's time, the console distance indoors, and an overall
+ * The end: splits put right, the console distance indoors, and an overall
  * RPE for every Session. Ended early, Keep going goes back to the clock;
  * ended on a tap, it goes back onto the last Block, in case that tap slipped.
  */
@@ -1141,13 +1140,9 @@ function FinishSheet({
   onSave: (finish: LiveFinish) => void
   onDiscard: () => void
 }) {
-  const status = liveStatus(run)
-  const covered = distanceSeconds(run)
-  const result = run.type === '5k-test' && status === 'done'
   // A circuit's runs are logged round by round, not as a console total.
-  const indoor = run.environment === 'indoor' && run.type !== 'hyrox' && run.type !== 'race-simulation'
+  const indoor = run.environment === 'indoor' && !run.blocks.some((b) => b.round !== null)
   const mile = context.unit === 'mph'
-  const [time, setTime] = useState(covered === null ? '' : clock(covered))
   const [distance, setDistance] = useState(Number.NaN)
   const [predicted] = useState(() => predictedRpe(run))
   const [rpe, setRpe] = useState<number | null>(predicted)
@@ -1163,15 +1158,13 @@ function FinishSheet({
       setMissingRpe(true)
       return
     }
-    const resultSeconds = result ? parseClock(time) : null
-    if (result && (resultSeconds === null || validateTime(time))) return
     if (quick.some((q) => validateSplit(q, fixText(q)))) return
     const meters = indoor && Number.isFinite(distance) ? Math.round(distance * (mile ? KM_PER_MILE * 1000 : 1000)) : null
     const fixed = quick.map(({ block, leg }, i) => ({ block, leg, seconds: parseClock(fixText(quick[i])) }))
     const hardPace = speedPace(speeds.hard, run.environment, context.unit)
     const recoveryPace = speedPace(speeds.jog, run.environment, context.unit)
     if (hardPace === undefined || recoveryPace === undefined) return
-    onSave({ rpe, distanceMeters: meters, resultSeconds, fixes: fixed, hardPace, recoveryPace })
+    onSave({ rpe, distanceMeters: meters, fixes: fixed, hardPace, recoveryPace })
   }
 
   return (
@@ -1207,31 +1200,6 @@ function FinishSheet({
       )}
       <CutShort run={run} onMarkDone={onMarkDone} />
       {hasByFeelReps(run) && <ByFeelSpeeds run={run} context={context} value={speeds} onChange={setSpeeds} />}
-      {result && (
-        <TextField
-          value={time}
-          onChange={(text) => setTime(clockInput(text))}
-          isRequired
-          validate={validateTime}
-          inputMode="numeric"
-          className="grid gap-2"
-        >
-          {({ isInvalid }) => (
-            <>
-              <Label className={groupLabel}>5 km time</Label>
-              <Input placeholder="mm:ss" autoComplete="off" className={inputClass} />
-              {isInvalid ? (
-                <FieldError className="text-body-quiet font-bold text-ink" />
-              ) : (
-                <Text slot="description" className="text-body-quiet text-muted">
-                  From Start to the Finished tap. Fix it if you tapped late. It sets the Training paces.
-                </Text>
-              )}
-            </>
-          )}
-        </TextField>
-      )}
-
       {indoor && (
         <NumberField
           value={distance}

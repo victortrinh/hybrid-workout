@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { expectNoAxeViolations, WEEK_3 } from './axe'
-import { caughtUp, serveHistory, weekDone } from './history'
+import { caughtUp, serveHistory } from './history'
 import { aMinuteBefore, doToday, startAsChosen } from './today'
 
 /**
@@ -9,10 +9,6 @@ import { aMinuteBefore, doToday, startAsChosen } from './today'
  * Settings and what it hands the server as the app goes off screen.
  */
 
-const WEEK_2 = [
-  { week: 2, sessionId: '5k-test', date: '2026-11-03', status: 'done', resultSeconds: 23 * 60, environment: 'indoor' },
-  ...weekDone(2, ['strength', 'threshold', 'hyrox'], '2026-11-04'),
-] as const
 
 /** The cue timer's answer to GET /api/cues. */
 const serveKey = (page: Page, key: string | null) =>
@@ -49,7 +45,7 @@ test('Settings offers lock-screen cues once the server is set up, and says so un
 test('a Live session hands its cues to the server as the app goes off screen, and takes them back on return', async ({
   page,
 }) => {
-  await serveHistory(page, caughtUp(1, [...WEEK_2]))
+  await serveHistory(page, caughtUp(2))
   const schedules: { cues: { at: number; title: string; body: string }[] }[] = []
   await page.route('/api/cues/schedule', (route) => {
     schedules.push(route.request().postDataJSON())
@@ -59,7 +55,7 @@ test('a Live session hands its cues to the server as the app goes off screen, an
   const start = new Date(WEEK_3.getTime() + 1000)
   await page.clock.install({ time: aMinuteBefore(WEEK_3) })
   await page.goto('/')
-  await doToday(page, page.getByRole('list').filter({ hasText: 'Strength' }).getByRole('button', { name: /^Threshold/ }))
+  await doToday(page, page.getByRole('list').filter({ hasText: 'Strength' }).getByRole('button', { name: /^Run/ }))
   await page.clock.pauseAt(start)
   await page.getByRole('button', { name: /^Start / }).click()
   await startAsChosen(page)
@@ -70,7 +66,7 @@ test('a Live session hands its cues to the server as the app goes off screen, an
   await expect.poll(() => schedules.length).toBeGreaterThan(0)
   // The warm-up's end, then the clock holds on Ready: that's as far as it can say.
   expect(schedules.at(-1)!.cues).toEqual([
-    { at: start.getTime() + 10 * 60_000, title: 'Rep 1 of 2 next', body: 'Open the app and tap Start.' },
+    { at: start.getTime() + 10 * 60_000, title: 'Rep 1 of 3 next', body: 'Open the app and tap Start.' },
   ])
 
   const sent = schedules.length
@@ -80,7 +76,7 @@ test('a Live session hands its cues to the server as the app goes off screen, an
 })
 
 test('nothing goes to the server while lock-screen cues are off', async ({ page }) => {
-  await serveHistory(page, caughtUp(1, [...WEEK_2]))
+  await serveHistory(page, caughtUp(2))
   let calls = 0
   await page.route('/api/cues/schedule', (route) => {
     calls += 1
@@ -88,7 +84,7 @@ test('nothing goes to the server while lock-screen cues are off', async ({ page 
   })
   await page.clock.install({ time: aMinuteBefore(WEEK_3) })
   await page.goto('/')
-  await doToday(page, page.getByRole('list').filter({ hasText: 'Strength' }).getByRole('button', { name: /^Threshold/ }))
+  await doToday(page, page.getByRole('list').filter({ hasText: 'Strength' }).getByRole('button', { name: /^Run/ }))
   await page.clock.pauseAt(new Date(WEEK_3.getTime() + 1000))
   await page.getByRole('button', { name: /^Start / }).click()
   await startAsChosen(page)

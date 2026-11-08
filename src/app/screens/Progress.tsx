@@ -4,7 +4,7 @@ import { motion, useInView, useReducedMotion } from 'motion/react'
 import type { LocalDate } from '../../domain/calendar'
 import type { CoachDay } from '../../domain/coach'
 import type { SessionLog } from '../../domain/log'
-import { clock, GOAL_PACE, speedFor, UNIT_LABEL, type SpeedUnit, type TrainingPaces } from '../../domain/paces'
+import { clock, speedFor, UNIT_LABEL, type SpeedUnit, type TrainingPaces } from '../../domain/paces'
 import { stations as STATIONS } from '../../domain/program/program'
 import { LIFT_NAME } from '../../domain/program/describe'
 import type { Lane, Program, Station } from '../../domain/program/types'
@@ -51,7 +51,7 @@ interface ProgressProps {
 export function Progress({ program, day, logs, recoveryNights, unit }: ProgressProps) {
   const data = useMemo(() => progress(program, logs, day.today), [program, logs, day.today])
   const stations = useMemo(() => stationTimes(program, logs, day.today), [program, logs, day.today])
-  const firstTest = program.phases.flatMap((p) => p.weeks).find((w) => w.fiveKTest)
+  const firstTest = program.phases.flatMap((p) => p.weeks).find((w) => w.compromisedRunTest)
 
   return (
     <div className="px-pad pt-6 desktop:max-w-progress desktop:px-gutter desktop:pt-9">
@@ -72,7 +72,7 @@ export function Progress({ program, day, logs, recoveryNights, unit }: ProgressP
           <FiveKPanel program={program} fiveK={data.fiveK} firstTestWeek={firstTest?.number ?? null} />
           <CompletionPanel program={program} day={day} completion={data.completion} />
           <LoadPanel program={program} load={data.load} />
-          <PacesPanel paces={day.paces} fiveKTest={day.fiveKTest} unit={unit} firstTestWeek={firstTest?.number ?? null} />
+          <PacesPanel paces={day.paces} unit={unit} firstTestWeek={firstTest?.number ?? null} />
           <RecoveryPanel nights={recoveryNights} today={day.today} />
           <WeightsPanel program={program} changes={day.workingWeightChanges} />
           <StationsPanel times={stations} />
@@ -389,10 +389,10 @@ function CompletionRow({ program, week, current }: { program: Program; week: Wee
 // Training load
 
 const LANE_FILL: Record<Lane, string> = {
-  speed: 'var(--speed)',
-  strength: 'var(--str)',
-  threshold: 'var(--thr)',
   hyrox: 'var(--hyrox)',
+  run: 'var(--thr)',
+  test: 'var(--speed)',
+  strength: 'var(--str)',
   easy: 'var(--easy)',
 }
 
@@ -479,39 +479,31 @@ function loadSummary(load: WeekLoad[]): string {
 
 function PacesPanel({
   paces,
-  fiveKTest,
   unit,
   firstTestWeek,
 }: {
   paces: TrainingPaces | null
-  fiveKTest: SessionLog | null
   unit: SpeedUnit
   firstTestWeek: number | null
 }) {
-  if (!paces || (!fiveKTest && !paces.estimate)) {
+  const test = firstTestWeek ? `The Week ${firstTestWeek} Compromised run test` : 'The first Compromised run test'
+  if (!paces) {
     return (
-      <Panel title="Training paces" sub="Runs go by RPE until the baseline 5K test." span={4}>
-        <EmptyState title="No paces yet.">
-          {firstTestWeek ? `The Week ${firstTestWeek} test sets them.` : 'The first 5K test sets them.'}
-        </EmptyState>
+      <Panel title="Training paces" sub="Runs go by RPE until there are Training paces." span={4}>
+        <EmptyState title="No paces yet.">{`${test} sets them.`}</EmptyState>
       </Panel>
     )
   }
   const speed = (secondsPerKm: number) => speedFor(secondsPerKm, unit).toFixed(1)
   const rows: [string, string, string][] = [
-    ['Goal', clock(GOAL_PACE), speed(GOAL_PACE)],
-    ['5K', clock(paces.fiveK), speed(paces.fiveK)],
+    ['Race run', clock(paces.raceRun), speed(paces.raceRun)],
     ['Threshold', clock(paces.threshold), speed(paces.threshold)],
     ['Easy', `${clock(paces.easy[0])}–${clock(paces.easy[1])}`, `${speed(paces.easy[1])}–${speed(paces.easy[0])}`],
   ]
   return (
     <Panel
       title="Training paces"
-      sub={
-        fiveKTest
-          ? fromTest(fiveKTest.week, fiveKTest.date, paces.fromSeconds)
-          : `Estimated from your ${clock(paces.fromSeconds)} 5K estimate. ${firstTestWeek ? `The Week ${firstTestWeek} test` : 'The first 5K test'} replaces them.`
-      }
+      sub={`Estimated from your Starting point. ${test} replaces them.`}
       span={4}
     >
       <table className="mt-2.5 w-full border-collapse text-[16px]">
@@ -543,9 +535,6 @@ function PacesPanel({
     </Panel>
   )
 }
-
-const fromTest = (week: number, date: LocalDate, seconds: number) =>
-  `From the ${clock(seconds)} test in Week ${week}, ${shortDay(date)}.`
 
 // ---------------------------------------------------------------------------
 // Recovery

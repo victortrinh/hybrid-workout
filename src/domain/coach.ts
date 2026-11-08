@@ -11,7 +11,7 @@ import { addDays, daysBetween, mondayOf, type LocalDate } from './calendar'
 import { DEFAULT_EQUIPMENT, equip, equipWeek, type Equipment } from './equipment'
 import { logFor, trained, type LoggedStatus, type SessionLog } from './log'
 import { painAdapted, painLevel, standingPain, type PainLevel, type PainReport } from './pain'
-import { currentPaces, latestFiveKTest, type TrainingPaces } from './paces'
+import { currentPaces, type TrainingPaces } from './paces'
 import {
   easyDayAdapted,
   readout,
@@ -111,8 +111,8 @@ export type RestReason =
    * to wait a day. Only suggested: `anyway` is the Session to do instead.
    */
   | { kind: 'hard-yesterday' | 'hard-today'; anyway: RestAnyway }
-  /** Only Speed is left, and Strength or HYROX was done yesterday or today. Only suggested, like the above. */
-  | { kind: 'speed-after-load'; anyway: RestAnyway }
+  /** Only the Run is left, and Strength or HYROX was done yesterday or today. Only suggested, like the above. */
+  | { kind: 'run-after-load'; anyway: RestAnyway }
   /** What's left is pinned to a later day: the race. */
   | { kind: 'waiting'; session: Session; date: LocalDate }
 
@@ -175,12 +175,7 @@ export interface CoachDay {
   upNext: Session | null
   /** Why `upNext` is null while in a Week. */
   rest: RestReason | null
-  /** The latest 5K test on or before today, which the Training paces come from. */
-  fiveKTest: SessionLog | null
-  /**
-   * From the latest 5K test, or estimated from the Starting point before the
-   * first one; null with neither, when every run is RPE only.
-   */
+  /** Estimated from the Starting point; null without one, when every run is RPE only. */
   paces: TrainingPaces | null
   /**
    * The Suggestions for this Week, whatever their decision, then each lift's
@@ -291,7 +286,6 @@ export function coach({
   if (recovered.suggestion) suggestions.push(recovered.suggestion)
   const upNext = recovered.upNext
   if (upNext !== chosen.upNext) logged[logged.indexOf(chosen.upNext!)] = upNext!
-  const fiveKTest = latestFiveKTest(logs, today)
   const standing = standingPain(painReports, today)
   const matched = matchActivities(program, activities, logs, activityAnswers)
   const attached = new Map(
@@ -316,8 +310,7 @@ export function coach({
     dropped: droppedFor(program, logs, decisions, today),
     upNext: upNext?.session ?? null,
     rest,
-    fiveKTest,
-    paces: currentPaces(logs, today, startingPoint?.fiveKSeconds ?? null),
+    paces: currentPaces(startingPoint?.fiveKSeconds ?? null),
     suggestions,
     heldIncreases: position.kind === 'in-week' ? strength.held : [],
     workingWeights: strength.weights,
@@ -496,9 +489,9 @@ function phaseProgress(phase: Phase, position: ProgramPosition): PhaseProgress {
 
 /** Every Session type but the Easy run. */
 export const isHard = (type: SessionType) => type !== 'easy'
-/** The 5K test takes the Speed session's place, so it follows the Speed rule. */
-const isSpeed = (type: SessionType) => type === 'speed' || type === '5k-test'
-/** What makes the legs too heavy for Speed the next day. */
+/** The Compromised run test takes the Run's place, so it follows the Run's rule. */
+const isRun = (type: SessionType) => type === 'run' || type === 'compromised-run-test'
+/** What makes the legs too heavy for the Run the next day. */
 const isLoad = (type: SessionType) => type === 'strength' || type === 'hyrox' || type === 'race-simulation'
 
 interface UpNextInput {
@@ -521,7 +514,7 @@ interface UpNextInput {
  * 2. A Session pinned to today (Race day) is Up next.
  * 3. The Optional session waits until nothing else is left to do before
  *    Sunday (Race week's shakeout only waits for nothing but the race).
- * 4. Never Speed the day after Strength or HYROX (or later the same day).
+ * 4. Never the Run the day after Strength or HYROX (or later the same day).
  * 5. No Hard session the day after another (or a second one the same day) when
  *    the Week has room to rest today and still fit the Hard sessions left.
  *    Rules 4 and 5 only suggest the rest: rule 1 taps past it.
@@ -569,8 +562,8 @@ function chooseAmong(
   const typesOn = (date: LocalDate) => trainedTypes(program, logs, date)
   const before = [...typesOn(yesterday), ...typesOn(today)]
 
-  const allowed = before.some(isLoad) ? pool.filter((e) => !isSpeed(e.session.type)) : pool
-  if (allowed.length === 0) return { upNext: null, rest: { kind: 'speed-after-load', anyway: anyway(pool) } }
+  const allowed = before.some(isLoad) ? pool.filter((e) => !isRun(e.session.type)) : pool
+  if (allowed.length === 0) return { upNext: null, rest: { kind: 'run-after-load', anyway: anyway(pool) } }
 
   const hardToday = typesOn(today).some(isHard)
   const hardYesterday = typesOn(yesterday).some(isHard)

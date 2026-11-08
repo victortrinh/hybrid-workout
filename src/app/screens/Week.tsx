@@ -5,7 +5,7 @@ import type { CoachDay } from '../../domain/coach'
 import { isLive, type LiveSession } from '../../domain/lifts'
 import { logFor, missingRequired, trained, type SessionLog } from '../../domain/log'
 import { logSummary } from '../../domain/logSummary'
-import { clock, type Environment, type RunContext } from '../../domain/paces'
+import type { Environment, RunContext } from '../../domain/paces'
 import { describeSession, SESSION_TYPES } from '../../domain/program/describe'
 import type { Program, Session, Week } from '../../domain/program/types'
 import type { PainReport } from '../../domain/pain'
@@ -43,7 +43,7 @@ export function WeekScreen({
   program: Program
   week: Week
   day: CoachDay
-  /** How each Session's runs read: exact speeds or paces once there is a 5K test. */
+  /** How each Session's runs read: exact speeds or paces once there are Training paces. */
   runContext: (week: number, session: Session) => RunContext
   logs: SessionLog[]
   live: LiveSession | null
@@ -101,11 +101,9 @@ export function WeekScreen({
       {when && <p className="mt-4 text-body">{nb(outsideWeekLine(when, week.number, week.startDate, sunday))}</p>}
 
       <p className="mt-1.5 text-body-quiet text-muted">
-        {day.fiveKTest?.resultSeconds
-          ? `Paces from the ${clock(day.fiveKTest.resultSeconds)} 5K test on ${shortDay(day.fiveKTest.date)}`
-          : day.paces?.estimate
-            ? `Estimated paces from your ${clock(day.paces.fromSeconds)} 5K estimate, until the first 5K test`
-            : 'Runs go by RPE until the baseline 5K test sets the Training paces'}
+        {day.paces
+          ? 'Estimated paces from your Starting point'
+          : 'Runs go by RPE until there are Training paces'}
       </p>
 
       {week.notes && (

@@ -1,11 +1,12 @@
 import { expect, test } from '@playwright/test'
-import { expectNoAxeViolations, WEEK_3 } from './axe'
+import { expectNoAxeViolations } from './axe'
 import { caughtUp, serveHistory, weekDone } from './history'
 
 test.beforeEach(async ({ page }) => {
   // Week 2 done in full, so Today opens on Week 3's own Up next.
-  await serveHistory(page, caughtUp(1, weekDone(2, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-11-02')))
-  await page.clock.setFixedTime(WEEK_3)
+  await serveHistory(page, caughtUp(1, weekDone(2, ['hyrox-a', 'hyrox-b', 'compromised-run-test', 'strength'], '2026-11-16')))
+  // Wednesday of Week 3.
+  await page.clock.setFixedTime(new Date('2026-11-25T12:00:00-05:00'))
 })
 
 test('phones get the bottom tab bar, desktop gets the cobalt side rail', async ({ page }, testInfo) => {
@@ -53,7 +54,7 @@ test('deep links load on refresh, and unknown paths say so', async ({ page }) =>
   await page.goto('/nowhere')
   await expect(page.getByRole('heading', { level: 1, name: 'Nothing here.' })).toBeVisible()
   await page.getByRole('link', { name: 'Back to Today' }).click()
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Speed, 5 × 3′')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('HYROX A, 4 rounds')
 })
 
 test('the Worker answers the API with D1 bound', async ({ request }) => {

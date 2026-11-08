@@ -8,7 +8,6 @@
  * One record, synced like Pain reports: the later edit wins. Skipping is a
  * record too, with nothing in it, so the screen shows once.
  */
-import type { SessionLog } from './log'
 import { FIVE_K_SECONDS } from './paces'
 import type { LiftId, Range } from './program/types'
 import type { WorkingWeights } from './weights'
@@ -83,7 +82,6 @@ export interface StartingField {
 
 export function startingFields(
   point: StartingPoint | null,
-  fiveKTest: SessionLog | null,
   weights: WorkingWeights,
 ): { fiveK: StartingField; lifts: Record<EstimatedLift, StartingField> } {
   const lift = (id: EstimatedLift): StartingField => {
@@ -91,10 +89,7 @@ export function startingFields(
     return real !== undefined ? { value: real, real: true } : { value: point?.weights[id] ?? null, real: false }
   }
   return {
-    fiveK:
-      fiveKTest?.resultSeconds != null
-        ? { value: fiveKTest.resultSeconds, real: true }
-        : { value: point?.fiveKSeconds ?? null, real: false },
+    fiveK: { value: point?.fiveKSeconds ?? null, real: false },
     lifts: Object.fromEntries(ESTIMATED_LIFTS.map((id) => [id, lift(id)])) as Record<EstimatedLift, StartingField>,
   }
 }

@@ -4,35 +4,37 @@ import { caughtUpOnServer, seedLogs } from './history'
 
 /**
  * Each project gets a pair of Weeks no other test reads: the phone trains
- * Week 11 (a Deload) through Thursday and comes back 7 days later in Week 12;
- * desktop does the same with Weeks 17 and 18.
+ * Week 10 (a Deload) through Thursday and comes back 7 days later in Week 11;
+ * desktop does the same with Weeks 17 and 18, after the phone's.
  */
 const SCENARIO = {
   phone: {
-    before: 11,
-    back: 12,
+    before: 10,
+    back: 11,
     logs: [
-      { sessionId: 'speed', date: '2027-01-04', status: 'done' },
-      { sessionId: 'strength', date: '2027-01-05', status: 'done' },
-      { sessionId: 'easy-deload', date: '2027-01-06', status: 'done' },
-      { sessionId: 'hyrox', date: '2027-01-07', status: 'partial' },
+      { sessionId: 'hyrox-a', date: '2027-01-11', status: 'done' },
+      { sessionId: 'strength', date: '2027-01-12', status: 'done' },
+      { sessionId: 'run', date: '2027-01-13', status: 'done' },
+      { sessionId: 'hyrox-b', date: '2027-01-14', status: 'partial' },
     ],
-    thursday: '2027-01-14',
-    speed: '3 × 5′',
-    lighter: '2 × 5′',
+    thursday: '2027-01-21',
+    heading: 'HYROX A, 4 rounds',
+    full: '4 × (Station + 800 m)',
+    lighter: '4 × (Station + 500 m)',
   },
   desktop: {
     before: 17,
     back: 18,
     logs: [
-      { sessionId: 'speed', date: '2027-02-15', status: 'done' },
-      { sessionId: 'strength', date: '2027-02-16', status: 'done' },
-      { sessionId: 'threshold', date: '2027-02-17', status: 'done' },
-      { sessionId: 'race-simulation', date: '2027-02-18', status: 'partial' },
+      { sessionId: 'hyrox-a', date: '2027-03-01', status: 'done' },
+      { sessionId: 'strength', date: '2027-03-02', status: 'done' },
+      { sessionId: 'run', date: '2027-03-03', status: 'done' },
+      { sessionId: 'hyrox-b', date: '2027-03-04', status: 'partial' },
     ],
-    thursday: '2027-02-25',
-    speed: '5 × 3′',
-    lighter: '3 × 3′',
+    thursday: '2027-03-11',
+    heading: 'Race simulation, half B',
+    full: '4 × (1 km + Station)',
+    lighter: '4 × (700 m + Station)',
   },
 } as const
 
@@ -49,10 +51,11 @@ test('7 days without training bring a lighter Week: Accept lightens it, Undo res
 
   const upNext = page.getByRole('heading', { level: 1 })
   const suggestion = page.getByRole('region', { name: 'Coach’s Suggestion' })
-  const speedRow = page.getByRole('list').filter({ hasText: 'Strength' }).getByRole('listitem').first()
-  const bare = (text: string) => text.replaceAll(' ', ' ')
+  const nextRow = page.getByRole('list').filter({ hasText: 'Strength' }).getByRole('listitem').first()
+  const bare = (text: string) => text.replaceAll(' ', ' ')
 
-  await expect(upNext).toHaveText(`Speed, ${s.speed}`)
+  await expect(upNext).toHaveText(s.heading)
+  await expect(nextRow).toContainText(bare(s.full))
   await expect(suggestion).toContainText(
     `Welcome back. Full volume now is how calves file complaints. The rest of Week ${s.back} goes 33% lighter.`,
   )
@@ -60,31 +63,30 @@ test('7 days without training bring a lighter Week: Accept lightens it, Undo res
   await expectNoAxeViolations(page)
 
   await suggestion.getByRole('button', { name: 'Accept' }).click()
-  await expect(upNext).toHaveText(`Speed, ${s.lighter}`)
-  await expect(speedRow).toContainText(bare(s.lighter))
+  await expect(nextRow).toContainText(bare(s.lighter))
   await expect(suggestion).toContainText(`Done. The rest of Week ${s.back} is 33% lighter.`)
   await expectNoAxeViolations(page)
 
   // Stored and synced: it survives a reload and the API returns it.
   await page.reload()
-  await expect(upNext).toHaveText(`Speed, ${s.lighter}`)
+  await expect(nextRow).toContainText(bare(s.lighter))
   const state = await (await request.get('/api/state')).json()
   expect(state.suggestionDecisions).toContainEqual(
     expect.objectContaining({ id: `re-entry-w${s.back}`, decision: 'accepted', date: s.thursday }),
   )
 
   await suggestion.getByRole('button', { name: 'Undo' }).click()
-  await expect(upNext).toHaveText(`Speed, ${s.speed}`)
+  await expect(nextRow).toContainText(bare(s.full))
   await expect(suggestion.getByRole('button', { name: 'Accept' })).toBeVisible()
 
   // Keep leaves the Week as written, and Undo brings the choice back.
   await suggestion.getByRole('button', { name: 'Keep full volume' }).click()
   await expect(suggestion).toContainText('Keeping full volume. Your call. Your calves.')
-  await expect(upNext).toHaveText(`Speed, ${s.speed}`)
+  await expect(nextRow).toContainText(bare(s.full))
   await suggestion.getByRole('button', { name: 'Undo' }).click()
 
   await page.reload()
-  await expect(upNext).toHaveText(`Speed, ${s.speed}`)
+  await expect(nextRow).toContainText(bare(s.full))
   await expect(suggestion.getByRole('button', { name: 'Accept' })).toBeVisible()
 })
 

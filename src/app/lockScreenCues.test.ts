@@ -5,6 +5,7 @@ import { currentSet, finish, logSet, startLifts } from '../domain/lifts'
 import { advance, end, nextBlock, pause, resume, startRun, tick } from '../domain/live'
 import { trainingPaces, type RunContext } from '../domain/paces'
 import { program } from '../domain/program/program'
+import type { Session } from '../domain/program/types'
 import { cuesFor } from './lockScreenCues'
 
 const T0 = Date.parse('2026-11-11T17:00:00Z')
@@ -16,46 +17,52 @@ const seconds = (cues: { at: number }[]) => cues.map((c) => (c.at - T0) / 1000)
 
 describe('cuesFor a run', () => {
   it('stops at the Ready screen: the warm-up’s end says what’s next and to tap Start', () => {
-    const cues = cuesFor(run('threshold'), RPE_ONLY)
-    expect(cues).toEqual([{ at: at(600), title: 'Rep 1 of 2 next', body: 'Open the app and tap Start.' }])
+    const cues = cuesFor(run('run'), RPE_ONLY)
+    expect(cues).toEqual([{ at: at(600), title: 'Rep 1 of 3 next', body: 'Open the app and tap Start.' }])
   })
 
   it('walks every timed Block from there to the end of the Session', () => {
-    const started = resume(advance(run('threshold'), at(600)), at(610))
+    const started = resume(advance(run('run'), at(600)), at(610))
     const cues = cuesFor(started, RPE_ONLY)
-    expect(seconds(cues)).toEqual([610 + 720, 610 + 840, 610 + 1560, 610 + 2100])
+    expect(seconds(cues)).toEqual([610 + 480, 610 + 570, 610 + 1050, 610 + 1140, 610 + 1620, 610 + 2100])
     expect(cues.map((c) => c.title)).toEqual([
       expect.stringMatching(/^Jog/),
-      expect.stringMatching(/^Rep 2 of 2/),
-      expect.stringMatching(/^Easy and cooldown/),
+      expect.stringMatching(/^Rep 2 of 3/),
+      expect.stringMatching(/^Jog/),
+      expect.stringMatching(/^Rep 3 of 3/),
+      expect.stringMatching(/^Cooldown/),
       'Session over',
     ])
-    expect(cues[1].body).toBe('Last rep. Same speed. Same face.')
-    expect(cues[3].body).toBe('Open the app to log it.')
+    expect(cues[3].body).toBe('Last rep. Same speed. Same face.')
+    expect(cues[5].body).toBe('Open the app to log it.')
   })
 
   it('puts the target on the title in the screen’s wording: both units indoors, pace per km outdoors', () => {
-    const started = resume(advance(run('threshold'), at(600)), at(600))
+    const started = resume(advance(run('run'), at(600)), at(600))
     const paces = trainingPaces(21 * 60)
     const [, rep] = cuesFor(started, { paces, unit: 'kmh', environment: 'indoor' })
-    expect(rep.title).toMatch(/^Rep 2 of 2 · \d+\.\d km\/h · \d:\d\d\/km · 1% incline$/)
-    const outdoors = startRun({ week: 3, session: session(3, 'threshold'), date: localDate('2026-11-11'), environment: 'outdoor' }, T0)
+    expect(rep.title).toMatch(/^Rep 2 of 3 · \d+\.\d km\/h · \d:\d\d\/km · 1% incline$/)
+    const outdoors = startRun({ week: 3, session: session(3, 'run'), date: localDate('2026-11-11'), environment: 'outdoor' }, T0)
     const [, outdoorRep] = cuesFor(resume(advance(outdoors, at(600)), at(600)), { paces, unit: 'kmh', environment: 'indoor' })
-    expect(outdoorRep.title).toMatch(/^Rep 2 of 2 · \d:\d\d\/km$/)
+    expect(outdoorRep.title).toMatch(/^Rep 2 of 3 · \d:\d\d\/km$/)
   })
 
   it('counts time paused in the Block: the cues move later by it', () => {
-    const started = resume(advance(run('threshold'), at(600)), at(600))
+    const started = resume(advance(run('run'), at(600)), at(600))
     const paused = resume(pause(started, at(700)), at(760))
-    expect(seconds(cuesFor(paused, RPE_ONLY))[0]).toBe(600 + 720 + 60)
+    expect(seconds(cuesFor(paused, RPE_ONLY))[0]).toBe(600 + 480 + 60)
   })
 
-  it('stops at a Block with no clock: drills to tick, a run to a distance', () => {
-    expect(cuesFor(run('speed'), RPE_ONLY)).toEqual([{ at: at(420), title: 'Drills', body: 'Drills. Sharp, not tired.' }])
+  it('stops at a Block with no clock: strides to tick, a run to a distance', () => {
+    const test = startRun({ week: 2, session: session(2, 'compromised-run-test'), date: localDate('2026-11-18'), environment: 'indoor' }, T0)
+    expect(cuesFor(test, RPE_ONLY)).toEqual([{ at: at(480), title: 'Strides', body: 'Quick and relaxed. Not a sprint.' }])
+    const onStrides = nextBlock(advance(test, at(480)), at(600))
+    expect(onStrides.blocks[onStrides.block].kind).toBe('distance')
+    expect(cuesFor(onStrides, RPE_ONLY)).toEqual([])
   })
 
   it('has none while paused, on the finish sheet, or once it’s over', () => {
-    const r = run('threshold')
+    const r = run('run')
     expect(cuesFor(pause(r, at(30)), RPE_ONLY)).toEqual([])
     expect(cuesFor(end(r, at(30)), RPE_ONLY)).toEqual([])
     expect(cuesFor(advance(r, at(600)), RPE_ONLY)).toEqual([])
@@ -63,8 +70,30 @@ describe('cuesFor a run', () => {
 })
 
 describe('cuesFor a checklist rest', () => {
-  /** On Plyometrics at 600 s: the jog ran its 7 minutes, the Drills were Done at 600. */
-  const plyometrics = () => nextBlock(advance(run('speed'), at(420)), at(600))
+  /** No Session in the Program rests between ticked sets any more; a drill Block with rests stands in. */
+  const drills: Session = {
+    id: 'run',
+    type: 'run',
+    headline: 'drills',
+    minutes: 20,
+    key: false,
+    optional: false,
+    blocks: [
+      { name: 'Warm-up', minutes: 7, exercises: [{ name: 'Easy jog', prescription: { kind: 'run', minutes: 7, effort: { pace: 'easy' } } }] },
+      {
+        name: 'Plyometrics',
+        minutes: 5,
+        exercises: [
+          { name: 'Pogo jumps', prescription: { kind: 'sets', sets: 2, reps: 15, load: { kind: 'bodyweight' }, restSeconds: [60, 60] } },
+          { name: 'Broad jumps', prescription: { kind: 'sets', sets: 3, reps: 3, load: { kind: 'bodyweight' }, restSeconds: [20, 20] } },
+        ],
+      },
+      { name: 'Easy run', minutes: 8, main: true, exercises: [{ name: 'Easy run', prescription: { kind: 'run', minutes: 8, effort: { pace: 'easy' } } }] },
+    ],
+  }
+  /** On Plyometrics at 600 s: the jog ran its 7 minutes, then Start. */
+  const plyometrics = () =>
+    resume(advance(startRun({ week: 3, session: drills, date: localDate('2026-11-11'), environment: 'indoor' }, T0), at(420)), at(600))
 
   it('is the end of the rest, naming the set it’s for', () => {
     const resting = tick(plyometrics(), 0, at(630))

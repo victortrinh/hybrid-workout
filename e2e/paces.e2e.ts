@@ -1,54 +1,33 @@
 import { expect, test } from '@playwright/test'
-import { expectNoAxeViolations } from './axe'
-import { caughtUpOnServer } from './history'
+import { expectNoAxeViolations, WEEK_3 } from './axe'
+import { caughtUp, serveHistory } from './history'
 
-/**
- * Logs a 5K test to the shared e2e database. Paces come from the latest test
- * on or before today, so each project takes a 5K test Week no other test
- * reaches: the phone Week 16, desktop Week 24, every Week before caught up so
- * the 5K test is Up next.
- */
-const WEEK = { phone: 16, desktop: 24 } as Record<string, number>
-/** Thursday noon in Toronto of Week 16 (Mon 8 Feb) or Week 24 (Mon 5 Apr). */
-const THURSDAY = { 16: new Date('2027-02-11T12:00:00-05:00'), 24: new Date('2027-04-08T12:00:00-04:00') } as Record<
-  number,
-  Date
->
 
-test('logging a 23:00 5K test sets Threshold’s speed, and mph updates every speed', async ({ page }, testInfo) => {
-  const week = WEEK[testInfo.project.name]
-  await caughtUpOnServer(page, week - 1)
-  await page.clock.setFixedTime(THURSDAY[week])
+test('a 23:00 estimate sets the Run’s Threshold speed, and mph updates every speed', async ({ page }) => {
+  // Training paces come from the Starting point's estimate, kept on this device.
+  await page.addInitScript(() =>
+    localStorage.setItem(
+      'compromised:starting-point',
+      JSON.stringify({ point: { fiveKSeconds: 23 * 60, weights: {}, updatedAt: '2026-11-05T12:00:00.000Z' }, pending: false }),
+    ),
+  )
+  await serveHistory(page, caughtUp(2))
+  await page.clock.setFixedTime(WEEK_3)
   await page.goto('/')
+  const week = 3
 
   const upNext = page.getByRole('heading', { level: 1 })
   const bucket = page.getByRole('list').filter({ hasText: 'Strength' })
-  await expect(upNext).toHaveText(/^5K test, /)
-
-  await page.goto(`/log/${week}/5k-test`)
-  await expect(page).toHaveURL(`/log/${week}/5k-test`)
-  const time = page.getByRole('textbox', { name: '5 km time' })
-  await expect(time).toBeVisible()
-  await page.getByRole('radio', { name: 'Indoor' }).check({ force: true })
-
-  // A time that isn't mm:ss stops the save and says why.
-  await time.fill('23')
-  await page.getByRole('button', { name: 'Save log' }).click()
-  await expect(page).toHaveURL(`/log/${week}/5k-test`)
-  await expect(page.getByText('Minutes and seconds, like 23:00. That isn’t a time.')).toBeVisible()
+  await expect(upNext).toHaveText(/^HYROX A, /)
   await expectNoAxeViolations(page)
 
-  await time.fill('23:00')
-  await page.getByRole('button', { name: 'Save log' }).click()
-  await expect(page).toHaveURL('/')
-
-  // Threshold now has an exact treadmill speed: 4:52/km is 12.3 km/h.
-  await expect(bucket.getByRole('button', { name: /^Threshold/ })).toHaveCount(1)
-  await bucket.getByRole('button', { name: /^Threshold/ }).click()
+  // The Run's Threshold reps have an exact treadmill speed: 4:52/km is 12.3 km/h.
+  await expect(bucket.getByRole('button', { name: /^Run/ })).toHaveCount(1)
+  await bucket.getByRole('button', { name: /^Run/ }).click()
   await page.getByRole('button', { name: /^Do it today/ }).click()
-  await expect(upNext).toHaveText(/^Threshold, /)
+  await expect(upNext).toHaveText(/^Run, /)
   const target = upNext.locator('xpath=following-sibling::p[1]')
-  // February runs indoors by default, April outdoors: start both on the treadmill.
+  // Start on the treadmill, whatever the month's default.
   await page.getByRole('radio', { name: 'Indoor' }).check({ force: true })
   await expect(target).toHaveText(/^12\.3 km\/h · 4:52\/km · 1% incline/)
 
@@ -70,7 +49,7 @@ test('logging a 23:00 5K test sets Threshold’s speed, and mph updates every sp
 
   await page.goto(`/plan/week/${week}`)
   const main = page.getByRole('main')
-  await expect(main.getByText(/Paces from the 23:00 5K test/)).toBeVisible()
+  await expect(main.getByText('Estimated paces from your Starting point')).toBeVisible()
   await expect(main.getByText(/mph/).first()).toBeVisible()
   await expect(main).not.toContainText('km/h')
 

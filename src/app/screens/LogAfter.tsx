@@ -1,7 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import {
   Button,
-  FieldError,
   Form,
   Group,
   Input,
@@ -28,14 +27,9 @@ import {
   type SessionLog,
 } from '../../domain/log'
 import {
-  clock,
-  clockInput,
   consoleDistance,
   consoleMeters,
   DISTANCE_UNIT,
-  FIVE_K_SECONDS,
-  parseClock,
-  type Environment,
   type SpeedUnit,
 } from '../../domain/paces'
 import type { PainArea } from '../../domain/pain'
@@ -47,7 +41,6 @@ import { outsideWeekLine } from '../coachCopy'
 import { FinishTimeField, validateFinish } from '../components/FinishTimeField'
 import { Icon } from '../components/Icons'
 import { answered, PainFields, type PainAnswer } from '../components/PainFields'
-import { Segmented } from '../components/Segmented'
 import { OverallRpe } from './liveUi'
 import { activitySummary, km, longDay, nb, shortWeekday, STATUS_LABEL, timeOfDay } from '../format'
 import { navigate, SCREEN_PATH, weekPath } from '../router'
@@ -79,7 +72,6 @@ export function LogAfter({
   lastDay: loggableUntil,
   logs,
   today,
-  defaultEnvironment,
   onSave,
   onPain,
   activity,
@@ -92,8 +84,6 @@ export function LogAfter({
   lastDay: LocalDate
   logs: SessionLog[]
   today: LocalDate
-  /** Where runs happen on a day unless the log says otherwise: the month's setting. */
-  defaultEnvironment: (date: LocalDate) => Environment
   onSave: (log: SessionLog) => void
   /** The pain step's answer, if given: a Pain report for this Session, from today. */
   onPain: (score: number, area: PainArea | null) => void
@@ -124,10 +114,8 @@ export function LogAfter({
   const [notes, setNotes] = useState(existing?.notes ?? '')
   const isRace = session.id === RACE_SESSION_ID
   const [time, setTime] = useState(
-    existing?.resultSeconds ? (isRace ? finishClock : clock)(existing.resultSeconds) : '',
+    existing?.resultSeconds && isRace ? finishClock(existing.resultSeconds) : '',
   )
-  /** Null follows the month's default for the chosen day. */
-  const [environment, setEnvironment] = useState<Environment | null>(existing?.environment ?? null)
   /** Unanswered gives no Pain report; the Coach goes on with the last one. */
   const [hurts, setHurts] = useState<'no' | 'yes' | null>(null)
   const [pain, setPain] = useState<PainAnswer>({ score: null, area: null })
@@ -135,16 +123,13 @@ export function LogAfter({
 
   const description = describeSession(session)
   const trained = status !== 'skipped'
-  /** A Done 5K test has a time, which resets the Training paces; the race has its finish, if it's known yet. */
-  const result = session.type === '5k-test' && status === 'done'
+  /** The race has its finish, if it's known yet. */
   const finish = isRace && status === 'done'
-  const where = environment ?? (date ? defaultEnvironment(date) : 'outdoor')
 
   function submit(event: FormEvent) {
     event.preventDefault()
     if (!date) return
-    const resultSeconds = result ? parseClock(time) : finish && time.trim() !== '' ? parseFinish(time) : null
-    if (result && resultSeconds === null) return
+    const resultSeconds = finish && time.trim() !== '' ? parseFinish(time) : null
     if (finish && validateFinish(time)) return
     if (hurts === 'yes' && !answered(pain)) {
       setPainMissing(true)
@@ -163,7 +148,7 @@ export function LogAfter({
       notes: notes.trim() === '' ? null : notes.trim(),
       resultSeconds,
       // A Live session's Environment, console distance, recovery pace, reps and sets stay with the log through an edit.
-      environment: result ? where : (existing?.environment ?? null),
+      environment: existing?.environment ?? null,
       distanceMeters: !trained
         ? null
         : onTreadmill
@@ -268,50 +253,6 @@ export function LogAfter({
           />
         )}
 
-        {result && (
-          <>
-            <TextField
-              value={time}
-              onChange={(text) => setTime(clockInput(text))}
-              isRequired
-              validate={validateTime}
-              inputMode="numeric"
-              className="grid gap-2"
-            >
-              {({ isInvalid }) => (
-                <>
-                  <Label className={groupLabel}>5 km time</Label>
-                  <Input
-                    placeholder="mm:ss"
-                    autoComplete="off"
-                    className="h-11 w-32 rounded-sm bg-paper px-3 text-center text-[17px] font-bold shadow-[inset_0_0_0_2px_var(--edge)] outline-none placeholder:font-semibold placeholder:text-muted focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-link data-invalid:shadow-[inset_0_0_0_2px_var(--ink)]"
-                  />
-                  {/* The error takes the hint's place, so nothing below moves when it clears. */}
-                  {isInvalid ? (
-                    <FieldError className="text-body-quiet font-bold text-ink" />
-                  ) : (
-                    <Text slot="description" className="text-body-quiet text-muted">
-                      Minutes and seconds: 2300 is 23:00. It sets the Training paces.
-                    </Text>
-                  )}
-                </>
-              )}
-            </TextField>
-
-            <Segmented
-              label="Where"
-              labelClassName={groupLabel}
-              className="max-w-72"
-              value={where}
-              options={[
-                { value: 'indoor', label: 'Indoor' },
-                { value: 'outdoor', label: 'Outdoor' },
-              ]}
-              onChange={setEnvironment}
-            />
-          </>
-        )}
-
         {trained && (
           <>
             <NumberField
@@ -414,15 +355,6 @@ export function LogAfter({
       </Form>
     </div>
   )
-}
-
-/** A 5 km time as typed: mm:ss, within what a 5K test can believably take. */
-export function validateTime(text: string): string | null {
-  const seconds = parseClock(text)
-  if (seconds === null) return 'Minutes and seconds, like 23:00. That isn’t a time.'
-  const [low, high] = FIVE_K_SECONDS
-  if (seconds < low || seconds > high) return `A 5 km time between ${clock(low)} and ${clock(high)}.`
-  return null
 }
 
 /** Now, or just after the edit it replaces if this device's clock is behind the one that wrote it. */

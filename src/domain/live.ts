@@ -26,19 +26,21 @@ import {
   type RunContext,
   type SpeedUnit,
 } from './paces'
-import { drillAmount, SESSION_TYPES, stationPounds } from './program/describe'
+import { drillAmount, SESSION_TYPES, sessionHeading, stationPounds } from './program/describe'
 import { program, stations } from './program/program'
 import type { Block, Exercise, Lane, RunEffort, Session, SessionType, StationId } from './program/types'
 
-/** The Session types that are only running: their reps get Held it or Changed. */
-export const LIVE_RUN_TYPES: readonly SessionType[] = ['speed', 'threshold', 'easy', '5k-test']
-
-export const isLiveRun = (session: Session) => LIVE_RUN_TYPES.includes(session.type)
+/** The Session types that are running: their reps get Held it or Changed, unless they're rounds with a Station. */
+export const LIVE_RUN_TYPES: readonly SessionType[] = ['run', 'easy']
 
 /** Runs and Stations: logged as Station logs. */
-export const CIRCUIT_TYPES: readonly SessionType[] = ['hyrox', 'race-simulation']
+export const CIRCUIT_TYPES: readonly SessionType[] = ['hyrox', 'race-simulation', 'compromised-run-test']
 
-export const isCircuit = (session: Session) => CIRCUIT_TYPES.includes(session.type)
+/** Rounds of runs and Stations: a circuit Session type, or a Run of Compromised intervals. */
+export const isCircuit = (session: Session) =>
+  CIRCUIT_TYPES.includes(session.type) || session.blocks.some((b) => b.main && b.exercises.some((e) => e.prescription.kind === 'station'))
+
+export const isLiveRun = (session: Session) => LIVE_RUN_TYPES.includes(session.type) && !isCircuit(session)
 
 /** Everything Start session runs. */
 const LIVE_TYPES: readonly SessionType[] = [...LIVE_RUN_TYPES, ...CIRCUIT_TYPES]
@@ -56,7 +58,7 @@ export type LiveBlockKind =
   | 'run'
   | 'distance'
   | 'cooldown'
-  /** A HYROX round: its run, then its Stations, with a tap at the end of each leg. */
+  /** A round: a HYROX Station then its run, or a Compromised interval's run then its wall balls, with a tap at the end of each leg. */
   | 'round'
   /** One Station of a Race simulation, timed on its own. */
   | 'station'
@@ -76,7 +78,7 @@ export interface LiveBlock {
   /** "Warm-up", "Rep 2 of 5", "Jog", "5 km" */
   name: string
   kind: LiveBlockKind
-  /** Null for a Block run to a distance rather than a time: the 5 km of a 5K test. */
+  /** Null for a Block run to a distance rather than a time: a test's 1 km. */
   seconds: number | null
   meters: number | null
   lane: Lane
@@ -86,6 +88,8 @@ export interface LiveBlock {
   round: number | null
   /** A round's Stations, a Race simulation Station's one, or every Station to set up. Empty for everything else. */
   stations: LiveStation[]
+  /** A round whose run comes before its Stations (Compromised intervals); a HYROX round runs after them. */
+  runFirst: boolean
   /** Null where the Block isn't a run at a target: drills, plyometrics. */
   effort: RunEffort | null
   /** What the Session is for: a rep, the 5 km, the Easy run. Cutting it short makes the log Partial. */
@@ -114,7 +118,16 @@ export function liveBlocks(session: Session): LiveBlock[] {
   let round = 0
   return session.blocks.flatMap((block): LiveBlock[] => {
     const kind = blockKind(block)
-    const base = { meters: null, rep: null, round: null, stations: [] as LiveStation[], detail: [] as string[], checklist: [] as string[], rests: [] as (number | null)[] }
+    const base = {
+      meters: null,
+      rep: null,
+      round: null,
+      stations: [] as LiveStation[],
+      runFirst: false,
+      detail: [] as string[],
+      checklist: [] as string[],
+      rests: [] as (number | null)[],
+    }
 
     if (block.setup) {
       return [
@@ -137,7 +150,8 @@ export function liveBlocks(session: Session): LiveBlock[] {
       const run = block.exercises.find((e) => e.prescription.kind === 'run')?.prescription
       const runMeters = run?.kind === 'run' ? (run.meters ?? null) : null
       const legs = block.exercises.flatMap(liveStation)
-      if (session.type === 'race-simulation') {
+      const runFirst = block.exercises.findIndex((e) => e.prescription.kind === 'run') < block.exercises.findIndex((e) => e.prescription.kind === 'station')
+      if (session.type === 'race-simulation' || session.type === 'compromised-run-test') {
         return [
           {
             ...base,
@@ -175,7 +189,8 @@ export function liveBlocks(session: Session): LiveBlock[] {
           lane,
           round,
           stations: legs,
-          effort: null,
+          runFirst: runMeters !== null && runFirst,
+          effort: run?.kind === 'run' ? (run.effort ?? null) : null,
           work: true,
         },
       ]
@@ -298,7 +313,7 @@ function liveStation({ prescription: rx }: Exercise): LiveStation[] {
       station: rx.station,
       meters: rx.meters ?? null,
       reps: rx.reps ?? null,
-      pounds: stationPounds(stations[rx.station], rx.raceLoadPercent ?? 100),
+      pounds: stationPounds(stations[rx.station]),
     },
   ]
 }
@@ -524,7 +539,7 @@ export function startRun({ week, session, date, environment }: LiveStart, now: n
     week,
     sessionId: session.id,
     type: session.type,
-    heading: `${SESSION_TYPES[session.type].name}, ${session.headline}`,
+    heading: sessionHeading(session),
     date,
     environment,
     blocks: liveBlocks(session),
@@ -677,10 +692,12 @@ export function nextBlock(run: LiveRun, now: number): LiveRun {
 /** Under this long, a leg's tap is the same thumb landing twice. */
 const LEG_BOUNCE_SECONDS = 2
 
-/** A HYROX round's legs, in order: its run, if it has one, then each Station. */
+/** A round's legs, in order: each Station then its run, or the run first where the round says so. */
 export function roundLegs(block: LiveBlock): StationPart[] {
   if (block.kind !== 'round') return []
-  return [...(block.meters !== null ? (['run'] as const) : []), ...block.stations.map((s) => s.station)]
+  const run: StationPart[] = block.meters !== null ? ['run'] : []
+  const legs = block.stations.map((s) => s.station)
+  return block.runFirst ? [...run, ...legs] : [...legs, ...run]
 }
 
 /** The seconds of each leg finished in a round. */
@@ -924,13 +941,15 @@ export function stationLogs(run: LiveRun, fixes: SplitFix[] = []): StationLog[] 
     switch (b.kind) {
       case 'round': {
         const legs = legsDone(run, i)
-        const timed = legs.length === roundLegs(b).length
+        const order = roundLegs(b)
+        const timed = legs.length === order.length
         const leg = (n: number) => (timed ? fixed(i, n, legs[n]) : null)
-        const ran = b.meters !== null ? 1 : 0
         return [
           { round, part: 'round', pounds: null, meters: null, reps: null, seconds: Math.min(SPLIT_MAX, split.seconds) },
-          ...(ran ? [runLog(leg(0))] : []),
-          ...b.stations.map((s, n) => stationLog(s, leg(n + ran))),
+          ...order.map((part, n) => {
+            const station = b.stations.find((s) => s.station === part)
+            return station ? stationLog(station, leg(n)) : runLog(leg(n))
+          }),
         ]
       }
       case 'distance':
@@ -1010,7 +1029,7 @@ function setUpSeconds(run: LiveRun, now: number): number {
   return ended.reduce((sum, c) => sum + c.seconds, 0) + current
 }
 
-/** The time of the Block run to a distance, if it was covered: a 5K test's result. */
+/** The time of the Block run to a distance, if it was covered. */
 export function distanceSeconds(run: LiveRun): number | null {
   return run.splits.find((s) => run.blocks[s.block]?.kind === 'distance')?.seconds ?? null
 }
@@ -1029,8 +1048,6 @@ export interface LiveLogInput {
   rpe: number | null
   /** The console's distance, indoors. */
   distanceMeters: number | null
-  /** A 5K test's time; only kept on a Done 5K test. */
-  resultSeconds: number | null
   /** Splits too quick to be true, put right or left untimed on the finish sheet. */
   fixes?: SplitFix[]
   /** By-feel speeds, in seconds per km: the hard reps' and the recovery jogs'. Either can be left out. */
@@ -1041,12 +1058,11 @@ export interface LiveLogInput {
 
 /** What each Session type usually feels like overall, when its Blocks don't say. */
 const TYPICAL_RPE: Record<SessionType, number> = {
-  speed: 8,
   strength: 7,
-  threshold: 7,
+  run: 7,
   hyrox: 8,
   easy: 4,
-  '5k-test': 10,
+  'compromised-run-test': 10,
   'race-simulation': 9,
 }
 
@@ -1065,7 +1081,7 @@ export const sessionRpe = (session: Session) => predictedRpe({ type: session.typ
 /** The Session log a finished Live session saves. */
 export function liveLog(run: LiveRun, now: number, input: LiveLogInput): SessionLog {
   const status = liveStatus(run)
-  const circuit = CIRCUIT_TYPES.includes(run.type)
+  const circuit = run.blocks.some((b) => b.round !== null)
   return {
     id: input.id,
     week: run.week,
@@ -1075,7 +1091,7 @@ export function liveLog(run: LiveRun, now: number, input: LiveLogInput): Session
     minutes: Math.min(600, Math.max(1, Math.round(activeSeconds(run, now) / 60))),
     rpe: input.rpe,
     notes: null,
-    resultSeconds: run.type === '5k-test' && status === 'done' ? input.resultSeconds : null,
+    resultSeconds: null,
     environment: run.environment,
     // A circuit's runs are logged one by one, not as a console total.
     distanceMeters: run.environment === 'indoor' && !circuit ? input.distanceMeters : null,
@@ -1121,6 +1137,8 @@ export function parseLiveRun(value: unknown): LiveRun | null {
     ...b,
     round: b.round ?? null,
     stations: b.stations ?? [],
+    // Rounds stored before HYROX ran Station first ran first.
+    runFirst: typeof b.runFirst === 'boolean' ? b.runFirst : b.kind === 'round' && b.meters !== null,
     checklist: Array.isArray(b.checklist) ? b.checklist : [],
     // Before rests between sets, none.
     rests: Array.isArray(b.rests) ? b.rests : [],

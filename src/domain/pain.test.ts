@@ -9,8 +9,8 @@ const report: PainReport = {
   date: localDate('2026-11-11'),
   score: 4,
   area: 'achilles-calf',
-  week: 3,
-  sessionId: 'speed',
+  week: 1,
+  sessionId: 'run',
   updatedAt: '2026-11-11T12:00:00.000Z',
 }
 
@@ -92,11 +92,11 @@ describe('painAdapted, HYROX at the ease level', () => {
     }
   })
 
-  it('puts SkiErg in their place for about the same time, with the pain note, one SkiErg a round', () => {
-    const build = withBurpees.find((s) => s.headline === '3 rounds' && s.blocks.some((b) => b.name === 'Round 3' && stationIds(b).join() === 'skierg'))!
-    const eased = painAdapted(build, 'ease')
-    const round1 = eased.blocks.find((b) => b.name === 'Round 1')!
-    expect(round1.exercises.map((e) => describeLeg(e))).toEqual(['Run', 'SkiErg 1000 m: Plus 500 m instead of burpee broad jumps: pain says no impact.'])
+  it('puts SkiErg in their place for about the same time, with the pain note, one Station a round', () => {
+    const foundation = withBurpees.find((s) => s.id === 'hyrox-b')!
+    const eased = painAdapted(foundation, 'ease')
+    const round2 = eased.blocks.find((b) => b.name === 'Round 2')!
+    expect(round2.exercises.map((e) => describeLeg(e))).toEqual(['SkiErg 250 m: Instead of burpee broad jumps: pain says no impact.', 'Run'])
     expect(eased.blocks.find((b) => b.setup)!.exercises.map((e) => e.name)).toEqual(['Wall balls'])
     for (const s of withBurpees) {
       for (const b of painAdapted(s, 'ease').blocks) expect(new Set(stationIds(b)).size).toBe(stationIds(b).length)

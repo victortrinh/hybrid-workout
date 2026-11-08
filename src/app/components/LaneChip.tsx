@@ -1,21 +1,22 @@
 import type { Lane } from '../../domain/program/types'
 
-/** The five lanes in Bucket order. */
-export const LANES: Lane[] = ['speed', 'strength', 'threshold', 'hyrox', 'easy']
+/** The five lanes in Bucket order; the Compromised run test sits where the Run it replaces does. */
+export const LANES: Lane[] = ['hyrox', 'run', 'test', 'strength', 'easy']
 
 export const LANE_NAME: Record<Lane, string> = {
-  speed: 'Speed',
-  strength: 'Strength',
-  threshold: 'Threshold',
   hyrox: 'HYROX',
+  run: 'Run',
+  test: 'Compromised run test',
+  strength: 'Strength',
   easy: 'Easy run',
 }
 
+/** The Compromised run test takes Track Red (the `speed` token), the Run Burnt Orange (`threshold`): DESIGN.md. */
 export const LANE_COLOR: Record<Lane, string> = {
-  speed: 'text-speed',
-  strength: 'text-strength',
-  threshold: 'text-threshold',
   hyrox: 'text-hyrox',
+  run: 'text-threshold',
+  test: 'text-speed',
+  strength: 'text-strength',
   easy: 'text-easy',
 }
 

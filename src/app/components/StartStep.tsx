@@ -10,11 +10,12 @@ import { asksPain, PAIN_FREE, PainStep, type PainAtStart } from './PainStep'
 import { Segmented } from './Segmented'
 
 /**
- * Whether Start asks where the run happens: a Session that is only running
- * (Speed, Threshold, Easy run, 5K test). Strength, HYROX and Race simulations
- * start as they always have.
+ * Whether Start asks where the run happens: the Run (Threshold or Compromised
+ * intervals), the Easy run and the Compromised run test. Strength, HYROX and
+ * Race simulations start as they always have.
  */
-export const asksWhere = (session: Session) => isLiveRun(session)
+export const asksWhere = (session: Session) =>
+  isLiveRun(session) || session.type === 'run' || session.type === 'compromised-run-test'
 
 /** Whether Start asks anything before the Live session: the pain step, where, or both. */
 export const asksAtStart = (session: Session, standing: PainReport | null) => asksPain(standing) || asksWhere(session)

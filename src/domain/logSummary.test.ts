@@ -7,7 +7,7 @@ import type { SessionType } from './program/types'
 const log = (overrides: Partial<SessionLog> = {}): SessionLog => ({
   id: 'log-00000001',
   week: 2,
-  sessionId: 'threshold',
+  sessionId: 'run',
   date: localDate('2026-11-04'),
   status: 'done',
   minutes: null,
@@ -45,10 +45,6 @@ const station = (round: number, part: StationLog['part'], seconds: number | null
 const summary = (type: SessionType, overrides: Partial<SessionLog>) => logSummary(log(overrides), type)
 
 describe('logSummary', () => {
-  it('leads a 5K test with its time', () => {
-    expect(summary('5k-test', { resultSeconds: 1380, rpe: 9 })).toBe('5K test, 23:00 · RPE 9')
-  })
-
   it('gives each lift its top set: the heaviest, then the most reps', () => {
     const sets = [
       set(0, 'back-squat', 165, 5),
@@ -76,9 +72,9 @@ describe('logSummary', () => {
       { block: 1, rep: 1, targetPace: 292, held: true, actualPace: null },
       { block: 3, rep: 2, targetPace: 292, held: false, actualPace: 300 },
     ]
-    expect(summary('speed', { intervals, minutes: 50, rpe: 8 })).toBe('1 of 2 reps on target · 50 min · RPE 8')
+    expect(summary('run', { intervals, minutes: 50, rpe: 8 })).toBe('1 of 2 reps on target · 50 min · RPE 8')
     const byRpe = intervals.map((i) => ({ ...i, targetPace: null }))
-    expect(summary('speed', { intervals: byRpe, rpe: 8 })).toBe('RPE 8')
+    expect(summary('run', { intervals: byRpe, rpe: 8 })).toBe('RPE 8')
   })
 
   it('falls back to time and RPE, and says nothing for a log with neither', () => {
@@ -88,7 +84,7 @@ describe('logSummary', () => {
 
   it('says nothing about a Skipped or Swapped Session: what was done was something else', () => {
     expect(summary('easy', { status: 'swapped', minutes: 45, rpe: 5 })).toBeNull()
-    expect(summary('5k-test', { status: 'skipped', rpe: 3 })).toBeNull()
+    expect(summary('compromised-run-test', { status: 'skipped', rpe: 3 })).toBeNull()
   })
 
   it('summarises a Partial Session from what it got through', () => {

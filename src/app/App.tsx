@@ -320,7 +320,7 @@ export function App() {
               settings={settings}
               onSettings={change}
               startingPoint={{
-                fields: startingFields(startingPoint, day.fiveKTest, day.workingWeights),
+                fields: startingFields(startingPoint, day.workingWeights),
                 onSave: saveStartingPoint,
               }}
               live={live}
@@ -340,7 +340,6 @@ export function App() {
               lastDay={loggableUntil!}
               logs={logs}
               today={today}
-              defaultEnvironment={(date) => environmentOn(date, settings)}
               onSave={save}
               onPain={(score, area) => report(painReport(score, area, week.number, logged.id))}
               activity={attachedTo(week.number, logged.id)}

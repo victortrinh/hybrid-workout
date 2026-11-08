@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { expectNoAxeViolations, WEEK_3 } from './axe'
+import { expectNoAxeViolations } from './axe'
 import { caughtUp, caughtUpOnServer, seedLogs, serveHistory, weekDone } from './history'
 
 /**
@@ -10,11 +10,11 @@ import { caughtUp, caughtUpOnServer, seedLogs, serveHistory, weekDone } from './
  */
 const WEEK = { phone: 9, desktop: 14 } as Record<string, number>
 const BEFORE = {
-  9: weekDone(8, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-12-17'),
-  14: weekDone(13, ['speed', 'strength', 'threshold', 'hyrox'], '2027-01-21'),
+  9: weekDone(8, ['hyrox-a', 'hyrox-b', 'run', 'strength'], '2026-12-31'),
+  14: weekDone(13, ['hyrox-a', 'hyrox-b', 'run', 'strength'], '2027-02-04'),
 } as Record<number, ReturnType<typeof weekDone>>
-/** Wednesday noon in Toronto of Week 9 (Mon 21 Dec) or Week 14 (Mon 25 Jan). */
-const WEDNESDAY = { 9: new Date('2026-12-23T12:00:00-05:00'), 14: new Date('2027-01-27T12:00:00-05:00') } as Record<
+/** Wednesday noon in Toronto of Week 9 (Mon 4 Jan) or Week 14 (Mon 8 Feb). */
+const WEDNESDAY = { 9: new Date('2027-01-06T12:00:00-05:00'), 14: new Date('2027-02-10T12:00:00-05:00') } as Record<
   number,
   Date
 >
@@ -90,8 +90,8 @@ test('a Session logged with no signal syncs once back online, and another browse
 
 test('the installed app opens offline on any screen', async ({ context, page, request }) => {
   // Week 2 done in full, kept on the phone from the first visit: Week 3 opens on its own Up next.
-  await serveHistory(page, caughtUp(1, weekDone(2, ['5k-test', 'strength', 'threshold', 'hyrox'], '2026-11-02')))
-  await page.clock.setFixedTime(WEEK_3)
+  await serveHistory(page, caughtUp(1, weekDone(2, ['hyrox-a', 'hyrox-b', 'compromised-run-test', 'strength'], '2026-11-16')))
+  await page.clock.setFixedTime(new Date('2026-11-25T12:00:00-05:00'))
   await page.goto('/')
   await shellCached(page)
 
@@ -99,7 +99,7 @@ test('the installed app opens offline on any screen', async ({ context, page, re
   await page.goto('/plan')
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Plan')
   await page.goto('/')
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^Speed, /)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^HYROX A, /)
 
   // Installable: a manifest whose icons are served.
   const manifest = await (await request.get('/manifest.webmanifest')).json()

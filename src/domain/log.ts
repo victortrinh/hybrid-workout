@@ -22,9 +22,8 @@ export const RACE_SESSION_ID = 'race'
 /** A Men's Open finish time the app believes: 30 minutes to 4 hours. */
 export const RACE_SECONDS: Range = [30 * 60, 4 * 60 * 60]
 
-/** The times a Session log's result can take: a 5K test's, the race's finish, or none for any other Session. */
+/** The times a Session log's result can take: the race's finish, or none for any other Session. */
 export function resultRange(sessionId: string): Range | null {
-  if (sessionId === '5k-test') return FIVE_K_SECONDS
   if (sessionId === RACE_SESSION_ID) return RACE_SECONDS
   return null
 }

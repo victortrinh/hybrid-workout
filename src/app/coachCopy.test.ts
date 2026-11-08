@@ -12,7 +12,7 @@ const recovery = (cut: ShortSleepCut | null): RecoverySuggestion => ({
   id: 'recovery-2026-11-11',
   kind: 'recovery',
   week: 3,
-  sessionId: 'hyrox',
+  sessionId: 'hyrox-a',
   date: localDate('2026-11-11'),
   cut,
   trigger: { sleepMinutes: 320, hrvMs: 40, hrvMean: 52 },
@@ -51,16 +51,16 @@ describe('the short-sleep copy names what is cut', () => {
   })
 })
 
-const race = findWeek(program, 26)!.sessions.find((s) => s.id === 'race')!
-const shakeout = findWeek(program, 26)!.sessions.find((s) => s.id === 'shakeout')!
+const race = findWeek(program, 24)!.sessions.find((s) => s.id === 'race')!
+const shakeout = findWeek(program, 24)!.sessions.find((s) => s.id === 'shakeout')!
 
 describe('waitingLine', () => {
   it('says tomorrow the day before the race', () => {
-    expect(waitingLine(race, localDate('2027-04-21'), localDate('2027-04-20'))).toBe('The race is tomorrow. Save it for that.')
+    expect(waitingLine(race, localDate('2027-04-22'), localDate('2027-04-21'))).toBe('The race is tomorrow. Save it for that.')
   })
 
   it('names the weekday further out', () => {
-    expect(waitingLine(race, localDate('2027-04-21'), localDate('2027-04-19'))).toBe('The race is Wednesday. Save it for that.')
+    expect(waitingLine(race, localDate('2027-04-22'), localDate('2027-04-19'))).toBe('The race is Thursday. Save it for that.')
   })
 
   it('uses the Session’s heading for any other pinned Session', () => {
@@ -70,25 +70,24 @@ describe('waitingLine', () => {
 })
 
 describe('a rest the spacing rules only suggest', () => {
-  const threshold = findWeek(program, 3)!.sessions.find((s) => s.id === 'threshold')!
-  const speed = findWeek(program, 3)!.sessions.find((s) => s.id === 'speed')!
+  const run = findWeek(program, 3)!.sessions.find((s) => s.id === 'run')!
 
   it('says the rest is suggested, with the reason first', () => {
-    expect(suggestedRestCopy({ kind: 'hard-yesterday', anyway: { week: 3, session: threshold } })).toEqual({
+    expect(suggestedRestCopy({ kind: 'hard-yesterday', anyway: { week: 3, session: run } })).toEqual({
       heading: 'Rest suggested.',
       target: 'Hard session yesterday. The Week has room, so legs up. Your call.',
-      meta: 'Threshold if you go anyway',
+      meta: 'Run if you go anyway',
     })
   })
 
   it('gives each spacing rule its reason', () => {
-    expect(suggestedRestCopy({ kind: 'hard-today', anyway: { week: 3, session: threshold } }).target).toMatch(
+    expect(suggestedRestCopy({ kind: 'hard-today', anyway: { week: 3, session: run } }).target).toMatch(
       /^Hard session already today\./,
     )
-    expect(suggestedRestCopy({ kind: 'speed-after-load', anyway: { week: 3, session: speed } })).toMatchObject({
+    expect(suggestedRestCopy({ kind: 'run-after-load', anyway: { week: 3, session: run } })).toMatchObject({
       heading: 'Rest suggested.',
-      target: expect.stringMatching(/^Speed on legs that just lifted or pushed a sled\?/),
-      meta: 'Speed if you go anyway',
+      target: expect.stringMatching(/^The Run on legs that just lifted or pushed a sled\?/),
+      meta: 'Run if you go anyway',
     })
   })
 })
@@ -133,7 +132,7 @@ describe('the Coach after Race day', () => {
   it('doesn’t ask after a Skipped race', () => {
     expect(raceCopy({ state: 'skipped', log: race }, recap(underGoal))).toEqual({
       heading: 'Program done.',
-      target: 'Race Skipped. The 26 Weeks still happened, and these are their numbers.',
+      target: 'Race Skipped. The 24 Weeks still happened, and these are their numbers.',
     })
   })
 })
@@ -147,11 +146,11 @@ describe('the Sessions dropped as Race specific starts', () => {
   })
 
   it('names the range of Weeks they came from', () => {
-    expect(droppedLine(dropped(3, 14, 15))).toBe('3 Sessions from Weeks 14–15 dropped to keep Race specific on schedule.')
+    expect(droppedLine(dropped(3, 13, 14))).toBe('3 Sessions from Weeks 13–14 dropped to keep Race specific on schedule.')
   })
 
   it('names the one Week, and says Session for one', () => {
-    expect(droppedLine(dropped(2, 21, 21))).toBe('2 Sessions from Week 21 dropped to keep Race specific on schedule.')
-    expect(droppedLine(dropped(1, 21, 21))).toBe('1 Session from Week 21 dropped to keep Race specific on schedule.')
+    expect(droppedLine(dropped(2, 15, 15))).toBe('2 Sessions from Week 15 dropped to keep Race specific on schedule.')
+    expect(droppedLine(dropped(1, 15, 15))).toBe('1 Session from Week 15 dropped to keep Race specific on schedule.')
   })
 })

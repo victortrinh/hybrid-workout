@@ -37,7 +37,7 @@ export interface ProgramRecap {
   workingWeights: { lift: LiftId; first: number; now: number }[]
   /** Required Sessions Done or Partial out of every one the Program prescribed, and Easy runs on top. */
   sessions: { done: number; required: number; easy: number }
-  /** RPE × minutes of everything trained in the Program, and by lane: a 5K test in Speed, the race in HYROX. */
+  /** RPE × minutes of everything trained in the Program, and by lane: the race in HYROX. */
   trainingLoad: { total: number; byLane: Partial<Record<Lane, number>> }
 }
 
@@ -69,7 +69,7 @@ export function programRecap(
         .filter((s) => !s.optional).length,
       easy: completion
         .flatMap((week) => week.cells)
-        .filter((c) => c.session.optional && (c.state === 'done' || c.state === 'partial')).length,
+        .filter((c) => c.session.type === 'easy' && c.session.optional && (c.state === 'done' || c.state === 'partial')).length,
     },
     trainingLoad: trainingLoad(program, logs, today).reduce(
       (sum, week) => {

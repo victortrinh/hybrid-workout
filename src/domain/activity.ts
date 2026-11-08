@@ -42,9 +42,9 @@ export interface ActivityAnswer {
 
 /** The Session types each kind of workout can be. */
 const FITS: Record<ActivityKind, readonly SessionType[]> = {
-  run: ['speed', 'threshold', 'easy', '5k-test'],
+  run: ['run', 'easy', 'compromised-run-test'],
   lifting: ['strength'],
-  circuit: ['strength', 'hyrox', 'race-simulation'],
+  circuit: ['strength', 'hyrox', 'race-simulation', 'compromised-run-test'],
   other: [],
 }
 
@@ -331,9 +331,8 @@ const ASSUMED_MAX_HEART_RATE = 190
 /** A workout's average heart rate as a share of maximum, warm-up and recoveries in, by Session type. */
 const TYPICAL_HEART_RATE: Record<SessionType, number> = {
   easy: 0.72,
-  speed: 0.82,
-  threshold: 0.84,
-  '5k-test': 0.88,
+  run: 0.84,
+  'compromised-run-test': 0.88,
   strength: 0.6,
   hyrox: 0.82,
   'race-simulation': 0.86,

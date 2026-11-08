@@ -56,21 +56,21 @@ export interface WeekCompletion {
 
 export interface WeekLoad {
   week: number
-  /** RPE × minutes of what was trained in the Week, by lane: a 5K test in Speed, a Race simulation in HYROX. */
+  /** RPE × minutes of what was trained in the Week, by lane: a Race simulation in HYROX. */
   byLane: Partial<Record<Lane, number>>
   total: number
 }
 
 /** The last 5K test Week: the planned line reaches the goal time here. */
 export function finalTestWeek(program: Program): number {
-  const weeks = program.phases.flatMap((p) => p.weeks).filter((w) => w.fiveKTest)
+  const weeks = program.phases.flatMap((p) => p.weeks).filter((w) => w.compromisedRunTest)
   return weeks.length > 0 ? weeks[weeks.length - 1].number : program.weekCount
 }
 
 export function fiveKProgress(program: Program, logs: SessionLog[], today: LocalDate): FiveKProgress {
-  const testWeeks = program.phases.flatMap((p) => p.weeks).filter((w) => w.fiveKTest)
+  const testWeeks = program.phases.flatMap((p) => p.weeks).filter((w) => w.compromisedRunTest)
   const tests: FiveKPoint[] = testWeeks.flatMap((week) => {
-    const log = logFor(logs, week.number, '5k-test')
+    const log = logFor(logs, week.number, 'compromised-run-test')
     if (!log || log.status !== 'done' || log.resultSeconds === null) return []
     if (daysBetween(log.date, today) < 0) return []
     return [{ week: week.number, date: log.date, seconds: log.resultSeconds, environment: log.environment }]

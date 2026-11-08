@@ -5,7 +5,7 @@
 import { daysBetween, type LocalDate } from '../domain/calendar'
 import { PAIN_AREA_LABEL, PAIN_REPS_PERCENT, type PainLevel } from '../domain/pain'
 import { clock } from '../domain/paces'
-import { describeSession, LIFT_NAME, SESSION_TYPES } from '../domain/program/describe'
+import { describeSession, LIFT_NAME, sessionName } from '../domain/program/describe'
 import { program } from '../domain/program/program'
 import type { Dropped, RestAnyway, RestReason } from '../domain/coach'
 import type { Session } from '../domain/program/types'
@@ -136,7 +136,7 @@ export function outsideWeekLine(when: 'early' | 'late', week: number, startDate:
  * or it was its last day and the Week closes with the miss.
  */
 export function skippedTodayLine(sessions: Session[], lastDay: boolean, daysAfter: number): string {
-  const names = list(sessions.map((s) => SESSION_TYPES[s.type].name))
+  const names = list(sessions.map(sessionName))
   if (lastDay) return `${names} skipped. It happens.`
   return `${names} ${sessions.length === 1 ? 'waits' : 'wait'} for tomorrow. ${plural(daysAfter, 'day')} left to fit ${sessions.length === 1 ? 'it' : 'them'} in.`
 }
@@ -162,12 +162,12 @@ export function suggestedRestCopy(rest: SuggestedRest): { heading: string; targe
   const reason = {
     'hard-yesterday': 'Hard session yesterday. The Week has room, so legs up.',
     'hard-today': 'Hard session already today. The rest of the Week fits.',
-    'speed-after-load': 'Speed on legs that just lifted or pushed a sled? Better tomorrow.',
+    'run-after-load': 'The Run on legs that just lifted or pushed a sled? Better tomorrow.',
   }[rest.kind]
   return {
     heading: 'Rest suggested.',
     target: `${reason} Your call.`,
-    meta: `${SESSION_TYPES[rest.anyway.session.type].name} if you go anyway`,
+    meta: `${sessionName(rest.anyway.session)} if you go anyway`,
   }
 }
 

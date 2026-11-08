@@ -2,8 +2,7 @@
  * Plain-language lines for a Session, read from its relative Prescription.
  *
  * Given a RunContext with Training paces, runs read as exact treadmill speeds
- * or paces per km; without one (before the baseline 5K test) they read as
- * effort and RPE. Lifts read as sets and reps until there are Working weights.
+ * or paces per km; without one they read as effort and RPE. Lifts read as sets and reps until there are Working weights.
  */
 import { runTarget, type RunContext } from '../paces'
 import { prescribedPounds, roundToFive, type WorkingWeights } from '../weights'
@@ -24,17 +23,22 @@ import type {
 } from './types'
 
 export const SESSION_TYPES: Record<SessionType, { name: string; lane: Lane }> = {
-  speed: { name: 'Speed', lane: 'speed' },
-  strength: { name: 'Strength', lane: 'strength' },
-  threshold: { name: 'Threshold', lane: 'threshold' },
   hyrox: { name: 'HYROX', lane: 'hyrox' },
+  run: { name: 'Run', lane: 'run' },
+  'compromised-run-test': { name: 'Compromised run test', lane: 'test' },
+  strength: { name: 'Strength', lane: 'strength' },
   easy: { name: 'Easy run', lane: 'easy' },
-  '5k-test': { name: '5K test', lane: 'speed' },
   'race-simulation': { name: 'Race simulation', lane: 'hyrox' },
 }
 
+/** What the Session is called: its own name where it has one ("HYROX A"), else its Session type's. */
+export const sessionName = (session: Session) => session.name ?? SESSION_TYPES[session.type].name
+
+/** "HYROX A, 4 rounds", "Run, 3 × 7′" */
+export const sessionHeading = (session: Session) => `${sessionName(session)}, ${session.headline}`
+
 export interface SessionDescription {
-  /** "Threshold, 3 × 7′" */
+  /** "Run, 3 × 7′" */
   heading: string
   /** One line for a Bucket row: "3 × 7′ at Threshold / 2′ jog" */
   summary: string
@@ -51,7 +55,7 @@ export interface SessionDescription {
 export function describeSession(session: Session, run?: RunContext, weights?: WorkingWeights): SessionDescription {
   const main = session.blocks.filter((b) => b.main)
   return {
-    heading: `${SESSION_TYPES[session.type].name}, ${session.headline}`,
+    heading: sessionHeading(session),
     summary: summary(session, main),
     target: target(session, main, run, weights),
     meta: [
@@ -81,6 +85,7 @@ export function drillAmount(rx: Extract<Prescription, { kind: 'drill' }>): strin
 }
 
 function summary(session: Session, main: Block[]): string {
+  if (isCircuit(main)) return `${main.length} × (${roundLegs(main).join(' + ')})`
   const rx = firstPrescription(main)
   switch (rx?.kind) {
     case 'intervals':
@@ -88,7 +93,6 @@ function summary(session: Session, main: Block[]): string {
         .filter(Boolean)
         .join(' / ')
     case 'run': {
-      if (isCircuit(main)) return `${main.length} × (${runLength(main)} + ${stationsPerRound(main)})`
       const runs = main[0].exercises.filter((e) => e.prescription.kind === 'run').length
       if (runs > 1) return `${runs} × (${km(rx.meters ?? 0)} + Station)`
       const effort = rx.effort ? ` ${effortWord(rx.effort)}` : ''
@@ -104,6 +108,16 @@ function summary(session: Session, main: Block[]): string {
 }
 
 function target(session: Session, main: Block[], run?: RunContext, weights?: WorkingWeights): string {
+  if (isCircuit(main)) {
+    const effort = main[0].exercises.find((e) => e.prescription.kind === 'run' && e.prescription.effort)
+    return [
+      `${roundLegs(main).join(', then ')}, each round`,
+      'Race load',
+      effort?.prescription.kind === 'run' && effortTarget(effort.prescription.effort, run),
+    ]
+      .filter(Boolean)
+      .join(' · ')
+  }
   const rx = firstPrescription(main)
   switch (rx?.kind) {
     case 'intervals': {
@@ -117,15 +131,6 @@ function target(session: Session, main: Block[], run?: RunContext, weights?: Wor
         .join(' · ')
     }
     case 'run': {
-      if (isCircuit(main)) {
-        const percent = main.flatMap((b) => b.exercises).map(raceLoadPercent).find((p) => p !== undefined)
-        return [
-          `${runLength(main)} run + ${stationsPerRound(main)} a round`,
-          percent && `about ${percent}% of Race load`,
-        ]
-          .filter(Boolean)
-          .join(' · ')
-      }
       if (rx.meters) {
         const strides = findPrescription(session, 'strides')
         return [`${km(rx.meters)} ${effortTarget(rx.effort, run)}`, strides && `${strides.reps} strides first`]
@@ -183,6 +188,7 @@ export const LIFT_NAME: Record<LiftId, string> = {
   'back-squat': 'Squat',
   'romanian-deadlift': 'RDL',
   'bulgarian-split-squat': 'Bulgarian split squat',
+  'heavy-farmers-carry': 'Heavy farmers carry',
   'single-leg-calf-raise': 'Single-leg calf raise',
   'seated-calf-raise': 'Loaded seated calf raise',
   'standing-calf-raise-machine': 'Standing calf raise',
@@ -200,28 +206,28 @@ function mainLifts(main: Block[], weights?: WorkingWeights): string {
     .join(', ')
 }
 
-/** HYROX rounds are the one Session with several main Blocks: a run, then Stations, each round. */
-const isCircuit = (main: Block[]) => main.length > 1
+/**
+ * Rounds of a run and a Station, several main Blocks of them: HYROX (Station,
+ * then the run), Compromised intervals, the Compromised run test and the Race
+ * simulations (the run, then the Station).
+ */
+const isCircuit = (main: Block[]) => main.length > 1 && main.every((b) => b.exercises.some((e) => e.prescription.kind === 'station'))
 
-function runLength(rounds: Block[]): string {
-  const run = rounds[0].exercises[0].prescription
-  return run.kind === 'run' && run.meters ? km(run.meters) : 'run'
+/**
+ * A round's legs in the order they're done: "400 m" for the run, the
+ * Station's name when every round has the same one ("Wall balls"), else "Station".
+ */
+function roundLegs(rounds: Block[]): string[] {
+  const same = (n: number) => new Set(rounds.map((r) => r.exercises[n]?.name)).size === 1
+  return rounds[0].exercises.map(({ name, prescription: rx }, n) => {
+    if (rx.kind === 'run') return rx.meters ? km(rx.meters) : 'run'
+    return same(n) ? name : 'Station'
+  })
 }
-
-/** "2 Stations", "1 Station", or "2–3 Stations" when rounds differ. */
-function stationsPerRound(rounds: Block[]): string {
-  const counts = rounds.map((r) => r.exercises.filter((e) => e.prescription.kind === 'station').length)
-  const low = Math.min(...counts)
-  const high = Math.max(...counts)
-  return `${range([low, high])} ${high === 1 ? 'Station' : 'Stations'}`
-}
-
-const raceLoadPercent = (e: Exercise) =>
-  e.prescription.kind === 'station' ? e.prescription.raceLoadPercent : undefined
 
 function effortWord(effort: RunEffort): string {
   if ('feel' in effort) return effort.feel
-  const pace = effort.pace === '5k' ? 'at 5K pace' : effort.pace === 'threshold' ? 'at Threshold' : effort.pace
+  const pace = { easy: 'easy', threshold: 'at Threshold', 'race-run': 'at Race run pace' }[effort.pace]
   return effort.secondsPerKmFaster ? `${pace} −${effort.secondsPerKmFaster} s/km` : pace
 }
 
@@ -241,7 +247,7 @@ function effortTarget(effort: RunEffort | undefined, run?: RunContext): string {
     }[effort.feel]
     return [feel, rpe].filter(Boolean).join(', ')
   }
-  const pace = { easy: 'Easy', threshold: 'Threshold effort', '5k': '5K effort', goal: 'Goal effort' }[effort.pace]
+  const pace = { easy: 'Easy', threshold: 'Threshold effort', 'race-run': 'Race run effort' }[effort.pace]
   const faster = effort.secondsPerKmFaster ? ` −${effort.secondsPerKmFaster} s/km` : ''
   return [`${pace}${faster}`, rpe].filter(Boolean).join(', ')
 }
@@ -276,19 +282,19 @@ function loadWords(load: StrengthLoad): string {
 export const isSled = (id: StationId) => id === 'sled-push' || id === 'sled-pull'
 
 /**
- * A Station's load in pounds at a share of Race load, as it's set up in the
- * gym: per implement, the plates alone on a sled, rounded to the nearest 5 lb.
- * The wall ball stays the ball it is. Null for a Station without a load.
+ * A Station's Race load in pounds, as it's set up in the gym: per implement,
+ * the plates alone on a sled, rounded to the nearest 5 lb. The wall ball
+ * stays the ball it is. Null for a Station without a load.
  */
-export function stationPounds(station: Station, percent = 100): number | null {
+export function stationPounds(station: Station): number | null {
   const { pounds, fixedLoad } = station.raceLoad
   if (pounds === undefined) return null
-  return fixedLoad ? pounds : roundToFive((pounds * percent) / 100)
+  return fixedLoad ? pounds : roundToFive(pounds)
 }
 
-/** "200 lb plates", "2 × 30 lb", "13 lb ball", or nothing for a Station without a load. */
-export function stationLoad(station: Station, percent = 100): string {
-  return poundsWords(station, stationPounds(station, percent))
+/** "335 lb plates", "2 × 55 lb", "13 lb ball", or nothing for a Station without a load. */
+export function stationLoad(station: Station): string {
+  return poundsWords(station, stationPounds(station))
 }
 
 /** A Station's load in words, whatever was actually used: "225 lb plates", "2 × 55 lb". */
@@ -365,7 +371,7 @@ function prescriptionWords(
       const reps = typeof rx.reps === 'number' ? `${rx.reps}` : range(rx.reps)
       const pounds = weights && prescribedPounds(rx, weights)
       return [
-        `${rx.sets} × ${reps}${rx.perLeg ? ' / leg' : ''}`,
+        rx.meters ? `${rx.sets} × ${km(rx.meters)}` : `${rx.sets} × ${reps}${rx.perLeg ? ' / leg' : ''}`,
         typeof pounds === 'number' ? `${pounds} lb` : loadWords(rx.load),
         rx.rpe && `RPE ${range(rx.rpe)}`,
         rx.rpeCap && `RPE ≤ ${rx.rpeCap}`,
@@ -377,10 +383,7 @@ function prescriptionWords(
     case 'station': {
       const station = stations[rx.station]
       const volume = rx.meters ? km(rx.meters) : rx.reps ? `${rx.reps} reps` : ''
-      const percent = rx.raceLoadPercent ?? 100
-      const load = stationLoad(station, percent)
-      const share = rx.raceLoadPercent !== undefined && rx.raceLoadPercent < 100 ? `${rx.raceLoadPercent}% of Race load` : ''
-      return [volume, load, share].filter(Boolean).join(' · ')
+      return [volume, stationLoad(station)].filter(Boolean).join(' · ')
     }
     case 'drill':
       return rx.sets > 1 ? `${rx.sets} × ${drillAmount(rx)}` : drillAmount(rx)

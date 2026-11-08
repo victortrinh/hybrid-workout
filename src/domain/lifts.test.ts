@@ -35,6 +35,7 @@ const WEIGHTS: WorkingWeights = {
   'back-squat': 185,
   'romanian-deadlift': 135,
   'bulgarian-split-squat': 30,
+  'heavy-farmers-carry': 70,
   'single-leg-calf-raise': 35,
   'seated-calf-raise': 65,
 }
@@ -80,17 +81,17 @@ describe('startLifts', () => {
       ['Back squat', 3, '5', 'RPE 7', 120, false],
       ['Romanian deadlift', 3, '6', 'RPE 7', 90, false],
       ['Bulgarian split squat', 2, '6 / leg', 'RPE 7', 60, false],
+      ['Heavy farmers carry', 3, '40 m', 'RPE 7', 60, false],
       ['Single-leg calf raise', 3, '8 / leg', null, 60, false],
       ['Loaded seated calf raise', 2, '10', null, 60, false],
-      ['Pull-ups and push-ups', 2, '6–10 each', null, 60, false],
     ])
     expect(lifts.sets.map((sets) => sets[0])).toEqual([
       { pounds: 185, reps: 5, rpe: 7, done: false },
       { pounds: 135, reps: 6, rpe: 7, done: false },
       { pounds: 30, reps: 6, rpe: 7, done: false },
+      { pounds: 70, reps: 1, rpe: 7, done: false },
       { pounds: 35, reps: 8, rpe: 7, done: false },
       { pounds: 65, reps: 10, rpe: 7, done: false },
-      { pounds: null, reps: 6, rpe: 7, done: false },
     ])
     expect(currentSet(lifts)).toEqual({ exercise: 0, set: 0 })
   })
@@ -122,11 +123,11 @@ describe('startLifts', () => {
 
   it('calibrates any lift with no Working weight yet', () => {
     const lifts = start(3, { 'back-squat': 185 })
-    expect(lifts.exercises.map((e) => e.calibrate)).toEqual([false, true, true, true, true, false])
+    expect(lifts.exercises.map((e) => e.calibrate)).toEqual([false, true, true, true, true, true])
   })
 
   it('follows the Deload pattern: two sets of the main lifts at about 85–90%, RPE 6 at most', () => {
-    const lifts = start(7)
+    const lifts = start(5)
     expect(lifts.exercises.slice(0, 2).map((e) => [e.sets, e.rpeWords])).toEqual([
       [2, 'RPE ≤ 6'],
       [2, 'RPE ≤ 6'],
@@ -134,8 +135,9 @@ describe('startLifts', () => {
     expect(lifts.sets[0][0]).toMatchObject({ pounds: 160, rpe: 6 })
   })
 
-  it('follows the maintenance pattern from Week 14: 2 × 4 at RPE 7–8', () => {
-    const lifts = start(14)
+  it('follows the maintenance pattern from Week 16: 2 × 4 at RPE 7–8, the split squat dropped', () => {
+    const lifts = start(16)
+    expect(lifts.exercises.map((e) => e.name)).not.toContain('Bulgarian split squat')
     expect(lifts.exercises.slice(0, 2).map((e) => [e.sets, e.repsWords, e.rpeWords])).toEqual([
       [2, '4', 'RPE 7–8'],
       [2, '4', 'RPE 7–8'],
@@ -160,7 +162,7 @@ describe('Working weight prompts', () => {
     const squat = suggest('back-squat', 185, 190)
     expect(start(1, {}, [squat]).prompts).toEqual([])
     expect(start(3, { 'romanian-deadlift': 135 }, [squat]).prompts).toEqual([])
-    expect(start(7, WEIGHTS, [squat]).prompts).toEqual([])
+    expect(start(5, WEIGHTS, [squat]).prompts).toEqual([])
     const taper = program.phases
       .flatMap((p) => p.weeks)
       .find((w) =>
@@ -264,7 +266,8 @@ describe('liftsLog', () => {
       { exercise: 0, set: 2, lift: 'back-squat', pounds: 190, reps: 5, rpe: 7 },
       { exercise: 0, set: 3, lift: 'back-squat', pounds: 190, reps: 5, rpe: 7 },
     ])
-    expect(log.sets.at(-1)).toEqual({ exercise: 5, set: 2, lift: null, pounds: null, reps: 6, rpe: 7 })
+    expect(log.sets.at(-1)).toEqual({ exercise: 5, set: 2, lift: 'seated-calf-raise', pounds: 65, reps: 10, rpe: 7 })
+    expect(log.sets.filter((s) => s.lift === 'heavy-farmers-carry')).toHaveLength(3)
     expect(parseSessionLog(log)).toEqual(log)
   })
 
@@ -279,7 +282,7 @@ describe('parseLiveLifts', () => {
   it('reads back what was stored, and drops anything else', () => {
     const lifts = logSet(start(3), 0, 0, at(0))
     expect(parseLiveLifts(JSON.parse(JSON.stringify(lifts)))).toEqual(lifts)
-    expect(parseLiveLifts({ ...lifts, type: 'speed' })).toBeNull()
+    expect(parseLiveLifts({ ...lifts, type: 'run' })).toBeNull()
     expect(parseLiveLifts({ ...lifts, sets: [] })).toBeNull()
     expect(parseLiveLifts(null)).toBeNull()
   })

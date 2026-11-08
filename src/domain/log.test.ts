@@ -5,7 +5,7 @@ import { logDays, logFor, mergeLogs, missingRequired, parseSessionLog, type Sess
 const valid = {
   id: '3f0c9a52-6f1e-4c55-9a6b-0b5f0f2b7e11',
   week: 3,
-  sessionId: 'threshold',
+  sessionId: 'run',
   date: '2026-11-04',
   status: 'done',
   minutes: 45,
@@ -43,9 +43,9 @@ describe('parseSessionLog', () => {
     })
   })
 
-  it('accepts a 5K test result with its Environment, and treats missing ones as none', () => {
-    expect(parseSessionLog({ ...valid, sessionId: '5k-test', resultSeconds: 1380, environment: 'indoor' })).toMatchObject({
-      resultSeconds: 1380,
+  it('accepts a result time with its Environment, and treats missing ones as none', () => {
+    expect(parseSessionLog({ ...valid, sessionId: 'race', resultSeconds: 5047, environment: 'indoor' })).toMatchObject({
+      resultSeconds: 5047,
       environment: 'indoor',
     })
     const { resultSeconds, environment, ...older } = valid
@@ -61,7 +61,7 @@ describe('parseSessionLog', () => {
 
   it('accepts by-feel speeds: a rep’s actual pace with no target, and the jogs’ recovery pace', () => {
     const rep = { block: 4, rep: 1, targetPace: null, held: false, actualPace: 257 }
-    const byFeel = { ...valid, sessionId: 'speed', environment: 'indoor', recoveryPace: 600, intervals: [rep] }
+    const byFeel = { ...valid, sessionId: 'run', environment: 'indoor', recoveryPace: 600, intervals: [rep] }
     expect(parseSessionLog(byFeel)).toEqual(byFeel)
     // Logs saved before by-feel speeds have no recovery pace.
     const { recoveryPace, ...older } = valid
@@ -76,7 +76,7 @@ describe('parseSessionLog', () => {
   })
 
   it('accepts a HYROX session’s Station logs, an empty sled included, and treats missing ones as none', () => {
-    const hyrox = { ...valid, sessionId: 'hyrox', stations: [round, sled] }
+    const hyrox = { ...valid, sessionId: 'hyrox-b', stations: [round, sled] }
     expect(parseSessionLog(hyrox)).toEqual(hyrox)
     const { stations, ...older } = valid
     expect(parseSessionLog(older)).toMatchObject({ stations: [] })
@@ -95,8 +95,8 @@ describe('parseSessionLog', () => {
     ['zero minutes', { minutes: 0 }],
     ['notes that are not text', { notes: 42 }],
     ['notes that are too long', { notes: 'x'.repeat(2001) }],
-    ['a 5K time under 12 minutes', { resultSeconds: 600 }],
-    ['a 5K time that is not whole seconds', { resultSeconds: 1380.5 }],
+    ['a result time under 12 minutes', { resultSeconds: 600 }],
+    ['a result time that is not whole seconds', { resultSeconds: 1380.5 }],
     ['a result past a 4-hour race', { resultSeconds: 14401 }],
     ['an Environment that is neither', { environment: 'pool' }],
     ['a console distance under 100 m', { distanceMeters: 50 }],
@@ -134,7 +134,7 @@ describe('parseSessionLog', () => {
 describe('mergeLogs', () => {
   const a = parseSessionLog(valid)
   const later: SessionLog = { ...a, status: 'partial', updatedAt: '2026-11-04T18:00:00.000Z' }
-  const other: SessionLog = { ...a, id: 'another-log-id', sessionId: 'speed' }
+  const other: SessionLog = { ...a, id: 'another-log-id', sessionId: 'hyrox-a' }
 
   it('keeps the later edit of a log present on both sides', () => {
     expect(mergeLogs([a], [later])).toEqual([later])
@@ -151,9 +151,9 @@ describe('logFor', () => {
 
   it('finds the latest log for a Week and Session, or none', () => {
     const later: SessionLog = { ...a, id: 'second-log-id', updatedAt: '2026-11-05T09:00:00.000Z' }
-    expect(logFor([later, a], 3, 'threshold')).toBe(later)
-    expect(logFor([a], 3, 'speed')).toBeNull()
-    expect(logFor([a], 4, 'threshold')).toBeNull()
+    expect(logFor([later, a], 3, 'run')).toBe(later)
+    expect(logFor([a], 3, 'hyrox-a')).toBeNull()
+    expect(logFor([a], 4, 'run')).toBeNull()
   })
 })
 
@@ -162,8 +162,8 @@ describe('missingRequired', () => {
   const week = {
     number: 3,
     sessions: [
-      { id: 'threshold', optional: false },
-      { id: 'speed', optional: false },
+      { id: 'run', optional: false },
+      { id: 'hyrox-a', optional: false },
       { id: 'easy', optional: true },
     ],
   }
@@ -173,12 +173,12 @@ describe('missingRequired', () => {
   })
 
   it('is false once every required Session has a log, Skipped or not, whatever the optional ones', () => {
-    const skipped: SessionLog = { ...a, id: 'speed-log', sessionId: 'speed', status: 'skipped' }
+    const skipped: SessionLog = { ...a, id: 'hyrox-log', sessionId: 'hyrox-a', status: 'skipped' }
     expect(missingRequired(week, [a, skipped])).toBe(false)
   })
 
   it("ignores another Week's logs", () => {
-    const elsewhere: SessionLog = { ...a, id: 'speed-log', sessionId: 'speed', week: 4 }
+    const elsewhere: SessionLog = { ...a, id: 'hyrox-log', sessionId: 'hyrox-a', week: 4 }
     expect(missingRequired(week, [a, elsewhere])).toBe(true)
   })
 })
