@@ -72,6 +72,8 @@ export interface LiveStation {
   reps: number | null
   /** Per implement, rounded to 5 lb; plates alone on a sled. Null where the Station has no load. */
   pounds: number | null
+  /** The Station target in seconds, where the Prescription has one: the time to beat. */
+  target?: number
 }
 
 export interface LiveBlock {
@@ -314,6 +316,7 @@ function liveStation({ prescription: rx }: Exercise): LiveStation[] {
       meters: rx.meters ?? null,
       reps: rx.reps ?? null,
       pounds: stationPounds(stations[rx.station]),
+      ...(rx.target !== undefined && { target: rx.target }),
     },
   ]
 }

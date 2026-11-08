@@ -1,11 +1,14 @@
 /**
- * What a Session log says happened, in one line: each lift's top set, a HYROX session's round times, the reps held on target,
- * then the time and RPE. The Week page leads a logged Session with it.
+ * What a Session log says happened, in one line: each lift's top set, a HYROX session's round times, the Fade, the reps held
+ * on target, then the time and RPE. The Week page leads a logged Session with it.
  */
 import { trained, type SessionLog, type SetLog } from './log'
 import { clock, fade, runTestResult } from './paces'
 import { LIFT_NAME, SESSION_TYPES } from './program/describe'
 import type { LiftId, SessionType } from './program/types'
+
+/** The Session types whose logs show the Fade after their times; the Compromised run test's shows it beside Race run pace. */
+const FADE_TYPES: readonly SessionType[] = ['hyrox', 'race-simulation']
 
 /** "Squat 185 lb × 5 · 45 min · RPE 7", or null when the log says nothing about this Session's work. */
 export function logSummary(log: SessionLog, type: SessionType): string | null {
@@ -16,6 +19,7 @@ export function logSummary(log: SessionLog, type: SessionType): string | null {
     ...(type === 'compromised-run-test'
       ? testResult(log)
       : [type === 'race-simulation' ? simulationTotal(log, SESSION_TYPES[type].name) : roundTimes(log)]),
+    FADE_TYPES.includes(type) && fadeOf(log),
     repsOnTarget(log),
     log.minutes !== null && `${log.minutes} min`,
     log.rpe !== null && `RPE ${log.rpe}`,
@@ -73,4 +77,10 @@ function repsOnTarget(log: SessionLog): string | null {
   const targeted = log.intervals.filter((rep) => rep.targetPace !== null)
   if (targeted.length === 0) return null
   return `${targeted.filter((rep) => rep.held).length} of ${targeted.length} reps on target`
+}
+
+/** A HYROX session's or a Race simulation's Fade, in words; null under two timed runs. */
+function fadeOf(log: SessionLog): string | null {
+  const seconds = fade(log.stations)
+  return seconds === null ? null : fadeLine(seconds)
 }

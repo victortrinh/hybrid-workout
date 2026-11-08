@@ -4,7 +4,7 @@
  * Given a RunContext with Training paces, runs read as exact treadmill speeds
  * or paces per km; without one they read as effort and RPE. Lifts read as sets and reps until there are Working weights.
  */
-import { runTarget, type RunContext } from '../paces'
+import { clock, runTarget, type RunContext } from '../paces'
 import { prescribedPounds, roundToFive, type WorkingWeights } from '../weights'
 import type {
   Block,
@@ -383,7 +383,7 @@ function prescriptionWords(
     case 'station': {
       const station = stations[rx.station]
       const volume = rx.meters ? km(rx.meters) : rx.reps ? `${rx.reps} reps` : ''
-      return [volume, stationLoad(station)].filter(Boolean).join(' · ')
+      return [volume, stationLoad(station), rx.target !== undefined && `Station target ${clock(rx.target)}`].filter(Boolean).join(' · ')
     }
     case 'drill':
       return rx.sets > 1 ? `${rx.sets} × ${drillAmount(rx)}` : drillAmount(rx)

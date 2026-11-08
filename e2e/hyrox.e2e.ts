@@ -370,3 +370,63 @@ test('half simulation A logs a split for every run and Station, in race order', 
     ],
   })
 })
+
+/** HYROX A done in Weeks 1 and 2 at RPE 6, every Station at Race load and Foundation volume, each run timed. */
+const hyroxA = (week: number, date: string, sled: number, runs: number[]) => ({
+  week,
+  sessionId: 'hyrox-a',
+  date,
+  status: 'done' as const,
+  rpe: 6,
+  stations: [
+    { round: 1, part: 'sled-push', pounds: 335, meters: 25, reps: null, seconds: sled },
+    { round: 2, part: 'sled-pull', pounds: 225, meters: 25, reps: null, seconds: 150 },
+    { round: 3, part: 'farmers-carry', pounds: 55, meters: 100, reps: null, seconds: 60 },
+    { round: 4, part: 'sandbag-lunges', pounds: 45, meters: 25, reps: null, seconds: 90 },
+    ...runs.map((seconds, i) => ({ round: i + 1, part: 'run', pounds: null, meters: 400, reps: null, seconds })),
+  ],
+})
+
+test('each Station shows its Station target on the Session sheet and the round clock; the log shows the Fade', async ({ page }) => {
+  const history = [
+    hyroxA(1, '2026-11-10', 180, [100, 104, 106, 108]),
+    hyroxA(2, '2026-11-17', 170, [100, 104, 108, 112]),
+    ...weekDone(2, ['hyrox-b', 'compromised-run-test', 'strength'], '2026-11-18'),
+  ]
+  await serveHistory(page, caughtUp(2, history))
+  await page.clock.install({ time: aMinuteBefore(WEEK_3) })
+  await page.goto('/')
+  await page.clock.pauseAt(new Date(WEEK_3.getTime() + 1000))
+
+  // Two logs at each volume, both RPE 7 or under: the Station best less 3%, to the second.
+  await page.getByRole('button', { name: 'Show the Prescription' }).click()
+  const sheet = page.getByRole('dialog', { name: /^HYROX A, / })
+  const rounds = sheet.getByRole('listitem').filter({ hasText: /Station target/ })
+  await expect(rounds).toHaveText([
+    /^Sled\spush\s·\s25\sm\s·\s335\slb\splates\s·\sStation\starget\s2:45$/,
+    /^Sled\spull\s·\s25\sm\s·\s225\slb\splates\s·\sStation\starget\s2:26$/,
+    /^Farmers\scarry\s·\s100\sm\s·\s2\s×\s55\slb\s·\sStation\starget\s0:58$/,
+    /^Sandbag\slunges\s·\s25\sm\s·\s45\slb\s·\sStation\starget\s1:27$/,
+  ])
+  await page.keyboard.press('Escape')
+
+  await page.getByRole('button', { name: 'Start HYROX A' }).click()
+  const s = live(page)
+  await s.finished.click()
+  await expect(s.block).toHaveText('Set up · 4 Stations')
+  await s.finished.click()
+  await s.start.click()
+  await expect(s.legs).toHaveText([/^Sled\spush,\snow:\s335\slb\splates\s·\sStation\starget\s2:45$/, /^Run\s·\s400\sm$/])
+  await page.clock.runFor('02:40')
+  await s.finished.click()
+  await expect(s.legs).toHaveText([/^Sled\spush\s·\s25\sm\s·\s335\slb\splates\s·\sStation\starget\s2:45,\sdone\sin\s2:40$/, 'Run, now'])
+  await page.clock.runFor('01:40')
+  await s.finished.click()
+  await s.start.click()
+  await expect(s.legs).toHaveText([/^Sled\spull,\snow:\s225\slb\splates\s·\sStation\starget\s2:26$/, /^Run\s·\s400\sm$/])
+  await scan(page)
+
+  // Week 2's runs went from 250 to 280 s/km: the log says so.
+  await page.goto('/plan/week/2')
+  await expect(page.getByText(/Fade\s\+30\ss\/km/)).toBeVisible()
+})

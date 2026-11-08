@@ -161,9 +161,10 @@ export const RUN_METERS: Record<VolumeTier, Record<Rotation, number>> = {
 }
 
 /**
- * Three rounds drop one Station. Until the Coach picks it from the logs, the
- * one dropped is the middle Station that is least technical: the farmers
- * carry in A, the row in B. Wall balls stay last.
+ * Three rounds drop one Station: the Coach drops the one done best last time
+ * (stations.ts). Until the logs say which, the one dropped is the middle
+ * Station that is least technical: the farmers carry in A, the row in B.
+ * Wall balls stay last.
  */
 const THREE_ROUNDS: Record<Rotation, StationId[]> = {
   A: ['sled-push', 'sled-pull', 'sandbag-lunges'],
@@ -202,6 +203,8 @@ function setUp(ids: StationId[]): Block {
 interface Circuit {
   rotation: Rotation
   ids: StationId[]
+  /** A three-round Session's left-out Station, kept as its spare round. */
+  spare?: StationId
   volume: (id: StationId) => Volume
   runMeters: number
   key?: boolean
@@ -210,8 +213,14 @@ interface Circuit {
 }
 
 /** A round is one Station at its Station volume, then the run: every run a Compromised run. */
-function hyrox({ rotation, ids, volume, runMeters, key = false, minutes = 45, note }: Circuit): Session {
+function hyrox({ rotation, ids, spare, volume, runMeters, key = false, minutes = 45, note }: Circuit): Session {
   const roundMinutes = (minutes - HYROX_WARM_UP.minutes! - HYROX_COOLDOWN.minutes!) / ids.length
+  const round = (id: StationId, i: number): Block => ({
+    name: `Round ${i + 1}`,
+    minutes: roundMinutes,
+    main: true,
+    exercises: [station(id, volume(id)), { name: 'Run', prescription: { kind: 'run', meters: runMeters } }],
+  })
   return {
     id: rotation === 'A' ? 'hyrox-a' : 'hyrox-b',
     type: 'hyrox',
@@ -224,16 +233,10 @@ function hyrox({ rotation, ids, volume, runMeters, key = false, minutes = 45, no
     blocks: [
       HYROX_WARM_UP,
       setUp(ids),
-      ...ids.map(
-        (id, i): Block => ({
-          name: `Round ${i + 1}`,
-          minutes: roundMinutes,
-          main: true,
-          exercises: [station(id, volume(id)), { name: 'Run', prescription: { kind: 'run', meters: runMeters } }],
-        }),
-      ),
+      ...ids.map(round),
       HYROX_COOLDOWN,
     ],
+    ...(spare && { spareRound: round(spare, ids.length) }),
   }
 }
 
@@ -253,6 +256,7 @@ const threeRounds = (rotation: Rotation, tier: VolumeTier, { half = false } = {}
   hyrox({
     rotation,
     ids: THREE_ROUNDS[rotation],
+    spare: ROTATION[rotation].find((id) => !THREE_ROUNDS[rotation].includes(id)),
     volume: half ? halfRaceVolume : (id) => STATION_VOLUME[tier][id],
     runMeters: RUN_METERS[tier][rotation],
     minutes: 36,

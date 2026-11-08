@@ -50,6 +50,14 @@ describe('describeSession', () => {
     expect(describeExercise(intervals, program.stations).detail).toBe('1 × 7′ · Threshold effort, RPE 6–7')
   })
 
+  it('reads a Station with its Station target, once the Coach gives it one', () => {
+    const ski = { name: 'SkiErg', prescription: { kind: 'station' as const, station: 'skierg' as const, meters: 250 } }
+    expect(describeExercise(ski, program.stations).detail).toBe('250 m')
+    expect(describeExercise({ ...ski, prescription: { ...ski.prescription, target: 58 } }, program.stations).detail).toBe(
+      '250 m · Station target 0:58',
+    )
+  })
+
   it('reads Week 1 Strength as calibration and later Weeks as the main lifts', () => {
     expect(session(1, 'strength')).toMatchObject({
       heading: 'Strength, find Working weights',
