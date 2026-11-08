@@ -40,6 +40,22 @@ describe('lighten', () => {
     expect(prescriptions(hyrox).find((rx) => rx.kind === 'run' && rx.meters)).toMatchObject({ meters: 400 })
   })
 
+  it('takes the Station targets off with the volume: a target is for the full volume', () => {
+    const written = session(7, 'hyrox-a')
+    const targeted: Session = {
+      ...written,
+      blocks: written.blocks.map((b) => ({
+        ...b,
+        exercises: b.exercises.map((e) =>
+          e.prescription.kind === 'station' && b.main ? { ...e, prescription: { ...e.prescription, target: 120 } } : e,
+        ),
+      })),
+    }
+    const stationRxs = prescriptions(lighten(targeted, RE_ENTRY_PERCENT)).filter((rx) => rx.kind === 'station')
+    expect(stationRxs.length).toBeGreaterThan(0)
+    for (const rx of stationRxs) expect(rx).not.toHaveProperty('target')
+  })
+
   it('leaves a Compromised run test and the race whole', () => {
     expect(lighten(session(9, 'compromised-run-test'), RE_ENTRY_PERCENT)).toBe(session(9, 'compromised-run-test'))
     expect(lighten(session(24, 'race'), RE_ENTRY_PERCENT)).toBe(session(24, 'race'))

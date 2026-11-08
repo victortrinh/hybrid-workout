@@ -639,3 +639,57 @@ test('with no Training paces, the jog suggestion is the jog logged last time', a
   await expect(s.target).toHaveText('6.0')
   await expect(page.locator('header')).toContainText('10:00/km')
 })
+
+/** HYROX B at Foundation volume and Race load, RPE 8: every Station slower than its best but the wall balls. */
+const hyroxB = (week: number, date: string, seconds: [ski: number, jumps: number, row: number, balls: number]) => ({
+  week,
+  sessionId: 'hyrox-b',
+  date,
+  status: 'done' as const,
+  rpe: 8,
+  stations: (
+    [
+      ['skierg', null, 250, null],
+      ['burpee-broad-jumps', null, 20, null],
+      ['row', null, 250, null],
+      ['wall-balls', 13, null, 25],
+    ] as const
+  ).map(([part, pounds, meters, reps], i) => ({ round: i + 1, part, pounds, meters, reps, seconds: seconds[i] })),
+})
+
+test('a Deload HYROX session runs three rounds without the Station done best last time, and no Station targets', async ({ page }) => {
+  // Wednesday of Week 5, a Deload week: the wall balls matched their best in Week 4, every other Station came in slower.
+  const wednesday = new Date('2026-12-09T12:00:00-05:00')
+  const history = caughtUp(4, [hyroxB(3, '2026-11-25', [58, 48, 52, 72]), hyroxB(4, '2026-12-02', [62, 50, 56, 70])])
+  await serveHistory(page, history)
+  await page.clock.install({ time: aMinuteBefore(wednesday) })
+  await page.goto('/')
+  await doToday(page, bucketRow(page, /^HYROX B/))
+  await page.clock.pauseAt(new Date(wednesday.getTime() + 1000))
+  await page.getByRole('button', { name: 'Show the Prescription' }).click()
+  const sheet = page.getByRole('dialog', { name: /^HYROX B, / })
+  await expect(sheet.getByRole('heading', { level: 3 })).toHaveText([/^Warm-up/, /^Round 1/, /^Round 2/, /^Round 3/, /^Cooldown/])
+  await expect(sheet.getByRole('listitem').filter({ hasNotText: /^(Run|Easy jog|Walk)/ })).toHaveText([
+    /^SkiErg\s·\s250\sm$/,
+    /^Burpee broad jumps\s·\s20\sm$/,
+    /^Row\s·\s250\sm$/,
+  ])
+  await expect(sheet.getByText(/Station target/)).toHaveCount(0)
+  await page.keyboard.press('Escape')
+
+  await page.getByRole('button', { name: 'Start HYROX B' }).click()
+  await expect(page).toHaveURL('/live')
+  const s = live(page)
+  // Nothing left to load without the wall balls: no Set up.
+  await expect(page.getByRole('list', { name: 'Blocks' }).getByRole('listitem')).toHaveText([
+    /^Warm-up/,
+    /^Round 1 of 3/,
+    /^Round 2 of 3/,
+    /^Round 3 of 3/,
+    /^Cooldown/,
+  ])
+  await s.skip.click()
+  await expect(s.block).toHaveText(/^Ready\?\sUp\snext:\sRound\s1\sof\s3\s·\s250\sm\sSkiErg$/)
+  await s.start.click()
+  await expect(page.locator('header')).not.toContainText('Station target')
+})

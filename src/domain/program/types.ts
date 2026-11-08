@@ -72,6 +72,11 @@ export interface Session {
   /** Instruction for the whole Session: "Not all-out", "Only if fresh". */
   note?: string
   blocks: Block[]
+  /**
+   * A three-round HYROX session's left-out round, the fourth Station of its
+   * rotation. The Coach swaps it back in for the Station done best last time.
+   */
+  spareRound?: Block
 }
 
 export interface Block {
@@ -131,8 +136,11 @@ export type Prescription =
       /** A ceiling rather than a target: Deload sets stay at or under it. */
       rpeCap?: number
     }
-  /** One Station at its Station volume, always at Race load. */
-  | { kind: 'station'; station: StationId; meters?: number; reps?: number }
+  /**
+   * One Station at its Station volume, always at Race load. `target` is its
+   * Station target in seconds, which the Coach adds from the Station logs.
+   */
+  | { kind: 'station'; station: StationId; meters?: number; reps?: number; target?: number }
   /** A warm-up drill, counted rather than timed: "A-skips 2 × 20 m", "Leg swings 10 / leg". */
   | { kind: 'drill'; sets: number; reps?: number; meters?: number; perLeg?: boolean }
   /** Sprints on a bike or a sled, as many as the Exercise they replace. */

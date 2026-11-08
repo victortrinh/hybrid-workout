@@ -39,6 +39,7 @@ import {
   type SuggestionDecision,
 } from './suggestion'
 import { startingWeights, type StartingPoint } from './startingPoint'
+import { stationRules } from './stations'
 import { strengthState, type HeldIncrease, type LighterSpan, type WorkingWeightChange, type WorkingWeights } from './weights'
 
 export interface CoachInput {
@@ -265,7 +266,7 @@ export function coach({
       : []),
     ...(position.kind === 'in-week' ? strength.suggestions : []),
   ]
-  const week = planned && adapt(planned, suggestions, logs, equipment)
+  const week = planned && adapt(program, planned, suggestions, logs, equipment)
 
   const painNow = acceptedPain(suggestions)
   const logged: Logged[] = [
@@ -385,7 +386,7 @@ function lateSessions(
         return !log || log.date === today
       })
       if (late.length === 0) return []
-      const prescribed = adapt(week, suggestionsFor(program, week, logs, decisions, null, today), logs, equipment)
+      const prescribed = adapt(program, week, suggestionsFor(program, week, logs, decisions, null, today), logs, equipment)
       return late.map((session) => ({
         session: prescribed.sessions.find((s) => s.id === session.id) ?? equip(session, equipment),
         week: week.number,
@@ -941,11 +942,11 @@ function reEntryFor(
 }
 
 /**
- * The Week with every accepted Suggestion applied, as it's done in this gym.
- * The pain rules change only what is still open: a Session logged before the
- * pain stays as it was.
+ * The Week with its Station rules and every accepted Suggestion applied, as
+ * it's done in this gym. The pain rules change only what is still open: a
+ * Session logged before the pain stays as it was.
  */
-function adapt(week: Week, suggestions: Suggestion[], logs: SessionLog[], equipment: readonly Equipment[]): Week {
+function adapt(program: Program, week: Week, suggestions: Suggestion[], logs: SessionLog[], equipment: readonly Equipment[]): Week {
   return equipWeek(
     suggestions.reduce((adapted, s) => {
       if (s.decision !== 'accepted' || s.week !== adapted.number) return adapted
@@ -974,7 +975,7 @@ function adapt(week: Week, suggestions: Suggestion[], logs: SessionLog[], equipm
           // Today's Up next only: the Coach applies it once Up next is chosen.
           return adapted
       }
-    }, week),
+    }, stationRules(program, week, logs)),
     equipment,
   )
 }
@@ -995,5 +996,5 @@ export function prescribedWeek(
 ): Week | null {
   const listed = findWeek(program, number)
   const week = listed && offeredSessions(program, listed, logs)
-  return week && adapt(week, suggestionsFor(program, week, logs, decisions, readiness, readiness?.today ?? null), logs, equipment)
+  return week && adapt(program, week, suggestionsFor(program, week, logs, decisions, readiness, readiness?.today ?? null), logs, equipment)
 }
