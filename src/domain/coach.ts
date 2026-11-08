@@ -906,12 +906,7 @@ export function prescribedWeek(
   equipment: readonly Equipment[] = DEFAULT_EQUIPMENT,
   pain: PainInput | null = null,
 ): Week | null {
-<<<<<<< HEAD
-  const week = findWeek(program, number)
-  return week && adapt(program, week, suggestionsFor(program, week, logs, decisions, pain, pain?.today ?? null), logs, equipment)
-=======
   const listed = findWeek(program, number)
   const week = listed && offeredSessions(program, listed, logs)
-  return week && adapt(week, suggestionsFor(program, week, logs, decisions, pain, pain?.today ?? null), logs, equipment)
->>>>>>> origin/main
+  return week && adapt(program, week, suggestionsFor(program, week, logs, decisions, pain, pain?.today ?? null), logs, equipment)
 }
