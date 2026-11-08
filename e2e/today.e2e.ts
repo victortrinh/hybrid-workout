@@ -138,3 +138,72 @@ test('taps past a rest the spacing rules only suggest, for today', async ({ page
   await expect(upNext).toHaveText(/^HYROX B/)
   expect(sent).toEqual([])
 })
+
+test('suggests resting the Run the day after Strength, and taps past it', async ({ page }) => {
+  // Week 3: HYROX A Monday, HYROX B Wednesday, Strength Saturday. Sunday, only the Run is left.
+  await serveHistory(
+    page,
+    caughtUp(1, [
+      ...weekDone(2, WEEK_2, '2026-11-16'),
+      { week: 3, sessionId: 'hyrox-a', date: '2026-11-23', status: 'done' },
+      { week: 3, sessionId: 'hyrox-b', date: '2026-11-25', status: 'done' },
+      { week: 3, sessionId: 'strength', date: '2026-11-28', status: 'done' },
+    ]),
+  )
+  await page.clock.setFixedTime(new Date('2026-11-29T12:00:00-05:00'))
+  await page.goto('/')
+
+  const upNext = page.getByRole('heading', { level: 1 })
+  await expect(upNext).toHaveText('Rest suggested.')
+  await expect(page.getByText('The Run on legs that just lifted? Better tomorrow. Your call.')).toBeVisible()
+  await expect(page.getByText('Run if you go anyway')).toBeVisible()
+  await page.getByRole('button', { name: 'Do it anyway' }).click()
+  await expect(upNext).toHaveText(/^Run/)
+})
+
+test('puts the Run the day after HYROX', async ({ page }) => {
+  // Week 3: HYROX A Monday, HYROX B Thursday. Friday, the Run and Strength are left in three days.
+  await serveHistory(
+    page,
+    caughtUp(1, [
+      ...weekDone(2, WEEK_2, '2026-11-16'),
+      { week: 3, sessionId: 'hyrox-a', date: '2026-11-23', status: 'done' },
+      { week: 3, sessionId: 'hyrox-b', date: '2026-11-26', status: 'done' },
+    ]),
+  )
+  await page.clock.setFixedTime(new Date('2026-11-27T12:00:00-05:00'))
+  await page.goto('/')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^Run/)
+})
+
+test('offers a second Easy run in Build after a fully Done Week', async ({ page }) => {
+  const WEEK_6 = ['hyrox-a', 'hyrox-b', 'run', 'strength']
+  const week7Monday = new Date('2026-12-21T12:00:00-05:00')
+  const bucket = page.getByRole('list').filter({ hasText: 'Easy run' })
+
+  // Week 6 all Done: Week 7's Bucket holds both Easy runs, the second Optional too.
+  await serveHistory(page, caughtUp(5, weekDone(6, WEEK_6, '2026-12-14')))
+  await page.clock.setFixedTime(week7Monday)
+  await page.goto('/')
+  await expect(bucket.getByRole('listitem')).toHaveText([
+    /^HYROX A/,
+    /^HYROX B/,
+    /^Run/,
+    /^Strength/,
+    /^Easy run.*Optional$/,
+    /^Second Easy run.*Optional$/,
+  ])
+})
+
+test('keeps to one Easy run after a Week with a required Session not Done', async ({ page }) => {
+  const logs = [
+    ...weekDone(6, ['hyrox-a', 'hyrox-b', 'run'], '2026-12-14'),
+    { week: 6, sessionId: 'strength', date: '2026-12-17', status: 'swapped' as const },
+  ]
+  await serveHistory(page, caughtUp(5, logs))
+  await page.clock.setFixedTime(new Date('2026-12-21T12:00:00-05:00'))
+  await page.goto('/')
+  const bucket = page.getByRole('list').filter({ hasText: 'Easy run' })
+  await expect(bucket.getByRole('listitem')).toHaveCount(5)
+  await expect(page.getByText('Second Easy run')).toHaveCount(0)
+})

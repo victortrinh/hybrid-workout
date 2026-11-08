@@ -1,6 +1,6 @@
 /**
  * What the Station logs say: each Station's Station best and Station target,
- * a Session's Fade, and which Station a three-round HYROX session drops.
+ * and which Station a three-round HYROX session drops. The Fade is paces.ts's.
  *
  * Pure like the Coach (ADR-0002). Progression is Station volume first, then
  * time: the Station target asks for the Station best again, or about 3% under
@@ -70,20 +70,6 @@ export function stationTarget(logs: readonly SessionLog[], id: StationId, volume
   const best = Math.min(...timed.map(({ line }) => line.seconds!))
   const easy = timed.slice(-LOGS_FOR_TARGET).every(({ log }) => log.rpe !== null && log.rpe <= EASY_ENOUGH_RPE)
   return easy ? Math.round(best * TARGET_SHARE) : best
-}
-
-/**
- * How much slower the last run was than the first, in seconds per km:
- * positive when the running faded, negative when it got quicker. Null
- * without two timed runs of a known distance.
- */
-export function fade(log: SessionLog): number | null {
-  const runs = log.stations
-    .filter((l) => l.part === 'run' && l.seconds !== null && l.meters !== null && l.meters > 0)
-    .toSorted((a, b) => a.round - b.round)
-  if (runs.length < 2) return null
-  const pace = (l: StationLog) => l.seconds! / (l.meters! / 1000)
-  return Math.round(pace(runs[runs.length - 1]) - pace(runs[0]))
 }
 
 /**

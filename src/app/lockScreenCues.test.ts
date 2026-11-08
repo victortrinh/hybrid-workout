@@ -39,7 +39,7 @@ describe('cuesFor a run', () => {
 
   it('puts the target on the title in the screen’s wording: both units indoors, pace per km outdoors', () => {
     const started = resume(advance(run('run'), at(600)), at(600))
-    const paces = trainingPaces(21 * 60)
+    const paces = trainingPaces(282)
     const [, rep] = cuesFor(started, { paces, unit: 'kmh', environment: 'indoor' })
     expect(rep.title).toMatch(/^Rep 2 of 3 · \d+\.\d km\/h · \d:\d\d\/km · 1% incline$/)
     const outdoors = startRun({ week: 3, session: session(3, 'run'), date: localDate('2026-11-11'), environment: 'outdoor' }, T0)

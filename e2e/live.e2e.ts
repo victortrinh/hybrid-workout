@@ -15,13 +15,13 @@ const HISTORY = caughtUp(2)
 
 /**
  * A Starting point with a 23:00 estimate on this device: Training paces from
- * it, so Threshold is 12.3 km/h (4:52/km) and the jogs 8.8 km/h.
+ * it, so Threshold is 12.3 km/h (4:52/km) and the jogs 8.6 km/h.
  */
 async function withEstimate(page: Page) {
   await page.addInitScript(() =>
     localStorage.setItem(
       'compromised:starting-point',
-      JSON.stringify({ point: { fiveKSeconds: 1380, weights: {}, updatedAt: '2026-01-02T00:00:00.000Z' }, pending: false }),
+      JSON.stringify({ point: { splitSeconds: 307, weights: {}, updatedAt: '2026-01-02T00:00:00.000Z' }, pending: false }),
     ),
   )
 }
@@ -133,7 +133,7 @@ test('a full Threshold Run from Start to logged', async ({ page }) => {
   await page.clock.runFor('07:30')
   await expect(s.block).toHaveText('Jog · 90 s')
   // The jog suggests a speed under Easy pace, and walking is fine.
-  await expect(s.target).toHaveText('8.8')
+  await expect(s.target).toHaveText('8.6')
   await expect(s.line).toHaveText('Jog or walk. Breathe. Pretend this is easy.')
   const check = page.getByRole('region', { name: 'Rep 1 of 3: held the target?' })
   await expect(check).toContainText('Rep 1 of 3: held 12.3 km/h?')
@@ -372,6 +372,59 @@ test('a Compromised run test Live session logs every run and Station split', asy
       { round: 4, part: 'wall-balls', reps: 50, pounds: 13, seconds: 150 },
     ],
   })
+
+  // The four runs average 4:23/km: Race run pace from today on, over any estimate. The log shows the Fade.
+  await page.goto('/plan/week/2')
+  await expect(page.getByText('Paces from your Compromised run test: Race run pace 4:23/km')).toBeVisible()
+  await expect(page.getByText(/Race run pace 4:23\/km\s·\sFade \+25\ss\/km\s·\s\d+\smin\s·\sRPE\s9/)).toBeVisible()
+})
+
+test('a Compromised run test logged after takes its four run splits and Station times', async ({ page }) => {
+  const thursday = new Date('2026-11-19T12:00:00-05:00')
+  const sent = await serveHistory(page, weekDone(1, ['hyrox-a', 'hyrox-b', 'run', 'strength'], '2026-11-10'))
+  await page.clock.setFixedTime(thursday)
+  await page.goto('/log/2/compromised-run-test')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^Compromised run test, baseline/)
+  await page.getByRole('radio', { name: 'Wed 18 November' }).check({ force: true })
+
+  // Done needs all four runs: their average is Race run pace.
+  const run = (n: number) => page.getByRole('textbox', { name: `Run ${n}, 1 km` })
+  await run(1).fill('458')
+  await expect(run(1)).toHaveValue('4:58')
+  await page.getByRole('button', { name: 'Save log' }).click()
+  await expect(page.getByText('All four run splits first: their average sets Race run pace.')).toBeVisible()
+  await run(2).fill('504')
+  await run(3).fill('509')
+  await run(4).fill('1')
+  await page.getByRole('button', { name: 'Save log' }).click()
+  await expect(page.getByText('Minutes and seconds, like 4:55.')).toBeVisible()
+  await run(4).fill('517')
+  await page.getByRole('textbox', { name: 'SkiErg' }).fill('158')
+  await page.getByRole('textbox', { name: 'Wall balls' }).fill('250')
+  await page.getByRole('radio', { name: '9', exact: true }).check({ force: true })
+  await expectNoAxeViolations(page)
+  await page.getByRole('button', { name: 'Save log' }).click()
+  await expect(page).not.toHaveURL(/\/log\//)
+
+  await expect.poll(() => sent.at(-1)).toMatchObject({
+    week: 2,
+    sessionId: 'compromised-run-test',
+    date: '2026-11-18',
+    status: 'done',
+    stations: [
+      { round: 1, part: 'run', meters: 1000, seconds: 298 },
+      { round: 1, part: 'skierg', meters: 500, seconds: 118 },
+      { round: 2, part: 'run', meters: 1000, seconds: 304 },
+      { round: 2, part: 'sled-push', meters: 25, pounds: 335, seconds: null },
+      { round: 3, part: 'run', meters: 1000, seconds: 309 },
+      { round: 3, part: 'row', meters: 500, seconds: null },
+      { round: 4, part: 'run', meters: 1000, seconds: 317 },
+      { round: 4, part: 'wall-balls', reps: 50, pounds: 13, seconds: 170 },
+    ],
+  })
+  await page.goto('/plan/week/2')
+  await expect(page.getByText('Paces from your Compromised run test: Race run pace 5:07/km')).toBeVisible()
+  await expect(page.getByText(/Race run pace 5:07\/km\s·\sFade \+19\ss\/km/)).toBeVisible()
 })
 
 test('Done, Start, Undo, going back, and a Partial flipped to Done', async ({ page }) => {
@@ -489,7 +542,7 @@ test('on its side, a Threshold rep: the target and the clock on the field, the r
 
   // The rep over: Held it or Changed, beside the jog's target.
   await s.skip.click()
-  await expect(s.target).toHaveText('8.8')
+  await expect(s.target).toHaveText('8.6')
   const check = page.getByRole('region', { name: 'Rep 1 of 3: held the target?' })
   await check.getByRole('button', { name: 'Changed' }).click()
   const actual = check.getByRole('textbox', { name: 'Actual speed, km/h' })

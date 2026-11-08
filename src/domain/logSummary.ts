@@ -3,12 +3,11 @@
  * on target, then the time and RPE. The Week page leads a logged Session with it.
  */
 import { trained, type SessionLog, type SetLog } from './log'
-import { clock } from './paces'
+import { clock, fade, runTestResult } from './paces'
 import { LIFT_NAME, SESSION_TYPES } from './program/describe'
 import type { LiftId, SessionType } from './program/types'
-import { fade } from './stations'
 
-/** The Session types whose logs show the Fade here; the Compromised run test's line shows its own beside Race run pace. */
+/** The Session types whose logs show the Fade after their times; the Compromised run test's shows it beside Race run pace. */
 const FADE_TYPES: readonly SessionType[] = ['hyrox', 'race-simulation']
 
 /** "Squat 185 lb × 5 · 45 min · RPE 7", or null when the log says nothing about this Session's work. */
@@ -17,8 +16,10 @@ export function logSummary(log: SessionLog, type: SessionType): string | null {
   if (!trained(log)) return null
   const parts = [
     topSets(log.sets),
-    type === 'race-simulation' || type === 'compromised-run-test' ? simulationTotal(log, SESSION_TYPES[type].name) : roundTimes(log),
-    FADE_TYPES.includes(type) && fadeWords(log),
+    ...(type === 'compromised-run-test'
+      ? testResult(log)
+      : [type === 'race-simulation' ? simulationTotal(log, SESSION_TYPES[type].name) : roundTimes(log)]),
+    FADE_TYPES.includes(type) && fadeOf(log),
     repsOnTarget(log),
     log.minutes !== null && `${log.minutes} min`,
     log.rpe !== null && `RPE ${log.rpe}`,
@@ -58,6 +59,19 @@ function simulationTotal(log: SessionLog, name: string): string | null {
   return `${name}, ${hours > 0 ? `${hours}:${rest.padStart(5, '0')}` : rest}`
 }
 
+/** "Race run pace 5:02/km · Fade +23 s/km": what a Compromised run test sets, and how the runs held up. */
+function testResult(log: SessionLog): (string | null)[] {
+  const result = runTestResult(log)
+  const runs = fade(log.stations)
+  const parts = [result && `Race run pace ${clock(result.raceRun)}/km`, runs !== null && fadeLine(runs)]
+  return parts.some(Boolean) ? parts.map((p) => p || null) : [simulationTotal(log, SESSION_TYPES['compromised-run-test'].name)]
+}
+
+/** "Fade +23 s/km", "Fade −6 s/km": the last run's pace less the first's. */
+export function fadeLine(seconds: number): string {
+  return `Fade ${seconds > 0 ? '+' : seconds < 0 ? '−' : ''}${Math.abs(seconds)} s/km`
+}
+
 /** Only reps run against a target pace count: RPE-only reps have nothing to hold. */
 function repsOnTarget(log: SessionLog): string | null {
   const targeted = log.intervals.filter((rep) => rep.targetPace !== null)
@@ -65,9 +79,8 @@ function repsOnTarget(log: SessionLog): string | null {
   return `${targeted.filter((rep) => rep.held).length} of ${targeted.length} reps on target`
 }
 
-/** "Fade +12 s/km": how much slower the last run was than the first. */
-export function fadeWords(log: SessionLog): string | null {
-  const seconds = fade(log)
-  if (seconds === null) return null
-  return `Fade ${seconds > 0 ? '+' : seconds < 0 ? '−' : ''}${Math.abs(seconds)} s/km`
+/** A HYROX session's or a Race simulation's Fade, in words; null under two timed runs. */
+function fadeOf(log: SessionLog): string | null {
+  const seconds = fade(log.stations)
+  return seconds === null ? null : fadeLine(seconds)
 }

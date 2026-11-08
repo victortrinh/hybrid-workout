@@ -5,7 +5,7 @@ import type { CoachDay } from '../../domain/coach'
 import { isLive, type LiveSession } from '../../domain/lifts'
 import { logFor, missingRequired, trained, type SessionLog } from '../../domain/log'
 import { logSummary } from '../../domain/logSummary'
-import type { Environment, RunContext } from '../../domain/paces'
+import { clock, type Environment, type RunContext } from '../../domain/paces'
 import { describeSession, SESSION_TYPES } from '../../domain/program/describe'
 import type { Program, Session, Week } from '../../domain/program/types'
 import type { PainReport } from '../../domain/pain'
@@ -101,9 +101,11 @@ export function WeekScreen({
       {when && <p className="mt-4 text-body">{nb(outsideWeekLine(when, week.number, week.startDate, sunday))}</p>}
 
       <p className="mt-1.5 text-body-quiet text-muted">
-        {day.paces
-          ? 'Estimated paces from your Starting point'
-          : 'Runs go by RPE until there are Training paces'}
+        {!day.paces
+          ? 'Runs go by RPE until there are Training paces'
+          : day.paces.estimate
+            ? 'Estimated paces from your Starting point'
+            : `Paces from your Compromised run test: Race run pace ${clock(day.paces.raceRun)}/km`}
       </p>
 
       {week.notes && (

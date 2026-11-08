@@ -1,6 +1,6 @@
 import { useId, useState, type FormEvent, type ReactNode } from 'react'
 import { Button, FieldError, Form, Input, Label, Text, TextField } from 'react-aria-components'
-import { clock, clockInput, FIVE_K_SECONDS, parseClock } from '../../domain/paces'
+import { clock, clockInput, parseClock, SPLIT_SECONDS } from '../../domain/paces'
 import {
   ESTIMATE_POUNDS,
   ESTIMATED_LIFT_LABEL,
@@ -13,7 +13,7 @@ import {
 type Estimates = Omit<StartingPoint, 'updatedAt'>
 
 export interface StartingFields {
-  fiveK: StartingField
+  split: StartingField
   lifts: Record<EstimatedLift, StartingField>
 }
 
@@ -23,13 +23,13 @@ const inputClass =
 const primaryClass =
   'min-h-[54px] cursor-pointer rounded-sm bg-cobalt px-5 text-[17px] font-bold text-on-cobalt hover:bg-cobalt-hover data-focus-visible:outline-3 data-focus-visible:outline-offset-2 data-focus-visible:outline-link'
 
-/** An estimated 5K time as typed: empty skips it, otherwise mm:ss within what a 5K takes. */
-export function validateEstimatedTime(text: string): string | null {
+/** An estimated 1 km split as typed: empty skips it, otherwise m:ss within what a km between Stations takes. */
+export function validateEstimatedSplit(text: string): string | null {
   if (text.trim() === '') return null
   const seconds = parseClock(text)
-  if (seconds === null) return 'Minutes and seconds, like 21:00. That isn’t a time.'
-  const [low, high] = FIVE_K_SECONDS
-  if (seconds < low || seconds > high) return `A 5 km time between ${clock(low)} and ${clock(high)}.`
+  if (seconds === null) return 'Minutes and seconds, like 5:30. That isn’t a time.'
+  const [low, high] = SPLIT_SECONDS
+  if (seconds < low || seconds > high) return `A 1 km split between ${clock(low)} and ${clock(high)}.`
   return null
 }
 
@@ -44,7 +44,7 @@ export function validatePounds(text: string): string | null {
 
 /**
  * The Starting point's fields, at first launch and in Settings: an estimated
- * 5K time and estimated Working weights, each optional. A field a real result
+ * 1 km split between Stations and estimated Working weights, each optional. A field a real result
  * has replaced shows that result, read-only.
  */
 export function StartingPointFields({
@@ -62,7 +62,7 @@ export function StartingPointFields({
   /** Beside the save button: Skip at first launch. */
   children?: ReactNode
 }) {
-  const [time, setTime] = useState(fields.fiveK.real || fields.fiveK.value === null ? '' : clock(fields.fiveK.value))
+  const [time, setTime] = useState(fields.split.real || fields.split.value === null ? '' : clock(fields.split.value))
   const [pounds, setPounds] = useState<Record<EstimatedLift, string>>(
     () =>
       Object.fromEntries(
@@ -77,32 +77,32 @@ export function StartingPointFields({
   const label = compact ? 'block text-[15px] font-bold' : 'block text-[17px] font-bold'
   const heading = compact ? 'text-label text-muted' : 'text-title-sm'
   const hint = `${compact ? 'text-[12px]' : 'text-body-quiet'} text-muted`
-  const editable = !fields.fiveK.real || ESTIMATED_LIFTS.some((l) => !fields.lifts[l].real)
+  const editable = !fields.split.real || ESTIMATED_LIFTS.some((l) => !fields.lifts[l].real)
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (validateEstimatedTime(time) || ESTIMATED_LIFTS.some((l) => validatePounds(pounds[l]))) return
+    if (validateEstimatedSplit(time) || ESTIMATED_LIFTS.some((l) => validatePounds(pounds[l]))) return
     // A field a real result replaced has no estimate left to keep: the real result stands.
     const weights: Estimates['weights'] = {}
     for (const lift of ESTIMATED_LIFTS) {
       const text = pounds[lift].trim()
       if (!fields.lifts[lift].real && text !== '') weights[lift] = Number(text)
     }
-    onSave({ fiveKSeconds: fields.fiveK.real ? null : parseClock(time), weights })
+    onSave({ splitSeconds: fields.split.real ? null : parseClock(time), weights })
     setSaved(true)
   }
 
   return (
     <Form onSubmit={submit} className={compact ? 'grid gap-3' : 'grid gap-7'}>
-      <section aria-labelledby={`${id}-5k`} className="grid gap-2">
-        <h2 id={`${id}-5k`} className={heading}>
-          Estimated 5K time
+      <section aria-labelledby={`${id}-split`} className="grid gap-2">
+        <h2 id={`${id}-split`} className={heading}>
+          {fields.split.real ? 'Race run pace' : 'Estimated split between Stations'}
         </h2>
-        {fields.fiveK.real ? (
+        {fields.split.real ? (
           <ReadOnly
-            label="5 km time"
-            value={clock(fields.fiveK.value!)}
-            note="From your 5K test: it sets the Training paces now."
+            label="Race run pace, per km"
+            value={clock(fields.split.value!)}
+            note="From your Compromised run test: it sets the Training paces now."
             hint={hint}
             labelClass={label}
           />
@@ -113,22 +113,22 @@ export function StartingPointFields({
               setTime(clockInput(text))
               setSaved(false)
             }}
-            validate={validateEstimatedTime}
+            validate={validateEstimatedSplit}
             validationBehavior="aria"
             inputMode="numeric"
             className="grid gap-2"
           >
             {({ isInvalid }) => (
               <>
-                <Label className={label}>5 km time</Label>
-                <Input placeholder="mm:ss" autoComplete="off" className={`${inputClass} w-32`} />
+                <Label className={label}>1 km split</Label>
+                <Input placeholder="m:ss" autoComplete="off" className={`${inputClass} w-32`} />
                 {isInvalid ? (
                   <FieldError className="text-body-quiet font-bold text-ink" />
                 ) : (
                   <Text slot="description" className={hint}>
                     {compact
-                      ? 'Estimated Training paces until your first 5K test.'
-                      : 'Your best guess today. It sets estimated Training paces until the first 5K test replaces them. Leave it empty to run by RPE.'}
+                      ? 'Estimated Training paces until your first Compromised run test.'
+                      : 'Your best guess at a hard 1 km run between Stations. It sets estimated Training paces until the first Compromised run test replaces them. Leave it empty to run by RPE.'}
                   </Text>
                 )}
               </>

@@ -125,8 +125,12 @@ describe('Program invariants', () => {
     for (const week of weeks.filter((w) => !w.race)) {
       const lanes = week.sessions.map((s) => SESSION_TYPES[s.type].lane)
       const run = week.compromisedRunTest ? 'test' : 'run'
-      expect({ week: week.number, lanes }).toEqual({ week: week.number, lanes: ['hyrox', 'hyrox', run, 'strength', 'easy'] })
-      expect(week.sessions.map((s) => s.optional)).toEqual([false, false, false, false, true])
+      // Build and Race specific also hold the second Easy run, offered after a fully Done Week.
+      const second = week.number >= 6 && week.number <= 21
+      const easy = second ? ['easy', 'easy'] : ['easy']
+      expect({ week: week.number, lanes }).toEqual({ week: week.number, lanes: ['hyrox', 'hyrox', run, 'strength', ...easy] })
+      expect(week.sessions.map((s) => s.optional)).toEqual([false, false, false, false, ...easy.map(() => true)])
+      expect(week.sessions.map((s) => !!s.afterFullWeek)).toEqual([false, false, false, false, false, ...(second ? [true] : [])])
       if (!week.raceSimulation) expect(week.sessions.slice(0, 2).map((s) => s.name)).toEqual(['HYROX A', 'HYROX B'])
     }
   })
@@ -137,6 +141,16 @@ describe('Program invariants', () => {
       else expect({ id: s.id, minutes: s.minutes <= 45 }).toEqual({ id: s.id, minutes: true })
       const timed = s.blocks.filter((b) => !b.setup && b.minutes !== undefined).reduce((sum, b) => sum + b.minutes!, 0)
       expect(timed).toBeLessThanOrEqual(s.minutes + 0.001)
+    }
+  })
+
+  it('makes the second Easy run 25 to 30 minutes, never Key', () => {
+    const seconds = weeks.flatMap((w) => w.sessions).filter((s) => s.afterFullWeek)
+    expect(seconds).toHaveLength(16)
+    for (const s of seconds) {
+      expect(s).toMatchObject({ id: 'easy-2', type: 'easy', optional: true, key: false, headline: '25–30′' })
+      expect(s.minutes).toBeGreaterThanOrEqual(25)
+      expect(s.minutes).toBeLessThanOrEqual(30)
     }
   })
 

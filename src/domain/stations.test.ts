@@ -6,7 +6,7 @@ import type { SessionLog, StationLog } from './log'
 import { stationPounds } from './program/describe'
 import { program, stations } from './program/program'
 import type { Session, StationId, Week } from './program/types'
-import { fade, stationBest, stationRules, stationTarget } from './stations'
+import { stationBest, stationRules, stationTarget } from './stations'
 
 let n = 0
 const log = (week: number, sessionId: string, date: string, rpe: number | null, lines: StationLog[]): SessionLog => ({
@@ -42,15 +42,6 @@ const at = (
   pounds,
   meters: volume.meters ?? null,
   reps: volume.reps ?? null,
-  seconds,
-})
-
-const run = (round: number, meters: number, seconds: number | null): StationLog => ({
-  round,
-  part: 'run',
-  pounds: null,
-  meters,
-  reps: null,
   seconds,
 })
 
@@ -110,22 +101,6 @@ describe('Station target', () => {
       log(3, 'hyrox-b', '2026-11-24', 8, [at('skierg', 61, SKI)]),
     ]
     expect(stationTarget(logs, 'skierg', SKI)).toBe(60)
-  })
-})
-
-describe('Fade', () => {
-  it('is the last run’s pace minus the first’s, in seconds per km', () => {
-    const lines = [run(1, 400, 100), at('skierg', 60, SKI), run(2, 400, 104), run(3, 400, 106), run(4, 400, 108)]
-    // 250 s/km, then 270 s/km.
-    expect(fade(log(1, 'hyrox-b', '2026-11-10', 8, lines))).toBe(20)
-  })
-
-  it('reads a run that got faster as a negative Fade', () => {
-    expect(fade(log(16, 'race-simulation', '2027-02-24', 8, [run(1, 1000, 300), run(2, 1000, 290)]))).toBe(-10)
-  })
-
-  it('needs two timed runs', () => {
-    expect(fade(log(1, 'hyrox-b', '2026-11-10', 8, [run(1, 400, 100), run(2, 400, null)]))).toBeNull()
   })
 })
 

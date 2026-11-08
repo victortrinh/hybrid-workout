@@ -35,7 +35,7 @@ export default defineConfig({
             {
               name: 'compromised:starting-point',
               value: JSON.stringify({
-                point: { fiveKSeconds: null, weights: {}, updatedAt: '2026-01-01T00:00:00.000Z' },
+                point: { splitSeconds: null, weights: {}, updatedAt: '2026-01-01T00:00:00.000Z' },
                 pending: false,
               }),
             },
