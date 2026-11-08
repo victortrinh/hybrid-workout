@@ -67,6 +67,17 @@ describe('logSummary', () => {
     expect(summary('race-simulation', { stations, rpe: 8 })).toBe('Race simulation, 1:04:05 · RPE 8')
   })
 
+  it('shows the Fade on HYROX, Race simulation and Compromised run test logs', () => {
+    const run = (round: number, meters: number, seconds: number): StationLog => ({ ...station(round, 'run', seconds), meters })
+    const runs = [station(1, 'round', 200), run(1, 400, 100), station(2, 'round', 210), run(2, 400, 108)]
+    expect(summary('hyrox', { stations: runs })).toBe('Rounds 3:20, 3:30 · Fade +20 s/km')
+    const quicker = [run(1, 1000, 300), run(2, 1000, 290)]
+    expect(summary('race-simulation', { stations: quicker })).toBe('Race simulation, 9:50 · Fade −10 s/km')
+    expect(summary('compromised-run-test', { stations: [run(1, 1000, 300), run(2, 1000, 300)] })).toBe(
+      'Compromised run test, 10:00 · Fade 0 s/km',
+    )
+  })
+
   it('counts the reps held on target in a Live run', () => {
     const intervals = [
       { block: 1, rep: 1, targetPace: 292, held: true, actualPace: null },

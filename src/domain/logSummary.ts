@@ -1,11 +1,15 @@
 /**
- * What a Session log says happened, in one line: each lift's top set, a HYROX session's round times, the reps held on target,
- * then the time and RPE. The Week page leads a logged Session with it.
+ * What a Session log says happened, in one line: each lift's top set, a HYROX session's round times, the Fade, the reps held
+ * on target, then the time and RPE. The Week page leads a logged Session with it.
  */
 import { trained, type SessionLog, type SetLog } from './log'
 import { clock } from './paces'
 import { LIFT_NAME, SESSION_TYPES } from './program/describe'
 import type { LiftId, SessionType } from './program/types'
+import { fade } from './stations'
+
+/** The Session types whose logs show the Fade: every one that runs between Stations. */
+const FADE_TYPES: readonly SessionType[] = ['hyrox', 'race-simulation', 'compromised-run-test']
 
 /** "Squat 185 lb × 5 · 45 min · RPE 7", or null when the log says nothing about this Session's work. */
 export function logSummary(log: SessionLog, type: SessionType): string | null {
@@ -14,6 +18,7 @@ export function logSummary(log: SessionLog, type: SessionType): string | null {
   const parts = [
     topSets(log.sets),
     type === 'race-simulation' || type === 'compromised-run-test' ? simulationTotal(log, SESSION_TYPES[type].name) : roundTimes(log),
+    FADE_TYPES.includes(type) && fadeWords(log),
     repsOnTarget(log),
     log.minutes !== null && `${log.minutes} min`,
     log.rpe !== null && `RPE ${log.rpe}`,
@@ -58,4 +63,11 @@ function repsOnTarget(log: SessionLog): string | null {
   const targeted = log.intervals.filter((rep) => rep.targetPace !== null)
   if (targeted.length === 0) return null
   return `${targeted.filter((rep) => rep.held).length} of ${targeted.length} reps on target`
+}
+
+/** "Fade +12 s/km": how much slower the last run was than the first. */
+export function fadeWords(log: SessionLog): string | null {
+  const seconds = fade(log)
+  if (seconds === null) return null
+  return `Fade ${seconds > 0 ? '+' : seconds < 0 ? '−' : ''}${Math.abs(seconds)} s/km`
 }

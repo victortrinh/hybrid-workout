@@ -591,13 +591,19 @@ const volume = (leg: LiveStation) => (leg.reps ? `${leg.reps} reps` : leg.meters
 const stationWords = (leg: LiveStation) =>
   [volume(leg), poundsWords(stations[leg.station], leg.pounds)].filter(Boolean).join(' · ')
 
+/** "Station target 0:58": the time to beat, where the Station has one. */
+const targetWords = (leg: LiveStation | undefined) => (leg?.target === undefined ? '' : `Station target ${clock(leg.target)}`)
+
+/** A Station's words with its Station target after them. */
+const withTarget = (words: string, leg: LiveStation | undefined) => [words, targetWords(leg)].filter(Boolean).join(' · ')
+
 /**
  * A round's Stations, large enough to read from the floor; a Race
  * simulation Station's load; every Station to load on Set up. Sled loads are the plates to add.
  */
 function StationList({ block }: { block: LiveBlock }) {
   if (block.kind === 'station') {
-    const load = poundsWords(stations[block.stations[0].station], block.stations[0].pounds)
+    const load = withTarget(poundsWords(stations[block.stations[0].station], block.stations[0].pounds), block.stations[0])
     return load ? <p className="mt-2 text-[22px] font-bold">{nb(load)}</p> : null
   }
   return (
@@ -605,7 +611,7 @@ function StationList({ block }: { block: LiveBlock }) {
       {block.stations.map((leg) => (
         <li key={leg.station} className="text-[22px] leading-tight font-bold">
           {stations[leg.station].name}{' '}
-          <span className="block text-[17px] font-semibold">{nb(stationWords(leg))}</span>
+          <span className="block text-[17px] font-semibold">{nb(withTarget(stationWords(leg), leg))}</span>
         </li>
       ))}
     </ul>
@@ -622,10 +628,10 @@ function RoundLegs({ block, leg, done }: { block: LiveBlock; leg: number; done: 
     <ol aria-label="Legs" className="mt-3 grid gap-1.5">
       {roundLegs(block).map((part, i) => {
         const station = block.stations.find((s) => s.station === part)
-        const words = station ? stationWords(station) : km(block.meters ?? 0)
+        const words = station ? withTarget(stationWords(station), station) : km(block.meters ?? 0)
         if (i === leg) {
-          // The hero says what and how far: the load is all that's left to say.
-          const load = station && poundsWords(stations[station.station], station.pounds)
+          // The hero says what and how far: the load and the time to beat are all that's left to say.
+          const load = station && withTarget(poundsWords(stations[station.station], station.pounds), station)
           return (
             <li key={part} aria-current="step" className={load ? 'text-[22px] leading-tight font-bold' : 'sr-only'}>
               <span className="sr-only">{legName(part)}, now{load ? ': ' : ''}</span>
