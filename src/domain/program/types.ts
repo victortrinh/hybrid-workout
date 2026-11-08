@@ -62,6 +62,11 @@ export interface Session {
   minutes: number
   key: boolean
   optional: boolean
+  /**
+   * The second Easy run: in the Bucket only when the Week before had its
+   * four required Sessions all Done (`offeredSessions`).
+   */
+  afterFullWeek?: boolean
   /** Pinned to one day, unlike the rest of the Bucket. Only Race day so far. */
   date?: LocalDate
   /** Instruction for the whole Session: "Not all-out", "Only if fresh". */
