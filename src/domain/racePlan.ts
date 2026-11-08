@@ -13,9 +13,10 @@ import type { Program, Station, StationId } from './program/types'
 
 /**
  * Time in the Roxzone, between the runs and the Stations, that a gym's
- * Race simulation never had: a guess, said as one.
+ * Race simulation never had: a guess, said as one. The Projected finish
+ * allows the same six minutes of transitions.
  */
-export const ROXZONE_SECONDS = 5 * 60
+export const ROXZONE_SECONDS = 6 * 60
 
 export interface RaceLeg {
   station: StationId

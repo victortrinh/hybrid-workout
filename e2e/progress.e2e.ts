@@ -59,16 +59,39 @@ for (const colorScheme of ['light', 'dark'] as const) {
     const main = page.getByRole('main')
 
     for (const name of [
-      '5K vs. sub-22',
+      'Projected finish',
       'Weekly completion',
-      'Training load',
+      'Station bests',
+      'Race run pace',
       'Training paces',
+      'Training load',
       'Recovery',
       'Working weights',
       'HYROX stations',
     ]) {
       await expect(main.getByRole('heading', { level: 2, name })).toBeVisible()
     }
+    // The 5K is gone.
+    await expect(main).not.toContainText(/5K|sub-22|goal/i)
+
+    // Projected finish: Week 1's sled push was 25 m, not race volume, so every Station is missing and there's no time.
+    const projected = main.getByRole('region', { name: 'Projected finish' })
+    await expect(projected).toContainText(
+      'No projection yet: no best at race volume yet for SkiErg, Sled push, Sled pull, Burpee broad jumps, Row, Farmers carry, Sandbag lunges and Wall balls.',
+    )
+    await expect(projected.getByRole('list', { name: 'Missing Stations' }).getByRole('listitem')).toHaveCount(8)
+    await expect(projected).not.toContainText(/\d:\d\d:\d\d/)
+
+    // Station bests: eight tiles at race volume, none set yet.
+    const bests = main.getByRole('region', { name: 'Station bests' })
+    await expect(bests).toContainText('0 of 8 set.')
+    await expect(bests.getByRole('listitem')).toHaveCount(8)
+    await expect(bests.getByRole('listitem', { name: 'Sled push' })).toHaveText('Sled push · 50 m–No best yet')
+    await expect(bests.getByRole('listitem', { name: 'Wall balls' })).toHaveText('Wall balls · 100 reps–No best yet')
+
+    // Race run pace from the baseline Compromised run test: the average of its four runs.
+    await expect(page.getByRole('img', { name: /^Race run pace:/ })).toHaveAccessibleName('Race run pace: 5:07/km in Week 2.')
+    await expect(main.getByRole('region', { name: 'Race run pace' })).toContainText('Next test Week 9.')
 
     // Weekly completion: Foundation so far, one row per Week, linking to it.
     const completion = main.getByRole('region', { name: 'Weekly completion' })
@@ -113,11 +136,14 @@ for (const colorScheme of ['light', 'dark'] as const) {
     const stations = main.getByRole('region', { name: 'HYROX stations' })
     await expect(stations).toContainText('No Race simulation yet. The first is Week 16, the week of Mon 22 Feb.')
     await expect(stations.getByRole('row', { name: /^Sled push/ })).toHaveText('Sled push3:1025 m · W1')
-    await expect(stations.getByRole('row', { name: /^Sled pull/ })).toHaveText('Sled pull–Not timed')
     await expect(stations.getByRole('row', { name: /^SkiErg/ })).toHaveText('SkiErg–Not timed')
 
     // The charts draw at the full width of their panel.
-    for (const chart of [page.getByRole('img', { name: /^Training load:/ }), recovery]) {
+    for (const chart of [
+      page.getByRole('img', { name: /^Training load:/ }),
+      page.getByRole('img', { name: /^Race run pace:/ }),
+      recovery,
+    ]) {
       const svg = (await chart.boundingBox())!
       const slot = (await chart.locator('xpath=..').boundingBox())!
       expect(Math.abs(svg.width - slot.width)).toBeLessThanOrEqual(1)
@@ -130,21 +156,23 @@ for (const colorScheme of ['light', 'dark'] as const) {
 test('desktop lays the panels on twelve columns; a phone stacks them', async ({ page }, testInfo) => {
   await page.goto('/progress')
   const box = async (name: string) => (await page.getByRole('region', { name }).boundingBox())!
-  const fiveK = await box('5K vs. sub-22')
+  const projected = await box('Projected finish')
   const completion = await box('Weekly completion')
+  const bests = await box('Station bests')
   if (testInfo.project.name === 'desktop') {
-    // Eight columns beside four, on one row.
-    expect(completion.y).toBeCloseTo(fiveK.y, 0)
-    expect(fiveK.width / completion.width).toBeGreaterThan(1.8)
-    // Recovery beside Working weights, half each; HYROX stations the full width.
+    // The Projected finish leads, eight columns beside four, on one row; the Station bests below, the full width.
+    expect(completion.y).toBeCloseTo(projected.y, 0)
+    expect(projected.width / completion.width).toBeGreaterThan(1.8)
+    expect(bests.y).toBeGreaterThan(projected.y + projected.height - 1)
+    expect(bests.width).toBeGreaterThan(projected.width * 1.4)
+    // Recovery beside Working weights, half each.
     const recovery = await box('Recovery')
     const weights = await box('Working weights')
     expect(weights.y).toBeCloseTo(recovery.y, 0)
     expect(weights.width).toBeCloseTo(recovery.width, 0)
-    expect((await box('HYROX stations')).width).toBeGreaterThan(recovery.width * 1.9)
   } else {
-    expect(completion.y).toBeGreaterThan(fiveK.y + fiveK.height - 1)
-    expect(completion.width).toBeCloseTo(fiveK.width, 0)
+    expect(completion.y).toBeGreaterThan(projected.y + projected.height - 1)
+    expect(completion.width).toBeCloseTo(projected.width, 0)
   }
 })
 
@@ -168,7 +196,57 @@ test('before any data for them, the new panels say what fills them', async ({ pa
   await expect(panel('Recovery')).toContainText('No nights from the ring yet.')
   await expect(panel('Recovery').getByRole('img')).toHaveCount(0)
   await expect(panel('Working weights')).toContainText('No Working weights yet.Week 1’s Strength session finds them.')
-  await expect(panel('HYROX stations')).toContainText('No Race simulation yet. The first is Week 16, the week of Mon 22 Feb.')
-  await expect(panel('HYROX stations').getByRole('table')).toHaveCount(0)
+  await expect(panel('Race run pace')).toContainText('No Compromised run test yet. The first is Week 2.')
+  await expect(panel('Race run pace').getByRole('img')).toHaveCount(0)
+  await expect(panel('Projected finish')).toContainText('and no Compromised run test yet.')
+  await expectNoAxeViolations(page)
+})
+
+/** Every Station at full volume and Race load, as the Week 16 and 18 Race simulations log it. */
+const FULL = [
+  ['skierg', 240, { meters: 1000 }],
+  ['sled-push', 180, { meters: 50, pounds: 335 }],
+  ['sled-pull', 200, { meters: 50, pounds: 225 }],
+  ['burpee-broad-jumps', 250, { meters: 80 }],
+  ['row', 245, { meters: 1000 }],
+  ['farmers-carry', 90, { meters: 200, pounds: 55 }],
+  ['sandbag-lunges', 260, { meters: 100, pounds: 45 }],
+  ['wall-balls', 330, { reps: 100, pounds: 13 }],
+] as const
+
+const simulation = (week: number, date: string, legs: typeof FULL[number][]): SeedLog => ({
+  week,
+  sessionId: 'race-simulation',
+  date,
+  status: 'done',
+  minutes: 65,
+  rpe: 8,
+  stations: legs.flatMap(([part, seconds, done], i) => [
+    { round: i + 1, part: 'run', pounds: null, meters: 1000, reps: null, seconds: 300 },
+    { round: i + 1, part, pounds: 'pounds' in done ? done.pounds : null, meters: 'meters' in done ? done.meters : null, reps: 'reps' in done ? done.reps : null, seconds },
+  ]),
+})
+
+test('with all eight Station bests at full volume, Progress leads with the Projected finish and its Doubles share', async ({ page }) => {
+  // The baseline test (Race run pace 5:07), then the two half simulations: Σ Stations 1795 s = 29:55.
+  await serveHistory(page, [
+    ...BASELINE_HISTORY,
+    simulation(16, '2027-02-27', FULL.slice(0, 4)),
+    simulation(18, '2027-03-13', FULL.slice(4)),
+  ])
+  await page.clock.setFixedTime(new Date('2027-03-15T12:00:00-04:00'))
+  await page.goto('/progress')
+  const projected = page.getByRole('main').getByRole('region', { name: 'Projected finish' })
+
+  // Solo: 1795 + 8 × 307 + 360 = 4611 s. Doubles: 897.5 + 2456 + 360 = 3713.5 s.
+  await expect(projected.getByRole('definition').first()).toHaveText('1:16:51')
+  await expect(projected.getByRole('term')).toHaveText(['Solo', 'Doubles share'])
+  await expect(projected.getByRole('definition').nth(1)).toHaveText('1:01:54')
+  await expect(projected).toContainText('eight runs at 5:07/km from Week 2’s test, and 6:00 of transitions.')
+  await expect(projected).toContainText('Stations 29:55 · running 40:56 · transitions 6:00.')
+
+  const bests = page.getByRole('main').getByRole('region', { name: 'Station bests' })
+  await expect(bests).toContainText('All eight set.')
+  await expect(bests.getByRole('listitem', { name: 'Row' })).toHaveText('Row · 1000 m4:05W18')
   await expectNoAxeViolations(page)
 })
