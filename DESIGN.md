@@ -244,8 +244,8 @@ A single saturated cobalt carries identity; five Session-type colours carry mean
 
 ### Secondary: Session-type lanes
 Each Session type owns one colour, used only for that type, in lane chips, Plan week cells, the load chart, live block bars and the legend:
-- **Track Red** (`speed`): Speed sessions; also the 20:00 goal line on the 5K chart.
-- **Burnt Orange** (`threshold`): Threshold sessions.
+- **Track Red** (`speed`): Compromised run tests; also the Race run pace line on the pace chart.
+- **Burnt Orange** (`threshold`): Run sessions (threshold and compromised intervals).
 - **Infield Green** (`hyrox`): HYROX sessions.
 - **Plate Violet** (`strength`): Strength sessions.
 - **Warm-up Grey** (`easy`): Easy runs, warm-ups, jogs and cooldowns; also normal-night sleep bars.

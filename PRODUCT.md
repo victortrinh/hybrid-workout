@@ -12,11 +12,11 @@ Vite + React 19 + Tailwind v4 + react-aria-components single-page app, installab
 
 ## Users
 
-One user: Victor, an amateur hybrid athlete in Montréal training for a sub-22 5K (sub-20 after it) and a HYROX Men's Open race on 21 April 2027. He trains 4–5 times a week in a gym that has a sled, SkiErg, rower, wall balls, sandbags, dumbbells, a barbell, a bike and about 15 m of open floor; most winter runs are on a treadmill. He is the only person who will ever use the app.
+One user: Victor, an amateur hybrid athlete in Montréal training for HYROX Ottawa, Doubles Men Open, on Thursday 22 April 2027. He races with a partner but trains alone at full Race load and Station volume. He trains 4 times a week in Sessions of at most 45 minutes, plus one or two optional Easy runs, in a gym that has a sled, SkiErg, rower, wall balls, sandbags, dumbbells, a barbell, a bike and about 15 m of open floor; most winter runs are on a treadmill. He is the only person who will ever use the app.
 
 ## Product Purpose
 
-Turn a fixed 26-week Program (`docs/training-plan.md`) into "what do I do today, and at what targets", then adapt the following Sessions to what was actually logged and how recovered he is. Success: every Week's Bucket gets done, the 5K tests trend toward 22:00, and he reaches race day healthy and race-ready without ever opening a spreadsheet.
+Turn a fixed 24-week Program (`docs/training-plan.md`) into "what do I do today, and at what targets", then adapt the following Sessions to what was actually logged and how recovered he is. Success: every Week's Bucket gets done, the Station bests and Race run pace improve test to test, the Projected finish falls, and he reaches race day healthy and race-ready without ever opening a spreadsheet.
 
 ## Positioning
 
@@ -33,9 +33,9 @@ A coach for exactly one Program and one athlete. It knows the plan, the race dat
 ## Capabilities and Constraints
 
 - Today: Up next, the rest of the Week's Bucket, race countdown, "Something hurts".
-- Live session: interval timer with treadmill speed and incline cues, set logger with rest timer, HYROX round clock, wake lock, haptic and sound cues; logging afterwards is always possible.
+- Live session: interval timer with treadmill speed and incline cues, set logger with rest timer, HYROX round clock with the Station target to beat, wake lock, haptic and sound cues; logging afterwards is always possible.
 - Plan: Phases and Weeks timeline; Session logs for past Sessions.
-- Progress: 5K tests vs. sub-22, Training paces, Working weights, Station and Race simulation times, weekly completion and Training load, recovery trends.
+- Progress: Projected finish with its Doubles share, Station bests at race volume, Race run pace from the Compromised run tests, Working weights, Race simulation times, weekly completion and Training load, recovery trends.
 - Settings: treadmill units (km/h default, mph option), Environment defaults, equipment profile, integrations, export.
 - Free to run; works offline in the gym; English only; America/Toronto time zone.
 - Units: distances and speeds are metric (km, m, km/h, with an mph option for the treadmill); every weight is in pounds (lb), matching the gym's plates and dumbbells.
@@ -47,9 +47,10 @@ A coach for exactly one Program and one athlete. It knows the plan, the race dat
 
 ## Evidence on Hand
 
-- `docs/training-plan.md`: the approved 26-week Program with every Session, Phase, deload and Race load.
+- `docs/training-plan.md`: the approved 24-week Program with every Session, Phase, Deload week and Race load.
+- `docs/research/hyrox-training-evidence.md`: the evidence review the Program's structure is built on.
 - `CONTEXT.md`: the domain glossary.
-- No logged data exists yet; prototypes may use realistic sample values but must not present them as real history.
+- No logged data counts: the Program restarts from scratch on 9 November 2026, and the history logged before it is wiped. Prototypes may use realistic sample values but must not present them as real history.
 
 ## Product Principles
 
@@ -57,7 +58,7 @@ A coach for exactly one Program and one athlete. It knows the plan, the race dat
 2. **Never ask for what can be measured.** Manual input is limited to what no device knows: pain, RPE, and corrections.
 3. **Every change has a reason.** The Coach never alters a Prescription silently; each Suggestion says why in one line and can be overridden.
 4. **Readable mid-effort.** Anything shown during a Live session must be legible at arm's length on a moving treadmill and operable in one tap.
-5. **The race date is the spine.** Every Week, countdown and taper decision is anchored to 21 April 2027.
+5. **The race date is the spine.** Every Week, countdown and taper decision is anchored to 22 April 2027.
 
 ## Accessibility & Inclusion
 

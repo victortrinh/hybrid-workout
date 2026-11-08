@@ -1,6 +1,6 @@
 # Compromised
 
-A personal training coach for one athlete's 26-week Program toward a sub-20 5K and a HYROX Men's Open race on Wednesday 21 April 2027. It turns the approved Program ([docs/training-plan.md](docs/training-plan.md)) into what to do today.
+A personal training coach for one athlete's 24-week Program toward HYROX Ottawa, Doubles Men Open, on Thursday 22 April 2027. It turns the approved Program ([docs/training-plan.md](docs/training-plan.md)) into what to do today.
 
 The front end is Vite, React 19, Tailwind v4 and react-aria-components. The API is Hono on Cloudflare Workers with a D1 database, and the same Worker serves the built app. Domain terms are defined in [CONTEXT.md](CONTEXT.md), design rules in [DESIGN.md](DESIGN.md), and decisions in [docs/adr/](docs/adr/).
 
