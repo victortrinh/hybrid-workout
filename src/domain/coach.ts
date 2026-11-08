@@ -10,10 +10,12 @@ import { lighten, RE_ENTRY_PERCENT } from './adapt'
 import { addDays, daysBetween, mondayOf, type LocalDate } from './calendar'
 import { DEFAULT_EQUIPMENT, equip, equipWeek, type Equipment } from './equipment'
 import { logFor, trained, type LoggedStatus, type SessionLog } from './log'
-import { painAdapted, painLevel, standingPain, type PainLevel, type PainReport } from './pain'
+import { inOrder, painAdapted, painLevel, standingPain, type PainLevel, type PainReport } from './pain'
 import { currentPaces, type TrainingPaces } from './paces'
 import {
   easyDayAdapted,
+  isShortSleep,
+  nightOf,
   readout,
   shortSleepAdapted,
   shortSleepCut,
@@ -24,10 +26,13 @@ import {
 import type { Phase, PhaseId, Program, Session, SessionType, Week } from './program/types'
 import {
   decisionFor,
+  lighterWeekId,
   painId,
   reEntryId,
   recoveryId,
+  type LighterWeekSuggestion,
   type PainSuggestion,
+  type ReadinessFlag,
   type ReEntrySuggestion,
   type RecoverySuggestion,
   type Suggestion,
@@ -203,7 +208,7 @@ export interface CoachDay {
    * when it changed nothing.
    */
   recoveryChange: 'short-sleep' | 'easy-day' | null
-  /** On a short-sleep day, what came off Up next: a rep, a set, a round or a Station; null when only RPE is capped. */
+  /** On a short-sleep day, what came off Up next: a rep, a round or a Station; null when only RPE is capped. */
   recoveryCut: ShortSleepCut | null
   /** Workouts from the last week that fit more than one Session, oldest first. */
   activityQuestions: ActivityQuestion[]
@@ -251,10 +256,11 @@ export function coach({
   const shownWeek =
     position.kind === 'in-week' ? position.week : position.kind === 'before-start' ? 1 : null
   const planned = shownWeek === null ? null : findWeek(program, shownWeek)
-  const strength = strengthState(program, logs, decisions, today, lighterSpans(program, logs, decisions, today))
+  const readiness: ReadinessInput = { reports: painReports, nights: recoveryNights, today }
+  const strength = strengthState(program, logs, decisions, today, lighterSpans(program, logs, decisions, today, readiness))
   const suggestions = [
     ...(position.kind === 'in-week' && planned
-      ? suggestionsFor(program, planned, logs, decisions, { reports: painReports, today }, today)
+      ? suggestionsFor(program, planned, logs, decisions, readiness, today)
       : []),
     ...(position.kind === 'in-week' ? strength.suggestions : []),
   ]
@@ -655,9 +661,14 @@ export function weekOutcome(program: Program, week: Week, logs: SessionLog[], to
 /** Days since the last Done or Partial Session that make the rest of a Week a lighter re-entry. */
 export const RE_ENTRY_DAYS = 7
 
-/** Pain reports, and the day they are read on: pain only changes the Week holding today. */
-interface PainInput {
+/**
+ * Readiness, and the day it is read on: pain only changes the Week holding
+ * today; the nights, with the reports, count the Week's Readiness flags.
+ */
+export interface ReadinessInput {
   reports: PainReport[]
+  /** Without them, only pain flags the Week. */
+  nights?: RecoveryNight[]
   today: LocalDate
   /** A Session of this Week done today, early or late: today's pain counts for it too. */
   doneToday?: boolean
@@ -668,24 +679,85 @@ function suggestionsFor(
   week: Week,
   logs: SessionLog[],
   decisions: SuggestionDecision[],
-  pain: PainInput | null,
+  readiness: ReadinessInput | null,
   /** Null when no day is given: a gap still open today isn't seen then, only one a log has closed. */
   today: LocalDate | null,
 ): Suggestion[] {
   const reEntry = reEntryFor(program, week, logs, decisions, today)
-  const painful = pain && painFor(week, pain, decisions)
-  return [...(reEntry ? [reEntry] : []), ...(painful ? [painful] : [])]
+  const lighter = readiness && lighterWeekFor(program, week, readiness, decisions, reEntry)
+  const painful = readiness && painFor(week, readiness, decisions)
+  return [...(reEntry ? [reEntry] : []), ...(lighter ? [lighter] : []), ...(painful ? [painful] : [])]
+}
+
+/** Readiness flags in a Week that make the rest of it a third lighter. */
+export const READINESS_FLAGS = 3
+
+/**
+ * Three Readiness flags in a Week: the Coach suggests the rest of it a third
+ * lighter, from the day of the third, like a re-entry. Never in a Deload week
+ * or the Taper, and not on top of an accepted re-entry: the Week is lighter
+ * already.
+ */
+function lighterWeekFor(
+  program: Program,
+  week: Week,
+  { reports, nights = [], today }: ReadinessInput,
+  decisions: SuggestionDecision[],
+  reEntry: ReEntrySuggestion | null,
+): LighterWeekSuggestion | null {
+  if (week.deload || phaseOfWeek(program, week.number).id === 'taper' || reEntry?.decision === 'accepted') return null
+  if (today < week.startDate) return null
+  const sunday = addDays(week.startDate, 6)
+  const flags = readinessFlags(reports, nights, week.startDate, today < sunday ? today : sunday).slice(0, READINESS_FLAGS)
+  if (flags.length < READINESS_FLAGS) return null
+
+  const id = lighterWeekId(week.number)
+  const decided = decisionFor(decisions, id)
+  return {
+    id,
+    kind: 'lighter-week',
+    week: week.number,
+    sessionId: null,
+    date: flags.at(-1)!.date,
+    from: { volumePercent: 100 },
+    to: { volumePercent: RE_ENTRY_PERCENT },
+    trigger: { flags },
+    decision: decided?.decision ?? 'open',
+    decidedOn: decided?.date ?? null,
+  }
+}
+
+/**
+ * The days from `from` to `to` that Readiness acted on, oldest first: a Pain
+ * report the pain rules act on (3 or more, or higher than the one before), or
+ * a night under 6 hours ending that morning. A day counts once.
+ */
+function readinessFlags(reports: PainReport[], nights: RecoveryNight[], from: LocalDate, to: LocalDate): ReadinessFlag[] {
+  const ordered = inOrder(reports)
+  const flags: ReadinessFlag[] = []
+  for (let date = from; date <= to; date = addDays(date, 1)) {
+    const scores = ordered.flatMap((r, i) =>
+      r.date === date && painLevel(r.score, ordered[i - 1]?.score ?? null) ? [r.score] : [],
+    )
+    const night = nightOf(nights, date)
+    const sleepMinutes = night && isShortSleep(night) ? night.sleepMinutes : null
+    if (scores.length > 0 || sleepMinutes !== null) {
+      flags.push({ date, painScore: scores.length > 0 ? Math.max(...scores) : null, sleepMinutes })
+    }
+  }
+  return flags
 }
 
 /**
  * The pain rules, while a Pain report of 3 or more, or a rising one, stands:
- * bike for jumps and accelerations and about 30% fewer reps, or from 5 easy
+ * an erg for burpee broad jumps and sled push and about 30% fewer interval
+ * reps, or from 5 easy
  * low-impact work or rest. Only for the Week holding today, or a Session of
  * another Week done today.
  */
 function painFor(
   week: Week,
-  { reports, today, doneToday = false }: PainInput,
+  { reports, today, doneToday = false }: ReadinessInput,
   decisions: SuggestionDecision[],
 ): PainSuggestion | null {
   const offset = daysBetween(week.startDate, today)
@@ -717,7 +789,7 @@ function painFor(
 
 /**
  * The recovery rules, for today's Up next only, when it is a Hard session:
- * sleep under 6 hours takes a rep, set, round or Station off (by Session
+ * sleep under 6 hours takes a rep, round or Station off (by Session
  * type) and caps RPE; with HRV at least 15%
  * under its mean too, the Coach suggests an easy day, which replaces both
  * once accepted. A day without a night changes nothing.
@@ -768,14 +840,28 @@ function recoveryFor(
 }
 
 /**
- * The days an accepted re-entry made lighter, up to `today`: from the day the
- * athlete came back to the Monday after.
+ * The days an accepted re-entry or lighter-Week Suggestion made lighter, up
+ * to `today`: from the day it applies from to the Monday after.
  */
-function lighterSpans(program: Program, logs: SessionLog[], decisions: SuggestionDecision[], today: LocalDate): LighterSpan[] {
-  return returns(program, logs, today)
+function lighterSpans(
+  program: Program,
+  logs: SessionLog[],
+  decisions: SuggestionDecision[],
+  today: LocalDate,
+  readiness: ReadinessInput,
+): LighterSpan[] {
+  const reEntries = returns(program, logs, today)
     .filter((r) => r.week !== null && reEntryFor(program, findWeek(program, r.week)!, logs, decisions, today)?.date === r.date)
     .filter((r) => decisionFor(decisions, reEntryId(r.week!))?.decision === 'accepted')
-    .map((r) => ({ start: r.date, landsOn: addDays(mondayOf(r.date), 7) }))
+    .map((r) => r.date)
+  const lighterWeeks = program.phases
+    .flatMap((phase) => phase.weeks)
+    .filter((week) => week.startDate <= today && decisionFor(decisions, lighterWeekId(week.number))?.decision === 'accepted')
+    .flatMap((week) => {
+      const reEntry = reEntryFor(program, week, logs, decisions, today)
+      return lighterWeekFor(program, week, readiness, decisions, reEntry)?.date ?? []
+    })
+  return [...reEntries, ...lighterWeeks].sort().map((start) => ({ start, landsOn: addDays(mondayOf(start), 7) }))
 }
 
 const acceptedPain = (suggestions: Suggestion[]): PainLevel | null =>
@@ -864,7 +950,8 @@ function adapt(week: Week, suggestions: Suggestion[], logs: SessionLog[], equipm
       if (s.decision !== 'accepted' || s.week !== adapted.number) return adapted
       switch (s.kind) {
         case 're-entry':
-          // The rest of the Week: a Session done before the athlete came back stays as it was.
+        case 'lighter-week':
+          // The rest of the Week: a Session done before it applies stays as it was.
           return {
             ...adapted,
             sessions: adapted.sessions.map((session) => {
@@ -893,8 +980,9 @@ function adapt(week: Week, suggestions: Suggestion[], logs: SessionLog[], equipm
 
 /**
  * A Week as it will be trained: the Program's Week with accepted Suggestions
- * applied. For screens that show a Week other than today's; with `pain`, the
- * pain rules apply to the Week holding its `today`.
+ * applied. For screens that show a Week other than today's; with `readiness`,
+ * the pain rules apply to the Week holding its `today`, and its flags can
+ * lighten the Week.
  */
 export function prescribedWeek(
   program: Program,
@@ -902,8 +990,8 @@ export function prescribedWeek(
   logs: SessionLog[],
   decisions: SuggestionDecision[],
   equipment: readonly Equipment[] = DEFAULT_EQUIPMENT,
-  pain: PainInput | null = null,
+  readiness: ReadinessInput | null = null,
 ): Week | null {
   const week = findWeek(program, number)
-  return week && adapt(week, suggestionsFor(program, week, logs, decisions, pain, pain?.today ?? null), logs, equipment)
+  return week && adapt(week, suggestionsFor(program, week, logs, decisions, readiness, readiness?.today ?? null), logs, equipment)
 }

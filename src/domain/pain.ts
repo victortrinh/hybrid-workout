@@ -1,15 +1,15 @@
 /**
  * Pain reports and the pain rules (docs/training-plan.md, Rules, 2):
- * pain 3 or more, or rising, means no jumps or accelerations (bike instead)
- * and about 30% fewer interval reps; pain 5 or more makes the Session easy
- * low-impact work or rest.
+ * pain 3 or more, or rising, means no burpee broad jumps or sled push (an erg
+ * instead) and about 30% fewer interval reps; pain 5 or more makes the Session
+ * easy low-impact work or rest.
  *
  * A report stands until the next one, so the "No" before a Session matters
  * too: it is a report of 0, and it ends whatever pain stood before it.
  */
 import { localDate, type LocalDate } from './calendar'
 import { stations } from './program/program'
-import type { Block, Exercise, Session } from './program/types'
+import type { Block, Exercise, Session, StationId } from './program/types'
 
 export const PAIN_AREAS = ['achilles-calf', 'shin', 'knee', 'hip', 'back', 'other'] as const
 export type PainArea = (typeof PAIN_AREAS)[number]
@@ -39,7 +39,7 @@ export interface PainReport {
   updatedAt: string
 }
 
-/** Pain at which jumps and accelerations go to the bike and interval reps drop. */
+/** Pain at which burpee broad jumps and sled push go to an erg and interval reps drop. */
 export const PAIN_EASE = 3
 /** Pain at which the Session becomes easy low-impact work, or rest. */
 export const PAIN_LOW_IMPACT = 5
@@ -110,33 +110,44 @@ function lowImpact(session: Session): Session {
   }
 }
 
-/** Jumps and accelerations to bike sprints, Burpee broad jumps to SkiErg, interval reps cut by about 30%. */
+/**
+ * Burpee broad jumps and sled push to an erg, interval reps cut by about 30%:
+ * Threshold reps, and the rounds of Compromised intervals (a 1 km and its wall
+ * balls). HYROX rounds stay four: the Stations change, not the count.
+ */
 function eased(session: Session): Session {
+  const swapped = { ...session, blocks: offTheFloor(session.blocks) }
+  return isCompromisedIntervals(swapped) ? fewerRounds(swapped) : fewerIntervalReps(swapped)
+}
+
+const fewerReps = (reps: number) => Math.max(1, Math.round((reps * PAIN_REPS_PERCENT) / 100))
+
+function fewerIntervalReps(session: Session): Session {
   const reps = mainReps(session)
-  const cut = reps === undefined ? undefined : fewerReps(reps)
   let saved = 0
   const blocks = session.blocks.map((block): Block => {
     const intervals = block.exercises.find((e) => e.prescription.kind === 'intervals')?.prescription
+    if (intervals?.kind !== 'intervals') return block
     let minutes = block.minutes
-    if (intervals?.kind === 'intervals' && minutes !== undefined) {
+    if (minutes !== undefined) {
       minutes = Math.round((minutes * fewerReps(intervals.reps)) / intervals.reps)
       saved += block.minutes! - minutes
     }
-    const exercises = offTheFloor(block.exercises.map(onTheBike))
-    // A Block of jumps or accelerations, all gone to the bike, says so.
-    const allBike = exercises.every((e, i) => e !== block.exercises[i] && e.prescription.kind === 'sprints')
-    return { ...block, name: allBike ? 'Bike sprints' : block.name, minutes, exercises }
+    return {
+      ...block,
+      minutes,
+      exercises: block.exercises.map((e) =>
+        e.prescription.kind === 'intervals' ? { ...e, prescription: { ...e.prescription, reps: fewerReps(e.prescription.reps) } } : e,
+      ),
+    }
   })
   return {
     ...session,
-    headline:
-      reps === undefined || cut === undefined ? session.headline : session.headline.replace(/^\d+(?= × )/, String(cut)),
+    headline: reps === undefined ? session.headline : session.headline.replace(/^\d+(?= × )/, String(fewerReps(reps))),
     minutes: session.minutes - saved,
     blocks,
   }
 }
-
-const fewerReps = (reps: number) => Math.max(1, Math.round((reps * PAIN_REPS_PERCENT) / 100))
 
 function mainReps(session: Session): number | undefined {
   const rx = session.blocks
@@ -147,45 +158,63 @@ function mainReps(session: Session): number | undefined {
   return rx?.kind === 'intervals' ? rx.reps : undefined
 }
 
-/** An Exercise Readiness can take off the floor goes to its bike option; interval reps drop. */
-function onTheBike(exercise: Exercise): Exercise {
-  const rx = exercise.prescription
-  if (rx.kind === 'intervals') return { ...exercise, prescription: { ...rx, reps: fewerReps(rx.reps) } }
-  const readiness = exercise.substitutions?.find((s) => s.when.includes('readiness'))
-  if (!readiness) return exercise
-  const bike = readiness.options.find((o) => /bike/i.test(o.name)) ?? readiness.options[0]
-  return { ...bike, note: `Instead of ${exercise.name.toLowerCase()}: pain says no impact.` }
+/** A Run of Compromised intervals: each main Block a rep of a run and a Station. */
+const isCompromisedIntervals = (session: Session) =>
+  session.type === 'run' &&
+  session.blocks.filter((b) => b.main).length > 1 &&
+  session.blocks.filter((b) => b.main).every((b) => b.exercises.some((e) => e.prescription.kind === 'station'))
+
+/** Compromised intervals lose their last reps, and their minutes; the last one kept has no rest after it. */
+function fewerRounds(session: Session): Session {
+  const main = session.blocks.filter((b) => b.main)
+  const kept = fewerReps(main.length)
+  const dropped = new Set(main.slice(kept))
+  const last = main[kept - 1]
+  const saved = [...dropped].reduce((sum, b) => sum + (b.minutes ?? 0), 0)
+  return {
+    ...session,
+    headline: session.headline.replace(/^\d+(?= × )/, String(kept)),
+    minutes: session.minutes - saved,
+    blocks: session.blocks.filter((b) => !dropped.has(b)).map((b) => (b === last ? { ...b, note: undefined } : b)),
+  }
 }
 
-/** SkiErg metres for each metre of Burpee broad jumps: about the same time, 80 m to 1000 m. */
-export const SKIERG_PER_BURPEE_METER = 12.5
+/**
+ * Each Station the pain rules take out, its erg, and erg metres per metre of
+ * it for about the same time: 80 m of burpee broad jumps is 1000 m of SkiErg,
+ * 50 m of sled push 1000 m of row.
+ */
+const INSTEAD: Partial<Record<StationId, { erg: StationId; perMeter: number }>> = {
+  'burpee-broad-jumps': { erg: 'skierg', perMeter: 12.5 },
+  'sled-push': { erg: 'row', perMeter: 20 },
+}
 
 /**
- * Burpee broad jumps go to SkiErg for about the same time. A Block's Stations
- * stay one of each (a Station log is one per Station a round), so where the
- * Block already has a SkiErg, the metres go onto it. Lunges stay: they don't
- * leave the floor.
+ * Burpee broad jumps go to the SkiErg and sled push to the row, for about the
+ * same time, with the reason on the Exercise. The Set up loses the sled: the
+ * ergs have nothing to load. Lunges stay: they don't leave the floor.
  */
-function offTheFloor(exercises: Exercise[]): Exercise[] {
-  const burpees = exercises.find(({ prescription: rx }) => rx.kind === 'station' && rx.station === 'burpee-broad-jumps')
-  if (burpees?.prescription.kind !== 'station') return exercises
-  const meters = burpees.prescription.meters && burpees.prescription.meters * SKIERG_PER_BURPEE_METER
-  const skierg = exercises.find(({ prescription: rx }) => rx.kind === 'station' && rx.station === 'skierg')
-  if (skierg?.prescription.kind === 'station') {
-    const rx = skierg.prescription
-    const more: Exercise = {
-      ...skierg,
-      prescription: { ...rx, meters: rx.meters !== undefined && meters !== undefined ? rx.meters + meters : rx.meters },
-      note: meters === undefined ? skierg.note : `Plus ${meters} m instead of burpee broad jumps: pain says no impact.`,
+function offTheFloor(blocks: Block[]): Block[] {
+  return blocks.map((block): Block => {
+    if (block.setup) {
+      const exercises = block.exercises.filter((e) => !(e.prescription.kind === 'station' && INSTEAD[e.prescription.station]))
+      return exercises.length === block.exercises.length ? block : { ...block, exercises, note: 'Nothing else to load.' }
     }
-    return exercises.flatMap((e) => (e === burpees ? [] : e === skierg ? [more] : [e]))
+    return { ...block, exercises: block.exercises.map(toTheErg) }
+  })
+}
+
+function toTheErg(exercise: Exercise): Exercise {
+  const rx = exercise.prescription
+  if (rx.kind !== 'station') return exercise
+  const instead = INSTEAD[rx.station]
+  if (!instead) return exercise
+  const meters = rx.meters && Math.max(50, Math.round((rx.meters * instead.perMeter) / 50) * 50)
+  return {
+    name: stations[instead.erg].name,
+    prescription: { kind: 'station', station: instead.erg, meters },
+    note: `Instead of ${exercise.name.toLowerCase()}: pain says no impact.`,
   }
-  const instead: Exercise = {
-    name: stations.skierg.name,
-    prescription: { kind: 'station', station: 'skierg', meters },
-    note: 'Instead of burpee broad jumps: pain says no impact.',
-  }
-  return exercises.map((e) => (e === burpees ? instead : e))
 }
 
 const ID = /^[a-z0-9-]{8,58}$/

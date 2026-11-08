@@ -3,7 +3,7 @@ import { localDate } from '../domain/calendar'
 import { findWeek } from '../domain/coach'
 import { program } from '../domain/program/program'
 import type { ShortSleepCut } from '../domain/recovery'
-import type { RecoverySuggestion } from '../domain/suggestion'
+import type { RecoverySuggestion, Suggestion } from '../domain/suggestion'
 import type { SessionLog } from '../domain/log'
 import type { ProgramRecap } from '../domain/recap'
 import { droppedLine, raceCopy, shortSleepLine, suggestedRestCopy, suggestionCopy, waitingLine } from './coachCopy'
@@ -25,7 +25,6 @@ describe('the short-sleep copy names what is cut', () => {
     ['rep', 'rep'],
     ['round', 'round'],
     ['station', 'Station'],
-    ['set', 'set'],
   ]
 
   it.each(cases)('%s: the line', (cut, noun) => {
@@ -152,5 +151,33 @@ describe('the Sessions dropped as Race specific starts', () => {
   it('names the one Week, and says Session for one', () => {
     expect(droppedLine(dropped(2, 15, 15))).toBe('2 Sessions from Week 15 dropped to keep Race specific on schedule.')
     expect(droppedLine(dropped(1, 15, 15))).toBe('1 Session from Week 15 dropped to keep Race specific on schedule.')
+  })
+})
+
+describe('the lighter-Week Suggestion’s copy', () => {
+  const lighter: Suggestion = {
+    id: 'lighter-week-w3',
+    kind: 'lighter-week',
+    week: 3,
+    sessionId: null,
+    date: localDate('2026-11-25'),
+    from: { volumePercent: 100 },
+    to: { volumePercent: 67 },
+    trigger: {
+      flags: [
+        { date: localDate('2026-11-23'), painScore: 3, sleepMinutes: null },
+        { date: localDate('2026-11-24'), painScore: null, sleepMinutes: 320 },
+        { date: localDate('2026-11-25'), painScore: 4, sleepMinutes: 341 },
+      ],
+    },
+    decision: 'open',
+    decidedOn: null,
+  }
+
+  it('says the change and the three flags behind it', () => {
+    const copy = suggestionCopy(lighter)
+    expect(copy.line).toBe('Three rough days this Week. That’s your body asking for a Deload. The rest of Week 3 goes 33% lighter.')
+    expect(copy.why).toBe('Mon pain 3 · Tue slept 5 h 20 · Wed pain 4, slept 5 h 41 · every Prescription left in Week 3 at 67%')
+    expect(copy.keep).toBe('Keep full volume')
   })
 })

@@ -194,6 +194,9 @@ _Avoid_: auto-adjustment, recommendation (when meaning a change)
 **Readiness**:
 The athlete's state for a day, combining Recovery data and the latest Pain report.
 
+**Readiness flag**:
+A day the Readiness rules acted on: a Pain report of 3 or more, or rising, or a night under 6 hours. A day counts once. Three in one Week make the Coach suggest the rest of it a third lighter, never in a Deload week or the Taper.
+
 **Recovery data**:
 Sleep duration, heart-rate variability and resting heart rate measured by the ring overnight.
 

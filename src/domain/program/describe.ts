@@ -310,7 +310,6 @@ const SUBSTITUTION_REASON: Record<SubstitutionReason, string> = {
   'no-floor-space': 'no floor space',
   'no-calf-machine': 'no standing calf machine',
   'no-seated-calf-machine': 'no seated calf machine',
-  readiness: 'Readiness says no jumps',
 }
 
 export interface ExerciseLine {
@@ -318,7 +317,7 @@ export interface ExerciseLine {
   /** "3 × 5 · RPE 7 · 90–120″ rest" */
   detail: string
   note?: string
-  /** "No floor space or Readiness says no jumps: Sled push sprints 10–15 m, light, or Bike sprints 8–10″" */
+  /** "No standing calf machine: Single-leg calf raise 3 × 12 · …" */
   substitutions: string[]
 }
 

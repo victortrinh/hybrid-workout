@@ -92,8 +92,8 @@ export interface Exercise {
   substitutions?: Substitution[]
 }
 
-/** Why a Substitution applies: a piece of the Equipment profile missing, or Readiness. */
-export type SubstitutionReason = 'no-floor-space' | 'no-calf-machine' | 'no-seated-calf-machine' | 'readiness'
+/** Why a Substitution applies: a piece of the Equipment profile missing. Readiness has rules of its own (pain.ts). */
+export type SubstitutionReason = 'no-floor-space' | 'no-calf-machine' | 'no-seated-calf-machine'
 
 export interface Substitution {
   when: SubstitutionReason[]

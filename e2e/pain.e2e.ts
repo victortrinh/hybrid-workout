@@ -48,7 +48,7 @@ test('pain 4 before the Run: the interval reps drop', async ({ page }) => {
   await step.getByRole('button', { name: 'Changed' }).click()
   await pick(step, '4')
   await pick(step, 'Achilles / calf')
-  await expect(step).toContainText('Pain 4 and rising. No jumps, fewer reps, before it gets a vote.')
+  await expect(step).toContainText('Pain 4 and rising. No jumps, no sled push, fewer reps, before it gets a vote.')
   await expectNoAxeViolations(page)
   await step.getByRole('button', { name: 'Start with that' }).click()
   await startAsChosen(page)
@@ -163,7 +163,7 @@ test('with the pain Suggestion open, the step asks it once, in its own words: tw
   await page.clock.setFixedTime(WEEK_3)
   await page.goto('/')
 
-  const line = 'Pain 4. No jumps, fewer reps. Your tendons will thank you.'
+  const line = 'Pain 4. No jumps, no sled push, fewer reps. Your tendons will thank you.'
   const suggestion = page.getByRole('region', { name: 'Coach’s Suggestion' }).filter({ hasText: line })
   await expect(suggestion).toBeVisible()
   await page.getByRole('button', { name: /^Start / }).click()
@@ -201,4 +201,24 @@ test('with the pain Suggestion already accepted, Same starts the Session with it
   await expect
     .poll(() => suggestionDecisions.find((d) => d.id === `pain-${reports.at(-1)!.id}`))
     .toMatchObject({ decision: 'accepted' })
+})
+
+test('pain 4 Accepted: HYROX A rows instead of the sled push, and says why', async ({ page }) => {
+  // Week 2 done; Week 3 untouched, so HYROX A is Up next on Wednesday.
+  const week2 = weekDone(2, ['hyrox-a', 'hyrox-b', 'compromised-run-test', 'strength'], '2026-11-19')
+  await serveHistory(page, caughtUp(1, week2), [ACHILLES_4])
+  await page.clock.setFixedTime(WEEK_3)
+  await page.goto('/')
+
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^HYROX A, /)
+  const suggestion = page.getByRole('region', { name: 'Coach’s Suggestion: pain' })
+  await expect(suggestion).toContainText('row or SkiErg for burpee broad jumps and sled push, 30% fewer interval reps')
+  await suggestion.getByRole('button', { name: 'Accept' }).click()
+  await expect(suggestion).toContainText('Done. Ergs for the jumps and the sled, fewer reps.')
+
+  await page.getByRole('button', { name: 'Show the Prescription' }).click()
+  const sheet = page.getByRole('dialog', { name: /^HYROX A, / })
+  await expect(sheet.getByRole('listitem').filter({ hasText: /^Row/ })).toContainText('Instead of sled push: pain says no impact.')
+  await expect(sheet.getByRole('listitem').filter({ hasText: /^Sled push/ })).toHaveCount(0)
+  await expectNoAxeViolations(page)
 })

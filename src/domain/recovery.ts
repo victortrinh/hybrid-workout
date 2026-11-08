@@ -2,8 +2,8 @@
  * Recovery data and the rules that read it (docs/training-plan.md, Rules, 3).
  *
  * One night per morning, sent by the iOS Shortcut from Apple Health,
- * filtered to the ring (ADR-0003). Sleep under 6 hours takes a rep, set,
- * round or Station off and caps RPE for that day's Hard session; HRV at least 15% under its 7-day mean
+ * filtered to the ring (ADR-0003). Sleep under 6 hours takes a rep, a
+ * round or a Station off and caps RPE for that day's Hard session; HRV at least 15% under its 7-day mean
  * on top of that is a Suggestion to make the day easy. No night, no change:
  * the athlete is never asked to type it in.
  */
@@ -79,14 +79,14 @@ export function readout(nights: RecoveryNight[], date: LocalDate): Readout | nul
 // What the rules do to a Session.
 
 /** What the short-sleep rule takes off, by Session type. */
-export type ShortSleepCut = 'rep' | 'set' | 'round' | 'station'
+export type ShortSleepCut = 'rep' | 'round' | 'station'
 
 /** How the Coach names a cut: "one round fewer". */
-export const CUT_NOUN: Record<ShortSleepCut, string> = { rep: 'rep', set: 'set', round: 'round', station: 'Station' }
+export const CUT_NOUN: Record<ShortSleepCut, string> = { rep: 'rep', round: 'round', station: 'Station' }
 
 /**
  * What the short-sleep rule takes off this Session: a rep of the intervals,
- * a set of every main lift on a Strength day, the last round of a HYROX
+ * a rep of every main lift on a Strength day, the last round of a HYROX
  * session, the last Run and Station of a Race simulation. Null when there is
  * only one to begin with: then the RPE cap is the whole change.
  */
@@ -99,7 +99,7 @@ export function shortSleepCut(session: Session): ShortSleepCut | null {
     case 'race-simulation':
       return main.length > 1 ? 'station' : null
     case 'strength':
-      return rxs.some((rx) => rx.kind === 'sets' && rx.sets > 1) ? 'set' : null
+      return rxs.some((rx) => rx.kind === 'sets' && !rx.meters && (typeof rx.reps === 'number' ? rx.reps : rx.reps[1]) > 1) ? 'rep' : null
     default:
       // Compromised intervals are rounds of a run and wall balls: one round fewer.
       if (main.length > 1 && main.every((b) => b.exercises.some((e) => e.prescription.kind === 'station'))) return 'round'
@@ -176,7 +176,7 @@ function lastMainDropped(session: Session, cut: 'round' | 'station'): Session {
   }
 }
 
-/** One Prescription on a short night: capped at RPE 7, less a rep or a set where that is the cut. */
+/** One Prescription on a short night: capped at RPE 7, less a rep where that is the cut. A carry keeps its distance. */
 function capped(rx: Prescription, cut: ShortSleepCut | null): Prescription {
   switch (rx.kind) {
     case 'intervals':
@@ -184,8 +184,7 @@ function capped(rx: Prescription, cut: ShortSleepCut | null): Prescription {
     case 'sets':
       return {
         ...rx,
-        sets: cut === 'set' ? Math.max(1, rx.sets - 1) : rx.sets,
-        reps: cut === 'rep' ? (typeof rx.reps === 'number' ? Math.max(1, rx.reps - 1) : fewer(rx.reps)) : rx.reps,
+        reps: cut === 'rep' && !rx.meters ? (typeof rx.reps === 'number' ? Math.max(1, rx.reps - 1) : fewer(rx.reps)) : rx.reps,
         rpe: rx.rpe && cappedRange(rx.rpe),
         rpeCap: Math.min(rx.rpeCap ?? SLEEP_RPE_CAP, SLEEP_RPE_CAP),
       }
