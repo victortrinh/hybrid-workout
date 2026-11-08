@@ -33,8 +33,15 @@ test('export from Settings holds a Session just logged, as JSON and as CSV', asy
   expect(json.suggestedFilename()).toMatch(/^compromised-\d{4}-\d{2}-\d{2}\.json$/)
   const exported = JSON.parse(await readFile(await json.path(), 'utf8'))
   expect(Object.keys(exported.tables)).toEqual(
-    expect.arrayContaining(['session_logs', 'set_logs', 'pain_reports', 'recovery_nights', 'activities']),
+    expect.arrayContaining([
+      'session_logs', 'interval_logs', 'station_logs', 'set_logs', 'suggestion_decisions', 'pain_reports',
+      'recovery_nights', 'activities', 'activity_answers', 'starting_point',
+    ]),
   )
+  // The new schema: the race's finish, no old result column; the Starting point's estimated split.
+  const sessionColumns = Object.keys(exported.tables.session_logs[0])
+  expect(sessionColumns).toContain('finish_seconds')
+  expect(sessionColumns).not.toContain('result_seconds')
   expect(exported.tables.session_logs).toContainEqual(
     expect.objectContaining({ id, week, session_id: 'easy', date, status: 'done', minutes: 40, rpe: 4, notes }),
   )

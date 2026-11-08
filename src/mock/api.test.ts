@@ -123,4 +123,44 @@ describe('the Worker in the browser', () => {
     const files = new TextDecoder().decode(await zip.arrayBuffer())
     expect(files).toMatch(/session_logs\.csvid,week,session_id,.*,recovery_pace\r\nlog-run-0001,.*,600\r\n/)
   })
+
+  it('exports every table the migrations create, in the new schema: test splits as Station logs, the estimated split, the race finish', async () => {
+    const test = log({
+      id: 'log-crt-0001',
+      week: 2,
+      sessionId: 'compromised-run-test',
+      date: '2026-11-18' as SessionLog['date'],
+      minutes: 45,
+      rpe: 9,
+      environment: 'indoor',
+      intervals: [],
+      stations: [
+        { round: 1, part: 'run', pounds: null, meters: 1000, reps: null, seconds: 300 },
+        { round: 1, part: 'skierg', pounds: null, meters: 500, reps: null, seconds: 115 },
+      ],
+      updatedAt: '2026-11-18T20:00:00.000Z',
+    })
+    await sync({
+      sessionLogs: [test],
+      startingPoint: { splitSeconds: 307, weights: { 'back-squat': 225 }, updatedAt: '2026-11-08T20:00:00.000Z' },
+    })
+    const { tables } = (await (await api(new Request('http://localhost/api/export.json'))).json()) as {
+      tables: Record<string, Record<string, unknown>[]>
+    }
+    const db = openDatabase(SQL)
+    const created = db
+      .exec("select name from sqlite_master where type = 'table' and name not like 'sqlite_%' and name != 'd1_migrations'")[0]
+      .values.flat()
+    expect(Object.keys(tables).sort()).toEqual([...created].sort())
+    expect(Object.keys(tables.session_logs[0])).not.toContain('result_seconds')
+    expect(tables.session_logs[0]).toMatchObject({ id: 'log-crt-0001', session_id: 'compromised-run-test', finish_seconds: null })
+    expect(tables.station_logs).toEqual([
+      expect.objectContaining({ session_log_id: 'log-crt-0001', round: 1, part: 'run', meters: 1000, seconds: 300 }),
+      expect.objectContaining({ session_log_id: 'log-crt-0001', round: 1, part: 'skierg', meters: 500, seconds: 115 }),
+    ])
+    expect(Object.keys(tables.starting_point[0]).sort()).toEqual(
+      ['back_squat_pounds', 'id', 'romanian_deadlift_pounds', 'split_seconds', 'updated_at'],
+    )
+    expect(tables.starting_point[0]).toMatchObject({ split_seconds: 307, back_squat_pounds: 225 })
+  })
 })

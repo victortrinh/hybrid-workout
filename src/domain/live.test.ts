@@ -880,7 +880,7 @@ describe('by-feel speeds', () => {
   const HARD = 257
   const JOG = 600
   /**
-   * Speed on Rep 1 at minute 10: the jog ran its 7, drills, Plyometrics and
+   * The drills run on Rep 1 at minute 10: the jog ran its 7, drills, Plyometrics and
    * Accelerations Done at 8, 9 and 10, Start at once. Reps are Blocks 4, 6, 8, 10 and 12.
    */
   const onRep1 = (kind: 'by-feel' | 'paced') => go(nextBlock(nextBlock(nextBlock(advance(start(drillsRun(kind)), at(7)), at(8)), at(9)), at(10)), at(10))
@@ -959,7 +959,7 @@ describe('last time', () => {
   /** 14 km/h and 6 km/h, as seconds per km. */
   const HARD = 257
   const JOG = 600
-  /** Week 3's Speed from Rep 1 to the end, the By-feel speeds answered, logged on `date`. */
+  /** The drills run from Rep 1 to the end, the By-feel speeds answered, logged on `date`. */
   const run = advance(go(nextBlock(nextBlock(nextBlock(advance(start(drillsRun('by-feel')), at(7)), at(8)), at(9)), at(10)), at(10)), at(60))
   const speedLog = (date: string, hardPace: number | null, recoveryPace: number | null): SessionLog => ({
     ...liveLog(run, at(60), { ...input, hardPace, recoveryPace }),
