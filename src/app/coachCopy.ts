@@ -4,13 +4,11 @@
  */
 import { daysBetween, type LocalDate } from '../domain/calendar'
 import { PAIN_AREA_LABEL, PAIN_REPS_PERCENT, type PainLevel } from '../domain/pain'
-import { clock } from '../domain/paces'
 import { describeSession, LIFT_NAME, sessionName } from '../domain/program/describe'
 import { program } from '../domain/program/program'
 import type { Dropped, RestAnyway, RestReason } from '../domain/coach'
 import type { Session } from '../domain/program/types'
 import { CUT_NOUN, EASY_DAY_MINUTES, SLEEP_RPE_CAP, sleepText, type ShortSleepCut } from '../domain/recovery'
-import { GOAL_LABEL, GOAL_SECONDS } from '../domain/progress'
 import { finishClock, type ProgramRecap, type RaceResult } from '../domain/recap'
 import type { ReadinessFlag, Suggestion } from '../domain/suggestion'
 import { plural, shortDay, shortWeekday, weekday } from './format'
@@ -205,18 +203,12 @@ export function raceCopy(result: RaceResult, recap: ProgramRecap): { heading: st
     }
   }
   const finish = finishClock(result.seconds)
-  const { fiveK } = recap
-  if (fiveK?.underGoal) {
+  const { raceRun } = recap
+  if (raceRun && raceRun.last.secondsPerKm < raceRun.first.secondsPerKm) {
+    const quicker = raceRun.first.secondsPerKm - raceRun.last.secondsPerKm
     return {
       heading: 'Program done.',
-      target: `Under ${clock(GOAL_SECONDS)} on the 5K, ${finish} at HYROX. Both goals, one Program. Now sit down for a week.`,
-    }
-  }
-  if (fiveK && fiveK.last.seconds < fiveK.first.seconds) {
-    const off = clock(fiveK.first.seconds - fiveK.last.seconds)
-    return {
-      heading: 'Program done.',
-      target: `${finish} at HYROX, and ${off} off the 5K to ${clock(fiveK.last.seconds)}. Not ${GOAL_LABEL}. Not nothing either.`,
+      target: `${finish} at HYROX, on a Race run pace ${quicker} s/km quicker than Week ${raceRun.first.week}’s. Now sit down for a week.`,
     }
   }
   return {

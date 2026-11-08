@@ -1,45 +1,22 @@
 /**
  * Progress: whether the Program is working, read from the Session logs.
  *
- * Pure, like the rest of the Coach (ADR-0002): the 5K tests against a planned
- * line to the goal time, each Week's completion by Session type, Training load per
- * Week, the Working weights, recent recovery and HYROX Station times. The screen picks what to show; this decides what the numbers are.
+ * Pure, like the rest of the Coach (ADR-0002): the Projected finish, the
+ * Station bests at race volume, the Race run pace from test to test, each
+ * Week's completion by Session type, Training load per Week, the Working
+ * weights, recent recovery and the Race simulation times. The screen picks what to show; this decides
+ * what the numbers are.
  */
 import { addDays, daysBetween, type LocalDate } from './calendar'
 import { findWeek, programStart, weekOutcome } from './coach'
 import { logFor, offeredSessions, trained, type SessionLog } from './log'
-import { GOAL_PACE, type Environment } from './paces'
+import { runTestResult, type RunTestResult } from './paces'
 import { SESSION_TYPES } from './program/describe'
-import { LIFTS, type Lane, type LiftId, type Program, type Session, type StationId } from './program/types'
+import { LIFTS, type Lane, type LiftId, type Program, type Session, type Station, type StationId } from './program/types'
+import { ROXZONE_SECONDS } from './racePlan'
 import { nightOf, type RecoveryNight } from './recovery'
+import { stationBest } from './stations'
 import type { WorkingWeightChange } from './weights'
-
-/** The goal time every 5K test is measured against: 22:00. */
-export const GOAL_SECONDS = GOAL_PACE * 5
-/** "sub-22": the goal time in words. */
-export const GOAL_LABEL = `sub-${GOAL_SECONDS / 60}`
-
-export interface FiveKPoint {
-  week: number
-  date: LocalDate
-  seconds: number
-  /** Null for a test logged before the Environment was recorded. */
-  environment: Environment | null
-}
-
-export interface PlannedLine {
-  from: { week: number; seconds: number }
-  to: { week: number; seconds: number }
-}
-
-export interface FiveKProgress {
-  /** Every 5K test logged as Done with a time, on or before today, oldest first. */
-  tests: FiveKPoint[]
-  /** From the baseline test to the goal time by the last 5K test Week. Null until the baseline. */
-  planned: PlannedLine | null
-  /** 5K test Weeks still ahead with no test logged, each with where the planned line puts it. */
-  upcoming: { week: number; seconds: number | null }[]
-}
 
 /** Where one Session of a past or current Week stands. Skipped with days left is still open. */
 export type CompletionState = 'done' | 'partial' | 'swapped' | 'skipped' | 'missed' | 'open'
@@ -59,42 +36,6 @@ export interface WeekLoad {
   /** RPE × minutes of what was trained in the Week, by lane: a Race simulation in HYROX. */
   byLane: Partial<Record<Lane, number>>
   total: number
-}
-
-/** The last 5K test Week: the planned line reaches the goal time here. */
-export function finalTestWeek(program: Program): number {
-  const weeks = program.phases.flatMap((p) => p.weeks).filter((w) => w.compromisedRunTest)
-  return weeks.length > 0 ? weeks[weeks.length - 1].number : program.weekCount
-}
-
-export function fiveKProgress(program: Program, logs: SessionLog[], today: LocalDate): FiveKProgress {
-  const testWeeks = program.phases.flatMap((p) => p.weeks).filter((w) => w.compromisedRunTest)
-  const tests: FiveKPoint[] = testWeeks.flatMap((week) => {
-    const log = logFor(logs, week.number, 'compromised-run-test')
-    if (!log || log.status !== 'done' || log.resultSeconds === null) return []
-    if (daysBetween(log.date, today) < 0) return []
-    return [{ week: week.number, date: log.date, seconds: log.resultSeconds, environment: log.environment }]
-  })
-
-  const baseline = tests[0]
-  const last = finalTestWeek(program)
-  const planned: PlannedLine | null =
-    baseline && baseline.week < last
-      ? { from: { week: baseline.week, seconds: baseline.seconds }, to: { week: last, seconds: GOAL_SECONDS } }
-      : null
-
-  const tested = new Set(tests.map((t) => t.week))
-  const upcoming = testWeeks
-    .filter((w) => !tested.has(w.number) && daysBetween(today, addDays(w.startDate, 6)) >= 0)
-    .map((w) => ({ week: w.number, seconds: planned ? plannedAt(planned, w.number) : null }))
-
-  return { tests, planned, upcoming }
-}
-
-/** The planned 5K time in `week`, on the straight line from the baseline to the goal time. */
-export function plannedAt(line: PlannedLine, week: number): number {
-  const share = (week - line.from.week) / (line.to.week - line.from.week)
-  return Math.round(line.from.seconds + share * (line.to.seconds - line.from.seconds))
 }
 
 /** The Week a date falls in, or null outside the Program. */
@@ -169,14 +110,19 @@ export function trainingLoad(program: Program, logs: SessionLog[], today: LocalD
 }
 
 export interface ProgressDay {
-  fiveK: FiveKProgress
+  projected: ProjectedFinish
+  bests: StationBest[]
+  raceRun: RunTestResult[]
   completion: WeekCompletion[]
   load: WeekLoad[]
 }
 
 export function progress(program: Program, logs: SessionLog[], today: LocalDate): ProgressDay {
+  const bests = stationBests(program, logs, today)
   return {
-    fiveK: fiveKProgress(program, logs, today),
+    projected: projectedFinish(program, logs, today, bests),
+    bests,
+    raceRun: raceRunSeries(logs, today),
     completion: weeklyCompletion(program, logs, today),
     load: trainingLoad(program, logs, today),
   }
@@ -223,6 +169,95 @@ export function recoveryTrend(nights: RecoveryNight[], today: LocalDate): { date
     const date = addDays(today, i - RECOVERY_NIGHTS + 1)
     return { date, night: nightOf(nights, date) }
   })
+}
+
+// ---------------------------------------------------------------------------
+// The Projected finish, the Station bests and the Race run pace
+
+/** The transitions the Projected finish allows: the race plan's Roxzone, six minutes. */
+export const TRANSITION_SECONDS = ROXZONE_SECONDS
+
+/** One log stands for each Session (the latest edit), counted from the day it was done. */
+const standingBy = (logs: SessionLog[], today: LocalDate) =>
+  logs.filter((log) => logFor(logs, log.week, log.sessionId) === log && daysBetween(log.date, today) >= 0)
+
+export interface StationBest {
+  station: StationId
+  /** The fastest time at race volume and Race load, and the Week it was logged in; null before any. */
+  seconds: number | null
+  week: number | null
+}
+
+/** The eight Stations in race order, each with its Station best at full Station volume by today. */
+export function stationBests(program: Program, logs: SessionLog[], today: LocalDate): StationBest[] {
+  const standing = standingBy(logs, today)
+  return (Object.values(program.stations) as Station[])
+    .sort((a, b) => a.order - b.order)
+    .map(({ id, raceLoad }) => {
+      const volume = { meters: raceLoad.meters, reps: raceLoad.reps }
+      const seconds = stationBest(standing, id, volume)
+      if (seconds === null) return { station: id, seconds: null, week: null }
+      // The earliest log that holds the best: where it was first set.
+      const set = standing
+        .filter((log) => trained(log) && log.stations.some((l) => l.part === id && l.seconds === seconds))
+        .sort((a, b) => a.date.localeCompare(b.date))[0]
+      return { station: id, seconds, week: set?.week ?? null }
+    })
+}
+
+/** Every Done Compromised run test by today with its four runs timed, oldest first: Race run pace from test to test. */
+export function raceRunSeries(logs: SessionLog[], today: LocalDate): RunTestResult[] {
+  return standingBy(logs, today)
+    .flatMap((log) => runTestResult(log) ?? [])
+    .sort((a, b) => a.date.localeCompare(b.date) || a.week - b.week)
+}
+
+export interface ProjectedFinish {
+  /** The Race run pace of the latest Compromised run test; null before the first. */
+  raceRun: { secondsPerKm: number; week: number } | null
+  /** Stations with no best at full Station volume yet, in race order. */
+  missing: StationId[]
+  /** Null while a Station best or the Race run pace is missing: the projection is never invented. */
+  projection: {
+    /** The eight Station bests at full volume. */
+    stations: number
+    /** Eight 1 km runs at Race run pace. */
+    running: number
+    transitions: number
+    solo: number
+    /** Half the Station part, every run and the same transitions: both partners run every 1 km. */
+    doubles: number
+  } | null
+}
+
+/**
+ * The solo finish the Coach projects: the eight Station bests at full
+ * Station volume, eight runs at Race run pace and six minutes of
+ * transitions, with the Doubles share beside it.
+ */
+export function projectedFinish(
+  program: Program,
+  logs: SessionLog[],
+  today: LocalDate,
+  bests: StationBest[] = stationBests(program, logs, today),
+): ProjectedFinish {
+  const latest = raceRunSeries(logs, today).at(-1)
+  const raceRun = latest ? { secondsPerKm: latest.raceRun, week: latest.week } : null
+  const missing = bests.filter((b) => b.seconds === null).map((b) => b.station)
+  if (!raceRun || missing.length > 0) return { raceRun, missing, projection: null }
+  const stations = bests.reduce((sum, b) => sum + b.seconds!, 0)
+  const running = 8 * raceRun.secondsPerKm
+  return {
+    raceRun,
+    missing,
+    projection: {
+      stations,
+      running,
+      transitions: TRANSITION_SECONDS,
+      solo: stations + running + TRANSITION_SECONDS,
+      doubles: stations / 2 + running + TRANSITION_SECONDS,
+    },
+  }
 }
 
 // ---------------------------------------------------------------------------

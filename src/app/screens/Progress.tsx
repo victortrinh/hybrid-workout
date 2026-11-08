@@ -4,25 +4,25 @@ import { motion, useInView, useReducedMotion } from 'motion/react'
 import type { LocalDate } from '../../domain/calendar'
 import type { CoachDay } from '../../domain/coach'
 import type { SessionLog } from '../../domain/log'
-import { clock, speedFor, UNIT_LABEL, type SpeedUnit, type TrainingPaces } from '../../domain/paces'
+import { clock, speedFor, UNIT_LABEL, type RunTestResult, type SpeedUnit, type TrainingPaces } from '../../domain/paces'
 import { stations as STATIONS } from '../../domain/program/program'
 import { LIFT_NAME } from '../../domain/program/describe'
-import type { Lane, Program, Station } from '../../domain/program/types'
+import type { Lane, Program, Station, StationId } from '../../domain/program/types'
 import {
-  GOAL_LABEL,
-  GOAL_SECONDS,
-  plannedAt,
   progress,
   recoveryTrend,
   RECOVERY_NIGHTS,
   stationTimes,
+  TRANSITION_SECONDS,
   workingWeightRows,
-  type FiveKProgress,
+  type ProjectedFinish,
+  type StationBest,
   type StationTimes,
   type WeekCompletion,
   type WeekLoad,
   type WorkingWeightRow,
 } from '../../domain/progress'
+import { finishClock } from '../../domain/recap'
 import { isShortSleep, sleepText, SHORT_SLEEP_MINUTES, type RecoveryNight } from '../../domain/recovery'
 import type { WorkingWeightChange } from '../../domain/weights'
 import { EmptyState } from '../components/EmptyState'
@@ -43,15 +43,18 @@ interface ProgressProps {
 }
 
 /**
- * Progress: whether the Program is working. 5K tests against the planned line
- * to the goal time, each Week's completion by Session type, Training load per Week,
- * the current Training paces, recent recovery, the Working weights and HYROX
- * Station times. Twelve columns on desktop, stacked on a phone.
+ * Progress: whether the Program is working. The Projected finish first, with
+ * its Doubles share, then the eight Station bests at race volume, the Race run
+ * pace from test to test, each Week's completion by Session type, Training
+ * load per Week, the current Training paces, recent recovery, the Working
+ * weights and the Race simulation times. Twelve columns on desktop, stacked on a phone.
  */
 export function Progress({ program, day, logs, recoveryNights, unit }: ProgressProps) {
   const data = useMemo(() => progress(program, logs, day.today), [program, logs, day.today])
   const stations = useMemo(() => stationTimes(program, logs, day.today), [program, logs, day.today])
-  const firstTest = program.phases.flatMap((p) => p.weeks).find((w) => w.compromisedRunTest)
+  const testWeeks = program.phases.flatMap((p) => p.weeks).filter((w) => w.compromisedRunTest)
+  const firstTest = testWeeks[0]
+  const nextTest = testWeeks.find((w) => w.startDate > day.today && !data.raceRun.some((t) => t.week === w.number))
 
   return (
     <div className="px-pad pt-6 desktop:max-w-progress desktop:px-gutter desktop:pt-9">
@@ -59,20 +62,22 @@ export function Progress({ program, day, logs, recoveryNights, unit }: ProgressP
         Progress
       </h1>
       <p className="mt-1 text-body-quiet text-muted">
-        5K tests against {clock(GOAL_SECONDS)}, weekly completion, Training load and paces.
+        The Projected finish, Station bests, Race run pace, weekly completion, Training load and recovery.
       </p>
       {logs.length === 0 && recoveryNights.length === 0 ? (
         <EmptyState title="Nothing logged yet, so nothing to chart.">
           {firstTest
-            ? `The baseline 5K test is Week ${firstTest.number}. The ${clock(GOAL_SECONDS)} line can wait until then.`
+            ? `The first Compromised run test is Week ${firstTest.number}. It sets the Race run pace the Projected finish runs on.`
             : 'Charts start with the first Session log.'}
         </EmptyState>
       ) : (
         <div className="mt-3.5 grid gap-x-10 desktop:grid-cols-12">
-          <FiveKPanel program={program} fiveK={data.fiveK} firstTestWeek={firstTest?.number ?? null} />
+          <ProjectedPanel projected={data.projected} />
           <CompletionPanel program={program} day={day} completion={data.completion} />
-          <LoadPanel program={program} load={data.load} />
+          <BestsPanel bests={data.bests} />
+          <RaceRunPanel program={program} tests={data.raceRun} firstTestWeek={firstTest?.number ?? null} nextTestWeek={nextTest?.number ?? null} />
           <PacesPanel paces={day.paces} unit={unit} firstTestWeek={firstTest?.number ?? null} />
+          <LoadPanel program={program} load={data.load} />
           <RecoveryPanel nights={recoveryNights} today={day.today} />
           <WeightsPanel program={program} changes={day.workingWeightChanges} />
           <StationsPanel times={stations} />
@@ -156,171 +161,198 @@ function Sweep({ width, height, children }: { width: number; height: number; chi
 const ticks = (width: number, all: number[]) => (width < 480 ? all.filter((_, i) => i % 2 === 0) : all)
 
 // ---------------------------------------------------------------------------
-// 5K vs. the goal time
+// The Projected finish
 
-const ENVIRONMENT_WORD = { indoor: 'treadmill', outdoor: 'outdoors' } as const
+const RACE_ORDER = (Object.values(STATIONS) as Station[]).sort((a, b) => a.order - b.order)
+const STATION_NAME = (id: StationId) => STATIONS[id].name
 
-function FiveKPanel({
+const listNames = (names: string[]) =>
+  names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`
+
+function ProjectedPanel({ projected }: { projected: ProjectedFinish }) {
+  const { projection, missing, raceRun } = projected
+  if (!projection) {
+    const gaps = [
+      ...(missing.length > 0
+        ? [`no best at race volume yet for ${listNames(missing.map(STATION_NAME))}`]
+        : []),
+      ...(raceRun ? [] : ['no Compromised run test yet']),
+    ]
+    return (
+      <Panel title="Projected finish" sub="Solo, with the Doubles share beside it." span={8}>
+        <EmptyState title={`No projection yet: ${gaps.join(', and ')}.`}>
+          It waits for all eight Station bests at full volume and a Race run pace rather than guess one.
+        </EmptyState>
+        {missing.length > 0 && (
+          <ul aria-label="Missing Stations" className="mt-3 flex flex-wrap gap-x-3.5 gap-y-1.5 text-label text-muted">
+            {missing.map((id) => (
+              <li key={id}>{STATION_NAME(id)}</li>
+            ))}
+          </ul>
+        )}
+      </Panel>
+    )
+  }
+  return (
+    <Panel
+      title="Projected finish"
+      sub={`A projection: the eight Station bests at full volume, eight runs at ${clock(raceRun!.secondsPerKm)}/km from Week ${raceRun!.week}’s test, and ${clock(TRANSITION_SECONDS)} of transitions.`}
+      span={8}
+    >
+      <dl className="mt-3 grid grid-cols-2 gap-x-6">
+        <div>
+          <dt className="text-label text-muted">Solo</dt>
+          <dd className="text-[44px] leading-none font-black tracking-[-0.03em] font-stretch-125%">
+            {finishClock(projection.solo)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-label text-muted">Doubles share</dt>
+          <dd className="text-[44px] leading-none font-black tracking-[-0.03em] font-stretch-125%">
+            {finishClock(projection.doubles)}
+          </dd>
+        </div>
+      </dl>
+      <p className="mt-3 text-body-quiet text-muted">
+        {nb(`Stations ${finishClock(projection.stations)}`)} · {nb(`running ${finishClock(projection.running)}`)} ·{' '}
+        {nb(`transitions ${clock(projection.transitions)}`)}. The Doubles share is half the Station work and all the running.
+      </p>
+    </Panel>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Station bests
+
+const raceVolume = (station: Station) =>
+  station.raceLoad.reps ? `${station.raceLoad.reps} reps` : `${station.raceLoad.meters} m`
+
+function BestsPanel({ bests }: { bests: StationBest[] }) {
+  const set = bests.filter((b) => b.seconds !== null).length
+  return (
+    <Panel
+      title="Station bests"
+      sub={`At race volume and Race load. ${set === 8 ? 'All eight set.' : `${set} of 8 set.`}`}
+      span={12}
+    >
+      <ul className="mt-3 grid grid-cols-2 gap-2.5 desktop:grid-cols-4">
+        {bests.map((best) => {
+          const station = STATIONS[best.station]
+          return (
+            <li key={best.station} aria-label={station.name} className="rounded-sm bg-sunk p-3.5">
+              <p className="text-label text-muted">{nb(`${station.name} · ${raceVolume(station)}`)}</p>
+              {best.seconds === null ? (
+                <p className="mt-1 text-[28px] leading-none font-black text-muted">
+                  <span aria-hidden="true">–</span>
+                  <span className="sr-only">No best yet</span>
+                </p>
+              ) : (
+                <p className="mt-1 text-[28px] leading-none font-black tracking-[-0.02em]">
+                  {clock(best.seconds)}
+                  <span className="ml-1.5 text-label font-semibold text-muted">W{best.week}</span>
+                </p>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+    </Panel>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Race run pace, test to test
+
+function RaceRunPanel({
   program,
-  fiveK,
+  tests,
   firstTestWeek,
+  nextTestWeek,
 }: {
   program: Program
-  fiveK: FiveKProgress
+  tests: RunTestResult[]
   firstTestWeek: number | null
+  nextTestWeek: number | null
 }) {
-  const latest = fiveK.tests.at(-1)
+  const latest = tests.at(-1)
+  const next = nextTestWeek ? ` Next test Week ${nextTestWeek}.` : ''
   const sub = !latest
-    ? `No 5K test yet.${firstTestWeek ? ` The baseline is Week ${firstTestWeek}.` : ''}`
-    : `${fiveK.tests.length === 1 ? 'One test so far' : `${fiveK.tests.length} tests so far`}: latest ${clock(latest.seconds)}${latest.environment ? ` ${latest.environment === 'indoor' ? 'on a treadmill' : 'outdoors'}` : ''}, Week ${latest.week}. ${toFind(latest.seconds, fiveK)}`
+    ? `No Compromised run test yet.${firstTestWeek ? ` The first is Week ${firstTestWeek}.` : ''}`
+    : `${tests.length === 1 ? 'One test so far' : `${tests.length} tests so far`}: latest ${clock(latest.raceRun)}/km, Week ${latest.week}, Fade ${signedSeconds(latest.fade)} s/km.${next}`
   return (
-    <Panel title={`5K vs. ${GOAL_LABEL}`} sub={sub} span={8}>
+    <Panel title="Race run pace" sub={sub} span={8}>
       {latest ? (
-        <>
-          <ChartSlot render={(width) => <FiveKChart width={width} weekCount={program.weekCount} fiveK={fiveK} />} />
-          <ul aria-label="Chart key" className="mt-3 flex flex-wrap gap-x-3.5 gap-y-1.5 text-label text-muted">
-            <li className="flex items-center gap-1.5">
-              <i aria-hidden="true" className="inline-block size-2.5 bg-link" />
-              Treadmill test
-            </li>
-            <li className="flex items-center gap-1.5">
-              <i aria-hidden="true" className="inline-block size-2.5 rounded-full bg-link" />
-              Outdoor test
-            </li>
-            {fiveK.planned && (
-              <li className="flex items-center gap-1.5">
-                <i aria-hidden="true" className="inline-block size-2.5 border-2 border-link" />
-                Planned test
-              </li>
-            )}
-          </ul>
-        </>
+        <ChartSlot render={(width) => <RaceRunChart width={width} weekCount={program.weekCount} tests={tests} />} />
       ) : (
-        <EmptyState title={`The ${clock(GOAL_SECONDS)} line can wait until the baseline.`}>
-          The baseline test sets the Training paces and the planned line to {GOAL_LABEL}.
+        <EmptyState title="The average of a test’s four runs lands here.">
+          Each Compromised run test sets the Race run pace and resets the Training paces.
         </EmptyState>
       )}
     </Panel>
   )
 }
 
-function toFind(seconds: number, fiveK: FiveKProgress): string {
-  const gap = seconds - GOAL_SECONDS
-  if (gap <= 0) return `Under ${clock(GOAL_SECONDS)}.`
-  const by = fiveK.planned ? ` by Week ${fiveK.planned.to.week}` : ''
-  return `${clock(gap)} to find${by}.`
-}
+const signedSeconds = (n: number) => (n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : '±0')
 
-function FiveKChart({ width: W, weekCount, fiveK }: { width: number; weekCount: number; fiveK: FiveKProgress }) {
-  const H = 230
+function RaceRunChart({ width: W, weekCount, tests }: { width: number; weekCount: number; tests: RunTestResult[] }) {
+  const H = 200
   const [L, R, T, B] = [48, 16, 18, 30]
-  const times = [...fiveK.tests.map((t) => t.seconds), GOAL_SECONDS]
-  const low = Math.min(19, Math.floor(Math.min(...times) / 60))
-  const high = Math.max(25, Math.ceil(Math.max(...times) / 60))
+  const paces = tests.map((t) => t.raceRun)
+  // Ten-second gridlines around the tests; faster is higher.
+  const low = Math.floor((Math.min(...paces) - 10) / 10) * 10
+  const high = Math.ceil((Math.max(...paces) + 10) / 10) * 10
   const x = (week: number) => L + ((week - 1) / (weekCount - 1)) * (W - L - R)
-  const y = (seconds: number) => T + ((seconds - low * 60) / ((high - low) * 60)) * (H - T - B)
-  const minutes = Array.from({ length: high - low + 1 }, (_, i) => low + i)
-  const latest = fiveK.tests.at(-1)!
-  const path = fiveK.tests.map((t, i) => `${i ? 'L' : 'M'}${x(t.week)},${y(t.seconds)}`).join('')
-  const midWeek = fiveK.planned ? (fiveK.planned.from.week + fiveK.planned.to.week) / 2 : null
-  // The latest test's label sits right of its mark, or left of it near the end.
-  const labelRight = x(latest.week) < W - R - 140
+  const y = (seconds: number) => T + ((seconds - low) / (high - low)) * (H - T - B)
+  const grid = Array.from({ length: (high - low) / 10 + 1 }, (_, i) => low + i * 10)
+  const latest = tests.at(-1)!
+  const path = tests.map((t, i) => `${i ? 'L' : 'M'}${x(t.week)},${y(t.raceRun)}`).join('')
+  const labelRight = x(latest.week) < W - R - 100
 
   return (
-    <svg className="chart" width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={fiveKSummary(fiveK)}>
-      {minutes.map((m) => (
-        <g key={m}>
-          <text x={L - 10} y={y(m * 60) + 4} textAnchor="end">
-            {m}:00
+    <svg className="chart" width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={raceRunSummary(tests)}>
+      {grid.map((s) => (
+        <g key={s}>
+          <text x={L - 10} y={y(s) + 4} textAnchor="end">
+            {clock(s)}
           </text>
-          <line x1={L} x2={W - R} y1={y(m * 60)} y2={y(m * 60)} stroke="var(--rule)" />
+          <line x1={L} x2={W - R} y1={y(s)} y2={y(s)} stroke="var(--rule)" />
         </g>
       ))}
-      {ticks(W, [1, 5, 9, 13, 17, 21, 25].filter((w) => w <= weekCount)).map((w) => (
+      {ticks(W, [1, 5, 9, 13, 17, 21, 24].filter((w) => w <= weekCount)).map((w) => (
         <text key={w} x={x(w)} y={H - 6} textAnchor="middle">
           W{w}
         </text>
       ))}
-      <line x1={L} x2={W - R} y1={y(GOAL_SECONDS)} y2={y(GOAL_SECONDS)} stroke="var(--speed)" strokeWidth={2} />
-      <text x={L + 6} y={y(GOAL_SECONDS) - 8} className="goal">
-        Goal {clock(GOAL_SECONDS)}
-      </text>
-      {fiveK.planned && midWeek !== null && (
-        <>
-          <line
-            x1={x(fiveK.planned.from.week)}
-            y1={y(fiveK.planned.from.seconds)}
-            x2={x(fiveK.planned.to.week)}
-            y2={y(fiveK.planned.to.seconds)}
-            stroke="var(--link)"
-            strokeWidth={2}
-            strokeDasharray="6 6"
-          />
-          <text x={x(midWeek)} y={y(plannedAt(fiveK.planned, midWeek)) + 20} textAnchor="middle">
-            Plan
-          </text>
-        </>
-      )}
       <Sweep width={W} height={H}>
-      {fiveK.upcoming.map(
-        (u) =>
-          u.seconds !== null && (
-            <rect
-              key={u.week}
-              x={x(u.week) - 6}
-              y={y(u.seconds) - 6}
-              width={12}
-              height={12}
-              fill="var(--paper)"
-              stroke="var(--link)"
-              strokeWidth={2}
-            />
-          ),
-      )}
-      {fiveK.tests.length > 1 && <path d={path} fill="none" stroke="var(--link)" strokeWidth={2} />}
-      {fiveK.tests.map((t) =>
-        t.environment === 'outdoor' ? (
-          <circle key={t.week} cx={x(t.week)} cy={y(t.seconds)} r={8} fill="var(--link)" stroke="var(--paper)" strokeWidth={2} />
-        ) : (
+        {tests.length > 1 && <path d={path} fill="none" stroke="var(--link)" strokeWidth={2} />}
+        {tests.map((t) => (
           <rect
-            key={t.week}
+            key={`${t.week}-${t.date}`}
             x={x(t.week) - 8}
-            y={y(t.seconds) - 8}
+            y={y(t.raceRun) - 8}
             width={16}
             height={16}
             fill="var(--link)"
             stroke="var(--paper)"
             strokeWidth={2}
           />
-        ),
-      )}
-      <text
-        className="strong"
-        x={x(latest.week) + (labelRight ? 14 : -14)}
-        y={y(latest.seconds) + 22}
-        textAnchor={labelRight ? 'start' : 'end'}
-      >
-        {clock(latest.seconds)}
-        {latest.environment && ` · ${ENVIRONMENT_WORD[latest.environment]}`}
-      </text>
+        ))}
+        <text
+          className="strong"
+          x={x(latest.week) + (labelRight ? 14 : -14)}
+          y={y(latest.raceRun) + 22}
+          textAnchor={labelRight ? 'start' : 'end'}
+        >
+          {clock(latest.raceRun)}/km
+        </text>
       </Sweep>
     </svg>
   )
 }
 
-function fiveKSummary(fiveK: FiveKProgress): string {
-  const tests = fiveK.tests
-    .map((t) => `${clock(t.seconds)} in Week ${t.week}${t.environment ? ` ${ENVIRONMENT_WORD[t.environment]}` : ''}`)
-    .join(', ')
-  const plan = fiveK.planned
-    ? ` Planned line from ${clock(fiveK.planned.from.seconds)} to ${clock(GOAL_SECONDS)} by Week ${fiveK.planned.to.week}.`
-    : ''
-  const upcoming = fiveK.upcoming.length ? ` Tests to come in Weeks ${listWeeks(fiveK.upcoming.map((u) => u.week))}.` : ''
-  return `5K tests: ${tests}.${plan}${upcoming}`
+function raceRunSummary(tests: RunTestResult[]): string {
+  return `Race run pace: ${tests.map((t) => `${clock(t.raceRun)}/km in Week ${t.week}`).join(', ')}.`
 }
-
-const listWeeks = (weeks: number[]) =>
-  weeks.length < 2 ? weeks.join('') : `${weeks.slice(0, -1).join(', ')} and ${weeks.at(-1)}`
 
 // ---------------------------------------------------------------------------
 // Weekly completion
@@ -404,7 +436,7 @@ function LoadPanel({ program, load }: { program: Program; load: WeekLoad[] }) {
   const nextDeload = deloads.find((w) => w >= (load.at(-1)?.week ?? 1))
   const sub = `RPE × minutes per Week, by Session type.${nextDeload ? ` Week ${nextDeload} is a deload, so expect a dip.` : ''}`
   return (
-    <Panel title="Training load" sub={sub} span={8}>
+    <Panel title="Training load" sub={sub} span={12}>
       <ChartSlot render={(width) => <LoadChart width={width} weekCount={program.weekCount} load={load} />} />
       <LaneLegend />
     </Panel>
@@ -740,9 +772,7 @@ function lastChange({ last, before }: WorkingWeightRow): string {
 }
 
 // ---------------------------------------------------------------------------
-// HYROX stations
-
-const RACE_ORDER = (Object.values(STATIONS) as Station[]).sort((a, b) => a.order - b.order)
+// HYROX stations: Race simulation times
 
 function StationsPanel({ times }: { times: StationTimes }) {
   const { simulations, hyrox, firstSimulation } = times

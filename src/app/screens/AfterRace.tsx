@@ -6,7 +6,6 @@ import { clock } from '../../domain/paces'
 import { LIFT_NAME } from '../../domain/program/describe'
 import { program } from '../../domain/program/program'
 import type { Lane } from '../../domain/program/types'
-import { GOAL_LABEL } from '../../domain/progress'
 import { parseFinish, type ProgramRecap, type RaceResult } from '../../domain/recap'
 import { raceCopy } from '../coachCopy'
 import { ActionBar } from '../components/ActionBar'
@@ -130,12 +129,12 @@ function NextRow({ term, children }: { term: string; children: ReactNode }) {
 
 /**
  * The Program in four numbers, solid (the striped one is the finish time
- * above): the 5K first to last, the Working weights first to now, Sessions
+ * above): the Race run pace first to last, the Working weights first to now, Sessions
  * done, and where the Training load went, one lane per Session type.
  */
 export function ProgramRecapPanel({ recap }: { recap: ProgramRecap }) {
   const start = programStart(program)
-  const { fiveK, workingWeights, sessions, trainingLoad } = recap
+  const { raceRun, workingWeights, sessions, trainingLoad } = recap
   return (
     <section
       aria-labelledby="recap-heading"
@@ -152,14 +151,14 @@ export function ProgramRecapPanel({ recap }: { recap: ProgramRecap }) {
       </h2>
       <dl className="mt-1.5">
         <RecapRow
-          term="5K test"
-          figure={fiveK ? clock(fiveK.last.seconds) : '–'}
+          term="Race run pace"
+          figure={raceRun ? clock(raceRun.last.secondsPerKm) : '–'}
           detail={
-            !fiveK
-              ? 'None logged. The paces were guesses all the way.'
-              : fiveK.first.week === fiveK.last.week
-                ? `Week ${fiveK.first.week}, the only one logged`
-                : `${clock(fiveK.first.seconds)} in Week ${fiveK.first.week} · ${fiveKChange(fiveK.first.seconds, fiveK.last.seconds)}${fiveK.underGoal ? ` · ${GOAL_LABEL}` : ''}`
+            !raceRun
+              ? 'No Compromised run test logged. The paces were guesses all the way.'
+              : raceRun.first.week === raceRun.last.week
+                ? `Per km · Week ${raceRun.first.week}, the only test logged`
+                : `Per km · ${clock(raceRun.first.secondsPerKm)} in Week ${raceRun.first.week} · ${paceChange(raceRun.first.secondsPerKm, raceRun.last.secondsPerKm)}`
           }
         />
         <div className="border-b border-rule py-3.5">
@@ -265,10 +264,10 @@ const LANE_FILL: Record<Lane, string> = {
   easy: 'bg-easy',
 }
 
-function fiveKChange(first: number, last: number): string {
-  if (last < first) return `${clock(first - last)} faster`
-  if (last > first) return `${clock(last - first)} slower`
-  return 'same time'
+function paceChange(first: number, last: number): string {
+  if (last < first) return `${first - last} s/km quicker`
+  if (last > first) return `${last - first} s/km slower`
+  return 'same pace'
 }
 
 const signed = (n: number) => (n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : '±0')

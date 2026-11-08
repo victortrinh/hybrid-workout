@@ -2,12 +2,12 @@
  * After Race day: the race result and the Program recap.
  *
  * Pure, like Progress (ADR-0002): the race's finish time from its Session log,
- * and the whole Program in four numbers: the 5K tests first to last, the
+ * and the whole Program in four numbers: the Race run pace first to last, the
  * Working weights first to now, Sessions done and the total Training load.
  */
 import { daysBetween, type LocalDate } from './calendar'
 import { logFor, RACE_SESSION_ID, type SessionLog } from './log'
-import { fiveKProgress, GOAL_SECONDS, trainingLoad, weeklyCompletion, workingWeightRows } from './progress'
+import { raceRunSeries, trainingLoad, weeklyCompletion, workingWeightRows } from './progress'
 import type { Lane, LiftId, Program } from './program/types'
 import type { WorkingWeightChange } from './weights'
 
@@ -31,8 +31,8 @@ export function raceResult(program: Program, logs: SessionLog[], today: LocalDat
 }
 
 export interface ProgramRecap {
-  /** The first and the last 5K test, and whether the last one beat the goal time; null with none logged. */
-  fiveK: { first: { week: number; seconds: number }; last: { week: number; seconds: number }; underGoal: boolean } | null
+  /** Race run pace from the first Compromised run test and the last, s/km; null with none logged. */
+  raceRun: { first: { week: number; secondsPerKm: number }; last: { week: number; secondsPerKm: number } } | null
   /** Each lift with a Working weight: where calibration found it, where it is now. */
   workingWeights: { lift: LiftId; first: number; now: number }[]
   /** Required Sessions Done or Partial out of every one the Program prescribed, and Easy runs on top. */
@@ -47,17 +47,16 @@ export function programRecap(
   changes: WorkingWeightChange[],
   today: LocalDate,
 ): ProgramRecap {
-  const tests = fiveKProgress(program, logs, today).tests
+  const tests = raceRunSeries(logs, today)
   const first = tests[0]
   const last = tests.at(-1)
   const completion = weeklyCompletion(program, logs, today)
   return {
-    fiveK:
+    raceRun:
       first && last
         ? {
-            first: { week: first.week, seconds: first.seconds },
-            last: { week: last.week, seconds: last.seconds },
-            underGoal: last.seconds < GOAL_SECONDS,
+            first: { week: first.week, secondsPerKm: first.raceRun },
+            last: { week: last.week, secondsPerKm: last.raceRun },
           }
         : null,
     workingWeights: workingWeightRows(changes).map((row) => ({ lift: row.lift, first: row.first.pounds, now: row.current })),
