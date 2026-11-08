@@ -203,7 +203,7 @@ const T0 = Date.parse('2026-11-11T17:00:00Z')
 const at = (minutes: number) => T0 + minutes * MIN
 
 /** Paces estimated from 23:00: Threshold 4:52/km, 12.3 km/h. */
-const paces = trainingPaces(23 * 60)
+const paces = trainingPaces(307)
 const indoor: RunContext = { paces, environment: 'indoor', unit: 'kmh' }
 
 const start = (s: Session, environment: 'indoor' | 'outdoor' = 'indoor'): LiveRun =>
@@ -326,35 +326,35 @@ describe('liveTarget', () => {
   })
 
   describe('a recovery jog', () => {
-    // A 23:00 test: Easy 5:51–6:26/km, so its slow end is 9.3 km/h.
+    // Race run pace 5:07: Easy 6:07–6:37/km, so its slow end is 9.1 km/h.
     const slowEasy = Math.round((3600 / paces.easy[1]) * 10) / 10
 
     it('suggests the slow end of Easy pace less 0.5 km/h, with walking allowed', () => {
-      expect(slowEasy).toBe(9.3)
+      expect(slowEasy).toBe(9.1)
       expect(liveTarget(jog, indoor)).toEqual({
-        value: '8.8',
+        value: '8.6',
         unit: 'km/h',
-        secondary: { value: '6:49', unit: '/km' },
+        secondary: { value: '6:59', unit: '/km' },
         incline: 1,
-        pace: 409,
-        figure: '8.8 km/h · 6:49/km · 1% incline',
-        words: 'Jog ~8.8 km/h · 6:49/km, or walk',
+        pace: 419,
+        figure: '8.6 km/h · 6:59/km · 1% incline',
+        words: 'Jog ~8.6 km/h · 6:59/km, or walk',
       })
     })
 
     it('reads in the Settings unit indoors and as pace per km outdoors', () => {
-      expect(liveTarget(jog, { ...indoor, unit: 'mph' })).toMatchObject({ value: '5.5', unit: 'mph', words: 'Jog ~5.5 mph · 6:49/km, or walk' })
+      expect(liveTarget(jog, { ...indoor, unit: 'mph' })).toMatchObject({ value: '5.3', unit: 'mph', words: 'Jog ~5.3 mph · 6:59/km, or walk' })
       expect(liveTarget(jog, { ...indoor, environment: 'outdoor' })).toMatchObject({
-        value: '6:49',
+        value: '6:59',
         unit: '/km',
         incline: null,
-        words: 'Jog ~6:49/km, or walk',
+        words: 'Jog ~6:59/km, or walk',
       })
     })
 
     it('comes from Estimated Training paces the same way', () => {
-      const estimated = { ...indoor, paces: trainingPaces(23 * 60, { estimate: true }) }
-      expect(liveTarget(jog, estimated)).toMatchObject({ value: '8.8', words: 'Jog ~8.8 km/h · 6:49/km, or walk' })
+      const estimated = { ...indoor, paces: trainingPaces(307, { estimate: true }) }
+      expect(liveTarget(jog, estimated)).toMatchObject({ value: '8.6', words: 'Jog ~8.6 km/h · 6:59/km, or walk' })
     })
 
     it('is ~7 km/h with no Training paces', () => {
@@ -372,7 +372,7 @@ describe('liveTarget', () => {
     })
 
     it('has no floor: slow Easy pace gives a slow jog', () => {
-      const slow = { ...indoor, paces: trainingPaces(45 * 60) }
+      const slow = { ...indoor, paces: trainingPaces(600) }
       const kmh = Math.round((3600 / slow.paces.easy[1]) * 10) / 10 - 0.5
       expect(kmh).toBeLessThan(7)
       expect(liveTarget(jog, slow)?.value).toBe(kmh.toFixed(1))
@@ -1035,9 +1035,9 @@ describe('last time', () => {
 
     it('still comes from the Training paces first, real or estimated', () => {
       const logged = { hardPace: null, recoveryPace: JOG }
-      expect(liveTarget(jog, { ...indoor, logged })).toMatchObject({ value: '8.8', pace: 409 })
-      const estimated = { ...indoor, paces: trainingPaces(23 * 60, { estimate: true }), logged }
-      expect(liveTarget(jog, estimated)).toMatchObject({ value: '8.8', pace: 409 })
+      expect(liveTarget(jog, { ...indoor, logged })).toMatchObject({ value: '8.6', pace: 419 })
+      const estimated = { ...indoor, paces: trainingPaces(307, { estimate: true }), logged }
+      expect(liveTarget(jog, estimated)).toMatchObject({ value: '8.6', pace: 419 })
     })
   })
 

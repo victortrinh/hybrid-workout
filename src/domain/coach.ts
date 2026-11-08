@@ -310,7 +310,7 @@ export function coach({
     dropped: droppedFor(program, logs, decisions, today),
     upNext: upNext?.session ?? null,
     rest,
-    paces: currentPaces(startingPoint?.fiveKSeconds ?? null),
+    paces: currentPaces(logs, startingPoint?.splitSeconds ?? null, today),
     suggestions,
     heldIncreases: position.kind === 'in-week' ? strength.held : [],
     workingWeights: strength.weights,

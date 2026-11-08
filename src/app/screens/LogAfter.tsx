@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import {
   Button,
+  FieldError,
   Form,
   Group,
   Input,
@@ -27,15 +28,22 @@ import {
   type SessionLog,
 } from '../../domain/log'
 import {
+  clock,
+  clockInput,
   consoleDistance,
   consoleMeters,
   DISTANCE_UNIT,
+  parseClock,
+  RUN_TEST_SESSION_ID,
+  SPLIT_SECONDS,
   type SpeedUnit,
 } from '../../domain/paces'
+import { runTestLines, runTestRounds, runTestTimes, type RunTestRound } from '../../domain/runTest'
 import type { PainArea } from '../../domain/pain'
 import { sessionRpe } from '../../domain/live'
 import { describeSession } from '../../domain/program/describe'
 import { finishClock, parseFinish } from '../../domain/recap'
+import { stations } from '../../domain/program/program'
 import type { Session, Week } from '../../domain/program/types'
 import { outsideWeekLine } from '../coachCopy'
 import { FinishTimeField, validateFinish } from '../components/FinishTimeField'
@@ -116,6 +124,15 @@ export function LogAfter({
   const [time, setTime] = useState(
     existing?.resultSeconds && isRace ? finishClock(existing.resultSeconds) : '',
   )
+  /** A Compromised run test's splits and Station times, as typed. */
+  const isTest = session.id === RUN_TEST_SESSION_ID
+  const [rounds] = useState(() => (isTest ? runTestRounds(session) : []))
+  const [splits, setSplits] = useState(() => {
+    const times = runTestTimes(rounds, existing)
+    const text = (t: number | null) => (t === null ? '' : clock(t))
+    return { runs: times.runs.map(text), stations: times.stations.map(text) }
+  })
+  const [splitsMissing, setSplitsMissing] = useState(false)
   /** Unanswered gives no Pain report; the Coach goes on with the last one. */
   const [hurts, setHurts] = useState<'no' | 'yes' | null>(null)
   const [pain, setPain] = useState<PainAnswer>({ score: null, area: null })
@@ -131,6 +148,13 @@ export function LogAfter({
     if (!date) return
     const resultSeconds = finish && time.trim() !== '' ? parseFinish(time) : null
     if (finish && validateFinish(time)) return
+    const testing = isTest && trained
+    if (testing && [...splits.runs.map(validateSplit), ...splits.stations.map(validateStationTime)].some(Boolean)) return
+    // A Done test is its four runs: their mean sets the Training paces.
+    if (testing && status === 'done' && splits.runs.some((t) => t.trim() === '')) {
+      setSplitsMissing(true)
+      return
+    }
     if (hurts === 'yes' && !answered(pain)) {
       setPainMissing(true)
       return
@@ -157,7 +181,11 @@ export function LogAfter({
       recoveryPace: trained ? (existing?.recoveryPace ?? null) : null,
       intervals: trained ? (existing?.intervals ?? []) : [],
       sets: trained ? (existing?.sets ?? []) : [],
-      stations: trained ? (existing?.stations ?? []) : [],
+      stations: !trained
+        ? []
+        : isTest
+          ? runTestLines(rounds, { runs: splits.runs.map(parseClock), stations: splits.stations.map(parseClock) })
+          : (existing?.stations ?? []),
       updatedAt: editedAt(existing),
     })
     navigate(back.href)
@@ -295,6 +323,18 @@ export function LogAfter({
               </NumberField>
             )}
 
+            {isTest && (
+              <RunTestFields
+                rounds={rounds}
+                value={splits}
+                missing={splitsMissing}
+                onChange={(next) => {
+                  setSplits(next)
+                  setSplitsMissing(false)
+                }}
+              />
+            )}
+
             <OverallRpe value={rpe} missing={false} predicted={predicted} onChange={setRpe} />
           </>
         )}
@@ -354,6 +394,84 @@ export function LogAfter({
         </div>
       </Form>
     </div>
+  )
+}
+
+/** A 1 km split as typed: empty while not yet given, otherwise m:ss within what a km between Stations takes. */
+function validateSplit(text: string): string | null {
+  if (text.trim() === '') return null
+  const seconds = parseClock(text)
+  const [low, high] = SPLIT_SECONDS
+  if (seconds === null) return 'Minutes and seconds, like 4:55.'
+  if (seconds < low || seconds > high) return `A 1 km split between ${clock(low)} and ${clock(high)}.`
+  return null
+}
+
+/** A Station time as typed: empty or m:ss. */
+function validateStationTime(text: string): string | null {
+  if (text.trim() === '') return null
+  const seconds = parseClock(text)
+  return seconds === null || seconds === 0 ? 'Minutes and seconds, like 2:05.' : null
+}
+
+const splitInputClass =
+  'h-11 w-24 rounded-sm bg-paper px-3 text-center text-[17px] font-bold shadow-[inset_0_0_0_2px_var(--edge)] outline-none placeholder:font-semibold placeholder:text-muted focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-link data-invalid:shadow-[inset_0_0_0_2px_var(--ink)]'
+
+/**
+ * A Compromised run test's four rounds, written after: each round's 1 km
+ * split and its Station's time, as Live would have logged them. The mean of
+ * the four runs sets Race run pace.
+ */
+function RunTestFields({
+  rounds,
+  value,
+  missing,
+  onChange,
+}: {
+  rounds: RunTestRound[]
+  value: { runs: string[]; stations: string[] }
+  missing: boolean
+  onChange: (value: { runs: string[]; stations: string[] }) => void
+}) {
+  const set = (key: 'runs' | 'stations', i: number, text: string) =>
+    onChange({ ...value, [key]: value[key].map((t, j) => (j === i ? clockInput(text) : t)) })
+  return (
+    <fieldset className="grid gap-3">
+      <legend className={groupLabel}>Splits</legend>
+      <p className={`-mt-1 text-body-quiet ${missing ? 'font-bold text-ink' : 'text-muted'}`}>
+        {missing
+          ? 'All four run splits first: their average sets Race run pace.'
+          : 'Each 1 km, then its Station. The average of the four runs becomes Race run pace.'}
+      </p>
+      {rounds.map((r, i) => (
+        <div key={r.round} className="grid grid-cols-2 gap-3">
+          <TextField
+            value={value.runs[i]}
+            onChange={(text) => set('runs', i, text)}
+            validate={validateSplit}
+            validationBehavior="aria"
+            inputMode="numeric"
+            className="grid gap-1"
+          >
+            <Label className="text-[15px] font-bold">Run {r.round}, 1 km</Label>
+            <Input placeholder="m:ss" autoComplete="off" className={splitInputClass} />
+            <FieldError className="text-body-quiet font-bold text-ink" />
+          </TextField>
+          <TextField
+            value={value.stations[i]}
+            onChange={(text) => set('stations', i, text)}
+            validate={validateStationTime}
+            validationBehavior="aria"
+            inputMode="numeric"
+            className="grid gap-1"
+          >
+            <Label className="text-[15px] font-bold">{stations[r.station].name}</Label>
+            <Input placeholder="m:ss" autoComplete="off" className={splitInputClass} />
+            <FieldError className="text-body-quiet font-bold text-ink" />
+          </TextField>
+        </div>
+      ))}
+    </fieldset>
   )
 }
 

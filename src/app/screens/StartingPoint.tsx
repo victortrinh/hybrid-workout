@@ -3,12 +3,12 @@ import { SKIPPED, type StartingPoint as Point } from '../../domain/startingPoint
 import { StartingPointFields, type StartingFields } from '../components/StartingPointFields'
 
 const EMPTY: StartingFields = {
-  fiveK: { value: null, real: false },
+  split: { value: null, real: false },
   lifts: { 'back-squat': { value: null, real: false }, 'romanian-deadlift': { value: null, real: false } },
 }
 
 /**
- * The Starting point, once, at first launch: an estimated 5K time and
+ * The Starting point, once, at first launch: an estimated 1 km split and
  * estimated Working weights, each optional. Anything left empty, or Skip,
  * gives RPE-only runs and calibrations from the bar. Settings edits it after.
  */
@@ -20,7 +20,7 @@ export function StartingPoint({ onSave }: { onSave: (estimates: Omit<Point, 'upd
         Where are you starting from?
       </h1>
       <p className="mt-2 text-body">
-        Two estimates, both optional, so the first weeks aren’t guesswork. A real 5K test or calibration always
+        Two estimates, both optional, so the first weeks aren’t guesswork. A real Compromised run test or calibration always
         replaces them, and you can change them in Settings until then.
       </p>
       <div className="mt-6 border-t-2 border-ink pt-4">

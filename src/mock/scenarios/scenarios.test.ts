@@ -120,13 +120,13 @@ describe('each scenario falls where its name says', () => {
   it('estimates: Week 1 with estimated paces and calibrations starting from the estimates', async () => {
     const d = await day('estimates')
     expect(d.position).toMatchObject({ kind: 'in-week', week: 1 })
-    expect(d.paces).toMatchObject({ fromSeconds: 21 * 60, estimate: true })
+    expect(d.paces).toMatchObject({ raceRun: 330, estimate: true })
     expect(d.estimatedWeights).toEqual({ 'back-squat': 225, 'romanian-deadlift': 185 })
   })
 
   it('every other scenario: the Starting point skipped, so it behaves as before', async () => {
     for (const s of SCENARIOS.filter((s) => !['first-launch', 'estimates', 'after-baseline'].includes(s.name))) {
-      expect(s.server.startingPoint, s.name).toMatchObject({ fiveKSeconds: null, weights: {} })
+      expect(s.server.startingPoint, s.name).toMatchObject({ splitSeconds: null, weights: {} })
     }
   })
 
@@ -134,7 +134,8 @@ describe('each scenario falls where its name says', () => {
     const d = await day('after-baseline')
     expect(d.position).toMatchObject({ kind: 'in-week', week: 2 })
     expect(d.state.sessionLogs.find((l) => l.sessionId === 'compromised-run-test')).toMatchObject({ week: 2, status: 'done' })
-    expect(d.paces).toMatchObject({ estimate: true })
+    // The test's four run splits set the paces from its day on, over the Starting point's estimate.
+    expect(d.paces).toEqual({ raceRun: 307, threshold: 292, easy: [367, 397], estimate: false })
     expect(parseSettings(d.scenario.device.settings).environmentByMonth[10]).toBe('indoor')
     expect(d.scenario.device.environment).toEqual({ '2/easy': 'outdoor' })
     expect(parseSettings(d.scenario.device.settings).unit).toBe('mph')

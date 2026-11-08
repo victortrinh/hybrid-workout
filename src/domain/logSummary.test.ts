@@ -67,6 +67,19 @@ describe('logSummary', () => {
     expect(summary('race-simulation', { stations, rpe: 8 })).toBe('Race simulation, 1:04:05 · RPE 8')
   })
 
+  it('gives a Compromised run test its Race run pace and its Fade, first split to fourth', () => {
+    const run = (round: number, seconds: number | null): StationLog => ({ ...station(round, 'run', seconds), meters: 1000 })
+    const stations = [run(1, 290), station(1, 'skierg', 120), run(2, 300), run(3, 305), run(4, 313)]
+    const test = { sessionId: 'compromised-run-test', stations, minutes: 45, rpe: 9 }
+    expect(summary('compromised-run-test', test)).toBe('Race run pace 5:02/km · Fade +23 s/km · 45 min · RPE 9')
+    const negative = [run(1, 300), run(2, 298), run(3, 296), run(4, 294)]
+    expect(summary('compromised-run-test', { ...test, stations: negative })).toBe('Race run pace 4:57/km · Fade −6 s/km · 45 min · RPE 9')
+    // Cut short: no Race run pace from it, but the Fade of what was run.
+    expect(summary('compromised-run-test', { ...test, status: 'partial', stations: stations.slice(0, 3) })).toBe(
+      'Fade +10 s/km · 45 min · RPE 9',
+    )
+  })
+
   it('counts the reps held on target in a Live run', () => {
     const intervals = [
       { block: 1, rep: 1, targetPace: 292, held: true, actualPace: null },

@@ -82,16 +82,16 @@ describe('the Worker in the browser', () => {
 
   it('keeps the Starting point, a later edit winning, and refuses an unbelievable one', async () => {
     expect((await state()).startingPoint).toBeNull()
-    const point = { fiveKSeconds: 1260, weights: { 'back-squat': 225 }, updatedAt: '2026-10-22T12:00:00.000Z' }
+    const point = { splitSeconds: 330, weights: { 'back-squat': 225 }, updatedAt: '2026-10-22T12:00:00.000Z' }
     expect((await sync({ startingPoint: point })).startingPoint).toEqual(point)
-    const later = { fiveKSeconds: null, weights: { 'romanian-deadlift': 185 }, updatedAt: '2026-10-23T12:00:00.000Z' }
+    const later = { splitSeconds: null, weights: { 'romanian-deadlift': 185 }, updatedAt: '2026-10-23T12:00:00.000Z' }
     await sync({ startingPoint: later })
     await sync({ startingPoint: point })
     expect((await state()).startingPoint).toEqual(later)
     const refused = await api(
       new Request('http://localhost/api/sync', {
         method: 'POST',
-        body: JSON.stringify({ startingPoint: { ...point, fiveKSeconds: 60 } }),
+        body: JSON.stringify({ startingPoint: { ...point, splitSeconds: 60 } }),
       }),
     )
     expect(refused.status).toBe(400)

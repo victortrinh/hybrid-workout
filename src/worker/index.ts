@@ -78,13 +78,13 @@ app.post('/sync', async (c) => {
   if (logs.length > 0) {
     const upsert = c.env.DB.prepare(
       `insert into session_logs
-         (id, week, session_id, date, status, minutes, rpe, notes, result_seconds, finish_seconds, environment,
+         (id, week, session_id, date, status, minutes, rpe, notes, finish_seconds, environment,
           distance_meters, recovery_pace, updated_at)
-       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        on conflict (id) do update set
          week = excluded.week, session_id = excluded.session_id, date = excluded.date,
          status = excluded.status, minutes = excluded.minutes, rpe = excluded.rpe,
-         notes = excluded.notes, result_seconds = excluded.result_seconds, finish_seconds = excluded.finish_seconds,
+         notes = excluded.notes, finish_seconds = excluded.finish_seconds,
          environment = excluded.environment, distance_meters = excluded.distance_meters,
          recovery_pace = excluded.recovery_pace, updated_at = excluded.updated_at
        where excluded.updated_at > session_logs.updated_at`,
@@ -122,8 +122,7 @@ app.post('/sync', async (c) => {
       logs.flatMap((l) => [
         upsert.bind(
           l.id, l.week, l.sessionId, l.date, l.status, l.minutes, l.rpe, l.notes,
-          // The race's finish has a column of its own: result_seconds holds a 5K test's time.
-          l.sessionId === RACE_SESSION_ID ? null : l.resultSeconds,
+          // Only the race has a result: its finish.
           l.sessionId === RACE_SESSION_ID ? l.resultSeconds : null,
           l.environment, l.distanceMeters, l.recoveryPace, l.updatedAt,
         ),
@@ -170,16 +169,16 @@ app.post('/sync', async (c) => {
     await c.env.DB.batch(answers.map((a) => upsert.bind(a.activityId, a.week, a.sessionId, a.updatedAt)))
   }
   if (startingPoint) {
-    const { fiveKSeconds, weights, updatedAt } = startingPoint
+    const { splitSeconds, weights, updatedAt } = startingPoint
     await c.env.DB.prepare(
-      `insert into starting_point (id, five_k_seconds, back_squat_pounds, romanian_deadlift_pounds, updated_at)
+      `insert into starting_point (id, split_seconds, back_squat_pounds, romanian_deadlift_pounds, updated_at)
        values (1, ?, ?, ?, ?)
        on conflict (id) do update set
-         five_k_seconds = excluded.five_k_seconds, back_squat_pounds = excluded.back_squat_pounds,
+         split_seconds = excluded.split_seconds, back_squat_pounds = excluded.back_squat_pounds,
          romanian_deadlift_pounds = excluded.romanian_deadlift_pounds, updated_at = excluded.updated_at
        where excluded.updated_at > starting_point.updated_at`,
     )
-      .bind(fiveKSeconds, weights['back-squat'] ?? null, weights['romanian-deadlift'] ?? null, updatedAt)
+      .bind(splitSeconds, weights['back-squat'] ?? null, weights['romanian-deadlift'] ?? null, updatedAt)
       .run()
   }
   return c.json(await readState(c.env.DB))
@@ -405,7 +404,7 @@ function parseLogs(raw: unknown): SessionLog[] {
       }
       if (log.intervals.length > 0 && !isLiveRun(session)) throw new Error('Only a run Session has reps to log')
       if (log.stations.length > 0 && !isCircuit(session)) {
-        throw new Error('Only HYROX and a Race simulation have Station logs')
+        throw new Error('Only HYROX, a Race simulation and a Compromised run test have Station logs')
       }
       if (log.sets.length > 0 && session.type !== 'strength') throw new Error('Only a Strength session has sets to log')
       return log
@@ -424,9 +423,8 @@ interface SessionLogRow {
   minutes: number | null
   rpe: number | null
   notes: string | null
-  result_seconds: number | null
-  /** The race's finish time; null on every other Session log, and before migration 0011. */
-  finish_seconds?: number | null
+  /** The race's finish time; null on every other Session log. */
+  finish_seconds: number | null
   environment: string | null
   distance_meters: number | null
   /** The recovery jogs' pace; null where it wasn't asked, and before migration 0012. */
@@ -501,7 +499,7 @@ interface AnswerRow {
 }
 
 interface StartingRow {
-  five_k_seconds: number | null
+  split_seconds: number | null
   back_squat_pounds: number | null
   romanian_deadlift_pounds: number | null
   updated_at: string
@@ -562,7 +560,7 @@ async function readState(db: D1Database): Promise<SyncState> {
   return {
     startingPoint: point
       ? parseStartingPoint({
-          fiveKSeconds: point.five_k_seconds,
+          splitSeconds: point.split_seconds,
           weights: { 'back-squat': point.back_squat_pounds, 'romanian-deadlift': point.romanian_deadlift_pounds },
           updatedAt: point.updated_at,
         })
@@ -625,7 +623,7 @@ async function readState(db: D1Database): Promise<SyncState> {
         minutes: row.minutes,
         rpe: row.rpe,
         notes: row.notes,
-        resultSeconds: row.result_seconds ?? row.finish_seconds ?? null,
+        resultSeconds: row.finish_seconds,
         environment: row.environment,
         distanceMeters: row.distance_meters,
         recoveryPace: row.recovery_pace ?? null,

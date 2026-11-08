@@ -320,7 +320,7 @@ export function App() {
               settings={settings}
               onSettings={change}
               startingPoint={{
-                fields: startingFields(startingPoint, day.workingWeights),
+                fields: startingFields(startingPoint, day.workingWeights, day.paces),
                 onSave: saveStartingPoint,
               }}
               live={live}

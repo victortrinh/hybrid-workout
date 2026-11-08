@@ -3,7 +3,7 @@
  * then the time and RPE. The Week page leads a logged Session with it.
  */
 import { trained, type SessionLog, type SetLog } from './log'
-import { clock } from './paces'
+import { clock, fade, runTestResult } from './paces'
 import { LIFT_NAME, SESSION_TYPES } from './program/describe'
 import type { LiftId, SessionType } from './program/types'
 
@@ -13,7 +13,9 @@ export function logSummary(log: SessionLog, type: SessionType): string | null {
   if (!trained(log)) return null
   const parts = [
     topSets(log.sets),
-    type === 'race-simulation' || type === 'compromised-run-test' ? simulationTotal(log, SESSION_TYPES[type].name) : roundTimes(log),
+    ...(type === 'compromised-run-test'
+      ? testResult(log)
+      : [type === 'race-simulation' ? simulationTotal(log, SESSION_TYPES[type].name) : roundTimes(log)]),
     repsOnTarget(log),
     log.minutes !== null && `${log.minutes} min`,
     log.rpe !== null && `RPE ${log.rpe}`,
@@ -51,6 +53,19 @@ function simulationTotal(log: SessionLog, name: string): string | null {
   const hours = Math.floor(total / 3600)
   const rest = clock(total % 3600)
   return `${name}, ${hours > 0 ? `${hours}:${rest.padStart(5, '0')}` : rest}`
+}
+
+/** "Race run pace 5:02/km · Fade +23 s/km": what a Compromised run test sets, and how the runs held up. */
+function testResult(log: SessionLog): (string | null)[] {
+  const result = runTestResult(log)
+  const runs = fade(log.stations)
+  const parts = [result && `Race run pace ${clock(result.raceRun)}/km`, runs !== null && fadeLine(runs)]
+  return parts.some(Boolean) ? parts.map((p) => p || null) : [simulationTotal(log, SESSION_TYPES['compromised-run-test'].name)]
+}
+
+/** "Fade +23 s/km", "Fade −6 s/km": the last run's pace less the first's. */
+export function fadeLine(seconds: number): string {
+  return `Fade ${seconds > 0 ? '+' : seconds < 0 ? '−' : ''}${Math.abs(seconds)} s/km`
 }
 
 /** Only reps run against a target pace count: RPE-only reps have nothing to hold. */

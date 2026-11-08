@@ -503,7 +503,11 @@ function PacesPanel({
   return (
     <Panel
       title="Training paces"
-      sub={`Estimated from your Starting point. ${test} replaces them.`}
+      sub={
+        paces.estimate
+          ? `Estimated from your Starting point. ${test} replaces them.`
+          : 'From your latest Compromised run test: the average of its four runs.'
+      }
       span={4}
     >
       <table className="mt-2.5 w-full border-collapse text-[16px]">
