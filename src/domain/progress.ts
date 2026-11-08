@@ -7,7 +7,7 @@
  */
 import { addDays, daysBetween, type LocalDate } from './calendar'
 import { findWeek, programStart, weekOutcome } from './coach'
-import { logFor, trained, type SessionLog } from './log'
+import { logFor, offeredSessions, trained, type SessionLog } from './log'
 import { GOAL_PACE, type Environment } from './paces'
 import { SESSION_TYPES } from './program/describe'
 import { LIFTS, type Lane, type LiftId, type Program, type Session, type StationId } from './program/types'
@@ -115,8 +115,9 @@ function weeksSoFar(program: Program, today: LocalDate): number[] {
 /** Each Week so far, Session by Session in Bucket order. */
 export function weeklyCompletion(program: Program, logs: SessionLog[], today: LocalDate): WeekCompletion[] {
   return weeksSoFar(program, today).flatMap((number) => {
-    const week = findWeek(program, number)
-    if (!week) return []
+    const listed = findWeek(program, number)
+    if (!listed) return []
+    const week = offeredSessions(program, listed, logs)
     // Misses as the Coach counts them: a Skipped Session isn't one while its Week has days left.
     const missed = new Set(weekOutcome(program, week, logs, today).skipped.map((s) => s.session.id))
     const cells = week.sessions.map((session) => {

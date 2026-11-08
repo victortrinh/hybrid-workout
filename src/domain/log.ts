@@ -11,7 +11,7 @@ import type { Activity, ActivityAnswer } from './activity'
 import type { PainReport } from './pain'
 import type { RecoveryNight } from './recovery'
 import type { StartingPoint } from './startingPoint'
-import { LIFTS, type LiftId, type Range } from './program/types'
+import { LIFTS, type LiftId, type Program, type Range, type Week } from './program/types'
 import { stations } from './program/program'
 import type { StationId } from './program/types'
 import type { SuggestionDecision } from './suggestion'
@@ -317,6 +317,24 @@ export function logFor(logs: SessionLog[], week: number, sessionId: string): Ses
     if (!latest || log.updatedAt > latest.updatedAt) latest = log
   }
   return latest
+}
+
+/**
+ * A Week with the Sessions the Coach offers in it: the second Easy run only
+ * when the Week before had every required Session Done. Partial, Swapped,
+ * Skipped or not logged keeps it out; the first Easy run doesn't count.
+ * A second Easy run already logged stays.
+ */
+export function offeredSessions<W extends Pick<Week, 'number' | 'sessions'>>(program: Program, week: W, logs: SessionLog[]): W {
+  if (!week.sessions.some((s) => s.afterFullWeek)) return week
+  const before = program.phases.flatMap((p) => p.weeks).find((w) => w.number === week.number - 1)
+  const full =
+    !!before &&
+    before.sessions
+      .filter((s) => !s.optional && !s.date)
+      .every((s) => logFor(logs, before.number, s.id)?.status === 'done')
+  // Once logged, it stays: the log is the athlete's, whatever the Week before turned into.
+  return full ? week : { ...week, sessions: week.sessions.filter((s) => !s.afterFullWeek || logFor(logs, week.number, s.id)) }
 }
 
 /** Whether a required (non-optional) Session of the Week is still Planned: nothing logged for it yet. */

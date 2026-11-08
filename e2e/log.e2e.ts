@@ -42,7 +42,9 @@ test('logging the Run as Done strikes it through on Today and changes Up next', 
   await bucket.getByRole('button', { name: /^Run/ }).click()
   await page.getByRole('button', { name: /^Do it today/ }).click()
   await expect(upNext).toHaveText(/^Run, /)
-  await expect(bucket.getByRole('listitem')).toHaveText([/^HYROX A/, /^HYROX B/, /^Run.*Next$/, /^Strength/, /^Easy run.*Optional$/])
+  // Week 6 follows a Week done in full, so Build offers the second Easy run too.
+  const easy = week >= 6 ? [/^Easy run.*Optional$/, /^Second Easy run.*Optional$/] : [/^Easy run.*Optional$/]
+  await expect(bucket.getByRole('listitem')).toHaveText([/^HYROX A/, /^HYROX B/, /^Run.*Next$/, /^Strength/, ...easy])
   await expect(bucket.getByRole('listitem').first()).not.toContainText('Next')
 
   await page.goto(`/log/${week}/run`)

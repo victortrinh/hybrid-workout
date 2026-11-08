@@ -647,6 +647,21 @@ function easyRun(minutes: number, { note = 'Full sentences. No tempo, no hills.'
 
 const LONG_RUN = 'The long run. Full sentences. No tempo, no hills.'
 
+/**
+ * The second Easy run, in Build and Race specific: offered only in a Week
+ * after one whose four required Sessions were all Done. Optional like the
+ * first. Not in the Taper, which cuts volume and keeps frequency.
+ */
+const secondEasyRun: Session = {
+  ...easyRun(25, { id: 'easy-2', note: 'A second easy run, for keeping up: 25 to 30 minutes. Full sentences.' }),
+  name: 'Second Easy run',
+  headline: '25–30′',
+  afterFullWeek: true,
+}
+
+/** Every Week of Build and Race specific also holds the second Easy run, last in its Bucket. */
+const withSecondEasyRun = (weeks: Week[]): Week[] => weeks.map((w) => ({ ...w, sessions: [...w.sessions, secondEasyRun] }))
+
 // ---------------------------------------------------------------------------
 // Race simulations: race order, Race load, exempt from the Session cap.
 
@@ -828,8 +843,8 @@ export const program: Program = {
   stations,
   phases: [
     { id: 'foundation', name: 'Foundation', firstWeek: 1, lastWeek: 5, weeks: foundation },
-    { id: 'build', name: 'Build', firstWeek: 6, lastWeek: 15, weeks: build },
-    { id: 'race-specific', name: 'Race specific', firstWeek: 16, lastWeek: 21, weeks: raceSpecific },
+    { id: 'build', name: 'Build', firstWeek: 6, lastWeek: 15, weeks: withSecondEasyRun(build) },
+    { id: 'race-specific', name: 'Race specific', firstWeek: 16, lastWeek: 21, weeks: withSecondEasyRun(raceSpecific) },
     // Race week stays inside the Taper Phase: the two Taper Weeks, then Week 24.
     { id: 'taper', name: 'Taper', firstWeek: 22, lastWeek: 24, weeks: taper },
   ],

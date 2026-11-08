@@ -51,6 +51,29 @@ test('serves the Late sessions first, says how far behind, and still lets a curr
 })
 
 /**
+ * Week 1's Strength is done Late on the Week 2 Monday, and only the Late Run
+ * is left: the Coach suggests leaving it for a day, as a rest the athlete can
+ * tap past (ADR-0007).
+ */
+test('only suggests resting a Late Run the day after Strength', async ({ page }) => {
+  await serveHistory(page, [
+    { week: 1, sessionId: 'hyrox-a', date: '2026-11-09', status: 'done' },
+    { week: 1, sessionId: 'hyrox-b', date: '2026-11-11', status: 'done' },
+    { week: 1, sessionId: 'strength', date: '2026-11-16', status: 'done' },
+  ])
+  await page.clock.setFixedTime(WEEK_2_TUESDAY)
+  await page.goto('/')
+
+  const upNext = page.getByRole('heading', { level: 1 })
+  await expect(upNext).toHaveText('Rest suggested.')
+  await expect(page.getByText('The Run on legs that just lifted? Better tomorrow. Your call.')).toBeVisible()
+  await expect(page.getByText('1 Session behind · Week 1')).toBeVisible()
+  await page.getByRole('button', { name: 'Do it anyway' }).click()
+  await expect(upNext).toHaveText(/^Run, 3\s×\s7′/)
+  await expect(page.locator('p', { hasText: /^Week 1 · Late/ })).toBeVisible()
+})
+
+/**
  * A watch run on the Week 2 Tuesday fits both Week 1's Late Run and Week
  * 2's Compromised run test: Today asks, naming each with its Week, and the
  * answer attaches it to the Late row.

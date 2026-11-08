@@ -5,7 +5,7 @@
  */
 import { addDays, daysBetween, localDateIn, type LocalDate } from './calendar'
 import { findWeek, programStart, raceSpecificStart } from './coach'
-import { trained, type SessionLog } from './log'
+import { offeredSessions, trained, type SessionLog } from './log'
 import type { Environment } from './paces'
 import type { Program, Session, SessionType } from './program/types'
 
@@ -304,7 +304,9 @@ export function matchActivities(
     const week = weekOn(program, activity.date)
     const planned = [
       ...(week ? lateBefore(program, week.number, activity.date).filter((c) => open(c.week, c.session)) : []),
-      ...(week?.sessions ?? []).filter((s) => open(week!.number, s)).map((session) => ({ week: week!.number, session })),
+      ...(week ? offeredSessions(program, week, logs).sessions : [])
+        .filter((s) => open(week!.number, s))
+        .map((session) => ({ week: week!.number, session })),
     ]
     const candidates =
       doneThatDay.size > 1 && overlapping.size === 1

@@ -86,7 +86,7 @@ describe('a rest the spacing rules only suggest', () => {
     )
     expect(suggestedRestCopy({ kind: 'run-after-load', anyway: { week: 3, session: run } })).toMatchObject({
       heading: 'Rest suggested.',
-      target: expect.stringMatching(/^The Run on legs that just lifted or pushed a sled\?/),
+      target: expect.stringMatching(/^The Run on legs that just lifted\?/),
       meta: 'Run if you go anyway',
     })
   })
