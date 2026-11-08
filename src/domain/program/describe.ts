@@ -292,18 +292,29 @@ export function stationPounds(station: Station): number | null {
   return fixedLoad ? pounds : roundToFive(pounds)
 }
 
-/** "335 lb plates", "2 × 55 lb", "13 lb ball", or nothing for a Station without a load. */
+/** "335 lb plates (7 × 45 + 20)", "2 × 55 lb", "13 lb ball", or nothing for a Station without a load. */
 export function stationLoad(station: Station): string {
   return poundsWords(station, stationPounds(station))
 }
 
-/** A Station's load in words, whatever was actually used: "225 lb plates", "2 × 55 lb". */
+/** A Station's load in words, whatever was actually used: "225 lb plates (5 × 45)", "2 × 55 lb". */
 export function poundsWords(station: Station, pounds: number | null): string {
   if (pounds === null) return ''
   if (station.raceLoad.fixedLoad) return `${pounds} lb ball`
-  if (isSled(station.id)) return `${pounds} lb plates`
+  if (isSled(station.id)) return `${pounds} lb plates${plateCount(pounds)}`
   const count = station.raceLoad.implements ?? 1
   return count > 1 ? `${count} × ${pounds} lb` : `${pounds} lb`
+}
+
+/**
+ * How a sled's plates load from 45s: " (7 × 45 + 20)", " (5 × 45)". The
+ * remainder is left for whatever smaller plates the gym has. Nothing under 45 lb.
+ */
+function plateCount(pounds: number): string {
+  const plates = Math.floor(pounds / 45)
+  if (plates === 0) return ''
+  const rest = pounds - plates * 45
+  return ` (${plates} × 45${rest > 0 ? ` + ${rest}` : ''})`
 }
 
 const SUBSTITUTION_REASON: Record<SubstitutionReason, string> = {

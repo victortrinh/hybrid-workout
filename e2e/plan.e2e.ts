@@ -54,10 +54,10 @@ for (const colorScheme of ['light', 'dark'] as const) {
       ])
       // Prescriptions open one tap away.
       const simulation = page.getByRole('region', { name: 'Race simulation, full run' })
-      await expect(simulation.getByText('Sled push · 25 m · 335 lb plates')).toBeHidden()
+      await expect(simulation.getByText('Sled push · 25 m · 335 lb plates (7 × 45 + 20)')).toBeHidden()
       await simulation.getByRole('button', { name: 'Show the Prescription' }).click()
       await expect(simulation.getByRole('button', { name: 'Hide the Prescription' })).toHaveAttribute('aria-expanded', 'true')
-      await expect(page.getByText('Sled push · 25 m · 335 lb plates')).toBeVisible()
+      await expect(page.getByText('Sled push · 25 m · 335 lb plates (7 × 45 + 20)')).toBeVisible()
       await expect(page.getByText('Farmers carry · 100 m · 2 × 55 lb')).toBeVisible()
       await expectNoAxeViolations(page)
 
