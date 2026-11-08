@@ -3,12 +3,12 @@ import { expectNoAxeViolations, WEEK_3 } from './axe'
 import { caughtUp, serveHistory } from './history'
 
 
-test('a 23:00 estimate sets the Run’s Threshold speed, and mph updates every speed', async ({ page }) => {
+test('a 5:07 estimated split sets the Run’s Threshold speed, and mph updates every speed', async ({ page }) => {
   // Training paces come from the Starting point's estimate, kept on this device.
   await page.addInitScript(() =>
     localStorage.setItem(
       'compromised:starting-point',
-      JSON.stringify({ point: { fiveKSeconds: 23 * 60, weights: {}, updatedAt: '2026-11-05T12:00:00.000Z' }, pending: false }),
+      JSON.stringify({ point: { splitSeconds: 307, weights: {}, updatedAt: '2026-11-05T12:00:00.000Z' }, pending: false }),
     ),
   )
   await serveHistory(page, caughtUp(2))

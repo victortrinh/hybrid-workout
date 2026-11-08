@@ -227,7 +227,7 @@ test.describe('the sync endpoint', () => {
       // Only a Strength session has sets, and only on the 5 lb step.
       [entry(project, { sessionId: 'easy', sets: [{ exercise: 0, set: 1, lift: 'back-squat', pounds: 185, reps: 5, rpe: 7 }] })],
       [entry(project, { sessionId: 'strength', sets: [{ exercise: 0, set: 1, lift: 'back-squat', pounds: 187, reps: 5, rpe: 7 }] })],
-      // Only HYROX and a Race simulation have Station logs.
+      // Only HYROX, a Race simulation and a Compromised run test have Station logs.
       [entry(project, { stations: [{ round: 1, part: 'round', pounds: null, meters: null, reps: null, seconds: 600 }] })],
     ]) {
       const response = await request.post('/api/sync', { data: { sessionLogs } })

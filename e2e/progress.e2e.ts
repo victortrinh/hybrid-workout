@@ -41,11 +41,11 @@ const NIGHTS = [
 
 test.beforeEach(async ({ page }, testInfo) => {
   if (testInfo.title.startsWith('before any data')) return
-  // Training paces from the Starting point's estimate, kept on this device.
+  // A Starting point estimate kept on this device: the baseline test's splits replace it.
   await page.addInitScript(() =>
     localStorage.setItem(
       'compromised:starting-point',
-      JSON.stringify({ point: { fiveKSeconds: 23 * 60, weights: {}, updatedAt: '2026-11-05T12:00:00.000Z' }, pending: false }),
+      JSON.stringify({ point: { splitSeconds: 330, weights: {}, updatedAt: '2026-11-05T12:00:00.000Z' }, pending: false }),
     ),
   )
   await serveHistory(page, HISTORY, [], { suggestionDecisions: BASELINE_DECISIONS, recoveryNights: NIGHTS })
@@ -85,11 +85,11 @@ for (const colorScheme of ['light', 'dark'] as const) {
       'Training load: Week 1 1205, Week 2 675, Week 3 so far 315',
     )
 
-    // Training paces estimated from the Starting point, in km/h by default.
+    // Training paces from the baseline test's four runs, over the Starting point's estimate, in km/h by default.
     const paces = main.getByRole('region', { name: 'Training paces' }).getByRole('table')
     await expect(paces.getByRole('columnheader')).toHaveText(['Pace', 'min/km', 'km/h'])
     await expect(paces.getByRole('row', { name: /^Race run/ })).toHaveText(/5:0711\.7/)
-    await expect(main.getByText('Estimated from your Starting point. The Week 2 Compromised run test replaces them.')).toBeVisible()
+    await expect(main.getByText('From your latest Compromised run test: the average of its four runs.')).toBeVisible()
     await expect(paces.getByRole('row', { name: /^Threshold/ })).toHaveText(/4:5212\.3/)
 
     // Working weights in pounds: calibrated, then moved by an accepted Suggestion.

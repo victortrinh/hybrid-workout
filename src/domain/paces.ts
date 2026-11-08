@@ -1,16 +1,19 @@
 /**
  * Training paces and run targets.
  *
- * For now the Training paces come from the Starting point's estimate alone,
- * always marked as an estimate: the estimated 5K time gives a VDOT (Daniels
- * and Gilbert's oxygen-cost and time-to-exhaustion equations), Threshold and
- * Easy pace are the speeds that cost a fixed share of it, and Race run pace
- * sits 15 s/km slower than Threshold, the Program's offset. With no estimate,
- * run Prescriptions stay RPE only.
+ * Race run pace is the base: the mean of the four 1 km splits of the latest
+ * Done Compromised run test, from the test's day on. Threshold pace is Race
+ * run pace less 15 s/km and Easy pace Race run pace plus 60 to 90 s/km, the
+ * Program's fixed offsets (training-plan.md, "Paces and treadmill"). Before
+ * the first test, the Starting point's estimated 1 km split stands in for
+ * the test, and the paces are marked as estimates. With neither, run
+ * Prescriptions stay RPE only.
  *
  * Paces are seconds per km. Indoor runs read as treadmill speed, then the pace
  * per km, then the incline; Outdoor runs as pace per km alone.
  */
+import type { LocalDate } from './calendar'
+import type { SessionLog, StationLog } from './log'
 import type { PaceRef, Range, RunEffort } from './program/types'
 
 export const ENVIRONMENTS = ['indoor', 'outdoor'] as const
@@ -22,27 +25,24 @@ export type SpeedUnit = (typeof SPEED_UNITS)[number]
 /** Treadmill incline when the Prescription doesn't say: 1% stands in for the air outdoors. */
 export const DEFAULT_INCLINE = 1
 
-/** Sub-22: 4:24 per km, the April checkpoint. Sub-20 (4:00) is the goal after it. */
+/** Sub-22: 4:24 per km. Left for Progress until #164 replaces its 5K panel. */
 export const GOAL_PACE = 264
 
 export const KM_PER_MILE = 1.609344
 
 export interface TrainingPaces {
-  /** The estimated time these paces come from, in seconds. */
-  fromSeconds: number
-  vdot: number
-  /** Seconds per km: the pace held between Stations. */
+  /** Seconds per km: the pace held between Stations, and the base of the others. */
   raceRun: number
   threshold: number
   /** Easy is a range: the faster end first. */
   easy: Range
-  /** From the Starting point's estimate, not a test. */
+  /** From the Starting point's estimated split, not a test. */
   estimate: boolean
 }
 
 /** What a run Prescription is resolved against. */
 export interface RunContext {
-  /** Null with no estimate: then every run is RPE only. */
+  /** Null with no test and no estimate: then every run is RPE only. */
   paces: TrainingPaces | null
   environment: Environment
   unit: SpeedUnit
@@ -56,60 +56,93 @@ export interface LoggedSpeeds {
   recoveryPace: number | null
 }
 
-/**
- * Shares of VDOT each Training pace costs. Threshold is Daniels' 88%. Easy
- * is the middle of Daniels' 59–74% band, 62–70%, which is where the
- * Program's own example puts it (5:50–6:30/km from a 23:00 test).
- */
-const THRESHOLD_SHARE = 0.88
-const EASY_SHARES: Range = [0.7, 0.62]
-
-/** Oxygen cost, ml/kg/min, of running at `v` metres per minute. */
-const oxygenCost = (v: number) => -4.6 + 0.182258 * v + 0.000104 * v * v
-
-/** The share of VO2max that can be held for `minutes`. */
-const sustainableShare = (minutes: number) =>
-  0.8 + 0.1894393 * Math.exp(-0.012778 * minutes) + 0.2989558 * Math.exp(-0.1932605 * minutes)
-
-/** The speed, metres per minute, whose oxygen cost is `vo2`. */
-function speedAtCost(vo2: number): number {
-  const a = 0.000104
-  const b = 0.182258
-  const c = -4.6 - vo2
-  return (-b + Math.sqrt(b * b - 4 * a * c)) / (2 * a)
-}
-
-/** VDOT from a 5K time in seconds. */
-export function vdot(fiveKSeconds: number): number {
-  const minutes = fiveKSeconds / 60
-  return oxygenCost(5000 / minutes) / sustainableShare(minutes)
-}
-
-const secondsPerKm = (metresPerMinute: number) => Math.round(60_000 / metresPerMinute)
-
-/** Race run pace is Threshold pace plus this, in seconds per km (training-plan.md, "Paces and treadmill"). */
+/** Threshold pace is Race run pace less this, in seconds per km. */
 export const THRESHOLD_OFFSET = 15
 
-export function trainingPaces(fiveKSeconds: number, { estimate = false } = {}): TrainingPaces {
-  const v = vdot(fiveKSeconds)
-  const at = (share: number) => secondsPerKm(speedAtCost(v * share))
-  const threshold = at(THRESHOLD_SHARE)
+/** Easy pace is Race run pace plus this range, in seconds per km. */
+export const EASY_OFFSET: Range = [60, 90]
+
+/** The Training paces a Race run pace gives, in seconds per km. */
+export function trainingPaces(raceRun: number, { estimate = false } = {}): TrainingPaces {
   return {
-    fromSeconds: fiveKSeconds,
-    vdot: v,
-    raceRun: threshold + THRESHOLD_OFFSET,
-    threshold,
-    easy: [at(EASY_SHARES[0]), at(EASY_SHARES[1])],
+    raceRun,
+    threshold: raceRun - THRESHOLD_OFFSET,
+    easy: [raceRun + EASY_OFFSET[0], raceRun + EASY_OFFSET[1]],
     estimate,
   }
 }
 
-/** A 5K test time from 12:00 to 60:00 is believable; anything else is a typo. */
-export const FIVE_K_SECONDS: Range = [12 * 60, 60 * 60]
+/** A 1 km split between Stations from 2:30 to 10:00 is believable; anything else is a typo. */
+export const SPLIT_SECONDS: Range = [150, 600]
 
-/** The Training paces today: estimated from the Starting point, or none. */
-export function currentPaces(estimatedSeconds: number | null): TrainingPaces | null {
-  return estimatedSeconds === null ? null : trainingPaces(estimatedSeconds, { estimate: true })
+/** The Compromised run test's id within its Week. */
+export const RUN_TEST_SESSION_ID = 'compromised-run-test'
+
+/** A Compromised run test is four rounds of a 1 km run and a Station. */
+export const RUN_TEST_RUNS = 4
+
+/** A Compromised run test's result, derived from its Station logs: none of it is stored. */
+export interface RunTestResult {
+  week: number
+  date: LocalDate
+  /** The four run splits in seconds per km, round 1 first. */
+  splits: number[]
+  /** Their mean, to the second: the Race run pace it sets. */
+  raceRun: number
+  /** The fourth split less the first, s/km: positive is slower at the end. */
+  fade: number
+}
+
+/** The timed runs of a Session log, in round order, as seconds per km. */
+function runPaces(stations: StationLog[]): number[] {
+  return stations
+    .filter((line) => line.part === 'run' && line.seconds !== null && line.meters !== null && line.meters > 0)
+    .sort((a, b) => a.round - b.round)
+    .map((line) => Math.round(line.seconds! / (line.meters! / 1000)))
+}
+
+/** The Fade of a log's runs: the last run's pace less the first's, in s/km; null under two timed runs. */
+export function fade(stations: StationLog[]): number | null {
+  const paces = runPaces(stations)
+  return paces.length < 2 ? null : paces.at(-1)! - paces[0]
+}
+
+/** What a Compromised run test log says, or null unless it is a Done test with all four runs timed. */
+export function runTestResult(log: SessionLog): RunTestResult | null {
+  if (log.sessionId !== RUN_TEST_SESSION_ID || log.status !== 'done') return null
+  const splits = runPaces(log.stations)
+  if (splits.length !== RUN_TEST_RUNS) return null
+  return {
+    week: log.week,
+    date: log.date,
+    splits,
+    raceRun: Math.round(splits.reduce((sum, s) => sum + s, 0) / splits.length),
+    fade: splits.at(-1)! - splits[0],
+  }
+}
+
+/** The latest Done Compromised run test on or before `today`, or null before the first. */
+export function latestRunTest(logs: SessionLog[], today: LocalDate): RunTestResult | null {
+  let latest: RunTestResult | null = null
+  for (const log of logs) {
+    if (log.date > today) continue
+    const result = runTestResult(log)
+    if (result && (!latest || result.date > latest.date || (result.date === latest.date && result.week > latest.week))) {
+      latest = result
+    }
+  }
+  return latest
+}
+
+/**
+ * The Training paces today: from the latest Done Compromised run test, from
+ * its day on; before the first, estimated from the Starting point's split;
+ * or none.
+ */
+export function currentPaces(logs: SessionLog[], estimatedSplit: number | null, today: LocalDate): TrainingPaces | null {
+  const test = latestRunTest(logs, today)
+  if (test) return trainingPaces(test.raceRun)
+  return estimatedSplit === null ? null : trainingPaces(estimatedSplit, { estimate: true })
 }
 
 /** An effort with no pace to hold, whatever the Training paces: "Hard, by feel". Controlled is Threshold. */

@@ -65,6 +65,26 @@ const station = (part: string, seconds: number | null, done: { meters?: number; 
 })
 
 /**
+ * The baseline Compromised run test's rounds: 4:58, 5:04, 5:09 and 5:17 for
+ * the four 1 km runs, so Race run pace is their mean, 5:07/km (Threshold
+ * 4:52, Easy 6:07–6:37), and the Fade is +19 s/km.
+ */
+export const BASELINE_SPLITS = [298, 304, 309, 317]
+const TEST_STATIONS: [part: string, done: { meters?: number; reps?: number; pounds?: number }, seconds: number][] = [
+  ['skierg', { meters: 500 }, 118],
+  ['sled-push', { meters: 25, pounds: 335 }, 95],
+  ['row', { meters: 500 }, 124],
+  ['wall-balls', { reps: 50, pounds: 20 }, 170],
+]
+const BASELINE_TEST: NonNullable<SeedLog['stations']> = BASELINE_SPLITS.flatMap((seconds, i) => {
+  const [part, done, stationSeconds] = TEST_STATIONS[i]
+  return [
+    { round: i + 1, part: 'run', pounds: null, meters: 1000, reps: null, seconds },
+    { round: i + 1, part, pounds: done.pounds ?? null, meters: done.meters ?? null, reps: done.reps ?? null, seconds: stationSeconds },
+  ]
+})
+
+/**
  * Week 1 mostly done and the baseline Compromised run test in Week 2, with
  * Week 2's Strength session on Thursday 19 November. Week 1 calibrated the
  * squat at 185 lb and the RDL at 135 lb; Week 2's easy squats moved it to
@@ -95,7 +115,15 @@ export const BASELINE_HISTORY: SeedLog[] = [
   },
   { week: 1, sessionId: 'run', date: '2026-11-12', status: 'partial' },
   { week: 1, sessionId: 'hyrox-b', date: '2026-11-14', status: 'done', rpe: 7 },
-  { week: 2, sessionId: 'compromised-run-test', date: '2026-11-18', status: 'done', rpe: 9, environment: 'indoor' },
+  {
+    week: 2,
+    sessionId: 'compromised-run-test',
+    date: '2026-11-18',
+    status: 'done',
+    rpe: 9,
+    environment: 'indoor',
+    stations: BASELINE_TEST,
+  },
   {
     week: 2,
     sessionId: 'strength',
