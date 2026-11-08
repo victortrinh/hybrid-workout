@@ -135,7 +135,7 @@ function painChange(level: PainLevel): string {
     : `row or SkiErg for burpee broad jumps and sled push, ${100 - PAIN_REPS_PERCENT}% fewer interval reps`
 }
 
-/** "Speed", "Speed and HYROX", "Speed, Strength and HYROX" */
+/** "Run", "Run and HYROX A", "Run, Strength and HYROX A" */
 export function list(items: string[]): string {
   return items.length <= 1 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`
 }

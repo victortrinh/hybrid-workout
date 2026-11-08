@@ -235,7 +235,7 @@ Shortcuts can't read a workout back from Health (there's no Workouts type in **F
    7. While setting up, **Show Result** (Contents of URL) at the end: Get Contents of URL doesn't stop on an error, so without it a refused workout fails silently. Remove it once workouts arrive.
 3. **Start automation.** **Automation** → **+** → **Apple Watch Workout** → **Any** workout, **Is Started** → **Run Immediately** → `Compromised workout start`.
 4. **End automations, one per workout type you start on the watch.** **Automation** → **+** → **Apple Watch Workout** → that type (for example **Running**), **Is Ended** → **Run Immediately** → **Text** with the type's name exactly as the list shows it → **Run Shortcut** `Compromised workouts`, input the Text. Likely types:
-   - **Running**: Speed, Threshold, Easy runs and 5K tests.
+   - **Running**: the Run, Easy runs and the Compromised run test.
    - **Traditional Strength Training**: Strength only.
    - **Functional Strength Training**, **Mixed Cardio** or **Mixed Metabolic Cardio Training**: HYROX, a Race simulation, or Strength.
    - Anything else (a walk) never matches a Session, so it needs no automation.
@@ -247,7 +247,7 @@ Shortcuts can't read a workout back from Health (there's no Workouts type in **F
 Do a Session with the watch, then open Today:
 
 - The Session's row in This Week shows `Watch, <day>: <minutes> min · <km> · avg <bpm> bpm`.
-- If more than one Session of that type could be it (say Speed and Threshold both still Planned), Today asks **Which Session was this?**. Tap the right one, or **None of these**.
+- If more than one Session of that type could be it (say HYROX A and HYROX B both still Planned), Today asks **Which Session was this?**. Tap the right one, or **None of these**.
 - A treadmill run asks **What did the console say?**. **Add console distance** opens Log after with the watch's minutes filled in.
 
 For `npm run dev`, copy `.dev.vars.example` to `.dev.vars`: any pair of values works locally.
@@ -285,7 +285,7 @@ If Settings says **Add Compromised to the Home Screen…**, it's open in a Safar
 
 #### 9d. Check it
 
-Start a Session with a short Block (Easy run's warm-up, or a Speed session after the drills), then switch to another app or lock the phone. When the Block ends, the phone buzzes and the lock screen shows the next Block and its target, with the Coach line under it, for example **Jog · 9.8 km/h** and *Jog. Breathe. Pretend this is easy.* Tapping it opens the Live session. Coming back to the app before then cancels the cue, and the on-screen buzz and beep take over.
+Start a Session with a short Block (Easy run's warm-up, or the Run's first rep), then switch to another app or lock the phone. When the Block ends, the phone buzzes and the lock screen shows the next Block and its target, with the Coach line under it, for example **Jog · 9.8 km/h** and *Jog. Breathe. Pretend this is easy.* Tapping it opens the Live session. Coming back to the app before then cancels the cue, and the on-screen buzz and beep take over.
 
 No notification? Workers & Pages → `compromised-cues` → **Logs**: a push Apple refused is logged there with its status. Turn Lock-screen cues off and on again to send a fresh subscription.
 
@@ -313,9 +313,77 @@ Migrations should only add things (new tables, new nullable columns) so the runn
 
 Every PR branch gets a preview from Workers Builds, built with `VITE_API=mock npm run build` (the non-production build command from [step 6](#6-preview-urls-victor)). That is the same build as `npm run build:mock`: mock mode, as in `npm run dev:mock` (README, "Mock mode"; ADR-0005). Mock Service Worker answers every `/api/*` request in the browser from SQLite in the tab, so a preview never reads or writes a real Session log, and a **MOCK** badge shows on every screen. Production's build command stays `npm run build`, which holds none of it (`npm run check:no-mocks`).
 
-A preview opens on the default scenario, `midweek-mixed` (Thursday of Week 5). To see another state of the Program, add `?scenario=<name>` to the preview's address, for example `https://<preview>-compromised.<your-subdomain>.workers.dev/?scenario=race-week`, or pick one under **Mock scenario** at the top of the settings popover (tap your initial on Today). Switching wipes the tab's data and loads the scenario fresh. Tap the badge for the mock panel: network modes, and Recovery night and Apple Watch workout sends.
+A preview opens on the default scenario, `midweek-mixed` (Thursday of Week 4). To see another state of the Program, add `?scenario=<name>` to the preview's address, for example `https://<preview>-compromised.<your-subdomain>.workers.dev/?scenario=race-week`, or pick one under **Mock scenario** at the top of the settings popover (tap your initial on Today). Switching wipes the tab's data and loads the scenario fresh. Tap the badge for the mock panel: network modes, and Recovery night and Apple Watch workout sends.
 
 The preview's Worker has no `DB` at all: previews take their bindings only from the `previews` block in `wrangler.jsonc`, which holds just `ACCESS_TEAM_DOMAIN`. Wrangler warns that `DB` is missing on each upload; that's expected. A request made outside the app, such as `/api/health` behind Access, fails instead of reaching any database.
+
+## Clean start: wipe and redeploy (Victor confirms)
+
+The 24-week HYROX Program starts from nothing: no Session log, Pain report, Recovery night, Activity, Suggestion decision or Starting point from the old Program is carried over (#157). This is the one time production data is deleted on purpose. Nothing runs it automatically, and no agent runs it: Victor runs these commands, or says go and watches them run. Do it after the HYROX Program is merged to `main` and before the first Session of Week 1 (Monday 9 November 2026).
+
+It empties every table and keeps the database itself, so the `database_id` in `wrangler.jsonc`, the applied-migrations record (`d1_migrations`) and D1 Time Travel all stay, and the wipe can be undone for 30 days.
+
+### 1. Keep a copy
+
+```bash
+npx wrangler d1 export compromised --remote --output=compromised-before-clean-start.sql
+npx wrangler d1 time-travel info compromised
+```
+
+The first writes every table, schema and rows, to a SQL file on your machine. It holds every log, so keep it out of the repo. The second prints the current **bookmark**: write it down, it is the point to restore to. The app's own **Export JSON** in Settings → Your data is a second copy, in the app's words.
+
+### 2. Apply every migration
+
+```bash
+npm run db:migrate:prod
+```
+
+Wrangler lists any migration not yet applied (the HYROX Program's is `0013_compromised_run_test.sql`) and asks before applying; answer yes. `No migrations to apply` is fine too. The tables now have the new schema: no 5K result column, the Starting point's estimated split.
+
+### 3. Empty every table
+
+Children before parents, `d1_migrations` left alone:
+
+```bash
+npx wrangler d1 execute compromised --remote --command "delete from interval_logs; delete from station_logs; delete from set_logs; delete from session_logs; delete from suggestion_decisions; delete from pain_reports; delete from recovery_nights; delete from activity_answers; delete from activities; delete from starting_point;"
+```
+
+Wrangler asks before running against the remote database; answer yes. Then check that every table is empty:
+
+```bash
+npx wrangler d1 execute compromised --remote --command "select 'session_logs', count(*) from session_logs union all select 'interval_logs', count(*) from interval_logs union all select 'station_logs', count(*) from station_logs union all select 'set_logs', count(*) from set_logs union all select 'suggestion_decisions', count(*) from suggestion_decisions union all select 'pain_reports', count(*) from pain_reports union all select 'recovery_nights', count(*) from recovery_nights union all select 'activities', count(*) from activities union all select 'activity_answers', count(*) from activity_answers union all select 'starting_point', count(*) from starting_point;"
+```
+
+Every count should be `0`. The list matches `EXPORT_TABLES` in `src/worker/export.ts`: every table the migrations create. If a later migration adds a table, add it to both commands.
+
+### 4. Deploy
+
+```bash
+npm run deploy
+```
+
+Runs the unit tests, builds, applies migrations (none left after step 2) and deploys. Skip it if Workers Builds already deployed the merge; it changes nothing then.
+
+### 5. Clear each device
+
+The app keeps Session logs in the phone's IndexedDB and its settings, Starting point and Pain reports in local storage, and a device sends what it holds back on the next sync. So before opening the app again, on every device that has used it:
+
+- **iPhone, Home Screen app:** delete the Compromised icon from the Home Screen, then Settings → Apps → Safari → Advanced → **Website Data**, find `compromised.<your-subdomain>.workers.dev`, swipe to delete. Open the address in Safari and **Add to Home Screen** again. Lock-screen cues need turning on again ([9c](#9c-turn-it-on-iphone)).
+- **A desktop browser:** with the app open, the site settings (the icon left of the address) → **Delete data** / **Clear site data**.
+
+### 6. Check it
+
+Open the app. It should show the Starting point screen (no estimated split, no Working weights yet), then Today with Week 1, the countdown to Thursday 22 April 2027 and Up next from HYROX A, HYROX B, Run and Strength. `/api/health` still answers `{"ok":true,"db":true}`. The next morning's Recovery Shortcut adds the first Recovery night of the new Program.
+
+### Undo
+
+Within 30 days, put the database back as it was before step 3:
+
+```bash
+npx wrangler d1 time-travel restore compromised --bookmark=<the bookmark from step 1>
+```
+
+The other way to a clean start, deleting and recreating the database (`npx wrangler d1 delete compromised`, then [step 2 of First deploy](#2-create-the-production-database-victor) with the new `database_id` committed), also works, but it loses Time Travel and needs a commit; emptying the tables is the one to use.
 
 ## Rolling back
 

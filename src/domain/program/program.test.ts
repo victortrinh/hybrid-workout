@@ -154,7 +154,7 @@ describe('Program invariants', () => {
     }
   })
 
-  it('has no Speed, Threshold or 5K test Session type', () => {
+  it('has only the HYROX Program’s Session types', () => {
     const types = new Set(weeks.flatMap((w) => w.sessions).map((s) => s.type as string))
     expect([...types].sort()).toEqual(['compromised-run-test', 'easy', 'hyrox', 'race-simulation', 'run', 'strength'])
   })

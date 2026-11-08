@@ -30,7 +30,7 @@ describe('the mock database', () => {
 })
 
 describe('migration 0013: Training paces from the Compromised run test', () => {
-  it('upgrades a database saved before it: the 5K columns go, the estimated split arrives, the rows stay', () => {
+  it('upgrades a database saved before it: the old result and estimate columns go, the estimated split arrives, the rows stay', () => {
     const before = new SQL.Database()
     before.exec('create table d1_migrations (id integer primary key autoincrement, name text unique, applied_at text)')
     for (const { name, sql } of migrations.filter((m) => m.name < '0013')) {
@@ -39,13 +39,13 @@ describe('migration 0013: Training paces from the Compromised run test', () => {
     }
     before.exec(`insert into session_logs (id, week, session_id, date, status, minutes, rpe, notes, result_seconds, environment, updated_at)
       values ('log-test-0001', 2, 'compromised-run-test', '2026-11-18', 'done', 45, 9, null, 1380, 'indoor', 'x')`)
-    before.exec("insert into starting_point (id, five_k_seconds, back_squat_pounds, updated_at) values (1, 1380, 225, 'x')")
+    // Positional: the old estimate column is second, before the two lifts.
+    before.exec("insert into starting_point values (1, 1380, 225, null, 'x')")
     const after = openDatabase(SQL, before.export())
     const columns = (table: string) => after.exec(`pragma table_info(${table})`)[0].values.map((row) => row[1])
     expect(columns('session_logs')).not.toContain('result_seconds')
     expect(columns('session_logs')).toContain('finish_seconds')
-    expect(columns('starting_point')).not.toContain('five_k_seconds')
-    expect(columns('starting_point')).toContain('split_seconds')
+    expect(columns('starting_point')).toEqual(['id', 'back_squat_pounds', 'romanian_deadlift_pounds', 'updated_at', 'split_seconds'])
     expect(after.exec('select id, environment from session_logs')[0].values).toEqual([['log-test-0001', 'indoor']])
     expect(after.exec('select split_seconds, back_squat_pounds from starting_point')[0].values).toEqual([[null, 225]])
     expect(() => after.exec("update starting_point set split_seconds = 60")).toThrow(/CHECK/)
