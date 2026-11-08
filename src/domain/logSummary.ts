@@ -8,8 +8,8 @@ import { LIFT_NAME, SESSION_TYPES } from './program/describe'
 import type { LiftId, SessionType } from './program/types'
 import { fade } from './stations'
 
-/** The Session types whose logs show the Fade: every one that runs between Stations. */
-const FADE_TYPES: readonly SessionType[] = ['hyrox', 'race-simulation', 'compromised-run-test']
+/** The Session types whose logs show the Fade here; the Compromised run test's line shows its own beside Race run pace. */
+const FADE_TYPES: readonly SessionType[] = ['hyrox', 'race-simulation']
 
 /** "Squat 185 lb × 5 · 45 min · RPE 7", or null when the log says nothing about this Session's work. */
 export function logSummary(log: SessionLog, type: SessionType): string | null {
