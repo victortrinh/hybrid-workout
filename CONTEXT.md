@@ -1,25 +1,29 @@
 # Compromised
 
-A personal coach for one athlete's 26-week program toward a sub-22 5K (sub-20 after it) and a HYROX Men's Open race on 21 April 2027. It turns the program into today's session and adapts it to what has been logged.
+A personal coach for one athlete's 24-week program toward HYROX Ottawa, Doubles Men Open, on 22 April 2027. It turns the program into today's session and adapts it to what has been logged.
 
 ## Program
 
 **Program**:
-The full 26-week plan, from week 1 (26 October 2026) to Race day.
+The full 24-week plan, from week 1 (9 November 2026) to Race day.
 _Avoid_: schedule, training plan (when meaning the whole thing)
 
 **Race day**:
-Wednesday 21 April 2027, the HYROX race every Week is counted back from.
+Thursday 22 April 2027, the HYROX race every Week is counted back from. The start time is assigned a few days before.
+
+**Doubles**:
+The race format: two partners run every 1 km together and split each Station's work between them as they choose, at the same Race load as singles. The athlete trains alone, at full Race load and full Station volume, as if racing singles.
+_Avoid_: pairs, team
 
 **Finish time**:
-The race's result, h:mm:ss, kept on the race's Session log. From the day after Race day, Today leads with it, and asks for it in one step until it is logged.
+The pair's race result, h:mm:ss, kept on the race's Session log. From the day after Race day, Today leads with it, and asks for it in one step until it is logged.
 _Avoid_: race time, result (alone)
 
 **Program recap**:
-The whole Program in four numbers, shown on Today after Race day: the 5K tests first to last, the Working weights first to now, Sessions done, and the total Training load.
+The whole Program in four numbers, shown on Today after Race day: Race run pace first to last, the Working weights first to now, Sessions done, and the total Training load.
 
 **Phase**:
-A run of Weeks sharing one emphasis: Foundation, 5K development, HYROX build, Race specific, Taper.
+A run of Weeks sharing one emphasis: Foundation, Build, Race specific, Taper.
 
 **Week**:
 A numbered Monday–Sunday period of the Program, counted back from Race day.
@@ -41,10 +45,10 @@ _Avoid_: overdue, missed (a Late session isn't missed yet)
 A Week whose Prescriptions are reduced by roughly a third to let fatigue clear.
 
 **Taper**:
-The reduced-volume Week before Race week, defined by the race-week rules rather than the normal pattern.
+The two reduced-volume Weeks before Race week: every Session type stays, each about 40% then 60% shorter, at the same intensity.
 
 **Race week**:
-Week 26, holding Race day and the few easy days around it.
+Week 24, holding Race day and the few easy days around it.
 
 ## Sessions
 
@@ -53,16 +57,20 @@ One planned piece of training of a single Session type, belonging to a Week's Bu
 _Avoid_: workout, training
 
 **Session type**:
-Speed, Strength, Threshold, HYROX, Easy run, 5K test or Race simulation.
+Strength, Run, HYROX, Easy run, Compromised run test or Race simulation.
+
+**Session cap**:
+45 minutes, the most any Session may take, Set up excluded. Only a Race simulation is exempt.
+_Avoid_: time limit, budget
 
 **Hard session**:
 Any Session type other than Easy run; two Hard sessions should not fall on consecutive days when avoidable.
 
 **Key session**:
-The one Session in a Week the Coach puts first in its Bucket (a 5K test, a Race simulation, or the Week's designated priority). Not done by Sunday, it is a Late session like any other.
+The one Session in a Week the Coach puts first in its Bucket (a Compromised run test, a Race simulation, or the Week's designated priority). Not done by Sunday, it is a Late session like any other.
 
 **Optional session**:
-The Easy run in a Bucket; it is never a Late session and missing it is not a miss.
+An Easy run in a Bucket; it is never a Late session and missing it is not a miss. A Week holds one, or two once the Coach offers a second.
 
 **Session status**:
 Planned, Done, Partial, Skipped or Swapped.
@@ -84,13 +92,13 @@ The speeds of a Live session's by-feel reps and of its recovery jogs, asked once
 _Avoid_: rep feedback, actual speed
 
 **Station log**:
-One line of a HYROX session or Race simulation log: a round's time, or a run or Station with the load, distance and split actually done.
+One line of a HYROX session, Compromised run test or Race simulation log: a round's time, or a run or Station with the load, distance and split actually done.
 
 **Block**:
-A timed part of a Session, such as warm-up, intervals, circuit or cooldown.
+A timed part of a Session, such as warm-up, rounds, intervals or cooldown.
 
 **Set up**:
-The untimed Block before a HYROX session's first round where every Station it uses is loaded, once for the whole Session. Its time is not in the Session's minutes or Training load.
+The untimed Block before a HYROX session's first round where every Station it uses is loaded, once for the whole Session. Its time is not in the Session's minutes, the Session cap or Training load.
 
 **Exercise**:
 A single movement or protocol inside a Block.
@@ -104,43 +112,68 @@ The list of equipment available at the athlete's gym, which decides Substitution
 ## Targets
 
 **Prescription**:
-The concrete targets of a Session after adaptation: reps, durations, paces or speeds, loads and RPE.
+The concrete targets of a Session after adaptation: reps, durations, paces or speeds, loads, Station targets and RPE.
 _Avoid_: plan text, workout description
 
 **RPE**:
 Rating of perceived exertion, 1–10; RPE 7 means about three reps left in reserve.
 
-**5K test**:
-An all-out 5 km time trial that replaces that Week's Speed session and resets the Training paces.
-_Avoid_: benchmark, TT
+**Compromised run**:
+A run done straight after a Station, on legs the Station has tired. Every run in the race after the first is one.
+_Avoid_: tired run, transition run
+
+**Compromised run test**:
+Four rounds of a 1 km run at full effort followed by one Station at Race load and half race volume; the Key session of its Week, replacing that Week's Run session. Its average run split becomes Race run pace and resets the Training paces; the gap from its first split to its last is the Fade.
+_Avoid_: benchmark, TT, time trial
+
+**Fade**:
+How much slower the last run of a Session is than its first, as seconds per km. Shown for HYROX sessions, Compromised run tests and Race simulations.
+_Avoid_: drop-off, slowdown
+
+**Race run pace**:
+The average 1 km split of the latest Compromised run test: the pace the athlete can hold between Stations. Before the first test, the Starting point's estimate.
+_Avoid_: 5K pace, goal pace
 
 **Training paces**:
-The 5K, Threshold and Easy paces derived from the latest 5K test, or, before the first one, Estimated Training paces.
+Race run pace and the Threshold and Easy paces derived from it, or, before the first Compromised run test, Estimated Training paces.
 
 **Starting point**:
-The estimates the athlete gives once, at first launch: an estimated 5K time and estimated Working weights for the main lifts, each optional. Editable in Settings until a real result replaces each; a real result always wins.
-_Avoid_: onboarding, baseline (the baseline is the first 5K test)
+The estimates the athlete gives once, at first launch: an estimated 1 km split between Stations and estimated Working weights for the main lifts, each optional. Editable in Settings until a real result replaces each; a real result always wins.
+_Avoid_: onboarding, baseline (the baseline is the first Compromised run test)
 
 **Estimated Training paces**:
-Training paces from the Starting point's estimated 5K time, worked out as for a 5K test of that time and shown as estimates until the first 5K test replaces them.
-
-**Goal pace**:
-4:24 per km, the pace of a sub-22 5K: the April checkpoint. Sub-20 (4:00 per km) is the goal after this Program.
+Training paces from the Starting point's estimated 1 km split, worked out as for a Compromised run test of that pace and shown as estimates until the first test replaces them.
 
 **Environment**:
 Whether a run happens Indoors on a treadmill or Outdoors; Indoor Prescriptions are expressed as speed and incline.
 
 **Working weight**:
-The current load for a lift's main sets, first found in a calibration session and then progressed from logged reps and RPE. A calibration ramps from the empty bar, or from about 70% of the Starting point's estimate, rounded down to 5 lb.
+The current load for a lift's main sets in a Strength session, first found in a calibration session and then progressed from logged reps and RPE. A calibration ramps from the empty bar, or from about 70% of the Starting point's estimate, rounded down to 5 lb. Stations have no Working weight: they are always at Race load.
 
 **Station**:
 One of the eight HYROX race stations: SkiErg, sled push, sled pull, burpee broad jumps, row, farmers carry, sandbag lunges, wall balls.
 
 **Race load**:
-The Men's Open weight and distance or rep count for a Station.
+The Men's Open weight for a Station, the same in Doubles as in singles, and its full race distance or rep count.
+
+**Station volume**:
+The distance or rep count of a Station prescribed in one round, from a fraction of its Race load distance in Foundation to the full race amount in Race specific.
+_Avoid_: station distance, station reps (when meaning the prescribed amount)
+
+**Station best**:
+The fastest time logged for a Station at a given Station volume, at Race load.
+_Avoid_: PR, record
+
+**Station target**:
+The time the Coach asks the athlete to beat for a Station at its prescribed Station volume: the Station best, or the Station best less about 3% once the last two logs at that volume came in at RPE 7 or under.
+_Avoid_: goal time, split goal
 
 **Race simulation**:
-A 60–75 minute Session of race-distance runs and Stations at Race load, done in place of a normal HYROX session.
+A 60–85 minute Session of race-distance runs and Stations at Race load, done in place of a normal HYROX session and exempt from the Session cap.
+
+**Projected finish**:
+The solo finish time the Coach estimates from the Station bests at full Station volume, eight runs at Race run pace and a fixed transition allowance; shown with the Doubles share beside it.
+_Avoid_: predicted time, forecast
 
 **Training load**:
 RPE multiplied by minutes, summed per Session or Week.
