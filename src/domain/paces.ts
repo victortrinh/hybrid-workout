@@ -25,9 +25,6 @@ export type SpeedUnit = (typeof SPEED_UNITS)[number]
 /** Treadmill incline when the Prescription doesn't say: 1% stands in for the air outdoors. */
 export const DEFAULT_INCLINE = 1
 
-/** Sub-22: 4:24 per km. Left for Progress until #164 replaces its 5K panel. */
-export const GOAL_PACE = 264
-
 export const KM_PER_MILE = 1.609344
 
 export interface TrainingPaces {

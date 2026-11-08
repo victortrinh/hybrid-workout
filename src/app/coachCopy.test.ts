@@ -92,44 +92,40 @@ describe('a rest the spacing rules only suggest', () => {
 })
 
 describe('the Coach after Race day', () => {
-  const recap = (fiveK: ProgramRecap['fiveK']): ProgramRecap => ({
-    fiveK,
+  const recap = (raceRun: ProgramRecap['raceRun']): ProgramRecap => ({
+    raceRun,
     workingWeights: [],
     sessions: { done: 108, required: 110, easy: 13 },
     trainingLoad: { total: 48210, byLane: {} },
   })
   const race = { id: 'r' } as SessionLog
-  const underGoal = { first: { week: 2, seconds: 1463 }, last: { week: 24, seconds: 1315 }, underGoal: true }
+  const faster = { first: { week: 2, secondsPerKm: 313 }, last: { week: 19, secondsPerKm: 291 } }
 
   it('asks for the finish time, one number', () => {
-    expect(raceCopy({ state: 'ask', log: null }, recap(underGoal))).toEqual({
+    expect(raceCopy({ state: 'ask', log: null }, recap(faster))).toEqual({
       heading: 'Race done. How fast?',
       target: 'The finish time off the results page. One number, then the recap.',
     })
   })
 
-  it('calls both goals when the last 5K test beat the goal time', () => {
-    expect(raceCopy({ state: 'finished', log: race, seconds: 5047 }, recap(underGoal))).toEqual({
+  it('says how far the Race run pace came', () => {
+    expect(raceCopy({ state: 'finished', log: race, seconds: 5047 }, recap(faster))).toEqual({
       heading: 'Program done.',
-      target: 'Under 22:00 on the 5K, 1:24:07 at HYROX. Both goals, one Program. Now sit down for a week.',
+      target: '1:24:07 at HYROX, on a Race run pace 22 s/km quicker than Week 2’s. Now sit down for a week.',
     })
   })
 
-  it('says how far the 5K came when it missed the goal time, without dressing it up', () => {
-    const close = { first: { week: 2, seconds: 1463 }, last: { week: 24, seconds: 1330 }, underGoal: false }
-    expect(raceCopy({ state: 'finished', log: race, seconds: 5047 }, recap(close)).target).toBe(
-      '1:24:07 at HYROX, and 2:13 off the 5K to 22:10. Not sub-22. Not nothing either.',
-    )
-  })
-
-  it('leans on the Sessions without a 5K test', () => {
-    expect(raceCopy({ state: 'finished', log: race, seconds: 5047 }, recap(null)).target).toBe(
-      '1:24:07 at HYROX, on 108 Sessions. Now sit down for a week.',
-    )
+  it('leans on the Sessions when the Race run pace didn’t come down, or was never tested', () => {
+    const flat = { first: { week: 2, secondsPerKm: 300 }, last: { week: 19, secondsPerKm: 300 } }
+    for (const raceRun of [flat, null]) {
+      expect(raceCopy({ state: 'finished', log: race, seconds: 5047 }, recap(raceRun)).target).toBe(
+        '1:24:07 at HYROX, on 108 Sessions. Now sit down for a week.',
+      )
+    }
   })
 
   it('doesn’t ask after a Skipped race', () => {
-    expect(raceCopy({ state: 'skipped', log: race }, recap(underGoal))).toEqual({
+    expect(raceCopy({ state: 'skipped', log: race }, recap(faster))).toEqual({
       heading: 'Program done.',
       target: 'Race Skipped. The 24 Weeks still happened, and these are their numbers.',
     })

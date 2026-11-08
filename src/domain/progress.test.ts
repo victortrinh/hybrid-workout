@@ -1,15 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import { localDate } from './calendar'
 import type { LoggedStatus, SessionLog, StationLog } from './log'
-import type { Environment } from './paces'
+import { ROXZONE_SECONDS } from './racePlan'
 import { program } from './program/program'
+import type { StationId } from './program/types'
 import {
-  finalTestWeek,
-  fiveKProgress,
-  GOAL_SECONDS,
-  plannedAt,
+  projectedFinish,
+  raceRunSeries,
   recoveryTrend,
+  stationBests,
   stationTimes,
+  TRANSITION_SECONDS,
   trainingLoad,
   weekOf,
   weeklyCompletion,
@@ -47,62 +48,149 @@ function log(
   }
 }
 
-/** A Compromised run test logged with a result time: the series still reads one, until it reads the splits. */
-const test = (week: number, date: string, seconds: number, environment: Environment = 'indoor') =>
-  log(week, 'compromised-run-test', date, { resultSeconds: seconds, environment, minutes: 45, rpe: 9 })
+const line = (round: number, part: StationLog['part'], seconds: number | null, extra: Partial<StationLog> = {}): StationLog => ({
+  round,
+  part,
+  pounds: null,
+  meters: null,
+  reps: null,
+  seconds,
+  ...extra,
+})
 
-describe('the test series', () => {
-  it('has no tests and no planned line before the baseline', () => {
-    const series = fiveKProgress(program, [], localDate('2026-11-11'))
-    expect(series.tests).toEqual([])
-    expect(series.planned).toBeNull()
-    expect(series.upcoming.map((u) => u.week)).toEqual([2, 9, 14, 19])
-    expect(series.upcoming.every((u) => u.seconds === null)).toBe(true)
+/** A Compromised run test: four 1 km runs at these paces, each before its Station. */
+const runTest = (week: number, date: string, splits: number[], extra: Parameters<typeof log>[3] = {}) =>
+  log(week, 'compromised-run-test', date, {
+    rpe: 9,
+    stations: splits.map((s, i) => line(i + 1, 'run', s, { meters: 1000 })),
+    ...extra,
   })
 
-  it('runs the planned line from the baseline to the last test Week, Week 19', () => {
-    const series = fiveKProgress(program, [test(2, '2026-11-18', 23 * 60)], localDate('2026-11-25'))
-    expect(finalTestWeek(program)).toBe(19)
-    expect(series.tests).toEqual([{ week: 2, date: '2026-11-18', seconds: 1380, environment: 'indoor' }])
-    expect(series.planned).toEqual({ from: { week: 2, seconds: 1380 }, to: { week: 19, seconds: GOAL_SECONDS } })
-    // 60 s over 17 Weeks.
-    expect(series.upcoming).toEqual([
-      { week: 9, seconds: Math.round(1380 - (7 / 17) * 60) },
-      { week: 14, seconds: Math.round(1380 - (12 / 17) * 60) },
-      { week: 19, seconds: GOAL_SECONDS },
+/** Each Station at full Station volume and Race load, as a Race simulation would log it. */
+const FULL: Record<StationId, Partial<StationLog>> = {
+  skierg: { meters: 1000 },
+  'sled-push': { meters: 50, pounds: 335 },
+  'sled-pull': { meters: 50, pounds: 227 },
+  'burpee-broad-jumps': { meters: 80 },
+  row: { meters: 1000 },
+  'farmers-carry': { meters: 200, pounds: 55 },
+  'sandbag-lunges': { meters: 100, pounds: 45 },
+  'wall-balls': { reps: 100, pounds: 13 },
+}
+
+const simulation = (week: number, date: string, times: Partial<Record<StationId, number>>) =>
+  log(week, 'race-simulation', date, {
+    minutes: 65,
+    rpe: 8,
+    stations: (Object.entries(times) as [StationId, number][]).flatMap(([id, seconds], i) => [
+      line(i + 1, 'run', 300, { meters: 1000 }),
+      line(i + 1, id, seconds, FULL[id]),
+    ]),
+  })
+
+/** Weeks 16 and 18: every Station once at full volume. Σ = 240+180+200+250+245+90+260+330 = 1795. */
+const HALF_A = simulation(16, '2027-02-27', { skierg: 240, 'sled-push': 180, 'sled-pull': 200, 'burpee-broad-jumps': 250 })
+const HALF_B = simulation(18, '2027-03-13', { row: 245, 'farmers-carry': 90, 'sandbag-lunges': 260, 'wall-balls': 330 })
+
+describe('the Projected finish', () => {
+  it('shares its six minutes of transitions with the race plan', () => {
+    expect(TRANSITION_SECONDS).toBe(6 * 60)
+    expect(ROXZONE_SECONDS).toBe(TRANSITION_SECONDS)
+  })
+
+  it('adds the eight Station bests at full volume, eight runs at Race run pace and the transitions', () => {
+    const logs = [runTest(14, '2027-02-10', [290, 295, 300, 307]), HALF_A, HALF_B]
+    const projected = projectedFinish(program, logs, localDate('2027-03-14'))
+    expect(projected.missing).toEqual([])
+    // Race run pace 298 s/km: the mean of 290, 295, 300 and 307.
+    expect(projected.raceRun).toEqual({ secondsPerKm: 298, week: 14 })
+    expect(projected.projection).toEqual({
+      stations: 1795,
+      running: 8 * 298,
+      transitions: 360,
+      solo: 1795 + 8 * 298 + 360,
+      // Doubles: half the Station work, all the running, the same transitions.
+      doubles: 1795 / 2 + 8 * 298 + 360,
+    })
+  })
+
+  it('names the Stations with no best at full volume instead of a time', () => {
+    // Half volume in a HYROX round, and a sled push under Race load: neither counts.
+    const hyrox = log(12, 'hyrox-a', '2027-01-30', {
+      stations: [line(1, 'row', 120, { meters: 500 }), line(2, 'sled-push', 150, { meters: 50, pounds: 225 })],
+    })
+    const logs = [runTest(14, '2027-02-10', [300, 300, 300, 300]), HALF_A, hyrox]
+    const projected = projectedFinish(program, logs, localDate('2027-03-01'))
+    expect(projected.projection).toBeNull()
+    expect(projected.missing).toEqual(['row', 'farmers-carry', 'sandbag-lunges', 'wall-balls'])
+  })
+
+  it('has no time without a Compromised run test, even with every Station best', () => {
+    const projected = projectedFinish(program, [HALF_A, HALF_B], localDate('2027-03-14'))
+    expect(projected.missing).toEqual([])
+    expect(projected.raceRun).toBeNull()
+    expect(projected.projection).toBeNull()
+  })
+
+  it('counts only what was done by today', () => {
+    const logs = [runTest(14, '2027-02-10', [300, 300, 300, 300]), HALF_A, HALF_B]
+    expect(projectedFinish(program, logs, localDate('2027-03-12')).missing).toEqual([
+      'row',
+      'farmers-carry',
+      'sandbag-lunges',
+      'wall-balls',
+    ])
+  })
+})
+
+describe('the Station bests', () => {
+  it('has each of the eight Stations in race order, at race volume, with the Week it was set', () => {
+    const faster = log(20, 'hyrox-b', '2027-03-20', {
+      stations: [line(1, 'skierg', 236, FULL.skierg), line(2, 'row', 250, FULL.row)],
+    })
+    const bests = stationBests(program, [HALF_A, HALF_B, faster], localDate('2027-03-21'))
+    expect(bests.map((b) => b.station)).toEqual([
+      'skierg',
+      'sled-push',
+      'sled-pull',
+      'burpee-broad-jumps',
+      'row',
+      'farmers-carry',
+      'sandbag-lunges',
+      'wall-balls',
+    ])
+    expect(bests[0]).toEqual({ station: 'skierg', seconds: 236, week: 20 })
+    expect(bests[4]).toEqual({ station: 'row', seconds: 245, week: 18 })
+  })
+
+  it('has none for a Station never done at race volume', () => {
+    const bests = stationBests(program, [HALF_A], localDate('2027-03-01'))
+    expect(bests.find((b) => b.station === 'wall-balls')).toEqual({ station: 'wall-balls', seconds: null, week: null })
+  })
+
+  it('leaves out a log edited to Skipped', () => {
+    const skipped = { ...HALF_A, id: 'edit', status: 'skipped' as const, updatedAt: '2027-02-28T10:00:00.000Z' }
+    expect(stationBests(program, [HALF_A, skipped], localDate('2027-03-01')).every((b) => b.seconds === null)).toBe(true)
+  })
+})
+
+describe('the Race run pace series', () => {
+  it('has each Compromised run test from test to test, oldest first', () => {
+    const logs = [runTest(9, '2027-01-13', [300, 304, 308, 312]), runTest(2, '2026-11-18', [305, 310, 315, 322])]
+    expect(raceRunSeries(logs, localDate('2027-01-20')).map((t) => [t.week, t.raceRun, t.fade])).toEqual([
+      [2, 313, 17],
+      [9, 306, 12],
     ])
   })
 
-  it('keeps every test, oldest first, with where it was run; the line stays anchored on the baseline', () => {
-    const logs = [test(9, '2027-01-06', 22 * 60 + 10, 'outdoor'), test(2, '2026-11-18', 23 * 60)]
-    const series = fiveKProgress(program, logs, localDate('2027-01-20'))
-    expect(series.tests.map((t) => [t.week, t.seconds, t.environment])).toEqual([
-      [2, 1380, 'indoor'],
-      [9, 1330, 'outdoor'],
-    ])
-    expect(series.planned?.from).toEqual({ week: 2, seconds: 1380 })
-    expect(series.upcoming.map((u) => u.week)).toEqual([14, 19])
-  })
-
-  it('ignores a test without a time, one not Done, and a later edit decides', () => {
+  it('leaves out a test not Done, one without its four runs, one still ahead, and lets the latest edit decide', () => {
     const logs = [
-      log(2, 'compromised-run-test', '2026-11-18'),
-      test(9, '2027-01-06', 1300),
-      log(9, 'compromised-run-test', '2027-01-06', { status: 'skipped', updatedAt: '2027-01-07T10:00:00.000Z' }),
+      runTest(2, '2026-11-18', [305, 310, 315]),
+      runTest(9, '2027-01-13', [300, 304, 308, 312]),
+      runTest(9, '2027-01-13', [300, 304, 308, 312], { status: 'skipped', updatedAt: '2027-01-14T10:00:00.000Z' }),
+      runTest(14, '2027-02-17', [295, 295, 295, 295]),
     ]
-    expect(fiveKProgress(program, logs, localDate('2027-01-20')).tests).toEqual([])
-  })
-
-  it('drops a test Week from upcoming once it has passed untested', () => {
-    expect(fiveKProgress(program, [], localDate('2026-11-23')).upcoming.map((u) => u.week)).toEqual([9, 14, 19])
-    expect(fiveKProgress(program, [], localDate('2026-11-18')).upcoming.map((u) => u.week)).toEqual([2, 9, 14, 19])
-  })
-
-  it('places a Week on the line', () => {
-    const line = { from: { week: 2, seconds: 1380 }, to: { week: 24, seconds: 1200 } }
-    expect(plannedAt(line, 2)).toBe(1380)
-    expect(plannedAt(line, 24)).toBe(1200)
-    expect(plannedAt(line, 13)).toBe(1290)
+    expect(raceRunSeries(logs, localDate('2027-02-16'))).toEqual([])
   })
 })
 
@@ -179,7 +267,7 @@ describe('Training load', () => {
       log(1, 'hyrox-a', '2026-11-09', { rpe: 7, minutes: 45 }),
       log(1, 'strength', '2026-11-10', { rpe: 6, minutes: 45 }),
       log(1, 'easy', '2026-11-14', { rpe: 3, minutes: 20 }),
-      test(2, '2026-11-18', 1380),
+      runTest(2, '2026-11-18', [300, 300, 300, 300]),
       log(2, 'hyrox-b', '2026-11-20', { rpe: 7, minutes: 60, status: 'partial' }),
     ]
     const load = trainingLoad(program, logs, localDate('2026-11-25'))
@@ -192,7 +280,7 @@ describe('Training load', () => {
   })
 
   it('counts a Late session in the Week it was done', () => {
-    const load = trainingLoad(program, [test(2, '2026-11-24', 1380)], localDate('2026-11-25'))
+    const load = trainingLoad(program, [runTest(2, '2026-11-24', [300, 300, 300, 300])], localDate('2026-11-25'))
     expect(load.map((w) => w.total)).toEqual([0, 0, 405])
   })
 
@@ -264,15 +352,6 @@ describe('recovery trend', () => {
 })
 
 describe('HYROX Station times', () => {
-  const line = (round: number, part: StationLog['part'], seconds: number | null): StationLog => ({
-    round,
-    part,
-    pounds: null,
-    meters: null,
-    reps: null,
-    seconds,
-  })
-
   it('names the first Race simulation before there is one', () => {
     const times = stationTimes(program, [], localDate('2026-11-11'))
     expect(times.simulations).toEqual([])

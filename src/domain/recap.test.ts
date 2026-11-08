@@ -75,24 +75,41 @@ describe('the race result', () => {
 })
 
 describe('the Program recap', () => {
-  it('runs the tests with a result time from the first to the last', () => {
+  /** A Compromised run test: four 1 km runs at these paces. */
+  const runTest = (week: number, date: string, splits: number[]) =>
+    log(week, 'compromised-run-test', date, {
+      rpe: 9,
+      stations: splits.map((seconds, i) => ({ round: i + 1, part: 'run', pounds: null, meters: 1000, reps: null, seconds })),
+    })
+
+  it('runs the Race run pace from the first Compromised run test to the last', () => {
     const logs = [
-      log(2, 'compromised-run-test', '2026-11-18', { resultSeconds: 1380 }),
-      log(9, 'compromised-run-test', '2027-01-06', { resultSeconds: 1335 }),
-      log(19, 'compromised-run-test', '2027-03-17', { resultSeconds: 1315 }),
+      runTest(2, '2026-11-18', [305, 310, 315, 322]),
+      runTest(9, '2027-01-13', [300, 304, 308, 312]),
+      runTest(19, '2027-03-17', [288, 290, 292, 294]),
     ]
-    const { fiveK } = programRecap(program, logs, [], DAY_AFTER)
-    expect(fiveK).toEqual({ first: { week: 2, seconds: 1380 }, last: { week: 19, seconds: 1315 }, underGoal: true })
+    expect(programRecap(program, logs, [], DAY_AFTER).raceRun).toEqual({
+      first: { week: 2, secondsPerKm: 313 },
+      last: { week: 19, secondsPerKm: 291 },
+    })
   })
 
-  it('has no test line without a test, and one test is both ends', () => {
-    expect(programRecap(program, [], [], DAY_AFTER).fiveK).toBeNull()
-    const one = [log(2, 'compromised-run-test', '2026-11-18', { resultSeconds: 1380 })]
-    expect(programRecap(program, one, [], DAY_AFTER).fiveK).toEqual({
-      first: { week: 2, seconds: 1380 },
-      last: { week: 2, seconds: 1380 },
-      underGoal: false,
+  it('has no Race run pace line without a test, and one test is both ends', () => {
+    expect(programRecap(program, [], [], DAY_AFTER).raceRun).toBeNull()
+    const one = [runTest(2, '2026-11-18', [305, 310, 315, 322])]
+    expect(programRecap(program, one, [], DAY_AFTER).raceRun).toEqual({
+      first: { week: 2, secondsPerKm: 313 },
+      last: { week: 2, secondsPerKm: 313 },
     })
+  })
+
+  it('keeps no 5K in the recap', () => {
+    expect(Object.keys(programRecap(program, [], [], DAY_AFTER))).toEqual([
+      'raceRun',
+      'workingWeights',
+      'sessions',
+      'trainingLoad',
+    ])
   })
 
   it('puts each Working weight where calibration found it and where it is now', () => {
