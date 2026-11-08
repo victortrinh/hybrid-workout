@@ -1162,17 +1162,17 @@ describe('the pain rules', () => {
     }
   })
 
-  it('swap burpee broad jumps for the SkiErg and cut interval reps by about 30% once Accepted', () => {
+  it('swap burpee broad jumps and sled push for an erg and cut interval reps by about 30% once Accepted', () => {
     const report = pain('2026-11-25', 4)
     const day = withPain('2026-11-25', [report], [painDecision(report, 'accepted')])
     const hyroxB = day.bucket.find((e) => e.session.id === 'hyrox-b')!.session
     expect(roundStations(hyroxB)).toEqual([['skierg 250'], ['skierg 250'], ['row 250'], ['wall-balls']])
+    expect(roundStations(day.upNext!)).toEqual([['row 500'], ['sled-pull 25'], ['farmers-carry 100'], ['sandbag-lunges 25']])
     const run = runOf(day)
     expect(run).toMatchObject({ headline: '2 × 8′', minutes: 36 })
     expect(mainIntervals(run)).toMatchObject({ kind: 'intervals', reps: 2, workSeconds: 480 })
-    // Strength and HYROX A, with nothing to swap or cut, stay as written.
+    // Strength, with nothing to swap or cut, stays as written.
     expect(day.bucket.find((e) => e.session.id === 'strength')!.session).toEqual(prescribedWeek(program, 3, [], [])!.sessions[3])
-    expect(day.upNext).toEqual(prescribedWeek(program, 3, [], [])!.sessions[0])
   })
 
   it('make every Session easy low-impact work or rest at pain 5 or more', () => {
@@ -1380,11 +1380,12 @@ describe('the recovery rules', () => {
     expect(recoveryOf(day)).toEqual([])
   })
 
-  it('take a set off every main lift and cap its sets at RPE 7 on a Strength day', () => {
+  it('take a rep off every main lift and cap its sets at RPE 7 on a Strength day', () => {
     const picked = { date: localDate('2026-11-25'), week: 3, sessionId: 'strength' }
     const day = withNights('2026-11-25', [...baseline, night('2026-11-25', 300)], [], [], picked)
     expect(day.upNext!.type).toBe('strength')
-    expect(day.recoveryCut).toBe('set')
+    expect(day.recoveryCut).toBe('rep')
+    expect(day.upNext!.note).toMatch(/^Short sleep \(5 h 00\): one rep fewer, nothing past RPE 7\./)
     const written = findWeek(program, 3)!.sessions.find((s) => s.id === day.upNext!.id)!
     const sets = (s: typeof written) =>
       s.blocks.filter((b) => b.main).flatMap((b) => b.exercises.map((e) => e.prescription)).filter((rx) => rx.kind === 'sets')
@@ -1394,8 +1395,8 @@ describe('the recovery rules', () => {
     after.forEach((rx, i) => {
       const was = before[i]
       if (rx.kind !== 'sets' || was.kind !== 'sets') throw new Error('not sets')
-      expect(rx.sets).toBe(Math.max(1, was.sets - 1))
-      expect(rx.reps).toEqual(was.reps)
+      expect(rx.sets).toBe(was.sets)
+      if (typeof rx.reps === 'number' && typeof was.reps === 'number' && !was.meters) expect(rx.reps).toBe(Math.max(1, was.reps - 1))
       expect(rx.rpeCap).toBeLessThanOrEqual(7)
       if (rx.rpe) expect(rx.rpe[1]).toBeLessThanOrEqual(7)
     })
@@ -1489,6 +1490,128 @@ describe('the recovery rules', () => {
     expect(day.upNext?.date).toBe(raceDay)
     expect(day.recoveryChange).toBeNull()
     expect(recoveryOf(day)).toEqual([])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Three Readiness flags in a Week: the rest of it a third lighter. Week 3 (Mon
+// 23 – Sun 29 Nov); Week 5 is a Deload week, Week 22 the Taper.
+
+const lighterOf = (day: ReturnType<typeof coach>) => day.suggestions.filter((s) => s.kind === 'lighter-week')
+
+function readiness(
+  iso: string,
+  { reports = [], nights = [], decisions = [], logs = [] }: { reports?: PainReport[]; nights?: RecoveryNight[]; decisions?: SuggestionDecision[]; logs?: SessionLog[] },
+) {
+  return coach({
+    program,
+    today: localDate(iso),
+    logs: [...caughtUpBefore(localDate(iso)), ...logs],
+    painReports: reports,
+    recoveryNights: nights,
+    decisions,
+  })
+}
+
+const lighterDecision = (decision: Decision, week = 3, date = '2026-11-25'): SuggestionDecision => ({
+  id: `lighter-week-w${week}`,
+  decision,
+  date: localDate(date),
+  updatedAt: `${date}T13:00:00.000Z`,
+})
+
+describe('the lighter-Week Suggestion from Readiness', () => {
+  // Monday pain 3, Tuesday a short night, Wednesday pain 4.
+  const monday = pain('2026-11-23', 3)
+  const tuesday = night('2026-11-24', 320)
+  const wednesday = pain('2026-11-25', 4)
+  const flags = { reports: [monday, wednesday], nights: [tuesday] }
+
+  it('comes on the third Readiness flag of the Week, as structured facts', () => {
+    expect(lighterOf(readiness('2026-11-24', flags))).toEqual([])
+    expect(lighterOf(readiness('2026-11-25', flags))).toEqual([
+      {
+        id: 'lighter-week-w3',
+        kind: 'lighter-week',
+        week: 3,
+        sessionId: null,
+        date: '2026-11-25',
+        from: { volumePercent: 100 },
+        to: { volumePercent: 67 },
+        trigger: {
+          flags: [
+            { date: '2026-11-23', painScore: 3, sleepMinutes: null },
+            { date: '2026-11-24', painScore: null, sleepMinutes: 320 },
+            { date: '2026-11-25', painScore: 4, sleepMinutes: null },
+          ],
+        },
+        decision: 'open',
+        decidedOn: null,
+      },
+    ])
+    // It stands for the rest of the Week, from the day of the third flag.
+    expect(lighterOf(readiness('2026-11-28', flags))[0]).toMatchObject({ date: '2026-11-25' })
+    // The Monday after is a new Week: no flags yet.
+    expect(lighterOf(readiness('2026-11-30', flags))).toEqual([])
+  })
+
+  it('counts a day once, whatever flagged it', () => {
+    const sameDay = { reports: [monday, wednesday], nights: [night('2026-11-23', 300), night('2026-11-25', 300)] }
+    expect(lighterOf(readiness('2026-11-25', sameDay))).toEqual([])
+    expect(lighterOf(readiness('2026-11-26', { ...sameDay, nights: [...sameDay.nights, night('2026-11-26', 330)] }))).toHaveLength(1)
+  })
+
+  it('counts only what the Readiness rules act on: pain 3 or rising, sleep under 6 hours', () => {
+    const calm = {
+      reports: [pain('2026-11-23', 2), pain('2026-11-25', 2)],
+      nights: [night('2026-11-24', 360), night('2026-11-26', 450)],
+    }
+    expect(lighterOf(readiness('2026-11-26', calm))).toEqual([])
+    // Rising pain is a flag even under 3: up from last Sunday's 0.
+    const rising = { reports: [pain('2026-11-22', 0), pain('2026-11-23', 1), pain('2026-11-24', 2), pain('2026-11-25', 3)], nights: [] }
+    expect(lighterOf(readiness('2026-11-25', rising))[0].trigger.flags).toEqual([
+      { date: '2026-11-23', painScore: 1, sleepMinutes: null },
+      { date: '2026-11-24', painScore: 2, sleepMinutes: null },
+      { date: '2026-11-25', painScore: 3, sleepMinutes: null },
+    ])
+  })
+
+  it('counts only the Week holding today: last Sunday’s flag is last Week’s', () => {
+    const across = { reports: [pain('2026-11-22', 4), monday], nights: [tuesday] }
+    expect(lighterOf(readiness('2026-11-25', across))).toEqual([])
+  })
+
+  it('changes nothing until Accepted, and the rest of the Week once it is', () => {
+    const hyroxMondayDone = [log(3, 'hyrox-a', '2026-11-23')]
+    const open = readiness('2026-11-25', { ...flags, logs: hyroxMondayDone })
+    expect(open.bucket.find((e) => e.session.id === 'hyrox-b')!.session.minutes).toBe(45)
+
+    const accepted = readiness('2026-11-25', { ...flags, logs: hyroxMondayDone, decisions: [lighterDecision('accepted')] })
+    expect(lighterOf(accepted)[0]).toMatchObject({ decision: 'accepted', decidedOn: '2026-11-25' })
+    // HYROX A was done before the flags added up: it stays as written.
+    expect(accepted.bucket.map((e) => e.session.minutes)).toEqual([45, 30, 30, 30, 20])
+    expect(accepted.bucket.find((e) => e.session.id === 'run')!.session.headline).toBe('2 × 8′')
+
+    const kept = readiness('2026-11-25', { ...flags, logs: hyroxMondayDone, decisions: [lighterDecision('kept')] })
+    expect(kept.bucket.map((e) => e.session.minutes)).toEqual([45, 45, 45, 45, 30])
+  })
+
+  it('shows the lighter Week on other screens too, given the nights', () => {
+    const decisions = [lighterDecision('accepted')]
+    const today = localDate('2026-11-25')
+    expect(prescribedWeek(program, 3, [], decisions, undefined, { ...flags, today })?.sessions[1].minutes).toBe(30)
+    expect(prescribedWeek(program, 3, [], decisions, undefined, { reports: flags.reports, today })?.sessions[1].minutes).toBe(45)
+  })
+
+  it('never comes in a Deload week or the Taper', () => {
+    // Week 5: Mon 7 Dec.
+    const deload = { reports: [pain('2026-12-07', 4), pain('2026-12-09', 5)], nights: [night('2026-12-08', 300)] }
+    expect(lighterOf(readiness('2026-12-09', deload))).toEqual([])
+    // Week 22: Mon 5 Apr.
+    const taper = { reports: [pain('2027-04-05', 4), pain('2027-04-07', 5)], nights: [night('2027-04-06', 300)] }
+    const day = readiness('2027-04-07', taper)
+    expect(day.position).toMatchObject({ week: 22, phase: 'taper' })
+    expect(lighterOf(day)).toEqual([])
   })
 })
 

@@ -223,9 +223,9 @@ describe('the short-sleep rule on each Session type', () => {
     expect(after.note).toMatch(/^Short sleep \(5 h 20\): one Station fewer, nothing past RPE 7\./)
   })
 
-  it('takes a set off every main lift on a Strength day, reps as written', () => {
-    const written = first('strength')
-    expect(shortSleepCut(written)).toBe('set')
+  it('takes a rep off every main lift on a Strength day, sets as written', () => {
+    const written = sessions.find((s) => s.type === 'strength' && mainBlocks(s).some((b) => b.exercises.some((e) => e.prescription.kind === 'sets' && e.prescription.load.kind === 'working-weight')))!
+    expect(shortSleepCut(written)).toBe('rep')
     const after = shortSleepAdapted(written, short)
     const sets = (s: Session) => mainBlocks(s).flatMap((b) => b.exercises.map((e) => e.prescription)).filter((rx) => rx.kind === 'sets')
     const before = sets(written)
@@ -233,11 +233,20 @@ describe('the short-sleep rule on each Session type', () => {
     sets(after).forEach((rx, i) => {
       const was = before[i]
       if (rx.kind !== 'sets' || was.kind !== 'sets') throw new Error('not sets')
-      expect(rx.sets).toBe(Math.max(1, was.sets - 1))
-      expect(rx.reps).toEqual(was.reps)
+      expect(rx.sets).toBe(was.sets)
+      const less = (n: number) => (was.meters ? n : Math.max(1, n - 1))
+      expect(rx.reps).toEqual(typeof was.reps === 'number' ? less(was.reps) : [less(was.reps[0]), less(was.reps[1])])
       expect(rx.rpeCap).toBeLessThanOrEqual(7)
     })
-    expect(after.note).toMatch(/^Short sleep \(5 h 20\): one set fewer, nothing past RPE 7\./)
+    expect(after.note).toMatch(/^Short sleep \(5 h 20\): one rep fewer, nothing past RPE 7\./)
+  })
+
+  it('takes a round off Compromised intervals', () => {
+    const written = first('run', '4 × (1 km + 20 wall balls)')
+    expect(shortSleepCut(written)).toBe('round')
+    const after = shortSleepAdapted(written, short)
+    expect(mainBlocks(after)).toHaveLength(3)
+    expect(after.note).toMatch(/^Short sleep \(5 h 20\): one round fewer, nothing past RPE 7\./)
   })
 
   it('cuts nothing from a single round, and says only the cap', () => {

@@ -12,8 +12,8 @@ import type { Session } from '../domain/program/types'
 import { CUT_NOUN, EASY_DAY_MINUTES, SLEEP_RPE_CAP, sleepText, type ShortSleepCut } from '../domain/recovery'
 import { GOAL_LABEL, GOAL_SECONDS } from '../domain/progress'
 import { finishClock, type ProgramRecap, type RaceResult } from '../domain/recap'
-import type { Suggestion } from '../domain/suggestion'
-import { plural, shortDay, weekday } from './format'
+import type { ReadinessFlag, Suggestion } from '../domain/suggestion'
+import { plural, shortDay, shortWeekday, weekday } from './format'
 
 export interface SuggestionCopy {
   /** The change and the reason, while it is Open. */
@@ -40,6 +40,16 @@ export function suggestionCopy(s: Suggestion): SuggestionCopy {
         kept: 'Keeping full volume. Your call. Your calves.',
       }
     }
+    case 'lighter-week': {
+      const cut = s.from.volumePercent - s.to.volumePercent
+      return {
+        line: `Three rough days this Week. That’s your body asking for a Deload. The rest of Week ${s.week} goes ${cut}% lighter.`,
+        why: `${s.trigger.flags.map(flagWords).join(' · ')} · every Prescription left in Week ${s.week} at ${s.to.volumePercent}%`,
+        keep: 'Keep full volume',
+        accepted: `Done. The rest of Week ${s.week} is ${cut}% lighter. Full volume again on Monday.`,
+        kept: 'Keeping full volume. Your call. Three flags is a pattern.',
+      }
+    }
     case 'pain': {
       const { score, area, risingFrom } = s.trigger
       const where = area ? ` · ${PAIN_AREA_LABEL[area]}` : ''
@@ -51,7 +61,7 @@ export function suggestionCopy(s: Suggestion): SuggestionCopy {
         accepted:
           s.level === 'low-impact'
             ? 'Done. Easy bike or rest until it settles. Tell me when it does.'
-            : 'Done. Bike for the jumps, fewer reps. Tell me when it settles.',
+            : 'Done. Ergs for the jumps and the sled, fewer reps. Tell me when it settles.',
         kept: 'Keeping it as written. Your call. Stop if it gets worse.',
       }
     }
@@ -92,6 +102,12 @@ export function suggestionCopy(s: Suggestion): SuggestionCopy {
   }
 }
 
+/** One Readiness flag in a few words: "Mon pain 4", "Tue slept 5 h 20", "Wed pain 3, slept 5 h 50". */
+function flagWords({ date, painScore, sleepMinutes }: ReadinessFlag): string {
+  const what = [painScore !== null && `pain ${painScore}`, sleepMinutes !== null && `slept ${sleepText(sleepMinutes)}`].filter(Boolean)
+  return `${shortWeekday(date)} ${what.join(', ')}`
+}
+
 /** The numbers behind a recovery change: "Sleep 5 h 41 · HRV 38 ms against a 52 ms average". */
 export function recoveryWhy(sleepMinutes: number, hrvMs: number | null, hrvMean: number | null): string {
   const hrv = hrvMs === null ? '' : ` · HRV ${hrvMs} ms${hrvMean === null ? '' : ` against a ${hrvMean} ms average`}`
@@ -107,8 +123,8 @@ export function shortSleepLine(sleepMinutes: number, cut: ShortSleepCut | null):
 /** The pain step's line and a pain Suggestion's: what the score does to training. */
 export function painLine(score: number, level: PainLevel | null, rising: boolean): string {
   if (level === 'low-impact') return `Pain ${score}. Today becomes easy bike or rest. Not negotiable.`
-  if (level === 'ease' && rising) return `Pain ${score} and rising. No jumps, fewer reps, before it gets a vote.`
-  if (level === 'ease') return `Pain ${score}. No jumps, fewer reps. Your tendons will thank you.`
+  if (level === 'ease' && rising) return `Pain ${score} and rising. No jumps, no sled push, fewer reps, before it gets a vote.`
+  if (level === 'ease') return `Pain ${score}. No jumps, no sled push, fewer reps. Your tendons will thank you.`
   return score === 0 ? 'Nothing hurts. Carry on.' : 'Noted. Carry on, carefully.'
 }
 
@@ -116,7 +132,7 @@ export function painLine(score: number, level: PainLevel | null, rising: boolean
 function painChange(level: PainLevel): string {
   return level === 'low-impact'
     ? 'every Session easy and low-impact'
-    : `bike for jumps and accelerations, ${100 - PAIN_REPS_PERCENT}% fewer interval reps`
+    : `row or SkiErg for burpee broad jumps and sled push, ${100 - PAIN_REPS_PERCENT}% fewer interval reps`
 }
 
 /** "Speed", "Speed and HYROX", "Speed, Strength and HYROX" */

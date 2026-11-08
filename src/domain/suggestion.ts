@@ -50,6 +50,38 @@ export interface ReEntrySuggestion {
   decidedOn: LocalDate | null
 }
 
+/**
+ * A day Readiness acted on: a Pain report of 3 or more, or rising, or a night
+ * under 6 hours. A day counts once, whatever flagged it.
+ */
+export interface ReadinessFlag {
+  date: LocalDate
+  /** The highest score the pain rules acted on that day; null when only the night flagged it. */
+  painScore: number | null
+  /** The short night ending that morning; null when only pain flagged it. */
+  sleepMinutes: number | null
+}
+
+/** The rest of a Week a third lighter, after three Readiness flags in it: the lighter-Week Suggestion, like re-entry's. */
+export interface LighterWeekSuggestion {
+  id: string
+  kind: 'lighter-week'
+  /** The Week it lightens: the one holding the flags. */
+  week: number
+  /** Null: every Session of the Week still open. */
+  sessionId: null
+  /** The day the change applies from: the day of the third flag. */
+  date: LocalDate
+  from: { volumePercent: number }
+  to: { volumePercent: number }
+  trigger: {
+    /** The first three flags of the Week, oldest first. */
+    flags: ReadinessFlag[]
+  }
+  decision: Decision
+  decidedOn: LocalDate | null
+}
+
 /** The pain rules, for every open Session while a Pain report stands. */
 export interface PainSuggestion {
   id: string
@@ -60,7 +92,7 @@ export interface PainSuggestion {
   sessionId: null
   /** The day it applies from: the day of the report. */
   date: LocalDate
-  /** Bike for jumps and accelerations with fewer reps, or easy low-impact work. */
+  /** An erg for burpee broad jumps and sled push with fewer interval reps, or easy low-impact work. */
   level: PainLevel
   trigger: {
     score: number
@@ -127,9 +159,15 @@ export interface WorkingWeightSuggestion {
   decidedOn: LocalDate | null
 }
 
-export type Suggestion = ReEntrySuggestion | WorkingWeightSuggestion | PainSuggestion | RecoverySuggestion
+export type Suggestion =
+  | ReEntrySuggestion
+  | LighterWeekSuggestion
+  | WorkingWeightSuggestion
+  | PainSuggestion
+  | RecoverySuggestion
 
 export const reEntryId = (week: number) => `re-entry-w${week}`
+export const lighterWeekId = (week: number) => `lighter-week-w${week}`
 export const workingWeightId = (lift: LiftId, week: number) => `ww-${lift}-w${week}`
 /** One per Pain report: a decision on it stands as long as the report does. */
 export const painId = (reportId: string) => `pain-${reportId}`

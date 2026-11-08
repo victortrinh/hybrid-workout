@@ -43,11 +43,13 @@ test('a four-round HYROX session: Set up off the clock, each Station then its ru
   const start = new Date(WEEK_3.getTime() + 1000)
   await page.clock.install({ time: aMinuteBefore(WEEK_3) })
   await page.goto('/')
-  await page.clock.pauseAt(start)
 
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('HYROX A, 4 rounds')
-  // Set up isn't in the minutes: it shows beside them.
+  // Set up isn't in the minutes: it shows beside them. It also says the history has
+  // loaded (Week 1's HYROX A would read "Week 1 · Late"), so only now is the clock
+  // paused: paused first, a slow first load waits on a retry timer that never fires.
   await expect(page.getByText(/^45\smin\s\+\s~5′\ssetup/).filter({ visible: true }).first()).toBeVisible()
+  await page.clock.pauseAt(start)
   await page.getByRole('button', { name: 'Start HYROX A' }).click()
 
   await expect(page).toHaveURL('/live')

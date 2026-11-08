@@ -75,45 +75,97 @@ describe('mergePainReports', () => {
   })
 })
 
-describe('painAdapted, HYROX at the ease level', () => {
+describe('painAdapted at the ease level: no burpee broad jumps or sled push, fewer interval reps', () => {
   const sessions = program.phases
     .flatMap((p) => p.weeks)
     .flatMap((w) => w.sessions)
-    .filter((s) => (s.type === 'hyrox' || s.type === 'race-simulation') && !s.date)
-  const withBurpees = sessions.filter((s) =>
-    s.blocks.some((b) => b.exercises.some((e) => e.prescription.kind === 'station' && e.prescription.station === 'burpee-broad-jumps')),
-  )
+    .filter((s) => !s.date)
   const stationIds = (b: Block) => b.exercises.flatMap((e) => (e.prescription.kind === 'station' ? [e.prescription.station] : []))
+  const IMPACT = ['burpee-broad-jumps', 'sled-push']
+  const withImpact = sessions.filter((s) => s.blocks.some((b) => stationIds(b).some((id) => IMPACT.includes(id))))
+  const week = (n: number) => program.phases.flatMap((p) => p.weeks).find((w) => w.number === n)!
+  const mainBlocks = (s: Session) => s.blocks.filter((b) => b.main)
 
-  it('takes Burpee broad jumps out of every HYROX session and Race simulation, Set up included', () => {
-    expect(withBurpees.map((s) => s.type)).toEqual(expect.arrayContaining(['hyrox', 'race-simulation']))
-    for (const s of withBurpees) {
-      expect(painAdapted(s, 'ease').blocks.flatMap(stationIds)).not.toContain('burpee-broad-jumps')
+  it('takes burpee broad jumps and sled push out of every Session that has them, Set up included', () => {
+    expect(new Set(withImpact.map((s) => s.type))).toEqual(new Set(['hyrox', 'race-simulation', 'compromised-run-test']))
+    for (const s of withImpact) {
+      expect(painAdapted(s, 'ease').blocks.flatMap(stationIds).filter((id) => IMPACT.includes(id))).toEqual([])
     }
   })
 
-  it('puts SkiErg in their place for about the same time, with the pain note, one Station a round', () => {
-    const foundation = withBurpees.find((s) => s.id === 'hyrox-b')!
-    const eased = painAdapted(foundation, 'ease')
+  it('puts the SkiErg in for burpee broad jumps, for about the same time, with the reason', () => {
+    const hyroxB = week(1).sessions.find((s) => s.id === 'hyrox-b')!
+    const eased = painAdapted(hyroxB, 'ease')
     const round2 = eased.blocks.find((b) => b.name === 'Round 2')!
-    expect(round2.exercises.map((e) => describeLeg(e))).toEqual(['SkiErg 250 m: Instead of burpee broad jumps: pain says no impact.', 'Run'])
-    expect(eased.blocks.find((b) => b.setup)!.exercises.map((e) => e.name)).toEqual(['Wall balls'])
-    for (const s of withBurpees) {
-      for (const b of painAdapted(s, 'ease').blocks) expect(new Set(stationIds(b)).size).toBe(stationIds(b).length)
-    }
+    expect(round2.exercises.map(describeLeg)).toEqual(['SkiErg 250 m: Instead of burpee broad jumps: pain says no impact.', 'Run'])
+    expect(eased.headline).toBe('4 rounds')
+    expect(eased.minutes).toBe(hyroxB.minutes)
   })
 
-  it('swaps a Race simulation’s Station alone for SkiErg, still a Station', () => {
-    const sim = withBurpees.find((s) => s.type === 'race-simulation' && s.headline === 'half A')!
-    const leg = painAdapted(sim, 'ease').blocks.find((b) => b.name === 'Run and Station 4')!
-    expect(leg.exercises.map(describeLeg)).toEqual(['Run', 'SkiErg 1000 m: Instead of burpee broad jumps: pain says no impact.'])
+  it('puts the row in for sled push, for about the same time, and takes the sled out of the Set up', () => {
+    const hyroxA = week(1).sessions.find((s) => s.id === 'hyrox-a')!
+    const eased = painAdapted(hyroxA, 'ease')
+    expect(eased.blocks.find((b) => b.name === 'Round 1')!.exercises.map(describeLeg)).toEqual([
+      'Row 500 m: Instead of sled push: pain says no impact.',
+      'Run',
+    ])
+    expect(eased.blocks.find((b) => b.setup)!.exercises.map((e) => e.name)).toEqual(['Sled pull', 'Farmers carry', 'Sandbag lunges'])
+    // Race volume: 50 m of sled push is 1000 m of row.
+    const sim = sessions.find((s) => s.type === 'race-simulation' && s.headline === 'half A')!
+    const leg = painAdapted(sim, 'ease').blocks.find((b) => b.exercises.some((e) => /sled push/.test(e.note ?? '')))!
+    expect(leg.exercises.map(describeLeg)).toContain('Row 1000 m: Instead of sled push: pain says no impact.')
   })
 
-  it('leaves sandbag lunges and the lunge warm-up as written', () => {
+  it('leaves the other Stations, and sandbag lunges, as written', () => {
     for (const s of sessions) {
-      const names = (x: Session) => x.blocks.flatMap((b) => b.exercises.map((e) => e.name)).filter((n) => /lunge/i.test(n))
-      expect(names(painAdapted(s, 'ease'))).toEqual(names(s))
+      const others = (x: Session) =>
+        x.blocks.flatMap((b) => b.exercises).filter((e) => e.prescription.kind !== 'station' || !IMPACT.includes(e.prescription.station))
+      const kept = painAdapted(s, 'ease').blocks.flatMap((b) => b.exercises).filter((e) => !/^Instead of/.test(e.note ?? ''))
+      expect(kept.filter((e) => /lunge/i.test(e.name))).toEqual(others(s).filter((e) => /lunge/i.test(e.name)))
     }
+  })
+
+  it('cuts Threshold reps by about 30%, and the minutes with them', () => {
+    const run = week(3).sessions.find((s) => s.id === 'run')!
+    expect(run.headline).toBe('3 × 8′')
+    const eased = painAdapted(run, 'ease')
+    expect(eased.headline).toBe('2 × 8′')
+    expect(eased.minutes).toBeLessThan(run.minutes)
+    expect(mainBlocks(eased)[0].exercises[0].prescription).toMatchObject({ kind: 'intervals', reps: 2 })
+  })
+
+  it('cuts Compromised intervals by about 30% too: a rep is a 1 km and its wall balls', () => {
+    const run = week(6).sessions.find((s) => s.id === 'run')!
+    expect(run.headline).toBe('4 × (1 km + 20 wall balls)')
+    const eased = painAdapted(run, 'ease')
+    expect(eased.headline).toBe('3 × (1 km + 20 wall balls)')
+    expect(mainBlocks(eased).map((b) => b.name)).toEqual(['Rep 1', 'Rep 2', 'Rep 3'])
+    expect(mainBlocks(eased).at(-1)!.note).toBeUndefined()
+    expect(eased.minutes).toBe(run.minutes - mainBlocks(run)[3].minutes!)
+    const five = week(11).sessions.find((s) => s.id === 'run')!
+    expect(painAdapted(five, 'ease').headline).toBe('4 × (1 km + 20 wall balls)')
+  })
+
+  it('leaves HYROX rounds and an Easy run whole', () => {
+    const easy = week(3).sessions.find((s) => s.id === 'easy')!
+    expect(painAdapted(easy, 'ease')).toEqual(easy)
+    const hyroxB = week(3).sessions.find((s) => s.id === 'hyrox-b')!
+    expect(mainBlocks(painAdapted(hyroxB, 'ease'))).toHaveLength(4)
+  })
+
+  it('keeps the old jump and acceleration Substitutions gone: nothing goes to the bike', () => {
+    for (const s of sessions) {
+      const names = painAdapted(s, 'ease').blocks.flatMap((b) => b.exercises.map((e) => e.name))
+      expect(names.filter((n) => /bike/i.test(n))).toEqual(s.blocks.flatMap((b) => b.exercises.map((e) => e.name)).filter((n) => /bike/i.test(n)))
+      for (const e of s.blocks.flatMap((b) => b.exercises)) {
+        expect((e.substitutions ?? []).flatMap((x) => x.when)).not.toContain('readiness')
+      }
+    }
+  })
+
+  it('makes the Session easy low-impact work or rest at pain 5 or more', () => {
+    const hyroxA = week(3).sessions.find((s) => s.id === 'hyrox-a')!
+    expect(painAdapted(hyroxA, 'low-impact')).toMatchObject({ headline: 'easy bike 30′ or rest', minutes: 30 })
   })
 })
 

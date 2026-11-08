@@ -11,7 +11,7 @@ export const RE_ENTRY_PERCENT = 67
 
 /**
  * Cuts a Session's volume to `percent`: fewer reps and sets, shorter runs,
- * less Station work, fewer minutes. Intensity stays as written. A
+ * less Station work, fewer minutes, and no Station targets. Intensity stays as written. A
  * Compromised run test and anything pinned to a day (the race) stay whole: a
  * shorter test isn't a test.
  */
@@ -58,12 +58,15 @@ function lightenPrescription(rx: Prescription, scale: number): Prescription {
     case 'sets':
     case 'drill':
       return { ...rx, sets: count(rx.sets, scale) }
-    case 'station':
+    case 'station': {
+      // A Station target is for the volume as written: a lighter Week has none, like a Deload week.
+      const { target: _target, ...station } = rx
       return {
-        ...rx,
+        ...station,
         meters: rx.meters === undefined ? undefined : step(rx.meters * scale, 5),
         reps: rx.reps === undefined ? undefined : step(rx.reps * scale, 5),
       }
+    }
     case 'note':
       return { ...rx, minutes: rx.minutes === undefined ? undefined : Math.round(rx.minutes * scale) }
     case 'sprints':

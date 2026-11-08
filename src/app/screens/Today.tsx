@@ -923,6 +923,22 @@ function HeldNote({ day }: { day: CoachDay }) {
   )
 }
 
+/** What a Suggestion is about, so two on Today never share a name: "pain", "Readiness, Week 3". */
+function suggestionTopic(s: Suggestion): string {
+  switch (s.kind) {
+    case 'pain':
+      return 'pain'
+    case 'recovery':
+      return 'last night'
+    case 're-entry':
+      return `coming back, Week ${s.week}`
+    case 'lighter-week':
+      return `Readiness, Week ${s.week}`
+    case 'working-weight':
+      return LIFT_NAME[s.lift]
+  }
+}
+
 /** The Coach's Suggestion between ink rules: the line, the facts, then Accept and Keep (or Undo). */
 function SuggestionNote({ suggestion, onDecide }: { suggestion: Suggestion; onDecide: (d: Decision) => void }) {
   const copy = suggestionCopy(suggestion)
@@ -931,7 +947,7 @@ function SuggestionNote({ suggestion, onDecide }: { suggestion: Suggestion; onDe
   const entrances = useEntrances()
   return (
     <section
-      aria-label="Coach’s Suggestion"
+      aria-label={`Coach’s Suggestion: ${suggestionTopic(suggestion)}`}
       aria-live="polite"
       className="mt-[18px] border-t-2 border-t-ink py-3.5 desktop:border-b desktop:border-b-rule"
     >

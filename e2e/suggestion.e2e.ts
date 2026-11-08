@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
-import { expectNoAxeViolations } from './axe'
-import { caughtUpOnServer, seedLogs } from './history'
+import { expectNoAxeViolations as axe, WEEK_3 } from './axe'
+import { caughtUp, caughtUpOnServer, seedLogs, serveHistory, weekDone } from './history'
 
 /**
  * Each project gets a pair of Weeks no other test reads: the phone trains
@@ -60,12 +60,12 @@ test('7 days without training bring a lighter Week: Accept lightens it, Undo res
     `Welcome back. Full volume now is how calves file complaints. The rest of Week ${s.back} goes 33% lighter.`,
   )
   await expect(suggestion).toContainText('7 days since your last Session')
-  await expectNoAxeViolations(page)
+  await axe(page)
 
   await suggestion.getByRole('button', { name: 'Accept' }).click()
   await expect(nextRow).toContainText(bare(s.lighter))
   await expect(suggestion).toContainText(`Done. The rest of Week ${s.back} is 33% lighter.`)
-  await expectNoAxeViolations(page)
+  await axe(page)
 
   // Stored and synced: it survives a reload and the API returns it.
   await page.reload()
@@ -87,6 +87,45 @@ test('7 days without training bring a lighter Week: Accept lightens it, Undo res
 
   await page.reload()
   await expect(nextRow).toContainText(bare(s.full))
+  await expect(suggestion.getByRole('button', { name: 'Accept' })).toBeVisible()
+})
+
+/** A Readiness flag a day, Monday to Wednesday of Week 3: pain 3, a short night, pain 4. */
+const FLAGS = {
+  reports: [
+    { id: 'seed-flag-mon', date: '2026-11-23', score: 3, area: 'shin', week: null, sessionId: null, updatedAt: '2026-11-23T12:00:00.000Z' },
+    { id: 'seed-flag-wed', date: '2026-11-25', score: 4, area: 'shin', week: null, sessionId: null, updatedAt: '2026-11-25T12:00:00.000Z' },
+  ],
+  nights: [
+    { date: '2026-11-24', sleepMinutes: 320, hrvMs: 50, restingHeartRate: 48, source: 'Ultrahuman', receivedAt: '2026-11-24T12:00:00.000Z' },
+  ],
+}
+
+test('three Readiness flags in a Week bring a lighter rest of it: Accept lightens, Undo restores', async ({ page }) => {
+  const week2 = weekDone(2, ['hyrox-a', 'hyrox-b', 'compromised-run-test', 'strength'], '2026-11-19')
+  const suggestionDecisions: Record<string, unknown>[] = []
+  await serveHistory(page, caughtUp(1, week2), [...FLAGS.reports], { recoveryNights: FLAGS.nights, suggestionDecisions })
+  await page.clock.setFixedTime(WEEK_3)
+  await page.goto('/')
+
+  const suggestion = page.getByRole('region', { name: 'Coach’s Suggestion: Readiness, Week 3' })
+  const nextRow = page.getByRole('list').filter({ hasText: 'Strength' }).getByRole('listitem').first()
+  const bare = (text: string) => text.replaceAll(' ', ' ')
+
+  await expect(suggestion).toContainText(
+    'Three rough days this Week. That’s your body asking for a Deload. The rest of Week 3 goes 33% lighter.',
+  )
+  await expect(suggestion).toContainText('Mon pain 3 · Tue slept 5 h 20 · Wed pain 4')
+  await expect(nextRow).toContainText(bare('4 × (Station + 400 m)'))
+  await axe(page)
+
+  await suggestion.getByRole('button', { name: 'Accept' }).click()
+  await expect(suggestion).toContainText('Done. The rest of Week 3 is 33% lighter.')
+  await expect(nextRow).toContainText(bare('4 × (Station + 300 m)'))
+  await expect.poll(() => suggestionDecisions.at(-1)).toMatchObject({ id: 'lighter-week-w3', decision: 'accepted' })
+
+  await suggestion.getByRole('button', { name: 'Undo' }).click()
+  await expect(nextRow).toContainText(bare('4 × (Station + 400 m)'))
   await expect(suggestion.getByRole('button', { name: 'Accept' })).toBeVisible()
 })
 

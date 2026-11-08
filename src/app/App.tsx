@@ -179,6 +179,7 @@ export function App() {
         : undefined) ??
       prescribedWeek(program, week, logs, decided, equipment, {
         reports: [...painReports, given],
+        nights: recoveryNights,
         today,
         doneToday: true,
       })?.sessions.find((s) => s.id === session.id) ??
@@ -232,7 +233,7 @@ export function App() {
     )?.activity ?? null
   const week =
     route.screen === 'week' || route.screen === 'log'
-      ? prescribedWeek(program, route.week ?? 0, logs, decisions, equipment, { reports: painReports, today })
+      ? prescribedWeek(program, route.week ?? 0, logs, decisions, equipment, { reports: painReports, nights: recoveryNights, today })
       : null
   const logged = route.screen === 'log' ? week?.sessions.find((s) => s.id === route.sessionId) : undefined
   const screen: Screen =

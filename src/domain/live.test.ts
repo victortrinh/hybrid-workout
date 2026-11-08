@@ -99,7 +99,7 @@ const THRESHOLD: Session = {
 }
 
 const floor: Substitution = {
-  when: ['no-floor-space', 'readiness'],
+  when: ['no-floor-space'],
   options: [
     { name: 'Sled push sprints', prescription: { kind: 'sprints', meters: [10, 15], light: true } },
     { name: 'Bike sprints', prescription: { kind: 'sprints', seconds: [8, 10] } },
