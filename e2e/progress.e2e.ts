@@ -71,8 +71,8 @@ for (const colorScheme of ['light', 'dark'] as const) {
     ]) {
       await expect(main.getByRole('heading', { level: 2, name })).toBeVisible()
     }
-    // The 5K is gone.
-    await expect(main).not.toContainText(/5K|sub-22|goal/i)
+    // Nothing from the old goal: no race distance in K, no sub-NN time, no goal line.
+    await expect(main).not.toContainText(/\b\dK\b|sub-\d\d|goal/i)
 
     // Projected finish: Week 1's sled push was 25 m, not race volume, so every Station is missing and there's no time.
     const projected = main.getByRole('region', { name: 'Projected finish' })

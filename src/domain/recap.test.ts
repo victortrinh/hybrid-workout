@@ -103,7 +103,7 @@ describe('the Program recap', () => {
     })
   })
 
-  it('keeps no 5K in the recap', () => {
+  it('holds the Program’s four numbers and nothing else', () => {
     expect(Object.keys(programRecap(program, [], [], DAY_AFTER))).toEqual([
       'raceRun',
       'workingWeights',
