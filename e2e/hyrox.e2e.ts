@@ -397,7 +397,11 @@ test('each Station shows its Station target on the Session sheet and the round c
   ]
   await serveHistory(page, caughtUp(2, history))
   await page.clock.install({ time: aMinuteBefore(WEEK_3) })
+  // Paused before the served history arrives, a slow first load waits on a retry
+  // timer that never fires: the clock is paused only once it has been answered.
+  const served = page.waitForResponse(/\/api\/(state|sync)$/)
   await page.goto('/')
+  await served
   await page.clock.pauseAt(new Date(WEEK_3.getTime() + 1000))
 
   // Two logs at each volume, both RPE 7 or under: the Station best less 3%, to the second.
