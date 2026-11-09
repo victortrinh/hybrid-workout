@@ -104,7 +104,7 @@ test('a full Strength session: a load change, RPEs, a missed rep, then the Coach
   const rest = page.getByRole('timer', { name: 'Rest left' })
   await expect(rest).toHaveText('2:00')
   const restBefore = await rest.elementHandle()
-  await page.clock.runFor('00:30')
+  await page.clock.fastForward('00:30')
   await expect(rest).toHaveText('1:30')
   expect(await rest.evaluate((el, before) => el === before, restBefore)).toBe(true)
 
@@ -130,7 +130,7 @@ test('a full Strength session: a load change, RPEs, a missed rep, then the Coach
   await expect(band.locator('.stripe-num')).toHaveText('190')
 
   // The rest runs out on its own.
-  await page.clock.runFor('01:30')
+  await page.clock.fastForward('01:30')
   await expect(rest).toHaveCount(0)
   await expect(band.locator('[aria-live]')).toHaveText('Rest over. Under the bar.')
 
@@ -393,7 +393,7 @@ test('tapping a load selects it, so typing 225 replaces it in one go', async ({ 
   expect(box!.height).toBeGreaterThanOrEqual(44)
 
   await load(1).click()
-  await page.clock.runFor(50)
+  await page.clock.fastForward(50)
   await page.keyboard.type('225')
   await page.keyboard.press('Enter')
   await expect(load(1)).toHaveValue('225')
