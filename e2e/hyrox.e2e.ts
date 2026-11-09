@@ -72,7 +72,7 @@ test('a four-round HYROX session: Set up off the clock, each Station then its ru
   ])
 
   // The jog runs its 5 minutes.
-  await page.clock.runFor('05:00')
+  await page.clock.fastForward('05:00')
 
   // Set up: every Station of the Session at Race load, on a stopwatch that's never training time.
   await expect(s.block).toHaveText('Set up · 4 Stations')
@@ -84,7 +84,7 @@ test('a four-round HYROX session: Set up off the clock, each Station then its ru
   ])
   await expect(s.line).toHaveText('Load every Station now. This clock isn’t training. Tap Done when it’s all set.')
   await expect(s.timer).toHaveText('00:00')
-  await page.clock.runFor('04:00')
+  await page.clock.fastForward('04:00')
   await expect(s.timer).toHaveText('04:00')
   await expect(s.finished).toHaveText('Done')
   await s.finished.click()
@@ -101,7 +101,7 @@ test('a four-round HYROX session: Set up off the clock, each Station then its ru
   await expect(s.timer).toHaveText('00:00')
   await expect(s.finished).toHaveText('Finished Sled push')
   await scan(page, new Date(start.getTime() + 9.5 * 60_000))
-  await page.clock.runFor('02:30')
+  await page.clock.fastForward('02:30')
   await expect(s.timer).toHaveText('03:00')
   await s.finished.click()
 
@@ -113,7 +113,7 @@ test('a four-round HYROX session: Set up off the clock, each Station then its ru
   // A second tap a moment after is a bounce: still on the run.
   await s.finished.click()
   await expect(s.finished).toHaveText('Finished 400 m')
-  await page.clock.runFor('02:00')
+  await page.clock.fastForward('02:00')
   await s.finished.click()
   await s.start.click()
   await expect(s.finished).toHaveText('Finished Sled pull')
@@ -131,7 +131,7 @@ test('a four-round HYROX session: Set up off the clock, each Station then its ru
   // Rounds 2 and 3 go unanswered: they log as written.
   for (const legs of [['03:30', '02:00'], ['02:00', '02:00']]) {
     for (const leg of legs) {
-      await page.clock.runFor(leg)
+      await page.clock.fastForward(leg)
       await s.finished.click()
     }
     await s.start.click()
@@ -139,13 +139,13 @@ test('a four-round HYROX session: Set up off the clock, each Station then its ru
   await expect(s.legs).toHaveText(['Sandbag lunges, now: 45 lb', 'Run · 400 m'])
   await expect(s.line).toHaveText('Last round. Same technique, tired legs.')
   for (const leg of ['03:00', '02:30']) {
-    await page.clock.runFor(leg)
+    await page.clock.fastForward(leg)
     await s.finished.click()
   }
   await expect(s.block).toHaveText('Cooldown · 4 min')
   await expect(blocks.nth(3)).toHaveText(/^Round 2 of 4, done\s*1 Station \+ 400 m · 5:30$/)
 
-  await page.clock.runFor('04:00')
+  await page.clock.fastForward('04:00')
   await expect(page.getByText('Session over')).toBeVisible()
   // The runs are logged round by round: no console total to ask for.
   await expect(page.getByRole('textbox', { name: /Console distance/ })).toHaveCount(0)
@@ -229,14 +229,14 @@ test('on an iPhone SE a HYROX round fits: target, clock and action without scrol
 
   // Every leg keeps its target, clock and tap on screen.
   await expect(s.finished).toHaveText('Finished Sled push')
-  await page.clock.runFor('03:20')
+  await page.clock.fastForward('03:20')
   await s.finished.click()
   await expect(s.finished).toHaveText('Finished 400 m')
   await onScreen()
 
   // Scrolled down the list mid-round, the next round still opens on its distance.
   await scrollBlocksDown()
-  await page.clock.runFor('03:20')
+  await page.clock.fastForward('03:20')
   await s.finished.click()
   await s.start.click()
   await expect(s.block).toHaveText('Round 2 of 4 · 1 Station + 400 m')
@@ -259,9 +259,9 @@ test('a split too quick to be true is asked about before saving, and saved as pu
   await s.start.click()
 
   // The thumb slipped: the sled push tapped late, so the 400 m "run" took 0:20.
-  await page.clock.runFor('03:00')
+  await page.clock.fastForward('03:00')
   await s.finished.click()
-  await page.clock.runFor('00:20')
+  await page.clock.fastForward('00:20')
   await s.finished.click()
   await page.getByRole('button', { name: 'End' }).click()
 
@@ -314,24 +314,24 @@ test('half simulation A logs a split for every run and Station, in race order', 
   await expect(s.block).toHaveText('Run 1 · 1 km')
   await expect(s.target).toHaveText('1')
   await expect(s.line).toHaveText('Run 1. Conservative. The race is long.')
-  await page.clock.runFor('04:30')
+  await page.clock.fastForward('04:30')
   await s.finished.click()
 
   await expect(s.block).toHaveText('SkiErg · 1 km')
   await expect(s.target).toHaveText('1')
   // The page never scrolls sideways on a phone.
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
-  await page.clock.runFor('04:15')
+  await page.clock.fastForward('04:15')
   await expect(s.finished).toHaveText('Finished SkiErg')
   await s.finished.click()
   await page.getByRole('region', { name: 'SkiErg: as written?' }).getByRole('button', { name: 'As written' }).click()
 
   await expect(s.line).toHaveText('Run 2. RPE 8, not all-out.')
-  await page.clock.runFor('04:45')
+  await page.clock.fastForward('04:45')
   await s.finished.click()
   await expect(s.block).toHaveText('Sled push · 50 m')
   await expect(page.locator('header').getByText('335 lb plates')).toBeVisible()
-  await page.clock.runFor('03:00')
+  await page.clock.fastForward('03:00')
   await s.finished.click()
   // The sled push went with 315 lb.
   const sled = page.getByRole('region', { name: 'Sled push: as written?' })
@@ -345,7 +345,7 @@ test('half simulation A logs a split for every run and Station, in race order', 
     ['05:00', 'Burpee broad jumps · 80 m'],
     ['06:00', 'Cooldown · 5 min'],
   ] as const) {
-    await page.clock.runFor(time)
+    await page.clock.fastForward(time)
     await s.finished.click()
     await expect(s.block).toHaveText(next)
   }
@@ -439,10 +439,10 @@ test('each Station shows its Station target on the Session sheet and the round c
   await s.finished.click()
   await s.start.click()
   await expect(s.legs).toHaveText([/^Sled\spush,\snow:\s335\slb\splates\s·\sStation\starget\s2:45$/, /^Run\s·\s400\sm$/])
-  await page.clock.runFor('02:40')
+  await page.clock.fastForward('02:40')
   await s.finished.click()
   await expect(s.legs).toHaveText([/^Sled\spush\s·\s25\sm\s·\s335\slb\splates\s·\sStation\starget\s2:45,\sdone\sin\s2:40$/, 'Run, now'])
-  await page.clock.runFor('01:40')
+  await page.clock.fastForward('01:40')
   await s.finished.click()
   await s.start.click()
   await expect(s.legs).toHaveText([/^Sled\spull,\snow:\s225\slb\splates\s·\sStation\starget\s2:26$/, /^Run\s·\s400\sm$/])

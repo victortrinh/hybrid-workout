@@ -63,6 +63,11 @@ async function startRun(page: Page, at: Date) {
   return live(page)
 }
 
+// The specs move the Live clock with `clock.fastForward`, never `clock.runFor`:
+// runFor fires the Live screen's one-second tick for every second jumped (2700
+// renders for a 45-minute Session, 15 s of test time), while fastForward fires
+// each due timer once and lands in the same state, because `advance` walks every
+// Block whose end has passed at its exact end time (the laptop-lid case).
 test('a full Threshold Run from Start to logged', async ({ page }) => {
   await withEstimate(page)
   const sent = await serveHistory(page, HISTORY)
@@ -98,21 +103,21 @@ test('a full Threshold Run from Start to logged', async ({ page }) => {
 
   // The controls are the same elements all session long: a tick never re-renders them.
   const pauseButton = await s.pause.elementHandle()
-  await page.clock.runFor('05:00')
+  await page.clock.fastForward('05:00')
   await expect(s.timer).toHaveText('05:00')
 
   await s.pause.click()
   await expect(s.pause).toHaveText('Resume')
-  await page.clock.runFor('02:00')
+  await page.clock.fastForward('02:00')
   await expect(s.timer).toHaveText('05:00')
   await s.pause.click()
   await expect(s.pause).toHaveText('Pause')
 
   // The warm-up is over; Rep 1 waits on Ready, and the wait counts nowhere.
-  await page.clock.runFor('05:00')
+  await page.clock.fastForward('05:00')
   await expect(s.block).toHaveText('Ready? Up next: Rep 1 of 3 · 12.3 km/h · 4:52/km · 1% incline')
   await expect(s.pause).toHaveCount(0)
-  await page.clock.runFor('01:00')
+  await page.clock.fastForward('01:00')
   await expect(s.timer).toHaveText('08:00')
   await s.start.click()
 
@@ -130,7 +135,7 @@ test('a full Threshold Run from Start to logged', async ({ page }) => {
   await expect(s.timer).toHaveText('07:30')
 
   // The rep is over: it asks, and saying nothing means it was held.
-  await page.clock.runFor('07:30')
+  await page.clock.fastForward('07:30')
   await expect(s.block).toHaveText('Jog · 90 s')
   // The jog suggests a speed under Easy pace, and walking is fine.
   await expect(s.target).toHaveText('8.6')
@@ -140,7 +145,7 @@ test('a full Threshold Run from Start to logged', async ({ page }) => {
   await expect(check).toContainText('Say nothing and it logs as held.')
 
   // Rep 3 drifted: Changed, with the speed actually run. The earlier questions have gone, held.
-  await page.clock.runFor('19:00')
+  await page.clock.fastForward('19:00')
   await expect(s.block).toHaveText('Cooldown · 8 min')
   await expect(check).toBeHidden()
   const third = page.getByRole('region', { name: 'Rep 3 of 3: held the target?' })
@@ -151,7 +156,7 @@ test('a full Threshold Run from Start to logged', async ({ page }) => {
   expect(await s.pause.evaluate((el, before) => el === before, pauseButton)).toBe(true)
 
   // Away to Today and back, a reload each way: the session is still running, where it was.
-  await page.clock.runFor('01:00')
+  await page.clock.fastForward('01:00')
   await page.goto('/')
   await page.getByRole('link', { name: 'Resume Run, 3 × 8′' }).click()
   await expect(page).toHaveURL('/live')
@@ -160,7 +165,7 @@ test('a full Threshold Run from Start to logged', async ({ page }) => {
   await expect(s.timer).toHaveText('07:00')
 
   // The last Block ends on the finish sheet.
-  await page.clock.runFor('07:00')
+  await page.clock.fastForward('07:00')
   await expect(page.getByText('Session over')).toBeVisible()
   await expect(s.pause).toHaveCount(0)
   // The clock ran it out, no tap to take back: nothing to keep going with.
@@ -336,7 +341,7 @@ test('a Compromised run test Live session logs every run and Station split', asy
   for (const [block, line, seconds] of legs) {
     await expect(s.block).toHaveText(block)
     await expect(s.line).toHaveText(line)
-    await page.clock.runFor(seconds)
+    await page.clock.fastForward(seconds)
     await expect(s.timer).toHaveText(seconds)
     await s.skip.click()
   }
@@ -438,12 +443,12 @@ test('Done, Start, Undo, going back, and a Partial flipped to Done', async ({ pa
 
   // Done on the warm-up three minutes in, then Undo: back on it with its clock still running.
   await expect(s.block).toHaveText('Warm-up · 10 min')
-  await page.clock.runFor('03:00')
+  await page.clock.fastForward('03:00')
   await expect(s.skip).toHaveText('Done')
   await s.skip.click()
   await expect(s.block).toHaveText('Ready? Up next: Rep 1 of 3 · 12.3 km/h · 4:52/km · 1% incline')
   await expect(page.getByRole('status')).toContainText('Warm-up: done.')
-  await page.clock.runFor('00:02')
+  await page.clock.fastForward('00:02')
   await s.undo.click()
   await expect(s.block).toHaveText('Warm-up · 10 min')
   await expect(s.timer).toHaveText('06:58')
@@ -451,24 +456,24 @@ test('Done, Start, Undo, going back, and a Partial flipped to Done', async ({ pa
 
   // Rep 1 waits for Start.
   await expect(s.block).toHaveText('Ready? Up next: Rep 1 of 3 · 12.3 km/h · 4:52/km · 1% incline')
-  await page.clock.runFor('01:00')
+  await page.clock.fastForward('01:00')
   await expect(s.timer).toHaveText('08:00')
   await scan(page, minutes(start, 5))
   await s.start.click()
 
   // Rep 1 skipped by mistake, two minutes in: Undo, and the seconds since count toward it.
-  await page.clock.runFor('02:00')
+  await page.clock.fastForward('02:00')
   await s.skip.click()
   await expect(s.block).toHaveText('Jog · 90 s')
   await expect(page.getByRole('status')).toContainText('Rep 1 of 3: skipped.')
-  await page.clock.runFor('00:05')
+  await page.clock.fastForward('00:05')
   await s.undo.click()
   await expect(s.block).toHaveText('Rep 1 of 3 · 8 min')
   await expect(s.timer).toHaveText('05:55')
 
   // Skipped again, and left: Undo goes after about 8 s.
   await s.skip.click()
-  await page.clock.runFor('00:09')
+  await page.clock.fastForward('00:09')
   await expect(s.undo).toHaveCount(0)
 
   // Back to Rep 1 from the lane list: it asks first, then resumes where it was left.
@@ -634,7 +639,7 @@ test('with no Training paces, the jog suggestion is the jog logged last time', a
   await s.skip.click()
   await s.start.click()
 
-  await page.clock.runFor('08:00')
+  await page.clock.fastForward('08:00')
   await expect(s.block).toHaveText('Jog · 90 s')
   await expect(s.target).toHaveText('6.0')
   await expect(page.locator('header')).toContainText('10:00/km')
