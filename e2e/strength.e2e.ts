@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { expectNoAxeViolations, WEEK_3 } from './axe'
 import { serveHistory, weekDone, type SeedLog } from './history'
-import { aMinuteBefore, doToday } from './today'
+import { aMinuteBefore } from './today'
 
 /**
  * Live Strength sessions under a controlled clock, against a served history:
@@ -49,6 +49,13 @@ const HISTORY: SeedLog[] = [
   },
 ]
 
+/**
+ * Week 3's Strength is Up next, but so is Week 1's (as Late) until the served
+ * history is in: its heading says the history has loaded. Only then is the
+ * clock paused: paused first, a slow first load waits on a retry timer that never fires.
+ */
+const loaded = (page: Page) => expect(page.getByRole('heading', { level: 1 })).toHaveText('Strength, squat 3 × 5')
+
 /** The set the screen leads with: Log set in the bar under the thumb, the only primary. */
 const currentLog = (page: Page) => page.getByRole('button', { name: /^Log set \d+ · / })
 
@@ -62,7 +69,7 @@ test('a full Strength session: a load change, RPEs, a missed rep, then the Coach
   const sent = await serveHistory(page, HISTORY)
   await page.clock.install({ time: aMinuteBefore(WEEK_3) })
   await page.goto('/')
-  await doToday(page, page.getByRole('list').filter({ hasText: 'HYROX B' }).getByRole('button', { name: /^Strength/ }))
+  await loaded(page)
   await page.clock.pauseAt(new Date(WEEK_3.getTime() + 1000))
 
   // Today shows the loads in pounds from the Working weights.
@@ -164,7 +171,7 @@ test('a full Strength session: a load change, RPEs, a missed rep, then the Coach
   await page.getByRole('button', { name: 'Save log' }).click()
 
   await expect(page).toHaveURL('/')
-  await expect(bucket.getByRole('listitem').nth(3)).toHaveText(/^Strength.*Done, Wed$/)
+  await expect(bucket.getByRole('listitem').nth(0)).toHaveText(/^Strength.*Done, Wed$/)
   await expect.poll(() => sent.at(-1)).toMatchObject({
     week: 3,
     sessionId: 'strength',
@@ -206,7 +213,7 @@ test('as prescribed, a Strength session is one tap per set plus three: Start, Fi
   const sent = await serveHistory(page, HISTORY)
   await page.clock.install({ time: aMinuteBefore(WEEK_3) })
   await page.goto('/')
-  await doToday(page, page.getByRole('list').filter({ hasText: 'HYROX B' }).getByRole('button', { name: /^Strength/ }))
+  await loaded(page)
   await page.clock.pauseAt(new Date(WEEK_3.getTime() + 1000))
 
   let taps = 0
@@ -230,7 +237,6 @@ test('Week 1 calibrates: ramp to RPE 7, and that load is the Working weight', as
   const sent = await serveHistory(page, [])
   await page.clock.install({ time: aMinuteBefore(wednesday) })
   await page.goto('/')
-  await doToday(page, page.getByRole('list').filter({ hasText: 'HYROX B' }).getByRole('button', { name: /^Strength/ }))
   await page.clock.pauseAt(new Date(wednesday.getTime() + 1000))
 
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Strength, find Working weights')
@@ -325,7 +331,7 @@ test('a pending Working weight is asked before set 1: Accept moves every squat s
   await serveHistory(page, EASY_SQUAT, [], { suggestionDecisions: decisions })
   await page.clock.install({ time: aMinuteBefore(WEEK_3) })
   await page.goto('/')
-  await doToday(page, page.getByRole('list').filter({ hasText: 'HYROX B' }).getByRole('button', { name: /^Strength/ }))
+  await loaded(page)
   await page.clock.pauseAt(new Date(WEEK_3.getTime() + 1000))
 
   await page.getByRole('button', { name: /^Start / }).click()
@@ -362,7 +368,7 @@ test('Keep leaves the loads where they are', async ({ page }) => {
   await serveHistory(page, EASY_SQUAT, [], { suggestionDecisions: decisions })
   await page.clock.install({ time: aMinuteBefore(WEEK_3) })
   await page.goto('/')
-  await doToday(page, page.getByRole('list').filter({ hasText: 'HYROX B' }).getByRole('button', { name: /^Strength/ }))
+  await loaded(page)
   await page.clock.pauseAt(new Date(WEEK_3.getTime() + 1000))
   await page.getByRole('button', { name: /^Start / }).click()
 
@@ -376,7 +382,7 @@ test('tapping a load selects it, so typing 225 replaces it in one go', async ({ 
   await serveHistory(page, HISTORY)
   await page.clock.install({ time: aMinuteBefore(WEEK_3) })
   await page.goto('/')
-  await doToday(page, page.getByRole('list').filter({ hasText: 'HYROX B' }).getByRole('button', { name: /^Strength/ }))
+  await loaded(page)
   await page.clock.pauseAt(new Date(WEEK_3.getTime() + 1000))
   await page.getByRole('button', { name: /^Start / }).click()
 
@@ -402,7 +408,7 @@ test('a set logged by mistake comes back with Undo: changed, logged again, and s
   const sent = await serveHistory(page, HISTORY)
   await page.clock.install({ time: aMinuteBefore(WEEK_3) })
   await page.goto('/')
-  await doToday(page, page.getByRole('list').filter({ hasText: 'HYROX B' }).getByRole('button', { name: /^Strength/ }))
+  await loaded(page)
   await page.clock.pauseAt(new Date(WEEK_3.getTime() + 1000))
   await page.getByRole('button', { name: /^Start / }).click()
 

@@ -18,7 +18,8 @@ const SCENARIO = {
       { sessionId: 'hyrox-b', date: '2027-01-14', status: 'partial' },
     ],
     thursday: '2027-01-21',
-    heading: 'HYROX A, 4 rounds',
+    heading: 'Strength, squat 3 × 5',
+    row: /^HYROX A/,
     full: '4 × (Station + 800 m)',
     lighter: '4 × (Station + 500 m)',
   },
@@ -32,7 +33,8 @@ const SCENARIO = {
       { sessionId: 'hyrox-b', date: '2027-03-04', status: 'partial' },
     ],
     thursday: '2027-03-11',
-    heading: 'Race simulation, half B',
+    heading: 'Strength, squat 2 × 4',
+    row: /^Race simulation/,
     full: '4 × (1 km + Station)',
     lighter: '4 × (700 m + Station)',
   },
@@ -51,7 +53,8 @@ test('7 days without training bring a lighter Week: Accept lightens it, Undo res
 
   const upNext = page.getByRole('heading', { level: 1 })
   const suggestion = page.getByRole('region', { name: 'Coach’s Suggestion' })
-  const nextRow = page.getByRole('list').filter({ hasText: 'Strength' }).getByRole('listitem').first()
+  // Strength is Up next; the HYROX row shows the Week's volume.
+  const nextRow = page.getByRole('list').filter({ hasText: 'Strength' }).getByRole('listitem').filter({ hasText: s.row })
   const bare = (text: string) => text.replaceAll(' ', ' ')
 
   await expect(upNext).toHaveText(s.heading)
@@ -109,7 +112,7 @@ test('three Readiness flags in a Week bring a lighter rest of it: Accept lighten
   await page.goto('/')
 
   const suggestion = page.getByRole('region', { name: 'Coach’s Suggestion: Readiness, Week 3' })
-  const nextRow = page.getByRole('list').filter({ hasText: 'Strength' }).getByRole('listitem').first()
+  const nextRow = page.getByRole('list').filter({ hasText: 'Strength' }).getByRole('listitem').filter({ hasText: /^HYROX A/ })
   const bare = (text: string) => text.replaceAll(' ', ' ')
 
   await expect(suggestion).toContainText(

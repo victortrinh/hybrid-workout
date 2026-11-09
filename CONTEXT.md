@@ -30,7 +30,7 @@ A numbered Monday–Sunday period of the Program, counted back from Race day.
 _Avoid_: microcycle
 
 **Bucket**:
-The set of Sessions a Week prescribes, done on any day and in any order within that Week. A Session may also be done early or late, outside its Week; it still counts for its own Week. In Catch-up, the Late sessions come first in it.
+The set of Sessions a Week prescribes, done on any day and in any order within that Week. Its order (Strength, HYROX B, Run, HYROX A, then the Optional sessions; ADR-0008) is how the Coach lists it and the tie-break for Up next when nothing else decides. A Session may also be done early or late, outside its Week; it still counts for its own Week. In Catch-up, the Late sessions come first in it.
 _Avoid_: schedule, calendar
 
 **Catch-up**:
@@ -67,7 +67,7 @@ _Avoid_: time limit, budget
 Any Session type other than Easy run; two Hard sessions should not fall on consecutive days when avoidable.
 
 **Key session**:
-The one Session in a Week the Coach puts first in its Bucket (a Compromised run test, a Race simulation, or the Week's designated priority). Not done by Sunday, it is a Late session like any other.
+The one Session in a Week the Coach marks as the Week's priority (a Compromised run test, a Race simulation, or the Week's designated HYROX or Run). It keeps its place in the Bucket. Not done by Sunday, it is a Late session like any other.
 
 **Optional session**:
 An Easy run in a Bucket; it is never a Late session and missing it is not a miss. A Week holds one, or two once the Coach offers a second.

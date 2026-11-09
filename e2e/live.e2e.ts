@@ -610,11 +610,11 @@ test('on its side, Today and Live lifts have no sideways scroll', async ({ page 
   await page.setViewportSize(SIDEWAYS)
   await page.clock.install({ time: WEEK_3 })
   await page.goto('/')
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('HYROX A, 4 rounds')
+  // Strength, first in the Bucket, is Up next on a bare Week.
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Strength, squat 3 × 5')
   const sideways = () => page.evaluate(() => document.scrollingElement!.scrollWidth - innerWidth)
   expect(await sideways()).toBeLessThanOrEqual(0)
 
-  await doToday(page, bucketRow(page, /^Strength/))
   await page.getByRole('button', { name: /^Start / }).click()
   await expect(page).toHaveURL('/live')
   await expect(page.locator('header .stripe-num')).toBeVisible()

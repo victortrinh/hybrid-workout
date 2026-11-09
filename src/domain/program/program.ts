@@ -769,8 +769,8 @@ const week = (
   sessions,
 })
 
-/** A normal Week: HYROX A, HYROX B, the Run, Strength and the Easy run. */
-const bucket = (a: Session, b: Session, run: Session, lift: Session, easy: Session) => [a, b, run, lift, easy]
+/** A normal Week in Bucket order: Strength, HYROX B, the Run, HYROX A and the Easy run (docs/training-plan.md, "How a Week works"). */
+const bucket = (a: Session, b: Session, run: Session, lift: Session, easy: Session) => [lift, b, run, a, easy]
 
 const foundation: Week[] = [
   week(1, bucket(fourRounds('A', 'foundation'), fourRounds('B', 'foundation'), thresholdRun(3, 7, true), strength('build', { calibration: true }), easyRun(25))),
@@ -799,7 +799,7 @@ const build: Week[] = [
   }),
 ]
 
-/** Race specific: full Station volume; the Race simulations take HYROX A's place. */
+/** Race specific: full Station volume; the Race simulations take HYROX A's place, last in the Bucket. */
 const raceSpecific: Week[] = [
   week(16, bucket(halfSimulationA, fourRounds('B', 'race-specific'), thresholdRun(3, 8), strength('maintenance'), easyRun(55))),
   week(17, bucket(fourRounds('A', 'race-specific', true), fourRounds('B', 'race-specific'), compromisedIntervals(5), strength('maintenance'), easyRun(60, { note: LONG_RUN }))),

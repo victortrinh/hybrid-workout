@@ -197,7 +197,8 @@ describe('the short-sleep rule on each Session type', () => {
   })
 
   it('takes the last round off a HYROX session, and its minutes with it', () => {
-    const written = first('hyrox', '3 rounds')
+    // HYROX A: its sleds and carries are what Set up loads, so the set-up check below has something to see.
+    const written = sessions.find((s) => s.id === 'hyrox-a' && s.headline === '3 rounds')!
     expect(shortSleepCut(written)).toBe('round')
     const after = shortSleepAdapted(written, short)
     expect(mainBlocks(after).map((b) => b.name)).toEqual(['Round 1', 'Round 2'])

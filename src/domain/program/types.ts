@@ -42,7 +42,7 @@ export interface Week {
   race: boolean
   /** Things the Week asks for that aren't Sessions: rest days, kit, recovery. */
   notes?: string[]
-  /** The Bucket, in display order: HYROX A, HYROX B, Run, Strength, then the Optional session. */
+  /** The Bucket, in display order: Strength, HYROX B, Run, HYROX A, then the Optional session. */
   sessions: Session[]
 }
 

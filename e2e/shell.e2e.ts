@@ -54,7 +54,7 @@ test('deep links load on refresh, and unknown paths say so', async ({ page }) =>
   await page.goto('/nowhere')
   await expect(page.getByRole('heading', { level: 1, name: 'Nothing here.' })).toBeVisible()
   await page.getByRole('link', { name: 'Back to Today' }).click()
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('HYROX A, 4 rounds')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Strength, squat 3 × 5')
 })
 
 test('the Worker answers the API with D1 bound', async ({ request }) => {

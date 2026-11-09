@@ -44,7 +44,7 @@ Every Station is preceded by a 1 km run: 8 km of running in total. Running is ab
 
 ## How a Week works
 
-- Each Week is a **Bucket**: HYROX A, HYROX B, Run, Strength, plus one Optional Easy run (two from Build, see below). Do them on any day, in any order, inside Monday–Sunday.
+- Each Week is a **Bucket**: Strength, HYROX B, Run, HYROX A, plus one Optional Easy run (two from Build, see below). Do them on any day, in any order, inside Monday–Sunday. The Bucket order is the order the Coach suggests when nothing else decides: Strength first on fresh legs, HYROX B (ergs, jumps, ball) the day after, the Run two days clear of Strength, HYROX A (sleds, carries, lunges) last on the freshest day, with the Easy run at the weekend.
 - Every required Session fits the **Session cap** of 45 minutes, Set up excluded. Only a Race simulation runs longer.
 - The Coach picks **Up next** each day: no two Hard sessions on consecutive days when avoidable; never Run the day after Strength; Strength at least 3 hours from any run, and first when they share a day. In Catch-up these are warnings, not blocks (ADR-0007).
 - A required Session not done by Sunday is **Late**, not missed: Up next comes from the oldest Week with a Late session until it is caught up. Each Session keeps its own Week's Prescription. The Optional sessions never wait. 7 or more days with no Done or Partial Session → the Coach suggests the rest of the Week Up next comes from a third lighter (never a Deload week or the Taper).

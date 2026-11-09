@@ -35,8 +35,11 @@ async function scan(page: Page, then?: Date) {
 
 const bucketOf = (page: Page) => page.getByRole('list').filter({ hasText: 'Strength' })
 
-/** Week 2 done; Wednesday of Week 3, nothing of it logged: HYROX A, its Key session, Up next. */
-const WEEK_2 = weekDone(2, ['hyrox-a', 'hyrox-b', 'compromised-run-test', 'strength'], '2026-11-18')
+/** Week 2 done, and Week 3's Strength, HYROX B and Run on its Monday: Wednesday of Week 3 has HYROX A, its Key session, Up next. */
+const WEEK_2 = [
+  ...weekDone(2, ['hyrox-a', 'hyrox-b', 'compromised-run-test', 'strength'], '2026-11-18'),
+  ...weekDone(3, ['strength', 'hyrox-b', 'run'], '2026-11-23'),
+]
 
 test('a four-round HYROX session: Set up off the clock, each Station then its run, a lighter sled in round 1', async ({ page }) => {
   const sent = await serveHistory(page, caughtUp(1, WEEK_2))
@@ -151,7 +154,7 @@ test('a four-round HYROX session: Set up off the clock, each Station then its ru
   await page.getByRole('button', { name: 'Save log' }).click()
 
   await expect(page).toHaveURL('/')
-  await expect(bucketOf(page).getByRole('listitem').nth(0)).toHaveText(/^HYROX A.*Done, Wed$/)
+  await expect(bucketOf(page).getByRole('listitem').nth(3)).toHaveText(/^HYROX A.*Done, Wed$/)
   const row = (round: number, part: string, change: Record<string, number | null>) => ({
     round,
     part,
@@ -191,6 +194,8 @@ test('on an iPhone SE a HYROX round fits: target, clock and action without scrol
   await serveHistory(page, caughtUp(1, WEEK_2))
   await page.clock.install({ time: aMinuteBefore(WEEK_3) })
   await page.goto('/')
+  // HYROX A Up next says the served history has loaded; only then is the clock paused.
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('HYROX A, 4 rounds')
   await page.clock.pauseAt(new Date(WEEK_3.getTime() + 1000))
   await page.getByRole('button', { name: 'Start HYROX A' }).click()
 
@@ -243,6 +248,8 @@ test('a split too quick to be true is asked about before saving, and saved as pu
   const sent = await serveHistory(page, caughtUp(1, WEEK_2))
   await page.clock.install({ time: aMinuteBefore(WEEK_3) })
   await page.goto('/')
+  // HYROX A Up next says the served history has loaded; only then is the clock paused.
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('HYROX A, 4 rounds')
   await page.clock.pauseAt(new Date(WEEK_3.getTime() + 1000))
   await page.getByRole('button', { name: 'Start HYROX A' }).click()
 
@@ -280,14 +287,22 @@ test('a split too quick to be true is asked about before saving, and saved as pu
 })
 
 test('half simulation A logs a split for every run and Station, in race order', async ({ page }) => {
-  // Wednesday of Week 16, the first of Race specific, Week 15 done: the Race simulation, its Key session, Up next.
+  // Wednesday of Week 16, the first of Race specific, Week 15 done and Week 16's Strength, HYROX B and Run
+  // on its Monday: the Race simulation, its Key session, Up next.
   const wednesday = new Date('2027-02-24T12:00:00-05:00')
-  const sent = await serveHistory(page, caughtUp(15, weekDone(15, ['hyrox-a', 'hyrox-b', 'run', 'strength'], '2027-02-17')))
+  const sent = await serveHistory(
+    page,
+    caughtUp(15, [
+      ...weekDone(15, ['hyrox-a', 'hyrox-b', 'run', 'strength'], '2027-02-17'),
+      ...weekDone(16, ['strength', 'hyrox-b', 'run'], '2027-02-22'),
+    ]),
+  )
   await page.clock.install({ time: aMinuteBefore(wednesday) })
   await page.goto('/')
-  await page.clock.pauseAt(new Date(wednesday.getTime() + 1000))
-
+  // Until the served history is in, the bare Week 16 reads Strength: the Up next heading says it has loaded,
+  // and only then is the clock paused (a paused clock never fires the load's retry timer).
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Race simulation, half A')
+  await page.clock.pauseAt(new Date(wednesday.getTime() + 1000))
   await page.getByRole('button', { name: /^Start / }).click()
 
   const s = live(page)
@@ -394,6 +409,8 @@ test('each Station shows its Station target on the Session sheet and the round c
     hyroxA(1, '2026-11-10', 180, [100, 104, 106, 108]),
     hyroxA(2, '2026-11-17', 170, [100, 104, 108, 112]),
     ...weekDone(2, ['hyrox-b', 'compromised-run-test', 'strength'], '2026-11-18'),
+    // Week 3's other required Sessions on Monday, so HYROX A is Up next on Wednesday.
+    ...weekDone(3, ['strength', 'hyrox-b', 'run'], '2026-11-23'),
   ]
   await serveHistory(page, caughtUp(2, history))
   await page.clock.install({ time: aMinuteBefore(WEEK_3) })

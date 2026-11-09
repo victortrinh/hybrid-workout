@@ -213,9 +213,9 @@ describe('matchActivities', () => {
     expect(outcome).toMatchObject({ state: 'attached', week: 3, sessionId: 'hyrox-b', by: 'coach' })
   })
 
-  it('asks between HYROX A, HYROX B and Strength for a circuit with nothing logged, HYROX first, guessing neither', () => {
+  it('asks between HYROX A, HYROX B and Strength for a circuit with nothing logged, HYROX first and the two in Bucket order, guessing neither', () => {
     const [outcome] = match([circuit('2026-11-25T07:00:00-05:00')], [], [])
-    expect(ids(outcome)).toEqual(['hyrox-a', 'hyrox-b', 'strength'])
+    expect(ids(outcome)).toEqual(['hyrox-b', 'hyrox-a', 'strength'])
     expect(outcome.state === 'ambiguous' && outcome.guess).toBeNull()
   })
 

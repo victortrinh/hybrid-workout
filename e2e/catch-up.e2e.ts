@@ -30,10 +30,10 @@ test('serves the Late sessions first, says how far behind, and still lets a curr
   await expect(bucket.getByRole('listitem')).toHaveText([
     /^HYROX B.*Week\s1\s·\sLate.*Next$/,
     /^Run.*Week\s1\s·\sLate.*Key$/,
-    /^HYROX A/,
+    /^Strength/,
     /^HYROX B/,
     /^Compromised run test/,
-    /^Strength/,
+    /^HYROX A/,
     /^Easy run.*Optional$/,
   ])
   // Week 2's own count leaves the Late sessions out.
@@ -42,7 +42,7 @@ test('serves the Late sessions first, says how far behind, and still lets a curr
   await expectNoAxeViolations(page)
 
   // Week 2's HYROX A instead, today: the Late sessions stay, still counted.
-  await doToday(page, bucket.getByRole('listitem').nth(2).getByRole('button'))
+  await doToday(page, bucket.getByRole('listitem').nth(5).getByRole('button'))
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^HYROX A/)
   await expect(lateMeta).toHaveCount(0)
   await expect(bucket.getByRole('listitem').first()).toHaveText(/^HYROX B.*Week\s1\s·\sLate/)
@@ -154,7 +154,8 @@ test('drops what is still Late as Race specific starts, and says so once', async
   await expect(page.getByText(/Sessions? behind/)).toHaveCount(0)
   await expect(page.locator('p', { hasText: /· Late/ })).toHaveCount(0)
   const bucket = page.getByRole('list').filter({ hasText: 'Strength' })
-  await expect(bucket.getByRole('listitem').first()).toHaveText(/^Race simulation.*Next$/)
+  await expect(bucket.getByRole('listitem').first()).toHaveText(/^Strength.*Next$/)
+  await expect(bucket.getByRole('listitem').nth(3)).toHaveText(/^Race simulation/)
   await expectNoAxeViolations(page)
 
   await page.getByRole('button', { name: 'Got it' }).click()

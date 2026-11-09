@@ -62,7 +62,7 @@ test('estimates set estimated paces and the calibration start, editable in Setti
   // A 5:30 split reads as estimated Training paces: Race run pace 5:30, easy running 60–90 s/km slower.
   await page.goto('/plan/week/1')
   await expect(page.getByText('Estimated paces from your Starting point')).toBeVisible()
-  await page.getByRole('button', { name: 'Show the Prescription' }).first().click()
+  await page.getByRole('region', { name: /^HYROX A/ }).getByRole('button', { name: 'Show the Prescription' }).click()
   await expect(page.getByText(/6:30–7:00\/km/).first()).toBeVisible()
 
   // 225 lb estimated: the squat's calibration ramps from 155 lb, the RDL with none from the bar.

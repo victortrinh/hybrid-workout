@@ -18,7 +18,7 @@ test('a 5:07 estimated split sets the Run’s Threshold speed, and mph updates e
 
   const upNext = page.getByRole('heading', { level: 1 })
   const bucket = page.getByRole('list').filter({ hasText: 'Strength' })
-  await expect(upNext).toHaveText(/^HYROX A, /)
+  await expect(upNext).toHaveText(/^Strength, /)
   await expectNoAxeViolations(page)
 
   // The Run's Threshold reps have an exact treadmill speed: 4:52/km is 12.3 km/h.

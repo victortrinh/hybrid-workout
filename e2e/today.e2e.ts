@@ -23,17 +23,18 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await expect(band.getByText('Week 3 of 24 · Foundation')).toBeVisible()
       await expect(band.getByText('Mon 23 – Sun 29 Nov')).toBeVisible()
 
-      await expect(page.getByRole('heading', { level: 1 })).toHaveText('HYROX A, 4 rounds')
+      // Bucket order: Strength first on fresh legs.
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText('Strength, squat 3 × 5')
       // Focus moves to the heading only when the screen changes, never on first load.
       await expect(page.getByRole('heading', { level: 1 })).not.toBeFocused()
-      await expect(page.getByText('Station, then 400 m, each round · Race load')).toBeVisible()
+      await expect(page.getByText(/^Squat\s3\s×\s5,\sRDL\s3\s×\s6\s·\sRPE\s7$/)).toBeVisible()
 
-      const bucket = page.getByRole('list').filter({ hasText: 'Strength' })
+      const bucket = page.getByRole('list').filter({ hasText: 'HYROX B' })
       await expect(bucket.getByRole('listitem')).toHaveText([
-        /^HYROX A.*Next$/,
+        /^Strength.*Next$/,
         /^HYROX B/,
         /^Run/,
-        /^Strength/,
+        /^HYROX A/,
         /^Easy run.*Optional$/,
       ])
       await expect(page.getByRole('region', { name: 'Coach’s Suggestion' })).toHaveCount(0)
@@ -64,7 +65,7 @@ test('counts the day in Toronto even when the phone is set to another time zone'
   await page.clock.setFixedTime(new Date('2026-11-23T00:30:00+09:00'))
   await page.goto('/')
   await expect(page.getByText('Week 2 of 24 · Foundation')).toBeVisible()
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('HYROX A, 4 rounds')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Strength, squat 3 × 5')
   await context.close()
 })
 
@@ -98,7 +99,7 @@ test('on the phone, Start sits in the bottom bar, in the thumb’s reach without
   await page.clock.setFixedTime(WEEK_3)
   await page.goto('/')
 
-  const start = page.getByRole('region', { name: 'Up next' }).getByRole('button', { name: 'Start HYROX A' })
+  const start = page.getByRole('region', { name: 'Up next' }).getByRole('button', { name: 'Start Strength' })
   const box = (await start.boundingBox())!
   const height = page.viewportSize()!.height
   expect(box.y).toBeGreaterThan(height * 0.6)
@@ -162,16 +163,18 @@ test('suggests resting the Run the day after Strength, and taps past it', async 
 })
 
 test('puts the Run the day after HYROX', async ({ page }) => {
-  // Week 3: HYROX A Monday, HYROX B Thursday. Friday, the Run and Strength are left in three days.
+  // Week 3: Strength Monday, HYROX A Wednesday, HYROX B Saturday. Sunday, only the Run is left,
+  // and HYROX yesterday doesn't hold it back the way Strength would.
   await serveHistory(
     page,
     caughtUp(1, [
       ...weekDone(2, WEEK_2, '2026-11-16'),
-      { week: 3, sessionId: 'hyrox-a', date: '2026-11-23', status: 'done' },
-      { week: 3, sessionId: 'hyrox-b', date: '2026-11-26', status: 'done' },
+      { week: 3, sessionId: 'strength', date: '2026-11-23', status: 'done' },
+      { week: 3, sessionId: 'hyrox-a', date: '2026-11-25', status: 'done' },
+      { week: 3, sessionId: 'hyrox-b', date: '2026-11-28', status: 'done' },
     ]),
   )
-  await page.clock.setFixedTime(new Date('2026-11-27T12:00:00-05:00'))
+  await page.clock.setFixedTime(new Date('2026-11-29T12:00:00-05:00'))
   await page.goto('/')
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^Run/)
 })
@@ -186,10 +189,10 @@ test('offers a second Easy run in Build after a fully Done Week', async ({ page 
   await page.clock.setFixedTime(week7Monday)
   await page.goto('/')
   await expect(bucket.getByRole('listitem')).toHaveText([
-    /^HYROX A/,
+    /^Strength/,
     /^HYROX B/,
     /^Run/,
-    /^Strength/,
+    /^HYROX A/,
     /^Easy run.*Optional$/,
     /^Second Easy run.*Optional$/,
   ])

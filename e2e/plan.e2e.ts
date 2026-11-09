@@ -46,10 +46,10 @@ for (const colorScheme of ['light', 'dark'] as const) {
         'page',
       )
       await expect(page.getByRole('heading', { level: 2 })).toHaveText([
-        'Race simulation, full run',
+        'Strength, squat 2 × 4',
         'HYROX B, 3 rounds',
         'Run, 3 × 6′',
-        'Strength, squat 2 × 4',
+        'Race simulation, full run',
         'Easy run, 40′',
       ])
       // Prescriptions open one tap away.
