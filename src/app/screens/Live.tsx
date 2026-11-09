@@ -587,7 +587,7 @@ const legName = (part: StationPart) => (part === 'run' || part === 'round' ? 'Ru
 /** A Station's distance or reps: "25 m", "20 reps". Nothing on Set up, where only the load matters. */
 const volume = (leg: LiveStation) => (leg.reps ? `${leg.reps} reps` : leg.meters ? km(leg.meters) : '')
 
-/** "25 m · 200 lb plates", "20 reps · 13 lb ball", "250 m" */
+/** "25 m · 200 lb plates (4 × 45 + 20)", "20 reps · 13 lb ball", "250 m" */
 const stationWords = (leg: LiveStation) =>
   [volume(leg), poundsWords(stations[leg.station], leg.pounds)].filter(Boolean).join(' · ')
 

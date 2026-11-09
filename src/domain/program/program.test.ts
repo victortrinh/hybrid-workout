@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { addDays, isoWeekday } from '../calendar'
 import { programStart } from '../coach'
-import { describeExercise, describeSession, SESSION_TYPES, stationLoad } from './describe'
+import { describeExercise, describeSession, poundsWords, SESSION_TYPES, stationLoad } from './describe'
 import { program } from './program'
 import type { Exercise, Session, StationId, Week } from './types'
 
@@ -319,8 +319,8 @@ describe('HYROX A and HYROX B', () => {
         .exercises.map((e) => describeExercise(e, program.stations))
         .map((l) => `${l.name}: ${l.detail}`)
     expect(loads(1, 'hyrox-a')).toEqual([
-      'Sled push: 335 lb plates',
-      'Sled pull: 225 lb plates',
+      'Sled push: 335 lb plates (7 × 45 + 20)',
+      'Sled pull: 225 lb plates (5 × 45)',
       'Farmers carry: 2 × 55 lb',
       'Sandbag lunges: 45 lb',
     ])
@@ -427,15 +427,22 @@ describe('Race loads', () => {
 
   it('prescribes every Station at Race load in pounds, rounded to 5 lb, sled loads as plates, the ball as it is', () => {
     const { stations } = program
-    expect(stationLoad(stations['sled-push'])).toBe('335 lb plates')
-    expect(stationLoad(stations['sled-pull'])).toBe('225 lb plates')
+    expect(stationLoad(stations['sled-push'])).toBe('335 lb plates (7 × 45 + 20)')
+    expect(stationLoad(stations['sled-pull'])).toBe('225 lb plates (5 × 45)')
     expect(stationLoad(stations['farmers-carry'])).toBe('2 × 55 lb')
     expect(stationLoad(stations['sandbag-lunges'])).toBe('45 lb')
     expect(stationLoad(stations['wall-balls'])).toBe('13 lb ball')
     expect(stationLoad(stations.skierg)).toBe('')
     const detail = (id: StationId) =>
       describeExercise(session(17, 'hyrox-a').blocks.filter((b) => b.main).flatMap((b) => b.exercises).find((e) => e.prescription.kind === 'station' && e.prescription.station === id)!, program.stations).detail
-    expect(detail('sled-push')).toBe('50 m · 335 lb plates')
+    expect(detail('sled-push')).toBe('50 m · 335 lb plates (7 × 45 + 20)')
     expect(detail('farmers-carry')).toBe('200 m · 2 × 55 lb')
+  })
+
+  it('counts a sled load in 45 lb plates, whatever was actually used', () => {
+    const sled = program.stations['sled-push']
+    expect(poundsWords(sled, 90)).toBe('90 lb plates (2 × 45)')
+    expect(poundsWords(sled, 200)).toBe('200 lb plates (4 × 45 + 20)')
+    expect(poundsWords(sled, 25)).toBe('25 lb plates')
   })
 })

@@ -77,8 +77,8 @@ test('a four-round HYROX session: Set up off the clock, each Station then its ru
   // Set up: every Station of the Session at Race load, on a stopwatch that's never training time.
   await expect(s.block).toHaveText('Set up · 4 Stations')
   await expect(s.stations).toHaveText([
-    'Sled push 335 lb plates',
-    'Sled pull 225 lb plates',
+    'Sled push 335 lb plates (7 × 45 + 20)',
+    'Sled pull 225 lb plates (5 × 45)',
     'Farmers carry 2 × 55 lb',
     'Sandbag lunges 45 lb',
   ])
@@ -96,7 +96,7 @@ test('a four-round HYROX session: Set up off the clock, each Station then its ru
   // A tap at the end of each leg: the Station first, its clock counting up.
   await expect(s.target).toHaveText('25')
   await expect(page.locator('header').getByText('m Sled push', { exact: true })).toBeVisible()
-  await expect(s.legs).toHaveText(['Sled push, now: 335 lb plates', 'Run · 400 m'])
+  await expect(s.legs).toHaveText(['Sled push, now: 335 lb plates (7 × 45 + 20)', 'Run · 400 m'])
   await expect(s.line).toHaveText('Tap Finished at the end of every leg. Technique before speed.')
   await expect(s.timer).toHaveText('00:00')
   await expect(s.finished).toHaveText('Finished Sled push')
@@ -109,7 +109,7 @@ test('a four-round HYROX session: Set up off the clock, each Station then its ru
   await expect(s.target).toHaveText('400')
   await expect(page.locator('header').getByText('m run', { exact: true })).toBeVisible()
   await expect(s.timer).toHaveText('00:00')
-  await expect(s.legs).toHaveText(['Sled push · 25 m · 335 lb plates, done in 3:00', 'Run, now'])
+  await expect(s.legs).toHaveText(['Sled push · 25 m · 335 lb plates (7 × 45 + 20), done in 3:00', 'Run, now'])
   // A second tap a moment after is a bounce: still on the run.
   await s.finished.click()
   await expect(s.finished).toHaveText('Finished 400 m')
@@ -126,7 +126,7 @@ test('a four-round HYROX session: Set up off the clock, each Station then its ru
   await check.getByRole('textbox', { name: 'Sled push, lb' }).fill('315')
   await check.getByRole('button', { name: 'Save' }).click()
   await expect(check).toBeHidden()
-  await expect(s.legs).toHaveText(['Sled pull, now: 225 lb plates', 'Run · 400 m'])
+  await expect(s.legs).toHaveText(['Sled pull, now: 225 lb plates (5 × 45)', 'Run · 400 m'])
 
   // Rounds 2 and 3 go unanswered: they log as written.
   for (const legs of [['03:30', '02:00'], ['02:00', '02:00']]) {
@@ -330,7 +330,7 @@ test('half simulation A logs a split for every run and Station, in race order', 
   await page.clock.fastForward('04:45')
   await s.finished.click()
   await expect(s.block).toHaveText('Sled push · 50 m')
-  await expect(page.locator('header').getByText('335 lb plates')).toBeVisible()
+  await expect(page.locator('header').getByText('335 lb plates (7 × 45 + 20)')).toBeVisible()
   await page.clock.fastForward('03:00')
   await s.finished.click()
   // The sled push went with 315 lb.
@@ -425,8 +425,8 @@ test('each Station shows its Station target on the Session sheet and the round c
   const sheet = page.getByRole('dialog', { name: /^HYROX A, / })
   const rounds = sheet.getByRole('listitem').filter({ hasText: /Station target/ })
   await expect(rounds).toHaveText([
-    /^Sled\spush\s·\s25\sm\s·\s335\slb\splates\s·\sStation\starget\s2:45$/,
-    /^Sled\spull\s·\s25\sm\s·\s225\slb\splates\s·\sStation\starget\s2:26$/,
+    /^Sled\spush\s·\s25\sm\s·\s335\slb\splates\s\(7\s×\s45\s\+\s20\)\s·\sStation\starget\s2:45$/,
+    /^Sled\spull\s·\s25\sm\s·\s225\slb\splates\s\(5\s×\s45\)\s·\sStation\starget\s2:26$/,
     /^Farmers\scarry\s·\s100\sm\s·\s2\s×\s55\slb\s·\sStation\starget\s0:58$/,
     /^Sandbag\slunges\s·\s25\sm\s·\s45\slb\s·\sStation\starget\s1:27$/,
   ])
@@ -438,14 +438,14 @@ test('each Station shows its Station target on the Session sheet and the round c
   await expect(s.block).toHaveText('Set up · 4 Stations')
   await s.finished.click()
   await s.start.click()
-  await expect(s.legs).toHaveText([/^Sled\spush,\snow:\s335\slb\splates\s·\sStation\starget\s2:45$/, /^Run\s·\s400\sm$/])
+  await expect(s.legs).toHaveText([/^Sled\spush,\snow:\s335\slb\splates\s\(7\s×\s45\s\+\s20\)\s·\sStation\starget\s2:45$/, /^Run\s·\s400\sm$/])
   await page.clock.fastForward('02:40')
   await s.finished.click()
-  await expect(s.legs).toHaveText([/^Sled\spush\s·\s25\sm\s·\s335\slb\splates\s·\sStation\starget\s2:45,\sdone\sin\s2:40$/, 'Run, now'])
+  await expect(s.legs).toHaveText([/^Sled\spush\s·\s25\sm\s·\s335\slb\splates\s\(7\s×\s45\s\+\s20\)\s·\sStation\starget\s2:45,\sdone\sin\s2:40$/, 'Run, now'])
   await page.clock.fastForward('01:40')
   await s.finished.click()
   await s.start.click()
-  await expect(s.legs).toHaveText([/^Sled\spull,\snow:\s225\slb\splates\s·\sStation\starget\s2:26$/, /^Run\s·\s400\sm$/])
+  await expect(s.legs).toHaveText([/^Sled\spull,\snow:\s225\slb\splates\s\(5\s×\s45\)\s·\sStation\starget\s2:26$/, /^Run\s·\s400\sm$/])
   await scan(page)
 
   // Week 2's runs went from 250 to 280 s/km: the log says so.
