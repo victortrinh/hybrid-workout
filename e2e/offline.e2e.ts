@@ -99,7 +99,7 @@ test('the installed app opens offline on any screen', async ({ context, page, re
   await page.goto('/plan')
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Plan')
   await page.goto('/')
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^HYROX A, /)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^Strength, /)
 
   // Installable: a manifest whose icons are served.
   const manifest = await (await request.get('/manifest.webmanifest')).json()

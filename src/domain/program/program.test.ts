@@ -121,17 +121,19 @@ describe('Program invariants', () => {
     }
   })
 
-  it('holds a Bucket of HYROX A, HYROX B, Run, Strength and an Optional Easy run in every Week before Race week', () => {
+  it('holds a Bucket of Strength, HYROX B, Run, HYROX A and an Optional Easy run in every Week before Race week', () => {
     for (const week of weeks.filter((w) => !w.race)) {
       const lanes = week.sessions.map((s) => SESSION_TYPES[s.type].lane)
       const run = week.compromisedRunTest ? 'test' : 'run'
       // Build and Race specific also hold the second Easy run, offered after a fully Done Week.
       const second = week.number >= 6 && week.number <= 21
       const easy = second ? ['easy', 'easy'] : ['easy']
-      expect({ week: week.number, lanes }).toEqual({ week: week.number, lanes: ['hyrox', 'hyrox', run, 'strength', ...easy] })
+      expect({ week: week.number, lanes }).toEqual({ week: week.number, lanes: ['strength', 'hyrox', run, 'hyrox', ...easy] })
       expect(week.sessions.map((s) => s.optional)).toEqual([false, false, false, false, ...easy.map(() => true)])
       expect(week.sessions.map((s) => !!s.afterFullWeek)).toEqual([false, false, false, false, false, ...(second ? [true] : [])])
-      if (!week.raceSimulation) expect(week.sessions.slice(0, 2).map((s) => s.name)).toEqual(['HYROX A', 'HYROX B'])
+      // HYROX B the day after Strength spares the legs; HYROX A, the sleds and lunges, waits for the freshest day.
+      expect(week.sessions[1].name).toBe('HYROX B')
+      if (!week.raceSimulation) expect(week.sessions[3].name).toBe('HYROX A')
     }
   })
 
@@ -222,7 +224,7 @@ describe('the plan’s marked Weeks', () => {
 
   it('tapers in Weeks 22 and 23 with every Session type kept and each shorter, then races in Week 24', () => {
     for (const n of [22, 23]) {
-      expect(byNumber(n).sessions.map((s) => s.type)).toEqual(['hyrox', 'hyrox', 'run', 'strength', 'easy'])
+      expect(byNumber(n).sessions.map((s) => s.type)).toEqual(['strength', 'hyrox', 'run', 'hyrox', 'easy'])
     }
     expect(byNumber(22).sessions.map((s) => s.minutes)).toEqual([30, 30, 30, 30, 30])
     expect(byNumber(23).sessions.map((s) => s.minutes)).toEqual([20, 20, 25, 20, 20])

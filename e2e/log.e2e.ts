@@ -35,16 +35,16 @@ test('logging the Run as Done strikes it through on Today and changes Up next', 
 
   const upNext = page.getByRole('heading', { level: 1 })
   const bucket = page.getByRole('list').filter({ hasText: 'Strength' })
-  await expect(upNext).toHaveText(/^HYROX A, /)
+  await expect(upNext).toHaveText(/^Strength, /)
 
-  // A Session tapped in the Bucket, then Do it today instead, is today's; HYROX A goes back to planned.
+  // A Session tapped in the Bucket, then Do it today instead, is today's; Strength goes back to planned.
   await expect(bucket.getByRole('button', { name: /^Run/ })).toHaveCount(1)
   await bucket.getByRole('button', { name: /^Run/ }).click()
   await page.getByRole('button', { name: /^Do it today/ }).click()
   await expect(upNext).toHaveText(/^Run, /)
   // Week 6 follows a Week done in full, so Build offers the second Easy run too.
   const easy = week >= 6 ? [/^Easy run.*Optional$/, /^Second Easy run.*Optional$/] : [/^Easy run.*Optional$/]
-  await expect(bucket.getByRole('listitem')).toHaveText([/^HYROX A/, /^HYROX B/, /^Run.*Next$/, /^Strength/, ...easy])
+  await expect(bucket.getByRole('listitem')).toHaveText([/^Strength/, /^HYROX B/, /^Run.*Next$/, /^HYROX A/, ...easy])
   await expect(bucket.getByRole('listitem').first()).not.toContainText('Next')
 
   await page.goto(`/log/${week}/run`)
@@ -66,7 +66,7 @@ test('logging the Run as Done strikes it through on Today and changes Up next', 
   const threshold = bucket.getByRole('listitem').nth(2)
   await expect(threshold).toHaveText(/^Run.*Done, Wed$/)
   await expect(threshold.getByText('Run', { exact: true })).toHaveCSS('text-decoration-line', 'line-through')
-  await expect(upNext).toHaveText(/^HYROX A, /)
+  await expect(upNext).toHaveText(/^Strength, /)
   await expect(page.getByText('3 Sessions left · 5 days')).toBeVisible()
   await expectNoAxeViolations(page)
 

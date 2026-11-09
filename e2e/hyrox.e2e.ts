@@ -35,8 +35,11 @@ async function scan(page: Page, then?: Date) {
 
 const bucketOf = (page: Page) => page.getByRole('list').filter({ hasText: 'Strength' })
 
-/** Week 2 done; Wednesday of Week 3, nothing of it logged: HYROX A, its Key session, Up next. */
-const WEEK_2 = weekDone(2, ['hyrox-a', 'hyrox-b', 'compromised-run-test', 'strength'], '2026-11-18')
+/** Week 2 done, and Week 3's Strength, HYROX B and Run on its Monday: Wednesday of Week 3 has HYROX A, its Key session, Up next. */
+const WEEK_2 = [
+  ...weekDone(2, ['hyrox-a', 'hyrox-b', 'compromised-run-test', 'strength'], '2026-11-18'),
+  ...weekDone(3, ['strength', 'hyrox-b', 'run'], '2026-11-23'),
+]
 
 test('a four-round HYROX session: Set up off the clock, each Station then its run, a lighter sled in round 1', async ({ page }) => {
   const sent = await serveHistory(page, caughtUp(1, WEEK_2))
@@ -69,7 +72,7 @@ test('a four-round HYROX session: Set up off the clock, each Station then its ru
   ])
 
   // The jog runs its 5 minutes.
-  await page.clock.runFor('05:00')
+  await page.clock.fastForward('05:00')
 
   // Set up: every Station of the Session at Race load, on a stopwatch that's never training time.
   await expect(s.block).toHaveText('Set up · 4 Stations')
@@ -81,7 +84,7 @@ test('a four-round HYROX session: Set up off the clock, each Station then its ru
   ])
   await expect(s.line).toHaveText('Load every Station now. This clock isn’t training. Tap Done when it’s all set.')
   await expect(s.timer).toHaveText('00:00')
-  await page.clock.runFor('04:00')
+  await page.clock.fastForward('04:00')
   await expect(s.timer).toHaveText('04:00')
   await expect(s.finished).toHaveText('Done')
   await s.finished.click()
@@ -98,7 +101,7 @@ test('a four-round HYROX session: Set up off the clock, each Station then its ru
   await expect(s.timer).toHaveText('00:00')
   await expect(s.finished).toHaveText('Finished Sled push')
   await scan(page, new Date(start.getTime() + 9.5 * 60_000))
-  await page.clock.runFor('02:30')
+  await page.clock.fastForward('02:30')
   await expect(s.timer).toHaveText('03:00')
   await s.finished.click()
 
@@ -110,7 +113,7 @@ test('a four-round HYROX session: Set up off the clock, each Station then its ru
   // A second tap a moment after is a bounce: still on the run.
   await s.finished.click()
   await expect(s.finished).toHaveText('Finished 400 m')
-  await page.clock.runFor('02:00')
+  await page.clock.fastForward('02:00')
   await s.finished.click()
   await s.start.click()
   await expect(s.finished).toHaveText('Finished Sled pull')
@@ -128,7 +131,7 @@ test('a four-round HYROX session: Set up off the clock, each Station then its ru
   // Rounds 2 and 3 go unanswered: they log as written.
   for (const legs of [['03:30', '02:00'], ['02:00', '02:00']]) {
     for (const leg of legs) {
-      await page.clock.runFor(leg)
+      await page.clock.fastForward(leg)
       await s.finished.click()
     }
     await s.start.click()
@@ -136,13 +139,13 @@ test('a four-round HYROX session: Set up off the clock, each Station then its ru
   await expect(s.legs).toHaveText(['Sandbag lunges, now: 45 lb', 'Run · 400 m'])
   await expect(s.line).toHaveText('Last round. Same technique, tired legs.')
   for (const leg of ['03:00', '02:30']) {
-    await page.clock.runFor(leg)
+    await page.clock.fastForward(leg)
     await s.finished.click()
   }
   await expect(s.block).toHaveText('Cooldown · 4 min')
   await expect(blocks.nth(3)).toHaveText(/^Round 2 of 4, done\s*1 Station \+ 400 m · 5:30$/)
 
-  await page.clock.runFor('04:00')
+  await page.clock.fastForward('04:00')
   await expect(page.getByText('Session over')).toBeVisible()
   // The runs are logged round by round: no console total to ask for.
   await expect(page.getByRole('textbox', { name: /Console distance/ })).toHaveCount(0)
@@ -151,7 +154,7 @@ test('a four-round HYROX session: Set up off the clock, each Station then its ru
   await page.getByRole('button', { name: 'Save log' }).click()
 
   await expect(page).toHaveURL('/')
-  await expect(bucketOf(page).getByRole('listitem').nth(0)).toHaveText(/^HYROX A.*Done, Wed$/)
+  await expect(bucketOf(page).getByRole('listitem').nth(3)).toHaveText(/^HYROX A.*Done, Wed$/)
   const row = (round: number, part: string, change: Record<string, number | null>) => ({
     round,
     part,
@@ -191,6 +194,8 @@ test('on an iPhone SE a HYROX round fits: target, clock and action without scrol
   await serveHistory(page, caughtUp(1, WEEK_2))
   await page.clock.install({ time: aMinuteBefore(WEEK_3) })
   await page.goto('/')
+  // HYROX A Up next says the served history has loaded; only then is the clock paused.
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('HYROX A, 4 rounds')
   await page.clock.pauseAt(new Date(WEEK_3.getTime() + 1000))
   await page.getByRole('button', { name: 'Start HYROX A' }).click()
 
@@ -224,14 +229,14 @@ test('on an iPhone SE a HYROX round fits: target, clock and action without scrol
 
   // Every leg keeps its target, clock and tap on screen.
   await expect(s.finished).toHaveText('Finished Sled push')
-  await page.clock.runFor('03:20')
+  await page.clock.fastForward('03:20')
   await s.finished.click()
   await expect(s.finished).toHaveText('Finished 400 m')
   await onScreen()
 
   // Scrolled down the list mid-round, the next round still opens on its distance.
   await scrollBlocksDown()
-  await page.clock.runFor('03:20')
+  await page.clock.fastForward('03:20')
   await s.finished.click()
   await s.start.click()
   await expect(s.block).toHaveText('Round 2 of 4 · 1 Station + 400 m')
@@ -243,6 +248,8 @@ test('a split too quick to be true is asked about before saving, and saved as pu
   const sent = await serveHistory(page, caughtUp(1, WEEK_2))
   await page.clock.install({ time: aMinuteBefore(WEEK_3) })
   await page.goto('/')
+  // HYROX A Up next says the served history has loaded; only then is the clock paused.
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('HYROX A, 4 rounds')
   await page.clock.pauseAt(new Date(WEEK_3.getTime() + 1000))
   await page.getByRole('button', { name: 'Start HYROX A' }).click()
 
@@ -252,9 +259,9 @@ test('a split too quick to be true is asked about before saving, and saved as pu
   await s.start.click()
 
   // The thumb slipped: the sled push tapped late, so the 400 m "run" took 0:20.
-  await page.clock.runFor('03:00')
+  await page.clock.fastForward('03:00')
   await s.finished.click()
-  await page.clock.runFor('00:20')
+  await page.clock.fastForward('00:20')
   await s.finished.click()
   await page.getByRole('button', { name: 'End' }).click()
 
@@ -280,14 +287,22 @@ test('a split too quick to be true is asked about before saving, and saved as pu
 })
 
 test('half simulation A logs a split for every run and Station, in race order', async ({ page }) => {
-  // Wednesday of Week 16, the first of Race specific, Week 15 done: the Race simulation, its Key session, Up next.
+  // Wednesday of Week 16, the first of Race specific, Week 15 done and Week 16's Strength, HYROX B and Run
+  // on its Monday: the Race simulation, its Key session, Up next.
   const wednesday = new Date('2027-02-24T12:00:00-05:00')
-  const sent = await serveHistory(page, caughtUp(15, weekDone(15, ['hyrox-a', 'hyrox-b', 'run', 'strength'], '2027-02-17')))
+  const sent = await serveHistory(
+    page,
+    caughtUp(15, [
+      ...weekDone(15, ['hyrox-a', 'hyrox-b', 'run', 'strength'], '2027-02-17'),
+      ...weekDone(16, ['strength', 'hyrox-b', 'run'], '2027-02-22'),
+    ]),
+  )
   await page.clock.install({ time: aMinuteBefore(wednesday) })
   await page.goto('/')
-  await page.clock.pauseAt(new Date(wednesday.getTime() + 1000))
-
+  // Until the served history is in, the bare Week 16 reads Strength: the Up next heading says it has loaded,
+  // and only then is the clock paused (a paused clock never fires the load's retry timer).
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Race simulation, half A')
+  await page.clock.pauseAt(new Date(wednesday.getTime() + 1000))
   await page.getByRole('button', { name: /^Start / }).click()
 
   const s = live(page)
@@ -299,24 +314,24 @@ test('half simulation A logs a split for every run and Station, in race order', 
   await expect(s.block).toHaveText('Run 1 · 1 km')
   await expect(s.target).toHaveText('1')
   await expect(s.line).toHaveText('Run 1. Conservative. The race is long.')
-  await page.clock.runFor('04:30')
+  await page.clock.fastForward('04:30')
   await s.finished.click()
 
   await expect(s.block).toHaveText('SkiErg · 1 km')
   await expect(s.target).toHaveText('1')
   // The page never scrolls sideways on a phone.
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
-  await page.clock.runFor('04:15')
+  await page.clock.fastForward('04:15')
   await expect(s.finished).toHaveText('Finished SkiErg')
   await s.finished.click()
   await page.getByRole('region', { name: 'SkiErg: as written?' }).getByRole('button', { name: 'As written' }).click()
 
   await expect(s.line).toHaveText('Run 2. RPE 8, not all-out.')
-  await page.clock.runFor('04:45')
+  await page.clock.fastForward('04:45')
   await s.finished.click()
   await expect(s.block).toHaveText('Sled push · 50 m')
   await expect(page.locator('header').getByText('335 lb plates (7 × 45 + 20)')).toBeVisible()
-  await page.clock.runFor('03:00')
+  await page.clock.fastForward('03:00')
   await s.finished.click()
   // The sled push went with 315 lb.
   const sled = page.getByRole('region', { name: 'Sled push: as written?' })
@@ -330,7 +345,7 @@ test('half simulation A logs a split for every run and Station, in race order', 
     ['05:00', 'Burpee broad jumps · 80 m'],
     ['06:00', 'Cooldown · 5 min'],
   ] as const) {
-    await page.clock.runFor(time)
+    await page.clock.fastForward(time)
     await s.finished.click()
     await expect(s.block).toHaveText(next)
   }
@@ -394,6 +409,8 @@ test('each Station shows its Station target on the Session sheet and the round c
     hyroxA(1, '2026-11-10', 180, [100, 104, 106, 108]),
     hyroxA(2, '2026-11-17', 170, [100, 104, 108, 112]),
     ...weekDone(2, ['hyrox-b', 'compromised-run-test', 'strength'], '2026-11-18'),
+    // Week 3's other required Sessions on Monday, so HYROX A is Up next on Wednesday.
+    ...weekDone(3, ['strength', 'hyrox-b', 'run'], '2026-11-23'),
   ]
   await serveHistory(page, caughtUp(2, history))
   await page.clock.install({ time: aMinuteBefore(WEEK_3) })
@@ -422,10 +439,10 @@ test('each Station shows its Station target on the Session sheet and the round c
   await s.finished.click()
   await s.start.click()
   await expect(s.legs).toHaveText([/^Sled\spush,\snow:\s335\slb\splates\s\(7\s×\s45\s\+\s20\)\s·\sStation\starget\s2:45$/, /^Run\s·\s400\sm$/])
-  await page.clock.runFor('02:40')
+  await page.clock.fastForward('02:40')
   await s.finished.click()
   await expect(s.legs).toHaveText([/^Sled\spush\s·\s25\sm\s·\s335\slb\splates\s\(7\s×\s45\s\+\s20\)\s·\sStation\starget\s2:45,\sdone\sin\s2:40$/, 'Run, now'])
-  await page.clock.runFor('01:40')
+  await page.clock.fastForward('01:40')
   await s.finished.click()
   await s.start.click()
   await expect(s.legs).toHaveText([/^Sled\spull,\snow:\s225\slb\splates\s\(5\s×\s45\)\s·\sStation\starget\s2:26$/, /^Run\s·\s400\sm$/])

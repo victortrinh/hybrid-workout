@@ -206,11 +206,11 @@ describe('weekly completion', () => {
 
     const [one, two, three] = weeks
     expect(one.cells.map((c) => [c.session.id, c.state])).toEqual([
-      ['hyrox-a', 'done'],
+      ['strength', 'partial'],
       // Never logged, it is a Late session (ADR-0007): still open, not missed.
       ['hyrox-b', 'open'],
       ['run', 'skipped'],
-      ['strength', 'partial'],
+      ['hyrox-a', 'done'],
       // The Optional session is never a miss.
       ['easy', 'open'],
     ])
@@ -249,8 +249,8 @@ describe('weekly completion', () => {
     const week6 = ['hyrox-a', 'hyrox-b', 'run', 'strength'].map((id, i) => log(6, id, `2026-12-1${4 + i}`))
     const ids = (week: number, logs: SessionLog[]) =>
       weeklyCompletion(program, logs, localDate('2026-12-29')).find((w) => w.week === week)!.cells.map((c) => c.session.id)
-    expect(ids(7, week6)).toEqual(['hyrox-a', 'hyrox-b', 'run', 'strength', 'easy', 'easy-2'])
-    expect(ids(7, week6.slice(1))).toEqual(['hyrox-a', 'hyrox-b', 'run', 'strength', 'easy'])
+    expect(ids(7, week6)).toEqual(['strength', 'hyrox-b', 'run', 'hyrox-a', 'easy', 'easy-2'])
+    expect(ids(7, week6.slice(1))).toEqual(['strength', 'hyrox-b', 'run', 'hyrox-a', 'easy'])
     const seven = weeklyCompletion(program, week6, localDate('2026-12-29')).find((w) => w.week === 7)!
     expect(seven).toMatchObject({ required: 4, missed: 0 })
   })

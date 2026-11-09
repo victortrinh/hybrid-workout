@@ -165,20 +165,22 @@ describe('Phase completion', () => {
 
 describe('Up next', () => {
   it("is the first planned Session in the current Week's Bucket", () => {
-    expect(on('2026-11-09').upNext).toMatchObject({ id: 'hyrox-a', name: 'HYROX A', headline: '4 rounds' })
-    expect(on('2026-11-15').upNext).toMatchObject({ id: 'hyrox-a' })
-    expect(on('2026-11-25').upNext).toMatchObject({ id: 'hyrox-a', key: true })
+    expect(on('2026-11-09').upNext).toMatchObject({ id: 'strength', headline: 'find Working weights' })
+    expect(on('2026-11-15').upNext).toMatchObject({ id: 'strength' })
+    // Bucket order, not the Key session: Week 3's Key session is HYROX A, last of the Hard sessions.
+    expect(on('2026-11-25').upNext).toMatchObject({ id: 'strength', key: false })
+    expect(on('2026-11-25').week?.sessions.find((s) => s.key)?.id).toBe('hyrox-a')
   })
 
   it('shows the current Week as the Bucket', () => {
     const day = on('2026-11-25')
     expect(day.week?.number).toBe(3)
-    expect(day.week?.sessions.map((s) => s.id)).toEqual(['hyrox-a', 'hyrox-b', 'run', 'strength', 'easy'])
+    expect(day.week?.sessions.map((s) => s.id)).toEqual(['strength', 'hyrox-b', 'run', 'hyrox-a', 'easy'])
   })
 
   it('holds the Compromised run test as the Key session of a test Week, in the Run’s place', () => {
     const day = on('2026-11-18')
-    expect(day.week?.sessions.map((s) => s.id)).toEqual(['hyrox-a', 'hyrox-b', 'compromised-run-test', 'strength', 'easy'])
+    expect(day.week?.sessions.map((s) => s.id)).toEqual(['strength', 'hyrox-b', 'compromised-run-test', 'hyrox-a', 'easy'])
     expect(day.week?.sessions.find((s) => s.key)?.id).toBe('compromised-run-test')
   })
 
@@ -220,9 +222,9 @@ describe('Up next', () => {
 })
 
 // ---------------------------------------------------------------------------
-// With Session logs. Week 3 runs Mon 23 – Sun 29 Nov: HYROX A (Key), HYROX B,
-// the Run (Threshold 3 × 8′), Strength, Easy run (Optional). HYROX and
-// Strength load the legs; the Run is never the day after either.
+// With Session logs. Week 3 runs Mon 23 – Sun 29 Nov, in Bucket order: Strength,
+// HYROX B, the Run (Threshold 3 × 8′), HYROX A (Key), Easy run (Optional).
+// Strength loads the legs: the Run is never the day after it.
 
 let nextId = 0
 function log(week: number, sessionId: string, date: string, status: LoggedStatus = 'done', updatedAt = '2026-11-22T12:00:00.000Z'): SessionLog {
@@ -253,10 +255,10 @@ const states = (day: ReturnType<typeof coach>) => Object.fromEntries(day.bucket.
 describe('the Bucket', () => {
   it('is Next for Up next and Planned for the rest while nothing is logged', () => {
     expect(states(on('2026-11-25'))).toEqual({
-      'hyrox-a': 'next',
+      strength: 'next',
       'hyrox-b': 'planned',
       run: 'planned',
-      strength: 'planned',
+      'hyrox-a': 'planned',
       easy: 'planned',
     })
   })
@@ -271,8 +273,8 @@ describe('the Bucket', () => {
     ]
     const day = withLogs('2026-11-25', logs)
     expect(states(day)).toEqual({ 'hyrox-a': 'done', 'hyrox-b': 'partial', run: 'skipped', strength: 'swapped', easy: 'next' })
-    expect(day.bucket[0].log).toBe(logs[0])
-    expect(day.bucket[4].log).toBeNull()
+    expect(day.bucket.find((e) => e.session.id === 'hyrox-a')!.log).toBe(logs[0])
+    expect(day.bucket.find((e) => e.session.id === 'easy')!.log).toBeNull()
   })
 
   it('goes by the latest edit when a Session has more than one log', () => {
@@ -284,7 +286,7 @@ describe('the Bucket', () => {
   })
 
   it('ignores logs from other Weeks', () => {
-    expect(states(withLogs('2026-11-25', [log(2, 'strength', '2026-11-17')])).strength).toBe('planned')
+    expect(states(withLogs('2026-11-25', [log(2, 'hyrox-a', '2026-11-17')]))['hyrox-a']).toBe('planned')
   })
 
   it('shows Week 1 all Planned before the Program starts', () => {
@@ -298,13 +300,13 @@ describe('the Bucket', () => {
 
 describe('Up next with Session logs', () => {
   it('moves past logged Sessions to the oldest-waiting one, in Bucket order', () => {
-    const day = withLogs('2026-11-25', [log(3, 'hyrox-a', '2026-11-23')])
+    const day = withLogs('2026-11-25', [log(3, 'strength', '2026-11-23')])
     expect(day.upNext?.id).toBe('hyrox-b')
     expect(day.rest).toBeNull()
   })
 
   it('moves past Skipped and Swapped Sessions too', () => {
-    const logs = [log(3, 'hyrox-a', '2026-11-23', 'skipped'), log(3, 'hyrox-b', '2026-11-23', 'swapped')]
+    const logs = [log(3, 'strength', '2026-11-23', 'skipped'), log(3, 'hyrox-b', '2026-11-23', 'swapped')]
     expect(withLogs('2026-11-25', logs).upNext?.id).toBe('run')
   })
 
@@ -327,7 +329,7 @@ describe('Up next with Session logs', () => {
       const day = withLogs('2026-11-28', [rest[0], rest[1], log(3, 'run', '2026-11-25', 'skipped')])
       expect(day.upNext?.id).toBe('strength')
       const later = withLogs('2026-11-27', [rest[0], log(3, 'hyrox-b', '2026-11-24', 'skipped')])
-      expect(later.upNext?.id).toBe('run')
+      expect(later.upNext?.id).toBe('strength')
     })
 
     it('is not offered again the day it was Skipped', () => {
@@ -380,21 +382,21 @@ describe('Up next with Session logs', () => {
 
   describe('no two Hard sessions on consecutive days when avoidable', () => {
     it('rests the day after a Hard session when the Week can still fit the rest', () => {
-      // Thursday: the Run and Strength left, four days to fit them in.
+      // Thursday: Strength and the Run left, four days to fit them in.
       const day = withLogs('2026-11-26', [log(3, 'hyrox-a', '2026-11-23'), log(3, 'hyrox-b', '2026-11-25')])
       expect(day.upNext).toBeNull()
-      expect(day.rest).toMatchObject({ kind: 'hard-yesterday', anyway: { week: 3, session: { id: 'run' } } })
+      expect(day.rest).toMatchObject({ kind: 'hard-yesterday', anyway: { week: 3, session: { id: 'strength' } } })
     })
 
     it('goes Hard anyway when resting would leave too few days', () => {
-      // Wednesday: HYROX B, the Run and Strength left in five days. Resting today
+      // Wednesday: Strength, HYROX B and the Run left in five days. Resting today
       // leaves four, which hold only two Hard sessions apart.
       const day = withLogs('2026-11-25', [log(3, 'hyrox-a', '2026-11-24')])
-      expect(day.upNext?.id).toBe('hyrox-b')
+      expect(day.upNext?.id).toBe('strength')
     })
 
     it('stops at one Hard session a day when the Week has room', () => {
-      const day = withLogs('2026-11-23', [log(3, 'hyrox-a', '2026-11-23')])
+      const day = withLogs('2026-11-23', [log(3, 'strength', '2026-11-23')])
       expect(day.upNext).toBeNull()
       expect(day.rest).toMatchObject({ kind: 'hard-today', anyway: { week: 3, session: { id: 'hyrox-b' } } })
     })
@@ -406,17 +408,17 @@ describe('Up next with Session logs', () => {
 
     it('counts the Hard day before Monday across the Week boundary', () => {
       // Strength done Sunday of Week 2; Week 3's HYROX sessions Swapped on Monday,
-      // so the Run and Strength are left with six days to fit them.
+      // so Strength and the Run are left with six days to fit them.
       const swapped = [log(3, 'hyrox-a', '2026-11-23', 'swapped'), log(3, 'hyrox-b', '2026-11-23', 'swapped')]
       const day = withLogs('2026-11-23', [log(2, 'strength', '2026-11-22'), ...swapped])
       expect(day.upNext).toBeNull()
       expect(day.rest).toMatchObject({ kind: 'hard-yesterday' })
-      expect(withLogs('2026-11-23', swapped).upNext?.id).toBe('run')
+      expect(withLogs('2026-11-23', swapped).upNext?.id).toBe('strength')
     })
 
     it('does not count Skipped or Swapped Sessions as a Hard day', () => {
       const day = withLogs('2026-11-26', [log(3, 'hyrox-a', '2026-11-23'), log(3, 'hyrox-b', '2026-11-25', 'skipped')])
-      expect(day.upNext?.id).toBe('run')
+      expect(day.upNext?.id).toBe('strength')
     })
 
     it('counts a Partial Session as a Hard day', () => {
@@ -429,12 +431,12 @@ describe('Up next with Session logs', () => {
     it('skips the Run for the next Session after Strength yesterday', () => {
       // Thursday, too little room to rest: both HYROX sessions and the Run left in four days.
       const day = withLogs('2026-11-26', [log(3, 'strength', '2026-11-25')])
-      expect(day.upNext?.id).toBe('hyrox-a')
+      expect(day.upNext?.id).toBe('hyrox-b')
     })
 
     it('allows the Run the day after HYROX', () => {
-      // Friday: the Run and Strength left in three days, so no rest after yesterday's HYROX B.
-      const day = withLogs('2026-11-27', [log(3, 'hyrox-a', '2026-11-23'), log(3, 'hyrox-b', '2026-11-26')])
+      // Friday: the Run and HYROX A left in three days, so no rest after yesterday's HYROX B.
+      const day = withLogs('2026-11-27', [log(3, 'strength', '2026-11-23'), log(3, 'hyrox-b', '2026-11-26')])
       expect(day.upNext?.id).toBe('run')
     })
 
@@ -516,7 +518,7 @@ describe('Up next with Session logs', () => {
     }
 
     it('names the Session that Do it anyway makes Up next, for today', () => {
-      const logs = [log(3, 'hyrox-a', '2026-11-23'), log(3, 'hyrox-b', '2026-11-25')]
+      const logs = [log(3, 'strength', '2026-11-23'), log(3, 'hyrox-b', '2026-11-25')]
       const anyway = doItAnyway(withLogs('2026-11-26', logs))
       expect(withLogs('2026-11-26', logs, anyway).upNext?.id).toBe('run')
       expect(withLogs('2026-11-26', logs, anyway).rest).toBeNull()
@@ -563,12 +565,12 @@ describe('Up next with Session logs', () => {
     })
 
     it('lasts only for the day it was picked', () => {
-      expect(withLogs('2026-11-26', [], picked('strength', '2026-11-25')).upNext?.id).toBe('hyrox-a')
+      expect(withLogs('2026-11-26', [], picked('run', '2026-11-25')).upNext?.id).toBe('strength')
     })
 
     it('gives way once it is logged', () => {
       const day = withLogs('2026-11-25', [log(3, 'run', '2026-11-25')], picked('run'))
-      expect(day.upNext?.id).toBe('hyrox-a')
+      expect(day.upNext?.id).toBe('strength')
     })
 
     it('before the Program, makes a Week 1 Session Up next, early', () => {
@@ -631,14 +633,15 @@ describe('Catch-up', () => {
   it('serves last Week’s Late sessions first, on a Week 2 Tuesday', () => {
     const day = coach({ program, today: localDate('2026-11-17'), logs: week1Half })
     expect(day.position).toMatchObject({ week: 2 })
-    expect(day.upNext).toMatchObject({ id: 'run', headline: '3 × 7′' })
+    // Week 1's own Prescription: the calibration Strength session.
+    expect(day.upNext).toMatchObject({ id: 'strength', headline: 'find Working weights' })
     expect(rows(day)).toEqual([
-      '1/run late',
       '1/strength late',
-      '2/hyrox-a',
+      '1/run late',
+      '2/strength',
       '2/hyrox-b',
       '2/compromised-run-test',
-      '2/strength',
+      '2/hyrox-a',
       '2/easy',
     ])
     expect(day.bucket[0]).toMatchObject({ week: 1, state: 'next', late: true, toDo: true, pickable: true })
@@ -687,7 +690,7 @@ describe('Catch-up', () => {
     const caughtUp = coach({ program, today: localDate('2026-11-25'), logs: [...week1Cleared, log(2, 'hyrox-b', '2026-11-23')] })
     expect(caughtUp.bucket.every((e) => e.week === 3 && !e.late)).toBe(true)
     expect(caughtUp.behind).toBeNull()
-    expect(caughtUp.upNext?.id).toBe('hyrox-a')
+    expect(caughtUp.upNext?.id).toBe('strength')
   })
 
   it('lets the Optional session drop away: it is never Late', () => {
@@ -710,7 +713,7 @@ describe('Catch-up', () => {
   it('lets a Late session Skipped today pass too', () => {
     const logs = [...week1Half, log(1, 'run', '2026-11-17', 'skipped')]
     const day = coach({ program, today: localDate('2026-11-17'), logs })
-    expect(day.bucket[0]).toMatchObject({ week: 1, state: 'skipped', toDo: false })
+    expect(day.bucket.find((e) => e.session.id === 'run')).toMatchObject({ week: 1, late: true, state: 'skipped', toDo: false })
     expect(day.upNext?.id).toBe('strength')
   })
 
@@ -728,7 +731,7 @@ describe('Catch-up', () => {
   it('counts a Late session logged today for its own Week, Done in the Bucket until tomorrow', () => {
     const logs = [...week1Half, log(1, 'run', '2026-11-17'), log(1, 'strength', '2026-11-17')]
     const day = coach({ program, today: localDate('2026-11-17'), logs })
-    expect(rows(day).slice(0, 2)).toEqual(['1/run late', '1/strength late'])
+    expect(rows(day).slice(0, 2)).toEqual(['1/strength late', '1/run late'])
     expect(day.bucket.slice(0, 2).map((e) => e.state)).toEqual(['done', 'done'])
     expect(day.behind).toBeNull()
     expect(outcome(1, '2026-11-17', logs)).toEqual({ skipped: [] })
@@ -747,7 +750,7 @@ describe('Catch-up', () => {
   it('carries nothing over: an undone Key session is Late like the rest, and never a miss', () => {
     for (const iso of ['2026-11-17', '2026-11-19', '2026-12-04']) {
       const day = coach({ program, today: localDate(iso), logs: week1Half })
-      expect(day.bucket.filter((e) => e.week === 1).map((e) => e.session.id)).toEqual(['run', 'strength'])
+      expect(day.bucket.filter((e) => e.week === 1).map((e) => e.session.id)).toEqual(['strength', 'run'])
       expect(day.bucket[0]).not.toHaveProperty('carriedUntil')
       expect(outcome(1, iso, week1Half)).toEqual({ skipped: [] })
     }
@@ -779,7 +782,7 @@ describe('Catch-up ending as Race specific starts', () => {
     log(14, 'hyrox-b', '2027-02-10'),
     ...['hyrox-a', 'hyrox-b', 'run'].map((id) => log(15, id, '2027-02-16')),
   ]
-  const lateIds = ['compromised-run-test by coach', 'strength by coach']
+  const lateIds = ['strength by coach', 'compromised-run-test by coach']
 
   it('starts Race specific on Monday 22 February, Week 16', () => {
     expect(on('2027-02-22').position).toMatchObject({ week: 16, phase: 'race-specific', startDate: '2027-02-22' })
@@ -788,8 +791,8 @@ describe('Catch-up ending as Race specific starts', () => {
 
   it('still serves the Late sessions the Sunday before, Week 15’s Strength still in its own Week', () => {
     const day = coach({ program, today: localDate('2027-02-21'), logs: behind })
-    expect(rows(day).filter((r) => r.endsWith('late'))).toEqual(['14/compromised-run-test late', '14/strength late'])
-    expect(day.upNext?.id).toBe('compromised-run-test')
+    expect(rows(day).filter((r) => r.endsWith('late'))).toEqual(['14/strength late', '14/compromised-run-test late'])
+    expect(day.upNext?.id).toBe('strength')
     expect(day.behind).toEqual({ sessions: 2, week: 14 })
     expect(day.dropped).toBeNull()
     expect(missed(outcome(14, '2027-02-21', behind))).toEqual([])
@@ -804,8 +807,8 @@ describe('Catch-up ending as Race specific starts', () => {
       expect(missed(outcome(15, iso, behind))).toEqual(['strength by coach'])
     }
     const monday = coach({ program, today: localDate('2027-02-22'), logs: behind })
-    expect(monday.upNext).toMatchObject({ id: 'race-simulation' })
-    expect(rows(monday)[0]).toBe('16/race-simulation')
+    expect(monday.upNext).toMatchObject({ id: 'strength' })
+    expect(rows(monday)[0]).toBe('16/strength')
   })
 
   it('says how many were dropped, and from which Weeks, until it is dismissed', () => {
@@ -844,7 +847,7 @@ describe('Catch-up ending as Race specific starts', () => {
       log(16, 'hyrox-b', '2027-02-24'),
     ]
     expect(missed(outcome(16, '2027-02-28', logs))).toEqual([])
-    expect(missed(outcome(16, '2027-03-01', logs))).toEqual(['run by coach', 'strength by coach'])
+    expect(missed(outcome(16, '2027-03-01', logs))).toEqual(['strength by coach', 'run by coach'])
     const day = coach({ program, today: localDate('2027-03-01'), logs })
     expect(day.bucket.every((e) => e.week === 17 && !e.late)).toBe(true)
     expect(day.behind).toBeNull()
@@ -865,7 +868,7 @@ describe('the second Optional Easy run', () => {
 
   it('is offered in Build after a Week whose four required Sessions were all Done', () => {
     const day = after('2026-12-21', fullWeek(6))
-    expect(rows(day)).toEqual(['7/hyrox-a', '7/hyrox-b', '7/run', '7/strength', '7/easy', '7/easy-2'])
+    expect(rows(day)).toEqual(['7/strength', '7/hyrox-b', '7/run', '7/hyrox-a', '7/easy', '7/easy-2'])
     const second = easyRows(day)[1].session
     expect(second).toMatchObject({ type: 'easy', optional: true, key: false })
     expect(second.minutes).toBeGreaterThanOrEqual(25)
@@ -941,7 +944,7 @@ describe('Sessions not done by Sunday', () => {
 // ---------------------------------------------------------------------------
 // The lighter re-entry Week, after a gap in training (ADR-0007). Week 7 (Mon
 // 21 – Sun 27 Dec) done Monday to Thursday; Week 8 (Mon 28 Dec – Sun 3 Jan):
-// HYROX A, HYROX B, the Run (4 × (1 km + 20 wall balls), Key), Strength. Week
+// Strength, HYROX B, the Run (4 × (1 km + 20 wall balls), Key), HYROX A. Week
 // 10 is a Deload week.
 
 const CLEARED = caughtUpBefore(localDate('2026-12-21'))
@@ -1008,7 +1011,7 @@ describe('the re-entry Suggestion', () => {
   })
 
   it('lightens the rest of the Late Week Up next comes from when the gap ends in Catch-up', () => {
-    const logs = [log(7, 'hyrox-a', '2026-12-21'), log(7, 'hyrox-b', '2026-12-22')]
+    const logs = [log(7, 'strength', '2026-12-21'), log(7, 'hyrox-b', '2026-12-22')]
     const day = onDay('2026-12-30', logs)
     expect(day.behind).toEqual({ sessions: 2, week: 7 })
     expect(day.suggestions).toEqual([
@@ -1041,17 +1044,17 @@ describe('the re-entry Suggestion', () => {
 
   it('changes nothing until it is Accepted', () => {
     const day = back('2026-12-31')
-    expect(day.upNext).toMatchObject({ id: 'hyrox-a', headline: '4 rounds', minutes: 45 })
+    expect(day.upNext).toMatchObject({ id: 'strength', headline: 'squat 3 × 5', minutes: 45 })
     expect(day.week).toEqual(equipWeek(findWeek(program, 8)!, DEFAULT_EQUIPMENT))
   })
 
   it('lightens every Prescription of the Week by a third once Accepted', () => {
     const day = back('2026-12-31', [], [decided('accepted')])
     expect(day.suggestions[0]).toMatchObject({ decision: 'accepted', decidedOn: '2026-12-31' })
-    expect(day.upNext).toMatchObject({ id: 'hyrox-a', minutes: 30 })
+    expect(day.upNext).toMatchObject({ id: 'strength', minutes: 30 })
     // Week 7 was all Done, so Week 8 holds the second Easy run too.
     expect(day.bucket.map((e) => e.session.minutes)).toEqual([30, 30, 30, 30, 27, 17])
-    expect(firstStation(day.upNext!)).toEqual([
+    expect(firstStation(day.bucket.find((e) => e.session.id === 'hyrox-a')!.session)).toEqual([
       { kind: 'station', station: 'sled-push', meters: 15, reps: undefined },
       { kind: 'run', meters: 400, minutes: undefined },
     ])
@@ -1061,7 +1064,7 @@ describe('the re-entry Suggestion', () => {
     for (const d of [decided('kept'), decided('open')]) {
       const day = back('2026-12-31', [], [d])
       expect(day.suggestions[0].decision).toBe(d.decision)
-      expect(day.upNext).toMatchObject({ headline: '4 rounds', minutes: 45 })
+      expect(day.upNext).toMatchObject({ id: 'strength', headline: 'squat 3 × 5', minutes: 45 })
     }
   })
 
@@ -1080,8 +1083,8 @@ describe('the re-entry Suggestion', () => {
 })
 
 // ---------------------------------------------------------------------------
-// The pain rules. Week 3 (Mon 23 – Sun 29 Nov): HYROX A (Key), HYROX B with
-// burpee broad jumps in round 2, the Run 3 × 8′ at Threshold, Strength, Easy run.
+// The pain rules. Week 3 (Mon 23 – Sun 29 Nov): Strength, HYROX B with burpee
+// broad jumps in round 2, the Run 3 × 8′ at Threshold, HYROX A (Key), Easy run.
 
 let nextReport = 0
 function pain(
@@ -1118,6 +1121,9 @@ const mainIntervals = (session: { blocks: { main?: boolean; exercises: { prescri
   session.blocks.find((b) => b.main)!.exercises[0].prescription
 
 const runOf = (day: ReturnType<typeof coach>) => day.bucket.find((e) => e.session.id === 'run')!.session
+const hyroxAOf = (day: ReturnType<typeof coach>) => day.bucket.find((e) => e.session.id === 'hyrox-a')!.session
+/** Week 3 as written, with the gym's equipment on it, the way the Coach hands it out. */
+const week3AsWritten = () => prescribedWeek(program, 3, [], [])!.sessions
 const roundStations = (session: Session) =>
   session.blocks
     .filter((b) => b.main)
@@ -1157,7 +1163,8 @@ describe('the pain rules', () => {
     const report = pain('2026-11-25', 4)
     for (const decisions of [[], [painDecision(report, 'kept')], [painDecision(report, 'open')]]) {
       const day = withPain('2026-11-25', [report], decisions)
-      expect(day.upNext).toBe(findWeek(program, 3)!.sessions[0])
+      expect(day.upNext).toEqual(week3AsWritten()[0])
+      expect(hyroxAOf(day)).toBe(findWeek(program, 3)!.sessions[3])
       expect(runOf(day)).toBe(findWeek(program, 3)!.sessions[2])
     }
   })
@@ -1167,12 +1174,12 @@ describe('the pain rules', () => {
     const day = withPain('2026-11-25', [report], [painDecision(report, 'accepted')])
     const hyroxB = day.bucket.find((e) => e.session.id === 'hyrox-b')!.session
     expect(roundStations(hyroxB)).toEqual([['skierg 250'], ['skierg 250'], ['row 250'], ['wall-balls']])
-    expect(roundStations(day.upNext!)).toEqual([['row 500'], ['sled-pull 25'], ['farmers-carry 100'], ['sandbag-lunges 25']])
+    expect(roundStations(hyroxAOf(day))).toEqual([['row 500'], ['sled-pull 25'], ['farmers-carry 100'], ['sandbag-lunges 25']])
     const run = runOf(day)
     expect(run).toMatchObject({ headline: '2 × 8′', minutes: 36 })
     expect(mainIntervals(run)).toMatchObject({ kind: 'intervals', reps: 2, workSeconds: 480 })
     // Strength, with nothing to swap or cut, stays as written.
-    expect(day.bucket.find((e) => e.session.id === 'strength')!.session).toEqual(prescribedWeek(program, 3, [], [])!.sessions[3])
+    expect(day.upNext).toEqual(week3AsWritten()[0])
   })
 
   it('make every Session easy low-impact work or rest at pain 5 or more', () => {
@@ -1181,7 +1188,7 @@ describe('the pain rules', () => {
       const day = withPain('2026-11-25', [report], [painDecision(report, 'accepted')])
       expect(painOf(day)[0]).toMatchObject({ level: 'low-impact', trigger: { score, area: 'knee' } })
       expect(day.bucket.map((e) => e.session.headline)).toEqual(Array(5).fill('easy bike 30′ or rest'))
-      expect(day.bucket.map((e) => e.session.type)).toEqual(['hyrox', 'hyrox', 'run', 'strength', 'easy'])
+      expect(day.bucket.map((e) => e.session.type)).toEqual(['strength', 'hyrox', 'run', 'hyrox', 'easy'])
       expect(day.upNext!.blocks).toHaveLength(1)
       expect(mainIntervals(day.upNext!)).toEqual({ kind: 'note', minutes: 30 })
       // Nothing left to run, lift or push: Log after, not Start session.
@@ -1226,7 +1233,8 @@ describe('the pain rules', () => {
     const report = pain('2026-11-24', 6)
     const day = withPain('2026-11-25', [report, pain('2026-11-25', 0)], [painDecision(report, 'accepted')])
     expect(painOf(day)).toEqual([])
-    expect(day.upNext).toBe(findWeek(program, 3)!.sessions[0])
+    expect(day.upNext).toEqual(week3AsWritten()[0])
+    expect(hyroxAOf(day)).toBe(findWeek(program, 3)!.sessions[3])
   })
 
   it('stand until the next report, Accepted or not', () => {
@@ -1262,7 +1270,7 @@ describe('the pain rules', () => {
     it('leaves the Session already logged as it was written', () => {
       const morning = pain('2026-11-25', 6)
       const day = withPain('2026-11-25', [atStart, morning], [painDecision(morning, 'accepted')], [hyroxDone])
-      expect(day.bucket.find((e) => e.session.id === 'hyrox-a')!.session).toBe(findWeek(program, 3)!.sessions[0])
+      expect(hyroxAOf(day)).toBe(findWeek(program, 3)!.sessions[3])
       expect(day.bucket.find((e) => e.session.id === 'strength')!.session.headline).toBe('easy bike 30′ or rest')
     })
   })
@@ -1334,16 +1342,19 @@ const recoveryDecision = (decision: Decision): SuggestionDecision => ({
   updatedAt: '2026-11-25T13:00:00.000Z',
 })
 
-/** Both HYROX sessions done Monday: on Wednesday the Run is Up next. */
-const hyroxMonday = [log(3, 'hyrox-a', '2026-11-23'), log(3, 'hyrox-b', '2026-11-23')]
+/** Strength done Monday: on Wednesday HYROX B is Up next. */
+const strengthMonday = [log(3, 'strength', '2026-11-23')]
+/** Strength and HYROX B done Monday: on Wednesday the Run is Up next. */
+const strengthAndHyroxMonday = [...strengthMonday, log(3, 'hyrox-b', '2026-11-23')]
 
 describe('the recovery rules', () => {
-  const asWritten = findWeek(program, 3)!.sessions[0]
+  /** Strength as written, with the gym's equipment on it, the way the Coach hands it out. */
+  const asWritten = prescribedWeek(program, 3, [], [])!.sessions[0]
 
   it('change nothing without a night for today', () => {
     for (const nights of [[], baseline, [night('2026-11-24', 300, 30)]]) {
       const day = withNights('2026-11-25', nights)
-      expect(day.upNext).toBe(asWritten)
+      expect(day.upNext).toEqual(asWritten)
       expect(day.recovery).toBeNull()
       expect(day.recoveryChange).toBeNull()
       expect(recoveryOf(day)).toEqual([])
@@ -1353,7 +1364,7 @@ describe('the recovery rules', () => {
   it('change nothing after 6 hours of sleep or more, whatever HRV does', () => {
     for (const sleep of [360, 480]) {
       const day = withNights('2026-11-25', [...baseline, night('2026-11-25', sleep, 30)])
-      expect(day.upNext).toBe(asWritten)
+      expect(day.upNext).toEqual(asWritten)
       expect(day.recovery).toMatchObject({ shortSleep: false, easyDay: false, hrvMean: 52 })
       expect(recoveryOf(day)).toEqual([])
     }
@@ -1361,7 +1372,7 @@ describe('the recovery rules', () => {
 
   it('take one rep off and cap RPE at 7 for the Run after under 6 hours', () => {
     const written = findWeek(program, 3)!.sessions[2]
-    const day = withNights('2026-11-25', [...baseline, night('2026-11-25', 341, 50)], [], hyroxMonday)
+    const day = withNights('2026-11-25', [...baseline, night('2026-11-25', 341, 50)], [], strengthAndHyroxMonday)
     expect(day.recoveryChange).toBe('short-sleep')
     expect(day.recoveryCut).toBe('rep')
     expect(day.upNext).toMatchObject({ id: 'run', headline: '2 × 8′' })
@@ -1403,11 +1414,11 @@ describe('the recovery rules', () => {
   })
 
   it('take the last round off a HYROX session, and say so on its Suggestion', () => {
-    const day = withNights('2026-11-25', [...baseline, night('2026-11-25', 320, 40)])
-    expect(day.upNext!.id).toBe('hyrox-a')
+    const day = withNights('2026-11-25', [...baseline, night('2026-11-25', 320, 40)], [], strengthMonday)
+    expect(day.upNext!.id).toBe('hyrox-b')
     expect(day.recoveryCut).toBe('round')
     expect(day.upNext!.blocks.filter((b) => b.main).map((b) => b.name)).toEqual(['Round 1', 'Round 2', 'Round 3'])
-    expect(recoveryOf(day)[0]).toMatchObject({ sessionId: 'hyrox-a', cut: 'round' })
+    expect(recoveryOf(day)[0]).toMatchObject({ sessionId: 'hyrox-b', cut: 'round' })
   })
 
   it('leave an Easy run alone', () => {
@@ -1423,13 +1434,13 @@ describe('the recovery rules', () => {
 
   it('suggest an easy day when HRV is at least 15% under its 7-night mean as well', () => {
     // 44 is 15.4% under 52.
-    const day = withNights('2026-11-25', [...baseline, night('2026-11-25', 341, 44)])
+    const day = withNights('2026-11-25', [...baseline, night('2026-11-25', 341, 44)], [], strengthMonday)
     expect(recoveryOf(day)).toEqual([
       {
         id: 'recovery-2026-11-25',
         kind: 'recovery',
         week: 3,
-        sessionId: 'hyrox-a',
+        sessionId: 'hyrox-b',
         date: '2026-11-25',
         cut: 'round',
         trigger: { sleepMinutes: 341, hrvMs: 44, hrvMean: 52 },
@@ -1462,12 +1473,12 @@ describe('the recovery rules', () => {
 
   it('make the Hard session an easy 30′ once the Suggestion is Accepted, and only then', () => {
     const nights = [...baseline, night('2026-11-25', 341, 44)]
-    const accepted = withNights('2026-11-25', nights, [recoveryDecision('accepted')])
+    const accepted = withNights('2026-11-25', nights, [recoveryDecision('accepted')], strengthMonday)
     expect(accepted.recoveryChange).toBe('easy-day')
-    expect(accepted.upNext).toMatchObject({ id: 'hyrox-a', type: 'hyrox', headline: 'easy 30′ or rest', minutes: 30 })
+    expect(accepted.upNext).toMatchObject({ id: 'hyrox-b', type: 'hyrox', headline: 'easy 30′ or rest', minutes: 30 })
     expect(recoveryOf(accepted)[0]).toMatchObject({ decision: 'accepted', decidedOn: '2026-11-25' })
 
-    const kept = withNights('2026-11-25', nights, [recoveryDecision('kept')])
+    const kept = withNights('2026-11-25', nights, [recoveryDecision('kept')], strengthMonday)
     expect(kept.recoveryChange).toBe('short-sleep')
     expect(kept.upNext!.blocks.filter((b) => b.main)).toHaveLength(3)
   })
@@ -1589,7 +1600,7 @@ describe('the lighter-Week Suggestion from Readiness', () => {
     const accepted = readiness('2026-11-25', { ...flags, logs: hyroxMondayDone, decisions: [lighterDecision('accepted')] })
     expect(lighterOf(accepted)[0]).toMatchObject({ decision: 'accepted', decidedOn: '2026-11-25' })
     // HYROX A was done before the flags added up: it stays as written.
-    expect(accepted.bucket.map((e) => e.session.minutes)).toEqual([45, 30, 30, 30, 20])
+    expect(accepted.bucket.map((e) => e.session.minutes)).toEqual([30, 30, 30, 45, 20])
     expect(accepted.bucket.find((e) => e.session.id === 'run')!.session.headline).toBe('2 × 8′')
 
     const kept = readiness('2026-11-25', { ...flags, logs: hyroxMondayDone, decisions: [lighterDecision('kept')] })

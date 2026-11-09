@@ -5,8 +5,8 @@ import { startAsChosen } from './today'
 
 /**
  * Pain reports and the pain rules. The server is stood in for, so nothing
- * here touches the shared database; Week 2 is done and Week 3's HYROX A and
- * B were done on Monday, so Wednesday of Week 3 has the Run, 3 × 8′ Up next.
+ * here touches the shared database; Week 2 is done and Week 3's Strength and
+ * both HYROX sessions were done on Monday, so Wednesday of Week 3 has the Run, 3 × 8′ Up next.
  */
 /**
  * Picks a toggle by its label. The radio's input sits visually hidden under
@@ -17,8 +17,8 @@ const pick = (scope: Page | Locator, name: string) =>
 
 const WEEK_2 = [
   ...weekDone(2, ['hyrox-a', 'hyrox-b', 'compromised-run-test', 'strength'], '2026-11-19'),
-  // Monday of Week 3: HYROX A and B, so the Run is what's left that isn't Strength.
-  ...weekDone(3, ['hyrox-a', 'hyrox-b'], '2026-11-23'),
+  // Monday of Week 3: Strength and both HYROX sessions, so the Run is all that's left.
+  ...weekDone(3, ['strength', 'hyrox-a', 'hyrox-b'], '2026-11-23'),
 ] as const
 
 /** Shin 2 from Monday, outside any Session: still standing on Wednesday. */
@@ -204,8 +204,11 @@ test('with the pain Suggestion already accepted, Same starts the Session with it
 })
 
 test('pain 4 Accepted: HYROX A rows instead of the sled push, and says why', async ({ page }) => {
-  // Week 2 done; Week 3 untouched, so HYROX A is Up next on Wednesday.
-  const week2 = weekDone(2, ['hyrox-a', 'hyrox-b', 'compromised-run-test', 'strength'], '2026-11-19')
+  // Week 2 done; Week 3's Strength, HYROX B and Run on Monday, so HYROX A is Up next on Wednesday.
+  const week2 = [
+    ...weekDone(2, ['hyrox-a', 'hyrox-b', 'compromised-run-test', 'strength'], '2026-11-19'),
+    ...weekDone(3, ['strength', 'hyrox-b', 'run'], '2026-11-23'),
+  ]
   await serveHistory(page, caughtUp(1, week2), [ACHILLES_4])
   await page.clock.setFixedTime(WEEK_3)
   await page.goto('/')

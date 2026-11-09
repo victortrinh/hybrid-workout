@@ -60,7 +60,7 @@ test('a Live session hands its cues to the server as the app goes off screen, an
   await page.getByRole('button', { name: /^Start / }).click()
   await startAsChosen(page)
   await expect(page).toHaveURL('/live')
-  await page.clock.runFor('02:00')
+  await page.clock.fastForward('02:00')
 
   await setVisibility(page, 'hidden')
   await expect.poll(() => schedules.length).toBeGreaterThan(0)
