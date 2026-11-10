@@ -428,7 +428,8 @@ test('each Station shows its Station target on the Session sheet and the round c
   await page.goto('/')
   // Up next without "Week 1 · Late" says the served history has loaded, so only now
   // is the clock paused: paused first, a slow first load waits on a retry timer that never fires.
-  await expect(page.getByText(/^35\smin\s\+\s~5′\ssetup/).filter({ visible: true }).first()).toBeVisible()
+  // 40 minutes, not the Program's 35: the logged sled times are slower than the defaults.
+  await expect(page.getByText(/^40\smin\s\+\s~5′\ssetup/).filter({ visible: true }).first()).toBeVisible()
   await page.clock.pauseAt(new Date(WEEK_3.getTime() + 1000))
 
   // Two logs at each volume, both RPE 7 or under: the Station best less 3%, to the second.

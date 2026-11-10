@@ -182,7 +182,7 @@ export function App() {
         nights: recoveryNights,
         today,
         doneToday: true,
-      })?.sessions.find((s) => s.id === session.id) ??
+      }, day.paces)?.sessions.find((s) => s.id === session.id) ??
       session
     const now = nowMs()
     setLive(
@@ -233,7 +233,7 @@ export function App() {
     )?.activity ?? null
   const week =
     route.screen === 'week' || route.screen === 'log'
-      ? prescribedWeek(program, route.week ?? 0, logs, decisions, equipment, { reports: painReports, nights: recoveryNights, today })
+      ? prescribedWeek(program, route.week ?? 0, logs, decisions, equipment, { reports: painReports, nights: recoveryNights, today }, day.paces)
       : null
   const logged = route.screen === 'log' ? week?.sessions.find((s) => s.id === route.sessionId) : undefined
   const screen: Screen =

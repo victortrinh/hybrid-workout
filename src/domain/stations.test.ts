@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { addDays, localDate } from './calendar'
-import { findWeek, prescribedWeek } from './coach'
+import { coach, findWeek, prescribedWeek } from './coach'
 import { liveBlocks } from './live'
 import type { SessionLog, StationLog } from './log'
 import { stationPounds } from './program/describe'
 import { program, stations } from './program/program'
 import type { Session, StationId, Week } from './program/types'
-import { stationBest, stationRules, stationTarget } from './stations'
+import { trainingPaces } from './paces'
+import { DEFAULT_RACE_RUN } from './program/hyroxMinutes'
+import { hyroxMinutes, stationBest, stationEstimate, stationRules, stationTarget } from './stations'
 
 let n = 0
 const log = (week: number, sessionId: string, date: string, rpe: number | null, lines: StationLog[]): SessionLog => ({
@@ -243,5 +245,71 @@ describe('the Coach’s Prescription', () => {
     // Both logs at RPE 7 or under: 54 × 0.97 = 52.38.
     expect(row.target).toBe(52)
     expect(liveBlocks(b).filter((block) => block.kind === 'round')).toHaveLength(8)
+  })
+})
+
+describe('Station estimate', () => {
+  it('is the Station best at that volume when there is one', () => {
+    const logs = [log(1, 'hyrox-b', '2026-11-10', 8, [at('skierg', 62, SKI)]), log(2, 'hyrox-b', '2026-11-17', 8, [at('skierg', 58, SKI)])]
+    expect(stationEstimate(logs, 'skierg', SKI)).toBe(58)
+  })
+
+  it('scales the best at the nearest other volume by share without one', () => {
+    const logs = [
+      log(1, 'hyrox-b', '2026-11-10', 8, [at('skierg', 60, SKI)]),
+      log(6, 'hyrox-b', '2026-12-15', 8, [at('skierg', 130, { meters: 500 }), at('skierg', 125, { meters: 500 })]),
+    ]
+    // 750 m is nearest 500 m: 125 ÷ (500 / 750).
+    expect(stationEstimate(logs, 'skierg', { meters: 750 })).toBe(188)
+    // Race volume, by reps as well as meters.
+    const balls = [log(1, 'hyrox-b', '2026-11-10', 8, [at('wall-balls', 80, { reps: 25 })])]
+    expect(stationEstimate(balls, 'wall-balls', { reps: 100 })).toBe(320)
+  })
+
+  it('falls back to the fixed default with no log at Race load at any volume', () => {
+    const light = [log(1, 'hyrox-a', '2026-11-10', 8, [at('sled-push', 40, { meters: 25 }, 100)])]
+    // Half of the 180 s race-volume default.
+    expect(stationEstimate(light, 'sled-push', { meters: 25 })).toBe(90)
+    expect(stationEstimate([], 'wall-balls', { reps: 50 })).toBe(180)
+  })
+})
+
+describe('HYROX minutes from the logs', () => {
+  const week = (n: number) => findWeek(program, n)!
+  const minutes = (w: Week, id: string) => w.sessions.find((s) => s.id === id)!.minutes
+
+  it('use the Station bests of the Weeks before, at the Race run pace', () => {
+    // Week 11's HYROX A at 5:15/km and the defaults is 40 minutes; much quicker Stations take it to 35.
+    expect(minutes(hyroxMinutes(week(11), [], null), 'hyrox-a')).toBe(40)
+    const quick = log(10, 'hyrox-a', '2027-01-26', 8, [
+      at('sled-push', 60, { meters: 50 }),
+      at('sled-pull', 70, { meters: 50 }),
+      at('farmers-carry', 60, { meters: 200 }),
+      at('sandbag-lunges', 90, { meters: 75 }),
+    ])
+    expect(minutes(hyroxMinutes(week(11), [quick], null), 'hyrox-a')).toBe(35)
+    // Its own Week's log never moves them.
+    expect(minutes(hyroxMinutes(week(11), [{ ...quick, week: 11 }], null), 'hyrox-a')).toBe(40)
+  })
+
+  it('go by the Training paces, the Program’s default pace without them', () => {
+    expect(minutes(hyroxMinutes(week(1), [], trainingPaces(DEFAULT_RACE_RUN)), 'hyrox-a')).toBe(35)
+    expect(minutes(hyroxMinutes(week(1), [], trainingPaces(400)), 'hyrox-a')).toBe(40)
+    // Nothing but HYROX changes.
+    const slow = hyroxMinutes(week(1), [], trainingPaces(400))
+    expect(slow.sessions.filter((s) => s.type !== 'hyrox')).toEqual(week(1).sessions.filter((s) => s.type !== 'hyrox'))
+  })
+
+  it('update once a Compromised run test sets a new Race run pace', () => {
+    const today = localDate('2026-11-25')
+    const hyroxA = (logs: SessionLog[]) => coach({ program, today, logs }).week!.sessions.find((s) => s.id === 'hyrox-a')!
+    expect(hyroxA([]).minutes).toBe(35)
+    // Week 2's test at 6:40/km: 8 × 400 m runs take over five minutes longer.
+    const run = (round: number): StationLog => ({ round, part: 'run', pounds: null, meters: 1000, reps: null, seconds: 400 })
+    const test = log(2, 'compromised-run-test', '2026-11-18', 8, [1, 2, 3, 4].map(run))
+    expect(hyroxA([test]).minutes).toBe(40)
+    // A Week shown elsewhere goes by the same paces.
+    const paces = coach({ program, today, logs: [test] }).paces
+    expect(minutes(prescribedWeek(program, 3, [test], [], undefined, null, paces)!, 'hyrox-a')).toBe(40)
   })
 })

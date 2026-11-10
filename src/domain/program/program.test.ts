@@ -226,8 +226,8 @@ describe('the plan’s marked Weeks', () => {
     for (const n of [22, 23]) {
       expect(byNumber(n).sessions.map((s) => s.type)).toEqual(['strength', 'hyrox', 'run', 'hyrox', 'easy'])
     }
-    expect(byNumber(22).sessions.map((s) => s.minutes)).toEqual([30, 30, 30, 30, 30])
-    expect(byNumber(23).sessions.map((s) => s.minutes)).toEqual([20, 20, 25, 20, 20])
+    expect(byNumber(22).sessions.map((s) => s.minutes)).toEqual([30, 25, 30, 25, 30])
+    expect(byNumber(23).sessions.map((s) => s.minutes)).toEqual([20, 20, 25, 15, 20])
     expect(rounds(session(22, 'hyrox-a'))).toEqual(['sled-push 25 → run 600', 'sled-pull 25 → run 600', 'sandbag-lunges 50 → run 600'])
     expect(rounds(session(23, 'hyrox-b'))).toEqual(['skierg 500 → run 400', 'wall-balls 50 → run 400'])
     expect(describeSession(session(22, 'run')).heading).toBe('Run, 3 × 5′')
@@ -304,14 +304,14 @@ describe('HYROX A and HYROX B', () => {
     }
   })
 
-  it('sets HYROX minutes as an estimate by Phase, not a flat 45', () => {
+  it('calculates HYROX minutes at the default Race run pace and Station times, not a flat 45', () => {
     const minutes = (n: number) => [session(n, 'hyrox-a').minutes, session(n, 'hyrox-b').minutes]
     expect(minutes(1)).toEqual([35, 35])
     expect(minutes(5)).toEqual([30, 30])
-    expect(minutes(6)).toEqual([35, 40])
-    expect(minutes(10)).toEqual([30, 35])
-    expect(minutes(11)).toEqual([40, 40])
-    expect(minutes(17)).toEqual([40, 40])
+    expect(minutes(6)).toEqual([40, 45])
+    expect(minutes(10)).toEqual([35, 35])
+    expect(minutes(11)).toEqual([40, 45])
+    expect(minutes(17)).toEqual([45, 40])
   })
 
   it('reads as rounds of a Station then a run at Race run pace, at Race load', () => {
@@ -328,10 +328,10 @@ describe('HYROX A and HYROX B', () => {
     expect(blocks.map((b) => [b.name, b.minutes])).toEqual([
       ['Warm-up', 5],
       ['Set up', undefined],
-      ['Round 1', 7.75],
-      ['Round 2', 7.75],
-      ['Round 3', 7.75],
-      ['Round 4', 7.75],
+      ['Round 1', 7.6],
+      ['Round 2', 8.5],
+      ['Round 3', 6.7],
+      ['Round 4', 8],
       ['Cooldown', 4],
     ])
     expect(session(11, 'hyrox-a').minutes).toBe(40)
