@@ -34,7 +34,7 @@ export const SESSION_TYPES: Record<SessionType, { name: string; lane: Lane }> = 
 /** What the Session is called: its own name where it has one ("HYROX A"), else its Session type's. */
 export const sessionName = (session: Session) => session.name ?? SESSION_TYPES[session.type].name
 
-/** "HYROX A, 4 rounds", "Run, 3 × 7′" */
+/** "HYROX A, 8 rounds", "Run, 3 × 7′" */
 export const sessionHeading = (session: Session) => `${sessionName(session)}, ${session.headline}`
 
 export interface SessionDescription {

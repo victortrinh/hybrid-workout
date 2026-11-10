@@ -98,7 +98,7 @@ describe('painAdapted at the ease level: no burpee broad jumps or sled push, few
     const eased = painAdapted(hyroxB, 'ease')
     const round2 = eased.blocks.find((b) => b.name === 'Round 2')!
     expect(round2.exercises.map(describeLeg)).toEqual(['SkiErg 250 m: Instead of burpee broad jumps: pain says no impact.', 'Run'])
-    expect(eased.headline).toBe('4 rounds')
+    expect(eased.headline).toBe('8 rounds')
     expect(eased.minutes).toBe(hyroxB.minutes)
   })
 
@@ -150,7 +150,7 @@ describe('painAdapted at the ease level: no burpee broad jumps or sled push, few
     const easy = week(3).sessions.find((s) => s.id === 'easy')!
     expect(painAdapted(easy, 'ease')).toEqual(easy)
     const hyroxB = week(3).sessions.find((s) => s.id === 'hyrox-b')!
-    expect(mainBlocks(painAdapted(hyroxB, 'ease'))).toHaveLength(4)
+    expect(mainBlocks(painAdapted(hyroxB, 'ease'))).toHaveLength(8)
   })
 
   it('keeps the old jump and acceleration Substitutions gone: nothing goes to the bike', () => {

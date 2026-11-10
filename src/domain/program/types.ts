@@ -73,7 +73,7 @@ export interface Session {
   note?: string
   blocks: Block[]
   /**
-   * A three-round HYROX session's left-out round, the fourth Station of its
+   * A Deload HYROX session's left-out round, the fourth Station of its
    * rotation. The Coach swaps it back in for the Station done best last time.
    */
   spareRound?: Block

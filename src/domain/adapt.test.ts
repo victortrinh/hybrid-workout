@@ -37,7 +37,7 @@ describe('lighten', () => {
         if (rx.reps) expect(rx.reps % 5).toBe(0)
       }
     }
-    expect(prescriptions(hyrox).find((rx) => rx.kind === 'run' && rx.meters)).toMatchObject({ meters: 400 })
+    expect(prescriptions(hyrox).find((rx) => rx.kind === 'run' && rx.meters)).toMatchObject({ meters: 300 })
   })
 
   it('takes the Station targets off with the volume: a target is for the full volume', () => {

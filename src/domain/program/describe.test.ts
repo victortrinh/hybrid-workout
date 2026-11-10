@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { findWeek } from '../coach'
+import { trainingPaces, type RunContext } from '../paces'
 import { describeExercise, describeSession } from './describe'
 import { program } from './program'
 import type { Session } from './types'
@@ -72,17 +73,23 @@ describe('describeSession', () => {
 
   it('reads HYROX A and B as rounds of a Station then a run, at Race load', () => {
     expect(session(1, 'hyrox-a')).toMatchObject({
-      heading: 'HYROX A, 4 rounds',
-      summary: '4 × (Station + 400 m)',
-      target: 'Station, then 400 m, each round · Race load',
+      heading: 'HYROX A, 8 rounds',
+      summary: '8 × (Station + 400 m)',
+      target: 'Station, then 400 m, each round · Race load · Race run effort, RPE 7–8',
     })
     expect(session(17, 'hyrox-b')).toMatchObject({ heading: 'HYROX B, 4 rounds', summary: '4 × (Station + 600 m)' })
   })
 
+  it('reads a HYROX run as the exact Race run pace and RPE 7–8 once there are Training paces', () => {
+    const hyroxA = program.phases[0].weeks[0].sessions.find((s) => s.id === 'hyrox-a')!
+    const run: RunContext = { paces: trainingPaces(315), environment: 'outdoor', unit: 'kmh' }
+    expect(describeSession(hyroxA, run).target).toBe('Station, then 400 m, each round · Race load · 5:15/km · RPE 7–8')
+  })
+
   it('adds the HYROX Set up to the minutes as an estimate, outside them', () => {
-    expect(session(1, 'hyrox-a').meta).toBe('45 min + ~5′ setup')
-    expect(session(3, 'hyrox-a').meta).toBe('45 min + ~5′ setup · Key session this Week')
-    expect(session(5, 'hyrox-b').meta).toBe('36 min + ~5′ setup')
+    expect(session(1, 'hyrox-a').meta).toBe('35 min + ~5′ setup')
+    expect(session(3, 'hyrox-a').meta).toBe('35 min + ~5′ setup · Key session this Week')
+    expect(session(5, 'hyrox-b').meta).toBe('30 min + ~5′ setup')
     expect(session(16, 'race-simulation').meta).toBe('65 min · Key session this Week')
   })
 
