@@ -39,7 +39,7 @@ import {
   type SuggestionDecision,
 } from './suggestion'
 import { startingWeights, type StartingPoint } from './startingPoint'
-import { stationRules } from './stations'
+import { hyroxMinutes, stationRules } from './stations'
 import { strengthState, type HeldIncrease, type LighterSpan, type WorkingWeightChange, type WorkingWeights } from './weights'
 
 export interface CoachInput {
@@ -259,6 +259,7 @@ export function coach({
   const listed = shownWeek === null ? null : findWeek(program, shownWeek)
   const planned = listed && offeredSessions(program, listed, logs)
   const readiness: ReadinessInput = { reports: painReports, nights: recoveryNights, today }
+  const paces = currentPaces(logs, startingPoint?.splitSeconds ?? null, today)
   const strength = strengthState(program, logs, decisions, today, lighterSpans(program, logs, decisions, today, readiness))
   const suggestions = [
     ...(position.kind === 'in-week' && planned
@@ -266,11 +267,11 @@ export function coach({
       : []),
     ...(position.kind === 'in-week' ? strength.suggestions : []),
   ]
-  const week = planned && adapt(program, planned, suggestions, logs, equipment)
+  const week = planned && adapt(program, planned, suggestions, logs, equipment, paces)
 
   const painNow = acceptedPain(suggestions)
   const logged: Logged[] = [
-    ...(position.kind === 'in-week' && week ? lateSessions(program, week.number, logs, decisions, equipment, today) : []).map(
+    ...(position.kind === 'in-week' && week ? lateSessions(program, week.number, logs, decisions, equipment, today, paces) : []).map(
       // Pain is about the body today: it changes a Late session still open, like any other.
       (entry) => (painNow && !entry.log ? { ...entry, session: painAdapted(entry.session, painNow) } : entry),
     ),
@@ -318,7 +319,7 @@ export function coach({
     dropped: droppedFor(program, logs, decisions, today),
     upNext: upNext?.session ?? null,
     rest,
-    paces: currentPaces(logs, startingPoint?.splitSeconds ?? null, today),
+    paces,
     suggestions,
     heldIncreases: position.kind === 'in-week' ? strength.held : [],
     workingWeights: strength.weights,
@@ -374,6 +375,7 @@ function lateSessions(
   decisions: SuggestionDecision[],
   equipment: readonly Equipment[],
   today: LocalDate,
+  paces: TrainingPaces | null,
 ): Logged[] {
   if (calendarAgain(program, today)) return []
   return program.phases
@@ -386,7 +388,7 @@ function lateSessions(
         return !log || log.date === today
       })
       if (late.length === 0) return []
-      const prescribed = adapt(program, week, suggestionsFor(program, week, logs, decisions, null, today), logs, equipment)
+      const prescribed = adapt(program, week, suggestionsFor(program, week, logs, decisions, null, today), logs, equipment, paces)
       return late.map((session) => ({
         session: prescribed.sessions.find((s) => s.id === session.id) ?? equip(session, equipment),
         week: week.number,
@@ -942,11 +944,18 @@ function reEntryFor(
 }
 
 /**
- * The Week with its Station rules and every accepted Suggestion applied, as
- * it's done in this gym. The pain rules change only what is still open: a
+ * The Week with its Station rules, its HYROX minutes from today's Training
+ * paces and every accepted Suggestion applied, as it's done in this gym. The pain rules change only what is still open: a
  * Session logged before the pain stays as it was.
  */
-function adapt(program: Program, week: Week, suggestions: Suggestion[], logs: SessionLog[], equipment: readonly Equipment[]): Week {
+function adapt(
+  program: Program,
+  week: Week,
+  suggestions: Suggestion[],
+  logs: SessionLog[],
+  equipment: readonly Equipment[],
+  paces: TrainingPaces | null,
+): Week {
   return equipWeek(
     suggestions.reduce((adapted, s) => {
       if (s.decision !== 'accepted' || s.week !== adapted.number) return adapted
@@ -975,7 +984,7 @@ function adapt(program: Program, week: Week, suggestions: Suggestion[], logs: Se
           // Today's Up next only: the Coach applies it once Up next is chosen.
           return adapted
       }
-    }, stationRules(program, week, logs)),
+    }, hyroxMinutes(stationRules(program, week, logs), logs, paces)),
     equipment,
   )
 }
@@ -984,7 +993,8 @@ function adapt(program: Program, week: Week, suggestions: Suggestion[], logs: Se
  * A Week as it will be trained: the Program's Week with accepted Suggestions
  * applied. For screens that show a Week other than today's; with `readiness`,
  * the pain rules apply to the Week holding its `today`, and its flags can
- * lighten the Week.
+ * lighten the Week. HYROX minutes go by `paces` (the Coach's for today), or
+ * the Program's default Race run pace without them.
  */
 export function prescribedWeek(
   program: Program,
@@ -993,8 +1003,11 @@ export function prescribedWeek(
   decisions: SuggestionDecision[],
   equipment: readonly Equipment[] = DEFAULT_EQUIPMENT,
   readiness: ReadinessInput | null = null,
+  paces: TrainingPaces | null = null,
 ): Week | null {
   const listed = findWeek(program, number)
   const week = listed && offeredSessions(program, listed, logs)
-  return week && adapt(program, week, suggestionsFor(program, week, logs, decisions, readiness, readiness?.today ?? null), logs, equipment)
+  if (!week) return null
+  const suggestions = suggestionsFor(program, week, logs, decisions, readiness, readiness?.today ?? null)
+  return adapt(program, week, suggestions, logs, equipment, paces)
 }

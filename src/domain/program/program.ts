@@ -7,6 +7,7 @@
  * commented.
  */
 import { addDays, localDate } from '../calendar'
+import { DEFAULT_RACE_RUN, defaultStationSeconds, withHyroxMinutes } from './hyroxMinutes'
 import type {
   Block,
   Exercise,
@@ -167,18 +168,6 @@ export const RUN_METERS: Record<VolumeTier, Record<Rotation, number>> = {
  */
 const PASSES: Record<VolumeTier, number> = { foundation: 2, 'build-early': 2, 'build-late': 1, 'race-specific': 1 }
 
-/**
- * A HYROX Session's minutes, warm-up and cooldown included, by tier: an
- * estimate at Race run pace near 5:15/km, not a target. 45 stays the Session
- * cap. Hand-set until the minutes are calculated (#178).
- */
-const HYROX_MINUTES: Record<VolumeTier, Record<Rotation, number>> = {
-  foundation: { A: 35, B: 35 },
-  'build-early': { A: 35, B: 40 },
-  'build-late': { A: 40, B: 40 },
-  'race-specific': { A: 40, B: 40 },
-}
-
 /** Every HYROX run: at Race run pace, RPE 7–8. Slowing one is how the athlete recovers; there's no prescribed rest. */
 const HYROX_RUN: RunEffort = { pace: 'race-run', rpe: [7, 8] }
 
@@ -238,25 +227,22 @@ interface Circuit {
   volume: (id: StationId) => Volume
   runMeters: number
   key?: boolean
-  minutes: number
   note?: string
 }
 
 /** A round is one Station at its Station volume, then the run: every run a Compromised run, at Race run pace. */
-function hyrox({ rotation, ids, spare, volume, runMeters, key = false, minutes, note }: Circuit): Session {
-  const roundMinutes = (minutes - HYROX_WARM_UP.minutes! - HYROX_COOLDOWN.minutes!) / ids.length
+function hyrox({ rotation, ids, spare, volume, runMeters, key = false, note }: Circuit): Session {
   const round = (id: StationId, i: number): Block => ({
     name: `Round ${i + 1}`,
-    minutes: roundMinutes,
     main: true,
     exercises: [station(id, volume(id)), { name: 'Run', prescription: { kind: 'run', meters: runMeters, effort: HYROX_RUN } }],
   })
-  return {
+  const session: Session = {
     id: rotation === 'A' ? 'hyrox-a' : 'hyrox-b',
     type: 'hyrox',
     name: `HYROX ${rotation}`,
     headline: `${ids.length} rounds`,
-    minutes,
+    minutes: 0,
     key,
     optional: false,
     note,
@@ -268,6 +254,9 @@ function hyrox({ rotation, ids, spare, volume, runMeters, key = false, minutes, 
     ],
     ...(spare && { spareRound: round(spare, ids.length) }),
   }
+  // Calculated, not hand-set (#178): at the default Race run pace and Station
+  // times here, then again by the Coach from the athlete's own.
+  return withHyroxMinutes(session, DEFAULT_RACE_RUN, (id, v) => defaultStationSeconds(stations[id], v))
 }
 
 /** A normal Week's HYROX: the four Stations at the tier's Station volume, twice through (8 rounds) or once (4). */
@@ -278,7 +267,6 @@ const hyroxRounds = (rotation: Rotation, tier: VolumeTier, key = false): Session
     volume: (id) => STATION_VOLUME[tier][id],
     runMeters: RUN_METERS[tier][rotation],
     key,
-    minutes: HYROX_MINUTES[tier][rotation],
     note: tier === 'foundation' ? `Technique before speed. ${CONTINUOUS}` : CONTINUOUS,
   })
 
@@ -294,7 +282,6 @@ const deloadRounds = (rotation: Rotation, tier: VolumeTier, { half = false } = {
     spare: ROTATION[rotation].find((id) => !THREE_ROUNDS[rotation].includes(id)),
     volume: half ? halfRaceVolume : (id) => STATION_VOLUME[tier][id],
     runMeters: RUN_METERS[tier][rotation],
-    minutes: PASSES[tier] > 1 ? HYROX_MINUTES[tier][rotation] - 5 : 36,
     note: `Race load kept. Smooth, no pushing. ${CONTINUOUS}`,
   })
 
@@ -305,7 +292,6 @@ const taperRounds = (rotation: Rotation, rounds: 3 | 2, key = false): Session =>
     ids: rounds === 3 ? THREE_ROUNDS[rotation] : TWO_ROUNDS[rotation],
     volume: halfRaceVolume,
     runMeters: rounds === 3 ? 600 : 400,
-    minutes: rounds === 3 ? 30 : 20,
     key,
     note: 'Race load, short. Stop well before tired.',
   })

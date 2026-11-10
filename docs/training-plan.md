@@ -84,16 +84,16 @@ Warm-ups and cooldowns are included in the minutes. Set up is not: it is untimed
 | --- | --- | --- |
 | Warm-up | Easy jog | 5 |
 | Set up | Every Station the Session uses, at Race load. Set up once; they stay set up between rounds | ~5, not counted |
-| Rounds | 8 or 4 × (Station at its Station volume → run @R, RPE 7–8), race order, straight on with no rest. Each Station shows its Station target | 26–31 |
+| Rounds | 8 or 4 × (Station at its Station volume → run @R, RPE 7–8), race order, straight on with no rest. Each Station shows its Station target | calculated |
 | Cooldown | Walk, relaxed breathing; no extra finisher | 4 |
 
-Minutes by Phase, warm-up and cooldown included (an estimate at @R near 5:15/km; the 45-minute Session cap is a ceiling, not a target):
+The minutes are calculated, not set: warm-up and cooldown, each run's meters at the athlete's Race run pace, and each Station's Station estimate (its Station best at that volume, else a best at another volume scaled by share, else a default from typical Men's Open splits), rounded to the nearest 5. Set up is left out. They move with each Compromised run test and each new Station best; the 45-minute Session cap is a ceiling, not a target. Before any test or log, at @R 5:15/km and the defaults:
 
 | | Foundation (1–5) | Build early (6–10) | Build late (11–15) | Race specific (16–21) |
 | --- | --- | --- | --- | --- |
-| HYROX A | 35 | 35 | 40 | 40 |
-| HYROX B | 35 | 40 | 40 | 40 |
-| Deload | 30 (Week 5) | 30 A · 35 B (Week 10) | 36 (Week 15) | 36 (Week 20) |
+| HYROX A | 35 | 40 | 40 | 45 |
+| HYROX B | 35 | 45 | 45 | 40 |
+| Deload | 30 (Week 5) | 35 (Week 10) | 35 (Week 15) | 30 A · 25 B (Week 20) |
 
 - **HYROX A**: sled push, sled pull, farmers carry, sandbag lunges. **HYROX B**: SkiErg, burpee broad jumps, row, wall balls. Wall balls always last: it is where heart rate, lactate and RPE peak.
 - The run comes **after** the Station, so every run is a Compromised run, at Race run pace (@R), RPE 7–8. Week 1 uses the Starting point's estimate until the baseline test.

@@ -1020,13 +1020,13 @@ describe('the re-entry Suggestion', () => {
 
     const lighter = onDay('2026-12-30', logs, [decided('accepted', 're-entry-w7', '2026-12-30')])
     expect(lighter.upNext).toMatchObject({ id: 'run', headline: '2 × 8′', minutes: 30 })
-    expect(lighter.bucket.filter((e) => e.week === 8).map((e) => e.session.minutes)).toEqual([45, 40, 45, 35, 40])
+    expect(lighter.bucket.filter((e) => e.week === 8).map((e) => e.session.minutes)).toEqual([45, 45, 45, 40, 40])
     // What was done before the gap stays as it was.
     const week7 = prescribedWeek(program, 7, [...CLEARED, ...logs], [decided('accepted', 're-entry-w7', '2026-12-30')], DEFAULT_EQUIPMENT, {
       reports: [],
       today: localDate('2026-12-30'),
     })!
-    expect(week7.sessions.map((s) => s.minutes)).toEqual([45, 40, 30, 23, 23])
+    expect(week7.sessions.map((s) => s.minutes)).toEqual([45, 45, 30, 27, 23])
   })
 
   it('never lightens a Deload week, nor the Taper', () => {
@@ -1053,7 +1053,7 @@ describe('the re-entry Suggestion', () => {
     expect(day.suggestions[0]).toMatchObject({ decision: 'accepted', decidedOn: '2026-12-31' })
     expect(day.upNext).toMatchObject({ id: 'strength', minutes: 30 })
     // Week 7 was all Done, so Week 8 holds the second Easy run too.
-    expect(day.bucket.map((e) => e.session.minutes)).toEqual([30, 27, 30, 23, 27, 17])
+    expect(day.bucket.map((e) => e.session.minutes)).toEqual([30, 30, 30, 27, 27, 17])
     expect(firstStation(day.bucket.find((e) => e.session.id === 'hyrox-a')!.session)).toEqual([
       { kind: 'station', station: 'sled-push', meters: 15, reps: undefined },
       { kind: 'run', meters: 300, minutes: undefined, effort: { pace: 'race-run', rpe: [7, 8] } },

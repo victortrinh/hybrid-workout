@@ -164,6 +164,10 @@ _Avoid_: station distance, station reps (when meaning the prescribed amount)
 The fastest time logged for a Station at a given Station volume, at Race load.
 _Avoid_: PR, record
 
+**Station estimate**:
+How long a Station is expected to take at a Station volume: its Station best there; otherwise a best at another volume scaled by share; otherwise a fixed default from typical Men's Open splits. With Race run pace it gives a HYROX session's minutes.
+_Avoid_: predicted time
+
 **Station target**:
 The time the Coach asks the athlete to beat for a Station at its prescribed Station volume: the Station best, or the Station best less about 3% once the last two logs at that volume came in at RPE 7 or under.
 _Avoid_: goal time, split goal
