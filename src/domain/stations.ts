@@ -1,6 +1,6 @@
 /**
  * What the Station logs say: each Station's Station best and Station target,
- * and which Station a three-round HYROX session drops. The Fade is paces.ts's.
+ * and which Station a Deload HYROX session drops. The Fade is paces.ts's.
  *
  * Pure like the Coach (ADR-0002). Progression is Station volume first, then
  * time: the Station target asks for the Station best again, or about 3% under
@@ -74,7 +74,7 @@ export function stationTarget(logs: readonly SessionLog[], id: StationId, volume
 
 /**
  * The Station rules applied to a Week as the Coach prescribes it: a
- * three-round HYROX session drops the Station done best last time, and every
+ * Deload HYROX session drops the Station done best last time, and every
  * HYROX Station gets its Station target, except in a Deload week or the
  * Taper. Only the Weeks before count, so a Session's own log never moves
  * what it was asked to beat.
@@ -129,29 +129,30 @@ function lastAgainstBest(logs: readonly SessionLog[], id: StationId): number {
 }
 
 /**
- * A three-round HYROX session without the Station done best last time: the
- * one whose last log came closest to its Station best. Ties, and no logs at
- * all, keep the Program's choice. Rounds stay in race order.
+ * A Deload HYROX session without the Station done best last time: the one
+ * whose last log came closest to its Station best. Ties, and no logs at all,
+ * keep the Program's choice. The Stations kept stay in race order, and a
+ * Session that goes through them twice still does, so every round of the
+ * dropped Station gives way to the spare.
  */
 function dropBestLastTime(session: Session, logs: readonly SessionLog[]): Session {
   const spare = session.spareRound
   const spareId = spare && roundStation(spare)
   if (!spare || !spareId) return session
   const rounds = session.blocks.filter((b) => b.main && roundStation(b) !== null)
+  const ids = [...new Set(rounds.map((b) => roundStation(b)!))]
   const score = (id: StationId) => lastAgainstBest(logs, id)
-  const drop = rounds.reduce<Block>((best, b) => (score(roundStation(b)!) < score(roundStation(best)!) ? b : best), spare)
-  if (drop === spare) return session
-  const kept = [...rounds.filter((b) => b !== drop), spare].toSorted(
-    (a, b) => stations[roundStation(a)!].order - stations[roundStation(b)!].order,
-  )
-  const renamed = kept.map((b, i) => ({ ...b, name: `Round ${i + 1}` }))
-  const ids = kept.map((b) => roundStation(b)!)
-  const blocks = session.blocks.flatMap((b) => (b.setup ? setUpFor(b, ids) : [b]))
+  const drop = ids.reduce<StationId>((best, id) => (score(id) < score(best) ? id : best), spareId)
+  if (drop === spareId) return session
+  const kept = [...ids.filter((id) => id !== drop), spareId].toSorted((a, b) => stations[a].order - stations[b].order)
+  const roundOf = (id: StationId) => (id === spareId ? spare : rounds.find((b) => roundStation(b) === id)!)
+  const renamed = rounds.map((_, i) => ({ ...roundOf(kept[i % kept.length]), name: `Round ${i + 1}` }))
+  const blocks = session.blocks.flatMap((b) => (b.setup ? setUpFor(b, kept) : [b]))
   const first = blocks.indexOf(rounds[0])
   return {
     ...session,
     blocks: [...blocks.slice(0, first), ...renamed, ...blocks.slice(first + rounds.length)],
-    spareRound: { ...drop, name: `Round ${rounds.length}` },
+    spareRound: { ...roundOf(drop), name: `Round ${rounds.length}` },
   }
 }
 

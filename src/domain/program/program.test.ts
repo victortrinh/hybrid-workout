@@ -250,13 +250,10 @@ describe('the plan’s marked Weeks', () => {
 
 describe('HYROX A and HYROX B', () => {
   it('trains the sleds and carries in A and the ergs, the jumps and the ball in B, in race order, wall balls last', () => {
-    expect(rounds(session(1, 'hyrox-a'))).toEqual([
-      'sled-push 25 → run 400',
-      'sled-pull 25 → run 400',
-      'farmers-carry 100 → run 400',
-      'sandbag-lunges 25 → run 400',
-    ])
-    expect(rounds(session(1, 'hyrox-b'))).toEqual(['skierg 250 → run 400', 'burpee-broad-jumps 20 → run 400', 'row 250 → run 400', 'wall-balls 25 → run 400'])
+    const a = ['sled-push 25 → run 400', 'sled-pull 25 → run 400', 'farmers-carry 100 → run 400', 'sandbag-lunges 25 → run 400']
+    const b = ['skierg 250 → run 400', 'burpee-broad-jumps 20 → run 400', 'row 250 → run 400', 'wall-balls 25 → run 400']
+    expect(rounds(session(1, 'hyrox-a'))).toEqual([...a, ...a])
+    expect(rounds(session(1, 'hyrox-b'))).toEqual([...b, ...b])
     for (const s of weeks.flatMap((w) => w.sessions).filter((s) => s.id === 'hyrox-b')) {
       expect(rounds(s).at(-1)).toMatch(/^wall-balls/)
     }
@@ -264,10 +261,15 @@ describe('HYROX A and HYROX B', () => {
 
   it('climbs the Station volume table Phase by Phase, with the run after each Station', () => {
     const volumes = (n: number, id: string) => rounds(session(n, id))
-    expect(volumes(6, 'hyrox-a')).toEqual(['sled-push 25 → run 600', 'sled-pull 25 → run 600', 'farmers-carry 100 → run 600', 'sandbag-lunges 50 → run 600'])
-    expect(volumes(6, 'hyrox-b')).toEqual(['skierg 500 → run 600', 'burpee-broad-jumps 40 → run 600', 'row 500 → run 600', 'wall-balls 50 → run 600'])
-    expect(volumes(11, 'hyrox-a')).toEqual(['sled-push 50 → run 800', 'sled-pull 50 → run 800', 'farmers-carry 200 → run 800', 'sandbag-lunges 75 → run 800'])
-    expect(volumes(11, 'hyrox-b')).toEqual(['skierg 750 → run 800', 'burpee-broad-jumps 60 → run 800', 'row 750 → run 800', 'wall-balls 75 → run 800'])
+    const twice = (r: string[]) => [...r, ...r]
+    expect(volumes(6, 'hyrox-a')).toEqual(
+      twice(['sled-push 25 → run 400', 'sled-pull 25 → run 400', 'farmers-carry 100 → run 400', 'sandbag-lunges 50 → run 400']),
+    )
+    expect(volumes(6, 'hyrox-b')).toEqual(
+      twice(['skierg 500 → run 400', 'burpee-broad-jumps 40 → run 400', 'row 500 → run 400', 'wall-balls 50 → run 400']),
+    )
+    expect(volumes(11, 'hyrox-a')).toEqual(['sled-push 50 → run 1000', 'sled-pull 50 → run 1000', 'farmers-carry 200 → run 1000', 'sandbag-lunges 75 → run 1000'])
+    expect(volumes(11, 'hyrox-b')).toEqual(['skierg 750 → run 1000', 'burpee-broad-jumps 60 → run 1000', 'row 750 → run 1000', 'wall-balls 75 → run 1000'])
     expect(volumes(17, 'hyrox-a')).toEqual([
       'sled-push 50 → run 1000',
       'sled-pull 50 → run 1000',
@@ -278,38 +280,62 @@ describe('HYROX A and HYROX B', () => {
     expect(volumes(17, 'hyrox-b')).toEqual(['skierg 1000 → run 600', 'burpee-broad-jumps 80 → run 600', 'row 1000 → run 600', 'wall-balls 100 → run 600'])
   })
 
-  it('is four rounds in a normal Week and three in a Deload, Race load kept; Week 20 at half volume', () => {
+  it('is 8 rounds through Build early (6 in its Deloads), then 4 (3 in a Deload), Race load kept; Week 20 at half volume', () => {
     for (const week of weeks.filter((w) => w.number <= 21)) {
       for (const s of week.sessions.filter((s) => s.type === 'hyrox')) {
-        const expected = week.deload || (week.number === 21 && s.id === 'hyrox-b') ? 3 : 4
+        const twice = week.number <= 10 ? 2 : 1
+        const expected = (week.deload || (week.number === 21 && s.id === 'hyrox-b') ? 3 : 4) * twice
         expect({ week: week.number, id: s.id, rounds: rounds(s).length }).toEqual({ week: week.number, id: s.id, rounds: expected })
       }
     }
-    expect(rounds(session(5, 'hyrox-a'))).toEqual(['sled-push 25 → run 400', 'sled-pull 25 → run 400', 'sandbag-lunges 25 → run 400'])
+    const deload = ['sled-push 25 → run 400', 'sled-pull 25 → run 400', 'sandbag-lunges 25 → run 400']
+    expect(rounds(session(5, 'hyrox-a'))).toEqual([...deload, ...deload])
+    expect(rounds(session(15, 'hyrox-a'))).toEqual(['sled-push 50 → run 1000', 'sled-pull 50 → run 1000', 'sandbag-lunges 75 → run 1000'])
     expect(rounds(session(20, 'hyrox-b'))).toEqual(['skierg 500 → run 600', 'burpee-broad-jumps 40 → run 600', 'wall-balls 50 → run 600'])
   })
 
-  it('reads as rounds of a Station then a run, at Race load', () => {
+  it('runs every HYROX run at Race run pace, RPE 7–8, with no rest prescribed between rounds', () => {
+    for (const s of weeks.flatMap((w) => w.sessions).filter((s) => s.id === 'hyrox-a' || s.id === 'hyrox-b')) {
+      for (const block of s.blocks.filter((b) => b.main)) {
+        const run = block.exercises.find((e) => e.prescription.kind === 'run')!
+        expect(run.prescription).toMatchObject({ effort: { pace: 'race-run', rpe: [7, 8] } })
+        expect(block.exercises.map((e) => e.prescription.kind)).toEqual(['station', 'run'])
+      }
+    }
+  })
+
+  it('sets HYROX minutes as an estimate by Phase, not a flat 45', () => {
+    const minutes = (n: number) => [session(n, 'hyrox-a').minutes, session(n, 'hyrox-b').minutes]
+    expect(minutes(1)).toEqual([35, 35])
+    expect(minutes(5)).toEqual([30, 30])
+    expect(minutes(6)).toEqual([35, 40])
+    expect(minutes(10)).toEqual([30, 35])
+    expect(minutes(11)).toEqual([40, 40])
+    expect(minutes(17)).toEqual([40, 40])
+  })
+
+  it('reads as rounds of a Station then a run at Race run pace, at Race load', () => {
     expect(describeSession(session(1, 'hyrox-a'))).toMatchObject({
-      heading: 'HYROX A, 4 rounds',
-      summary: '4 × (Station + 400 m)',
-      target: 'Station, then 400 m, each round · Race load',
-      meta: '45 min + ~5′ setup',
+      heading: 'HYROX A, 8 rounds',
+      summary: '8 × (Station + 400 m)',
+      target: 'Station, then 400 m, each round · Race load · Race run effort, RPE 7–8',
+      meta: '35 min + ~5′ setup',
     })
   })
 
   it('sets up once, untimed, before round 1, so it’s in neither the minutes nor the Training load', () => {
-    const blocks = session(1, 'hyrox-a').blocks
+    const blocks = session(11, 'hyrox-a').blocks
     expect(blocks.map((b) => [b.name, b.minutes])).toEqual([
       ['Warm-up', 5],
       ['Set up', undefined],
-      ['Round 1', 9],
-      ['Round 2', 9],
-      ['Round 3', 9],
-      ['Round 4', 9],
+      ['Round 1', 7.75],
+      ['Round 2', 7.75],
+      ['Round 3', 7.75],
+      ['Round 4', 7.75],
       ['Cooldown', 4],
     ])
-    expect(session(1, 'hyrox-a').minutes).toBe(45)
+    expect(session(11, 'hyrox-a').minutes).toBe(40)
+    expect(session(1, 'hyrox-a').blocks.filter((b) => b.setup)).toHaveLength(1)
   })
 
   it('lists every Station the Session loads once, at Race load, and says when the rest have nothing to load', () => {

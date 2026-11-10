@@ -1,6 +1,6 @@
 # Training plan — HYROX Doubles Men Open, trained solo
 
-Status: **approved 7 Nov 2026**. This file is the source the app's Program data is built from. Terms follow [CONTEXT.md](../CONTEXT.md); the evidence behind the structure is in [docs/research/hyrox-training-evidence.md](research/hyrox-training-evidence.md).
+Status: **approved 7 Nov 2026**; HYROX A and B reshaped 10 Nov 2026 ([ADR-0009](adr/0009-hyrox-race-pace-continuous-rounds.md)). This file is the source the app's Program data is built from. Terms follow [CONTEXT.md](../CONTEXT.md); the evidence behind the structure is in [docs/research/hyrox-training-evidence.md](research/hyrox-training-evidence.md).
 
 ## Goals
 
@@ -52,15 +52,16 @@ Every Station is preceded by a 1 km run: 8 km of running in total. Running is ab
 
 ## Progression
 
-- **Stations** are always at Race load. Progression is **Station volume** first (the table below), then time: each Station shows its **Station target**, the Station best at that volume, or the best less about 3% once the last two logs at that volume came in at RPE 7 or under. Row, sandbag lunges, burpee broad jumps and SkiErg reach race volume first: they separate finishers most, and sled pull and lunges punish slower athletes hardest (research note, §1).
+- **Stations** are always at Race load. Progression is **Station volume** first (the table below), then time: each Station shows its **Station target**, the Station best at that volume, or the best less about 3% once the last two Sessions logged at that volume came in at RPE 7 or under. The best can come from any round; the two logs are two Sessions, so a Station done twice in one Session counts once. Row, sandbag lunges, burpee broad jumps and SkiErg reach race volume first: they separate finishers most, and sled pull and lunges punish slower athletes hardest (research note, §1).
 - **Lifts** progress by load from RPE: all target reps at RPE ≤ 7 → +5 lb on squat and RDL, +5% on calves and carries (rounded to the nearest 5 lb, at least +5 lb) next time. RPE ≥ 9 or missed reps → hold. Two holds in a row → −5%, rounded to the nearest 5 lb. Smallest step 5 lb.
 - **Runs** progress by the Training paces, which come from the latest Compromised run test.
 - The volume-then-time progression at fixed load has no trial behind it (research note, §5); every Session's Training load is logged so the Program can be judged after Race day.
 
-### Station volume per Session (each Station once)
+### Station volume per round
 
 | Station | Foundation (1–5) | Build early (6–10) | Build late (11–15) | Race specific (16–21) |
 | --- | --- | --- | --- | --- |
+| Rounds | 8: the four Stations, then the same four again | 8 | 4 | 4 |
 | SkiErg | 250 m | 500 m | 750 m | 1000 m |
 | Sled push | 25 m | 25 m | 50 m | 50 m |
 | Sled pull | 25 m | 25 m | 50 m | 50 m |
@@ -69,7 +70,7 @@ Every Station is preceded by a 1 km run: 8 km of running in total. Running is ab
 | Farmers carry | 100 m | 100 m | 200 m | 200 m |
 | Sandbag lunges | 25 m | 50 m | 75 m | 100 m |
 | Wall balls | 25 | 50 | 75 | 100 |
-| Run after each Station | 400 m | 600 m | 800 m | 1 km (A) · 600 m (B) |
+| Run after each Station | 400 m | 400 m | 1 km | 1 km (A) · 600 m (B) |
 
 HYROX B's runs stay at 600 m in Race specific because its four Stations take about twice as long as A's; the Session would not fit the cap otherwise. The 1 km Compromised runs of Race specific come from HYROX A, the Run session and the Race simulations.
 
@@ -77,18 +78,28 @@ HYROX B's runs stay at 600 m in Race specific because its four Stations take abo
 
 Warm-ups and cooldowns are included in the minutes. Set up is not: it is untimed and shown as "+ ~5′ setup" beside the minutes.
 
-### HYROX A and HYROX B (~45 min)
+### HYROX A and HYROX B (~35–40 min)
 
 | Block | Prescription | Min |
 | --- | --- | --- |
 | Warm-up | Easy jog | 5 |
 | Set up | Every Station the Session uses, at Race load. Set up once; they stay set up between rounds | ~5, not counted |
-| Rounds | 4 × (Station at its Station volume → run), race order. Each Station shows its Station target | 28–36 |
+| Rounds | 8 or 4 × (Station at its Station volume → run @R, RPE 7–8), race order, straight on with no rest. Each Station shows its Station target | 26–31 |
 | Cooldown | Walk, relaxed breathing; no extra finisher | 4 |
 
+Minutes by Phase, warm-up and cooldown included (an estimate at @R near 5:15/km; the 45-minute Session cap is a ceiling, not a target):
+
+| | Foundation (1–5) | Build early (6–10) | Build late (11–15) | Race specific (16–21) |
+| --- | --- | --- | --- | --- |
+| HYROX A | 35 | 35 | 40 | 40 |
+| HYROX B | 35 | 40 | 40 | 40 |
+| Deload | 30 (Week 5) | 30 A · 35 B (Week 10) | 36 (Week 15) | 36 (Week 20) |
+
 - **HYROX A**: sled push, sled pull, farmers carry, sandbag lunges. **HYROX B**: SkiErg, burpee broad jumps, row, wall balls. Wall balls always last: it is where heart rate, lactate and RPE peak.
-- The run comes **after** the Station, so every run is a Compromised run. Log each run's split; the Coach shows the Fade from round 1 to round 4.
-- Deload weeks: 3 rounds instead of 4 (drop the Station the athlete did best last time), Race load kept, no Station targets.
+- The run comes **after** the Station, so every run is a Compromised run, at Race run pace (@R), RPE 7–8. Week 1 uses the Starting point's estimate until the baseline test.
+- **Continuous**: each round follows the last with no prescribed rest, the join between the two passes through the Stations included. The athlete recovers by easing a run; that run is logged as it was run, and counts like any other.
+- Log each run's split; the Coach shows the Fade from the first run to the last (run 1 against run 8 in an 8-round Session).
+- Deload weeks drop the Station the athlete did best last time and keep Race load, with no Station targets: Weeks 5 and 10 go through the other three Stations twice (6 rounds), Weeks 15 and 20 once (3 rounds).
 - Technique before speed in Foundation; the Station targets start counting once a Station has two logs at its volume.
 
 ### Run (~45 min)
@@ -154,11 +165,11 @@ Week 1 runs by RPE and the Starting point's estimate; no test yet. Strength: 3 �
 
 | Wk | Dates | Run | HYROX A | HYROX B | Easy | Key |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Nov 9 | 3 × 7′ @T / 90″ | 4 rounds, 400 m runs | 4 rounds, 400 m runs | 25 | **Run** |
-| 2 | Nov 16 | **Compromised run test** (baseline) | 4 rounds | 4 rounds | 25 | **Test** |
-| 3 | Nov 23 | 3 × 8′ @T / 90″ | 4 rounds | 4 rounds | 30 | **HYROX A** |
-| 4 | Nov 30 | 4 × 6′ @T / 90″ | 4 rounds | 4 rounds | 30 | **HYROX B** |
-| 5 | Dec 7 | Deload: 35′ easy | 3 rounds | 3 rounds | 25 | — |
+| 1 | Nov 9 | 3 × 7′ @T / 90″ | 8 rounds, 400 m runs @R | 8 rounds, 400 m runs @R | 25 | **Run** |
+| 2 | Nov 16 | **Compromised run test** (baseline) | 8 rounds | 8 rounds | 25 | **Test** |
+| 3 | Nov 23 | 3 × 8′ @T / 90″ | 8 rounds | 8 rounds | 30 | **HYROX A** |
+| 4 | Nov 30 | 4 × 6′ @T / 90″ | 8 rounds | 8 rounds | 30 | **HYROX B** |
+| 5 | Dec 7 | Deload: 35′ easy | 6 rounds | 6 rounds | 25 | — |
 
 ### Build (weeks 6–15)
 
@@ -166,12 +177,12 @@ Station volume: Build early in Weeks 6–10, Build late in 11–15. The second E
 
 | Wk | Dates | Run | HYROX A | HYROX B | Easy | Key |
 | --- | --- | --- | --- | --- | --- | --- |
-| 6 | Dec 14 | 4 × (1 km @R + 20 wall balls) / 60″ | 4 rounds, 600 m runs | 4 rounds, 600 m runs | 35 | **HYROX A** |
-| 7 | Dec 21 | 3 × 8′ @T / 90″ | 4 rounds | 4 rounds | 35 | **HYROX B** |
-| 8 | Dec 28 | 4 × (1 km @R + 20 wall balls) / 60″ | 4 rounds | 4 rounds | 40 | **Run** |
-| 9 | Jan 4 | **Compromised run test** | 4 rounds | 4 rounds | 40 | **Test** |
-| 10 | Jan 11 | Deload: 35′ easy | 3 rounds | 3 rounds | 30 | — |
-| 11 | Jan 18 | 5 × (1 km @R + 20 wall balls) / 60″ | 4 rounds, 800 m runs | 4 rounds, 800 m runs | 45 | **HYROX A** |
+| 6 | Dec 14 | 4 × (1 km @R + 20 wall balls) / 60″ | 8 rounds, 400 m runs | 8 rounds, 400 m runs | 35 | **HYROX A** |
+| 7 | Dec 21 | 3 × 8′ @T / 90″ | 8 rounds | 8 rounds | 35 | **HYROX B** |
+| 8 | Dec 28 | 4 × (1 km @R + 20 wall balls) / 60″ | 8 rounds | 8 rounds | 40 | **Run** |
+| 9 | Jan 4 | **Compromised run test** | 8 rounds | 8 rounds | 40 | **Test** |
+| 10 | Jan 11 | Deload: 35′ easy | 6 rounds | 6 rounds | 30 | — |
+| 11 | Jan 18 | 5 × (1 km @R + 20 wall balls) / 60″ | 4 rounds, 1 km runs | 4 rounds, 1 km runs | 45 | **HYROX A** |
 | 12 | Jan 25 | 4 × 7′ @T / 90″ | 4 rounds | 4 rounds | 45 | **HYROX B** |
 | 13 | Feb 1 | 5 × (1 km @R + 20 wall balls) / 60″ | 4 rounds | 4 rounds | 50 | **Run** |
 | 14 | Feb 8 | **Compromised run test** | 4 rounds | 4 rounds | 50 | **Test** |
@@ -198,8 +209,8 @@ Two Weeks, volume cut about 40% then about 60%, intensity and frequency unchange
 
 | Session | Week 22 (Apr 5) | Week 23 (Apr 12) |
 | --- | --- | --- |
-| HYROX A | 3 × (Station at half volume → 600 m), ~30′ | 2 × (Station at half volume → 400 m), ~20′ |
-| HYROX B | 3 × (Station at half volume → 600 m), ~30′ | 2 × (Station at half volume → 400 m), ~20′ |
+| HYROX A | 3 × (Station at half volume → 600 m @R), ~30′ | 2 × (Station at half volume → 400 m @R), ~20′ |
+| HYROX B | 3 × (Station at half volume → 600 m @R), ~30′ | 2 × (Station at half volume → 400 m @R), ~20′ |
 | Run | 3 × 5′ @T / 90″, ~30′ | 20′ easy + 4 × 1′ @R, ~25′ |
 | Strength | Squat and RDL 2 × 4 @ RPE 7, carries 2 × 40 m, calves 2 × 8, ~30′ | Squat and RDL 2 × 3 light, calves 2 × 8; no heavy lowering, ~20′ |
 | Easy (optional) | 30 | 20, only if fresh |

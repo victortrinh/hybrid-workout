@@ -127,7 +127,7 @@ Four rounds of a 1 km run at full effort followed by one Station at Race load an
 _Avoid_: benchmark, TT, time trial
 
 **Fade**:
-How much slower the last run of a Session is than its first, as seconds per km. Shown for HYROX sessions, Compromised run tests and Race simulations.
+How much slower the last run of a Session is than its first, as seconds per km, however many rounds it has (run 1 against run 8 in an 8-round HYROX session). Shown for HYROX sessions, Compromised run tests and Race simulations.
 _Avoid_: drop-off, slowdown
 
 **Race run pace**:

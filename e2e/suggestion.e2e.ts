@@ -20,8 +20,8 @@ const SCENARIO = {
     thursday: '2027-01-21',
     heading: 'Strength, squat 3 × 5',
     row: /^HYROX A/,
-    full: '4 × (Station + 800 m)',
-    lighter: '4 × (Station + 500 m)',
+    full: '4 × (Station + 1 km)',
+    lighter: '4 × (Station + 700 m)',
   },
   desktop: {
     before: 17,
@@ -119,16 +119,16 @@ test('three Readiness flags in a Week bring a lighter rest of it: Accept lighten
     'Three rough days this Week. That’s your body asking for a Deload. The rest of Week 3 goes 33% lighter.',
   )
   await expect(suggestion).toContainText('Mon pain 3 · Tue slept 5 h 20 · Wed pain 4')
-  await expect(nextRow).toContainText(bare('4 × (Station + 400 m)'))
+  await expect(nextRow).toContainText(bare('8 × (Station + 400 m)'))
   await axe(page)
 
   await suggestion.getByRole('button', { name: 'Accept' }).click()
   await expect(suggestion).toContainText('Done. The rest of Week 3 is 33% lighter.')
-  await expect(nextRow).toContainText(bare('4 × (Station + 300 m)'))
+  await expect(nextRow).toContainText(bare('8 × (Station + 300 m)'))
   await expect.poll(() => suggestionDecisions.at(-1)).toMatchObject({ id: 'lighter-week-w3', decision: 'accepted' })
 
   await suggestion.getByRole('button', { name: 'Undo' }).click()
-  await expect(nextRow).toContainText(bare('4 × (Station + 400 m)'))
+  await expect(nextRow).toContainText(bare('8 × (Station + 400 m)'))
   await expect(suggestion.getByRole('button', { name: 'Accept' })).toBeVisible()
 })
 

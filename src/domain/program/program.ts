@@ -2,7 +2,7 @@
  * The approved Program (docs/training-plan.md, approved 7 Nov 2026) as data.
  *
  * All 24 Weeks, built from the Session templates in the plan. Where the plan
- * leaves a detail open (which Station a three-round HYROX Session drops, the
+ * leaves a detail open (which Station a Deload HYROX Session drops, the
  * Deload volumes of the accessory lifts) the choice is made once here and
  * commented.
  */
@@ -101,7 +101,7 @@ const halfRaceVolume = (id: StationId): Volume => {
 }
 
 // ---------------------------------------------------------------------------
-// HYROX A and HYROX B: four rounds of a Station, then a run.
+// HYROX A and HYROX B: rounds of a Station, then a run at Race run pace (ADR-0009).
 
 type Rotation = 'A' | 'B'
 
@@ -155,13 +155,41 @@ export const STATION_VOLUME: Record<VolumeTier, Record<StationId, Volume>> = {
  */
 export const RUN_METERS: Record<VolumeTier, Record<Rotation, number>> = {
   foundation: { A: 400, B: 400 },
-  'build-early': { A: 600, B: 600 },
-  'build-late': { A: 800, B: 800 },
+  'build-early': { A: 400, B: 400 },
+  'build-late': { A: 1000, B: 1000 },
   'race-specific': { A: 1000, B: 600 },
 }
 
 /**
- * Three rounds drop one Station: the Coach drops the one done best last time
+ * How many times a Session goes through its Stations, by tier: twice (8
+ * rounds) in Foundation and Build early, where the Stations are short; once
+ * (4 rounds) from Build late on.
+ */
+const PASSES: Record<VolumeTier, number> = { foundation: 2, 'build-early': 2, 'build-late': 1, 'race-specific': 1 }
+
+/**
+ * A HYROX Session's minutes, warm-up and cooldown included, by tier: an
+ * estimate at Race run pace near 5:15/km, not a target. 45 stays the Session
+ * cap. Hand-set until the minutes are calculated (#178).
+ */
+const HYROX_MINUTES: Record<VolumeTier, Record<Rotation, number>> = {
+  foundation: { A: 35, B: 35 },
+  'build-early': { A: 35, B: 40 },
+  'build-late': { A: 40, B: 40 },
+  'race-specific': { A: 40, B: 40 },
+}
+
+/** Every HYROX run: at Race run pace, RPE 7–8. Slowing one is how the athlete recovers; there's no prescribed rest. */
+const HYROX_RUN: RunEffort = { pace: 'race-run', rpe: [7, 8] }
+
+/** Rounds run straight on, the joins between repeated Stations included. */
+const CONTINUOUS = 'No rest between rounds: ease a run to recover.'
+
+/** The Stations in the order the rounds go through them, `passes` times over. */
+const passes = (ids: StationId[], times: number): StationId[] => Array.from({ length: times }, () => ids).flat()
+
+/**
+ * A Deload drops one Station: the Coach drops the one done best last time
  * (stations.ts). Until the logs say which, the one dropped is the middle
  * Station that is least technical: the farmers carry in A, the row in B.
  * Wall balls stay last.
@@ -190,7 +218,8 @@ const HYROX_COOLDOWN: Block = {
  * load. They stay set up for the whole Session. Stations with nothing to
  * load (SkiErg, row, burpee broad jumps) are left out, and the note says so once.
  */
-function setUp(ids: StationId[]): Block {
+function setUp(rounds: StationId[]): Block {
+  const ids = [...new Set(rounds)]
   const loaded = ids.filter((id) => stations[id].raceLoad.pounds !== undefined)
   return {
     name: 'Set up',
@@ -202,24 +231,25 @@ function setUp(ids: StationId[]): Block {
 
 interface Circuit {
   rotation: Rotation
+  /** Each round's Station, in order: a Station comes up twice when the Session goes through its Stations twice. */
   ids: StationId[]
-  /** A three-round Session's left-out Station, kept as its spare round. */
+  /** A Deload Session's left-out Station, kept as its spare round. */
   spare?: StationId
   volume: (id: StationId) => Volume
   runMeters: number
   key?: boolean
-  minutes?: number
+  minutes: number
   note?: string
 }
 
-/** A round is one Station at its Station volume, then the run: every run a Compromised run. */
-function hyrox({ rotation, ids, spare, volume, runMeters, key = false, minutes = 45, note }: Circuit): Session {
+/** A round is one Station at its Station volume, then the run: every run a Compromised run, at Race run pace. */
+function hyrox({ rotation, ids, spare, volume, runMeters, key = false, minutes, note }: Circuit): Session {
   const roundMinutes = (minutes - HYROX_WARM_UP.minutes! - HYROX_COOLDOWN.minutes!) / ids.length
   const round = (id: StationId, i: number): Block => ({
     name: `Round ${i + 1}`,
     minutes: roundMinutes,
     main: true,
-    exercises: [station(id, volume(id)), { name: 'Run', prescription: { kind: 'run', meters: runMeters } }],
+    exercises: [station(id, volume(id)), { name: 'Run', prescription: { kind: 'run', meters: runMeters, effort: HYROX_RUN } }],
   })
   return {
     id: rotation === 'A' ? 'hyrox-a' : 'hyrox-b',
@@ -240,27 +270,32 @@ function hyrox({ rotation, ids, spare, volume, runMeters, key = false, minutes =
   }
 }
 
-/** A normal Week's HYROX: four rounds at the tier's Station volume. */
-const fourRounds = (rotation: Rotation, tier: VolumeTier, key = false): Session =>
+/** A normal Week's HYROX: the four Stations at the tier's Station volume, twice through (8 rounds) or once (4). */
+const hyroxRounds = (rotation: Rotation, tier: VolumeTier, key = false): Session =>
   hyrox({
     rotation,
-    ids: ROTATION[rotation],
+    ids: passes(ROTATION[rotation], PASSES[tier]),
     volume: (id) => STATION_VOLUME[tier][id],
     runMeters: RUN_METERS[tier][rotation],
     key,
-    note: tier === 'foundation' ? 'Technique before speed.' : undefined,
+    minutes: HYROX_MINUTES[tier][rotation],
+    note: tier === 'foundation' ? `Technique before speed. ${CONTINUOUS}` : CONTINUOUS,
   })
 
-/** A Deload week's HYROX: three rounds, Race load and volume kept. Week 20 halves the volume too. */
-const threeRounds = (rotation: Rotation, tier: VolumeTier, { half = false } = {}): Session =>
+/**
+ * A Deload week's HYROX: three Stations, Race load and volume kept, once
+ * through (3 rounds) or, where a normal Week goes through twice, twice (6
+ * rounds). Week 20 halves the volume too.
+ */
+const deloadRounds = (rotation: Rotation, tier: VolumeTier, { half = false } = {}): Session =>
   hyrox({
     rotation,
-    ids: THREE_ROUNDS[rotation],
+    ids: passes(THREE_ROUNDS[rotation], PASSES[tier]),
     spare: ROTATION[rotation].find((id) => !THREE_ROUNDS[rotation].includes(id)),
     volume: half ? halfRaceVolume : (id) => STATION_VOLUME[tier][id],
     runMeters: RUN_METERS[tier][rotation],
-    minutes: 36,
-    note: 'Race load kept. Smooth, no pushing.',
+    minutes: PASSES[tier] > 1 ? HYROX_MINUTES[tier][rotation] - 5 : 36,
+    note: `Race load kept. Smooth, no pushing. ${CONTINUOUS}`,
   })
 
 /** The Taper's HYROX: Stations at half race volume, fewer rounds and shorter runs, Race load kept. */
@@ -773,50 +808,50 @@ const week = (
 const bucket = (a: Session, b: Session, run: Session, lift: Session, easy: Session) => [lift, b, run, a, easy]
 
 const foundation: Week[] = [
-  week(1, bucket(fourRounds('A', 'foundation'), fourRounds('B', 'foundation'), thresholdRun(3, 7, true), strength('build', { calibration: true }), easyRun(25))),
-  week(2, bucket(fourRounds('A', 'foundation'), fourRounds('B', 'foundation'), compromisedRunTest(2), strength('build'), easyRun(25))),
-  week(3, bucket(fourRounds('A', 'foundation', true), fourRounds('B', 'foundation'), thresholdRun(3, 8), strength('build'), easyRun(30))),
-  week(4, bucket(fourRounds('A', 'foundation'), fourRounds('B', 'foundation', true), thresholdRun(4, 6), strength('build'), easyRun(30))),
-  week(5, bucket(threeRounds('A', 'foundation'), threeRounds('B', 'foundation'), deloadRun, strength('build', { deload: true }), easyRun(25)), {
+  week(1, bucket(hyroxRounds('A', 'foundation'), hyroxRounds('B', 'foundation'), thresholdRun(3, 7, true), strength('build', { calibration: true }), easyRun(25))),
+  week(2, bucket(hyroxRounds('A', 'foundation'), hyroxRounds('B', 'foundation'), compromisedRunTest(2), strength('build'), easyRun(25))),
+  week(3, bucket(hyroxRounds('A', 'foundation', true), hyroxRounds('B', 'foundation'), thresholdRun(3, 8), strength('build'), easyRun(30))),
+  week(4, bucket(hyroxRounds('A', 'foundation'), hyroxRounds('B', 'foundation', true), thresholdRun(4, 6), strength('build'), easyRun(30))),
+  week(5, bucket(deloadRounds('A', 'foundation'), deloadRounds('B', 'foundation'), deloadRun, strength('build', { deload: true }), easyRun(25)), {
     deload: true,
   }),
 ]
 
 const build: Week[] = [
-  week(6, bucket(fourRounds('A', 'build-early', true), fourRounds('B', 'build-early'), compromisedIntervals(4), strength('build'), easyRun(35))),
-  week(7, bucket(fourRounds('A', 'build-early'), fourRounds('B', 'build-early', true), thresholdRun(3, 8), strength('build'), easyRun(35))),
-  week(8, bucket(fourRounds('A', 'build-early'), fourRounds('B', 'build-early'), compromisedIntervals(4, true), strength('build'), easyRun(40))),
-  week(9, bucket(fourRounds('A', 'build-early'), fourRounds('B', 'build-early'), compromisedRunTest(9), strength('build'), easyRun(40))),
-  week(10, bucket(threeRounds('A', 'build-early'), threeRounds('B', 'build-early'), deloadRun, strength('build', { deload: true }), easyRun(30)), {
+  week(6, bucket(hyroxRounds('A', 'build-early', true), hyroxRounds('B', 'build-early'), compromisedIntervals(4), strength('build'), easyRun(35))),
+  week(7, bucket(hyroxRounds('A', 'build-early'), hyroxRounds('B', 'build-early', true), thresholdRun(3, 8), strength('build'), easyRun(35))),
+  week(8, bucket(hyroxRounds('A', 'build-early'), hyroxRounds('B', 'build-early'), compromisedIntervals(4, true), strength('build'), easyRun(40))),
+  week(9, bucket(hyroxRounds('A', 'build-early'), hyroxRounds('B', 'build-early'), compromisedRunTest(9), strength('build'), easyRun(40))),
+  week(10, bucket(deloadRounds('A', 'build-early'), deloadRounds('B', 'build-early'), deloadRun, strength('build', { deload: true }), easyRun(30)), {
     deload: true,
   }),
-  week(11, bucket(fourRounds('A', 'build-late', true), fourRounds('B', 'build-late'), compromisedIntervals(5), strength('build'), easyRun(45))),
-  week(12, bucket(fourRounds('A', 'build-late'), fourRounds('B', 'build-late', true), thresholdRun(4, 7), strength('build'), easyRun(45))),
-  week(13, bucket(fourRounds('A', 'build-late'), fourRounds('B', 'build-late'), compromisedIntervals(5, true), strength('build'), easyRun(50))),
-  week(14, bucket(fourRounds('A', 'build-late'), fourRounds('B', 'build-late'), compromisedRunTest(14), strength('build'), easyRun(50))),
-  week(15, bucket(threeRounds('A', 'build-late'), threeRounds('B', 'build-late'), deloadRun, strength('build', { deload: true }), easyRun(35)), {
+  week(11, bucket(hyroxRounds('A', 'build-late', true), hyroxRounds('B', 'build-late'), compromisedIntervals(5), strength('build'), easyRun(45))),
+  week(12, bucket(hyroxRounds('A', 'build-late'), hyroxRounds('B', 'build-late', true), thresholdRun(4, 7), strength('build'), easyRun(45))),
+  week(13, bucket(hyroxRounds('A', 'build-late'), hyroxRounds('B', 'build-late'), compromisedIntervals(5, true), strength('build'), easyRun(50))),
+  week(14, bucket(hyroxRounds('A', 'build-late'), hyroxRounds('B', 'build-late'), compromisedRunTest(14), strength('build'), easyRun(50))),
+  week(15, bucket(deloadRounds('A', 'build-late'), deloadRounds('B', 'build-late'), deloadRun, strength('build', { deload: true }), easyRun(35)), {
     deload: true,
   }),
 ]
 
 /** Race specific: full Station volume; the Race simulations take HYROX A's place, last in the Bucket. */
 const raceSpecific: Week[] = [
-  week(16, bucket(halfSimulationA, fourRounds('B', 'race-specific'), thresholdRun(3, 8), strength('maintenance'), easyRun(55))),
-  week(17, bucket(fourRounds('A', 'race-specific', true), fourRounds('B', 'race-specific'), compromisedIntervals(5), strength('maintenance'), easyRun(60, { note: LONG_RUN }))),
-  week(18, bucket(halfSimulationB, fourRounds('B', 'race-specific'), thresholdRun(4, 6), strength('maintenance'), easyRun(50))),
-  week(19, bucket(fourRounds('A', 'race-specific'), fourRounds('B', 'race-specific'), compromisedRunTest(19), strength('maintenance'), easyRun(60, { note: LONG_RUN }))),
+  week(16, bucket(halfSimulationA, hyroxRounds('B', 'race-specific'), thresholdRun(3, 8), strength('maintenance'), easyRun(55))),
+  week(17, bucket(hyroxRounds('A', 'race-specific', true), hyroxRounds('B', 'race-specific'), compromisedIntervals(5), strength('maintenance'), easyRun(60, { note: LONG_RUN }))),
+  week(18, bucket(halfSimulationB, hyroxRounds('B', 'race-specific'), thresholdRun(4, 6), strength('maintenance'), easyRun(50))),
+  week(19, bucket(hyroxRounds('A', 'race-specific'), hyroxRounds('B', 'race-specific'), compromisedRunTest(19), strength('maintenance'), easyRun(60, { note: LONG_RUN }))),
   week(
     20,
     bucket(
-      threeRounds('A', 'race-specific', { half: true }),
-      threeRounds('B', 'race-specific', { half: true }),
+      deloadRounds('A', 'race-specific', { half: true }),
+      deloadRounds('B', 'race-specific', { half: true }),
       deloadRun,
       strength('maintenance', { deload: true }),
       easyRun(35),
     ),
     { deload: true },
   ),
-  week(21, bucket(fullRunSimulation, threeRounds('B', 'race-specific', { half: true }), thresholdRun(3, 6), strength('maintenance'), easyRun(40))),
+  week(21, bucket(fullRunSimulation, deloadRounds('B', 'race-specific', { half: true }), thresholdRun(3, 6), strength('maintenance'), easyRun(40))),
 ]
 
 const taper: Week[] = [

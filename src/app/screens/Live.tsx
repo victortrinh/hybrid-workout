@@ -262,7 +262,12 @@ function Running({
   const blockWords = block && nb(run.ready ? readyWords(block, target) : `${block.name} · ${blockLength(block)}`)
   const coachLine = block && (run.ready ? 'The clock waits. Tap Start when you’re set.' : liveLine(block, run))
   const legs = block && (leg !== null ? (
-    <RoundLegs block={block} leg={leg} done={run.legs.filter((l) => l.block === run.block).map((l) => l.seconds)} />
+    <RoundLegs
+      block={block}
+      leg={leg}
+      done={run.legs.filter((l) => l.block === run.block).map((l) => l.seconds)}
+      effort={runEffortWords(block, context)}
+    />
   ) : (
     block.stations.length > 0 && <StationList block={block} />
   ))
@@ -623,15 +628,15 @@ function StationList({ block }: { block: LiveBlock }) {
  * through with their split, the load of the one on the clock (the hero names
  * it), then what's left to get ready for.
  */
-function RoundLegs({ block, leg, done }: { block: LiveBlock; leg: number; done: number[] }) {
+function RoundLegs({ block, leg, done, effort }: { block: LiveBlock; leg: number; done: number[]; effort: string }) {
   return (
     <ol aria-label="Legs" className="mt-3 grid gap-1.5">
       {roundLegs(block).map((part, i) => {
         const station = block.stations.find((s) => s.station === part)
-        const words = station ? withTarget(stationWords(station), station) : km(block.meters ?? 0)
+        const words = station ? withTarget(stationWords(station), station) : [km(block.meters ?? 0), effort].filter(Boolean).join(' · ')
         if (i === leg) {
-          // The hero says what and how far: the load and the time to beat are all that's left to say.
-          const load = station && withTarget(poundsWords(stations[station.station], station.pounds), station)
+          // The hero says what and how far: the load and the time to beat, or how hard to run, are all that's left to say.
+          const load = station ? withTarget(poundsWords(stations[station.station], station.pounds), station) : effort
           return (
             <li key={part} aria-current="step" className={load ? 'text-[22px] leading-tight font-bold' : 'sr-only'}>
               <span className="sr-only">{legName(part)}, now{load ? ': ' : ''}</span>
@@ -656,6 +661,19 @@ function RoundLegs({ block, leg, done }: { block: LiveBlock; leg: number; done: 
       })}
     </ol>
   )
+}
+
+/**
+ * How hard a round's run goes: "Race run pace · 5:15/km · RPE 7–8", the pace
+ * only once there are Training paces. Empty for a run with no effort.
+ */
+function runEffortWords(block: LiveBlock, context: RunContext): string {
+  const effort = block.effort
+  if (!effort || 'feel' in effort) return ''
+  const pace = { easy: 'Easy', threshold: 'Threshold', 'race-run': 'Race run pace' }[effort.pace]
+  const target = liveTarget(block, context)
+  const rpe = effort.rpe && `RPE ${effort.rpe[0] === effort.rpe[1] ? effort.rpe[0] : `${effort.rpe[0]}–${effort.rpe[1]}`}`
+  return [pace, target?.pace ? target.figure : null, rpe].filter(Boolean).join(' · ')
 }
 
 /** Where there's nothing to dial: what the Block is about instead, and a by-feel rep's speed last time. */
