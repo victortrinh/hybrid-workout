@@ -2,6 +2,8 @@
 
 The plan approved on 7 November 2026 gave HYROX A and HYROX B four rounds of a Station then a run in every Phase, starting from small Station volumes and 400 m runs, billed as 45 minutes. It said nothing about how hard to run or how long to rest between rounds. In Week 1 the athlete did it and found it underloaded: about 12–14 minutes of work behind a 45-minute heading, run at whatever effort felt right, with whatever rest felt right. A Foundation Station is short, so the Session was mostly the warm-up, the Set up and the cooldown.
 
+*Amended by [ADR-0010](0010-hyrox-six-rounds-run-first.md): 8 rounds proved too many, so Foundation and Build early do 6 and their Deloads 3, and every round is the run then the Station.*
+
 So from Week 1, including the Week under way and a Session already Up next, every HYROX Session follows one template:
 
 - **Every run is at Race run pace (@R), RPE 7–8.** Week 1 uses the Starting point's estimate until the baseline Compromised run test. Foundation Stations stay "Technique before speed".

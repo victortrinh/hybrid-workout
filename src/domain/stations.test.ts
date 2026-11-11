@@ -99,18 +99,19 @@ describe('Station target', () => {
   it('counts Sessions, not rounds: two rounds of a Station in one easy Session are one log', () => {
     const twice = (week: number, date: string, rpe: number, first: number, second: number) =>
       log(week, 'hyrox-b', date, rpe, [
-        { ...at('skierg', first, SKI), round: 1 },
-        { ...at('skierg', second, SKI), round: 5 },
+        { ...at('row', first, ROW), round: 3 },
+        { ...at('row', second, ROW), round: 5 },
       ])
+    const ROW = { meters: 250 }
     const one = [twice(1, '2026-11-10', 6, 62, 60)]
-    expect(stationTarget(one, 'skierg', SKI)).toBeNull()
+    expect(stationTarget(one, 'row', ROW)).toBeNull()
     // The Station best can come from any round.
-    expect(stationBest(one, 'skierg', SKI)).toBe(60)
+    expect(stationBest(one, 'row', ROW)).toBe(60)
     // A harder Session before an easy one: the last two Sessions weren't both RPE 7 or under.
     const hardThenEasy = [twice(1, '2026-11-10', 9, 62, 60), twice(2, '2026-11-17', 6, 63, 61)]
-    expect(stationTarget(hardThenEasy, 'skierg', SKI)).toBe(60)
+    expect(stationTarget(hardThenEasy, 'row', ROW)).toBe(60)
     const easyTwice = [twice(1, '2026-11-10', 7, 62, 60), twice(2, '2026-11-17', 6, 63, 61)]
-    expect(stationTarget(easyTwice, 'skierg', SKI)).toBe(58)
+    expect(stationTarget(easyTwice, 'row', ROW)).toBe(58)
   })
 
   it('stays the Station best when either of the last two was harder than RPE 7', () => {
@@ -159,7 +160,8 @@ describe('Station targets in the Prescription', () => {
       ['row', 55],
       ['wall-balls', 70],
     ]
-    expect(targets(session(week(3, logs), 'hyrox-b'))).toEqual([...once, ...once])
+    // The row and the wall balls come up twice, each time with its target.
+    expect(targets(session(week(3, logs), 'hyrox-b'))).toEqual([...once, ...once.slice(2)])
     expect(targets(session(week(3, logs), 'hyrox-a')).every(([, t]) => t === null)).toBe(true)
   })
 
@@ -177,15 +179,8 @@ describe('Station targets in the Prescription', () => {
 })
 
 describe('A Deload HYROX session', () => {
-  it('drops the row in B when nothing is logged yet, going through the other three twice', () => {
-    expect(roundStations(session(week(5, []), 'hyrox-b'))).toEqual([
-      'skierg',
-      'burpee-broad-jumps',
-      'wall-balls',
-      'skierg',
-      'burpee-broad-jumps',
-      'wall-balls',
-    ])
+  it('drops the row in B when nothing is logged yet', () => {
+    expect(roundStations(session(week(5, []), 'hyrox-b'))).toEqual(['skierg', 'burpee-broad-jumps', 'wall-balls'])
   })
 
   it('drops the Station the athlete did best last time, keeping race order', () => {
@@ -205,10 +200,10 @@ describe('A Deload HYROX session', () => {
       }),
     ]
     const b = session(week(5, logs), 'hyrox-b')
-    expect(roundStations(b)).toEqual(['skierg', 'burpee-broad-jumps', 'row', 'skierg', 'burpee-broad-jumps', 'row'])
-    expect(b.blocks.filter((bl) => bl.main).map((bl) => bl.name)).toEqual(['Round 1', 'Round 2', 'Round 3', 'Round 4', 'Round 5', 'Round 6'])
-    expect(b.headline).toBe('6 rounds')
-    expect(b.spareRound).toMatchObject({ name: 'Round 6', exercises: [{ name: 'Wall balls' }, { name: 'Run' }] })
+    expect(roundStations(b)).toEqual(['skierg', 'burpee-broad-jumps', 'row'])
+    expect(b.blocks.filter((bl) => bl.main).map((bl) => bl.name)).toEqual(['Round 1', 'Round 2', 'Round 3'])
+    expect(b.headline).toBe('3 rounds')
+    expect(b.spareRound).toMatchObject({ name: 'Round 3', exercises: [{ name: 'Run' }, { name: 'Wall balls' }] })
     // Without the wall balls, nothing is left to load: no Set up.
     expect(b.blocks.some((bl) => bl.setup)).toBe(false)
   })
@@ -224,13 +219,11 @@ describe('A Deload HYROX A', () => {
         at('sandbag-lunges', 50, { meters: 25 }),
       ])
     // The lunges, sleds and carry all matched their best last time: the carry, the Program's pick, stays dropped.
-    expect(roundStations(session(week(5, [a(4, '2026-12-02', 40)]), 'hyrox-a'))).toEqual(
-      ['sled-push', 'sled-pull', 'sandbag-lunges', 'sled-push', 'sled-pull', 'sandbag-lunges'],
-    )
+    expect(roundStations(session(week(5, [a(4, '2026-12-02', 40)]), 'hyrox-a'))).toEqual(['sled-push', 'sled-pull', 'sandbag-lunges'])
     // A slower carry: the sled push, first in race order of those at their best, goes instead.
     const logs = [a(3, '2026-11-25', 40), a(4, '2026-12-02', 45)]
     const s = session(week(5, logs), 'hyrox-a')
-    expect(roundStations(s)).toEqual(['sled-pull', 'farmers-carry', 'sandbag-lunges', 'sled-pull', 'farmers-carry', 'sandbag-lunges'])
+    expect(roundStations(s)).toEqual(['sled-pull', 'farmers-carry', 'sandbag-lunges'])
     expect(s.blocks.find((b) => b.setup)!.exercises.map((e) => e.name)).toEqual(['Sled pull', 'Farmers carry', 'Sandbag lunges'])
   })
 })
@@ -244,7 +237,7 @@ describe('the Coach’s Prescription', () => {
       .find((s) => s.station === 'row')!
     // Both logs at RPE 7 or under: 54 × 0.97 = 52.38.
     expect(row.target).toBe(52)
-    expect(liveBlocks(b).filter((block) => block.kind === 'round')).toHaveLength(8)
+    expect(liveBlocks(b).filter((block) => block.kind === 'round')).toHaveLength(6)
   })
 })
 
@@ -293,8 +286,8 @@ describe('HYROX minutes from the logs', () => {
   })
 
   it('go by the Training paces, the Program’s default pace without them', () => {
-    expect(minutes(hyroxMinutes(week(1), [], trainingPaces(DEFAULT_RACE_RUN)), 'hyrox-a')).toBe(35)
-    expect(minutes(hyroxMinutes(week(1), [], trainingPaces(400)), 'hyrox-a')).toBe(40)
+    expect(minutes(hyroxMinutes(week(1), [], trainingPaces(DEFAULT_RACE_RUN)), 'hyrox-a')).toBe(30)
+    expect(minutes(hyroxMinutes(week(1), [], trainingPaces(400)), 'hyrox-a')).toBe(35)
     // Nothing but HYROX changes.
     const slow = hyroxMinutes(week(1), [], trainingPaces(400))
     expect(slow.sessions.filter((s) => s.type !== 'hyrox')).toEqual(week(1).sessions.filter((s) => s.type !== 'hyrox'))
@@ -303,13 +296,13 @@ describe('HYROX minutes from the logs', () => {
   it('update once a Compromised run test sets a new Race run pace', () => {
     const today = localDate('2026-11-25')
     const hyroxA = (logs: SessionLog[]) => coach({ program, today, logs }).week!.sessions.find((s) => s.id === 'hyrox-a')!
-    expect(hyroxA([]).minutes).toBe(35)
-    // Week 2's test at 6:40/km: 8 × 400 m runs take over five minutes longer.
+    expect(hyroxA([]).minutes).toBe(30)
+    // Week 2's test at 6:40/km: 6 × 400 m runs take over three minutes longer.
     const run = (round: number): StationLog => ({ round, part: 'run', pounds: null, meters: 1000, reps: null, seconds: 400 })
     const test = log(2, 'compromised-run-test', '2026-11-18', 8, [1, 2, 3, 4].map(run))
-    expect(hyroxA([test]).minutes).toBe(40)
+    expect(hyroxA([test]).minutes).toBe(35)
     // A Week shown elsewhere goes by the same paces.
     const paces = coach({ program, today, logs: [test] }).paces
-    expect(minutes(prescribedWeek(program, 3, [test], [], undefined, null, paces)!, 'hyrox-a')).toBe(40)
+    expect(minutes(prescribedWeek(program, 3, [test], [], undefined, null, paces)!, 'hyrox-a')).toBe(35)
   })
 })

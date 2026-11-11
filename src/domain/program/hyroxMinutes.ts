@@ -51,7 +51,7 @@ export const defaultStationSeconds = (station: Station, volume: StationVolume): 
 /** A Station's expected seconds at a volume. */
 export type StationSeconds = (id: StationId, volume: StationVolume) => number
 
-/** A round's expected seconds: its Station, then its run at Race run pace. */
+/** A round's expected seconds: its run at Race run pace and its Station. */
 function roundSeconds(block: Block, raceRun: number, stationSeconds: StationSeconds): number {
   return block.exercises.reduce((sum, { prescription: rx }) => {
     if (rx.kind === 'station') return sum + stationSeconds(rx.station, rx)

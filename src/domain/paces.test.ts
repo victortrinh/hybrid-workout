@@ -85,12 +85,12 @@ describe('the Compromised run test', () => {
     expect(fade(testLines([300]))).toBeNull()
   })
 
-  it('measures a HYROX Session’s Fade from its first run to its last: run 1 against run 8 of 8 rounds', () => {
+  it('measures a HYROX Session’s Fade from its first run to its last: run 1 against run 6 of 6 rounds', () => {
     // 400 m runs at Race run pace, the fifth eased to recover: it's logged as run, and counts like any other.
-    const seconds = [126, 124, 128, 130, 150, 132, 134, 135]
+    const seconds = [126, 124, 128, 130, 150, 135]
     const lines = seconds.flatMap((s, i): StationLog[] => [
-      { round: i + 1, part: 'skierg', pounds: null, meters: 250, reps: null, seconds: 60 },
       { round: i + 1, part: 'run', pounds: null, meters: 400, reps: null, seconds: s },
+      { round: i + 1, part: 'skierg', pounds: null, meters: 250, reps: null, seconds: 60 },
     ])
     // 126 s / 0.4 km = 315 s/km; 135 s / 0.4 km = 338 s/km (337.5, to the second).
     expect(fade(lines.toReversed())).toBe(338 - 315)

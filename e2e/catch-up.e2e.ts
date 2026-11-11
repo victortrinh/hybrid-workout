@@ -20,7 +20,7 @@ test('serves the Late sessions first, says how far behind, and still lets a curr
   await page.clock.setFixedTime(WEEK_2_TUESDAY)
   await page.goto('/')
 
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^HYROX B, 8\srounds/)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^HYROX B, 6\srounds/)
   // Up next's meta line says where it's from.
   const lateMeta = page.locator('p', { hasText: /^Week 1 · Late/ })
   await expect(lateMeta).toBeVisible()
