@@ -1089,20 +1089,20 @@ describe('HYROX', () => {
   const hyroxRun = (week: number, id = 'hyrox-a', date = '2026-11-11') =>
     startRun({ week, session: session(week, id), date: localDate(date), environment: 'indoor' }, T0)
   const rounds = (week: number, id: string) => liveBlocks(session(week, id)).filter((b) => b.kind === 'round')
-  /** Each round as its Station, then its run: "sled-push 25 m → 400 m". */
+  /** Each round as its run, then its Station: "400 m → sled-push 25 m". */
   const layout = (week: number, id: string) =>
     rounds(week, id).map(
-      (b) => `${b.stations.map((s) => `${s.station} ${s.meters ? `${s.meters} m` : `${s.reps} reps`}`).join(', ')} → ${b.meters} m`,
+      (b) => `${b.meters} m → ${b.stations.map((s) => `${s.station} ${s.meters ? `${s.meters} m` : `${s.reps} reps`}`).join(', ')}`,
     )
   /** The pounds each Station of the Session is loaded with. */
   const loads = (blocks: LiveBlock[]) =>
     Object.fromEntries(blocks.flatMap((b) => b.stations).map((s) => [s.station, s.pounds]))
 
-  it('runs warm-up, Set up, eight rounds on a clock that counts up, and the cooldown', () => {
+  it('runs warm-up, Set up, six rounds on a clock that counts up, and the cooldown', () => {
     expect(liveBlocks(session(1, 'hyrox-a')).map((b) => [b.name, b.kind, b.seconds, b.round, b.work])).toEqual([
       ['Warm-up', 'warm-up', 300, null, false],
       ['Set up', 'setup', null, null, false],
-      ...[1, 2, 3, 4, 5, 6, 7, 8].map((n) => [`Round ${n} of 8`, 'round', null, n, true]),
+      ...[1, 2, 3, 4, 5, 6].map((n) => [`Round ${n} of 6`, 'round', null, n, true]),
       ['Cooldown', 'cooldown', 240, null, false],
     ])
   })
@@ -1115,36 +1115,36 @@ describe('HYROX', () => {
     expect(blocks.filter((b) => b.kind === 'round').every((b) => b.seconds === null)).toBe(true)
   })
 
-  it('takes the Station volume and the run after it from the Week’s Phase', () => {
-    const twice = (r: string[]) => [...r, ...r]
+  it('takes the run and the Station volume after it from the Week’s Phase', () => {
+    // Through Build early the last two Stations come up again: six rounds.
+    const lastTwoAgain = (r: string[]) => [...r, ...r.slice(2)]
     expect(layout(1, 'hyrox-a')).toEqual(
-      twice(['sled-push 25 m → 400 m', 'sled-pull 25 m → 400 m', 'farmers-carry 100 m → 400 m', 'sandbag-lunges 25 m → 400 m']),
+      lastTwoAgain(['400 m → sled-push 25 m', '400 m → sled-pull 25 m', '400 m → farmers-carry 100 m', '400 m → sandbag-lunges 25 m']),
     )
     expect(layout(1, 'hyrox-b')).toEqual(
-      twice(['skierg 250 m → 400 m', 'burpee-broad-jumps 20 m → 400 m', 'row 250 m → 400 m', 'wall-balls 25 reps → 400 m']),
+      lastTwoAgain(['400 m → skierg 250 m', '400 m → burpee-broad-jumps 20 m', '400 m → row 250 m', '400 m → wall-balls 25 reps']),
     )
     expect(layout(6, 'hyrox-a')).toEqual(
-      twice(['sled-push 25 m → 400 m', 'sled-pull 25 m → 400 m', 'farmers-carry 100 m → 400 m', 'sandbag-lunges 50 m → 400 m']),
+      lastTwoAgain(['400 m → sled-push 25 m', '400 m → sled-pull 25 m', '400 m → farmers-carry 100 m', '400 m → sandbag-lunges 50 m']),
     )
-    expect(layout(11, 'hyrox-b')).toEqual(['skierg 750 m → 1000 m', 'burpee-broad-jumps 60 m → 1000 m', 'row 750 m → 1000 m', 'wall-balls 75 reps → 1000 m'])
+    expect(layout(11, 'hyrox-b')).toEqual(['1000 m → skierg 750 m', '1000 m → burpee-broad-jumps 60 m', '1000 m → row 750 m', '1000 m → wall-balls 75 reps'])
     expect(layout(17, 'hyrox-a')).toEqual([
-      'sled-push 50 m → 1000 m',
-      'sled-pull 50 m → 1000 m',
-      'farmers-carry 200 m → 1000 m',
-      'sandbag-lunges 100 m → 1000 m',
+      '1000 m → sled-push 50 m',
+      '1000 m → sled-pull 50 m',
+      '1000 m → farmers-carry 200 m',
+      '1000 m → sandbag-lunges 100 m',
     ])
   })
 
-  it('cuts a Deload week to three Stations: six rounds in Weeks 5 and 10, three from Week 15', () => {
-    const three = ['sled-push 25 m → 400 m', 'sled-pull 25 m → 400 m', 'sandbag-lunges 25 m → 400 m']
-    expect(layout(5, 'hyrox-a')).toEqual([...three, ...three])
+  it('cuts a Deload week to three rounds, one Station left out', () => {
+    expect(layout(5, 'hyrox-a')).toEqual(['400 m → sled-push 25 m', '400 m → sled-pull 25 m', '400 m → sandbag-lunges 25 m'])
     expect(rounds(15, 'hyrox-a')).toHaveLength(3)
   })
 
-  it('puts each Station before its run, so every run is a Compromised run', () => {
+  it('puts each run before its Station, as in the race, so the Session ends on a Station', () => {
     for (const block of rounds(1, 'hyrox-a')) {
-      expect(block.runFirst).toBe(false)
-      expect(roundLegs(block)).toEqual([block.stations[0].station, 'run'])
+      expect(block.runFirst).toBe(true)
+      expect(roundLegs(block)).toEqual(['run', block.stations[0].station])
     }
   })
 
@@ -1156,14 +1156,14 @@ describe('HYROX', () => {
     expect(loads(rounds(1, 'hyrox-b'))).toEqual({ skierg: null, 'burpee-broad-jumps': null, row: null, 'wall-balls': 13 })
   })
 
-  it('times each leg of a round from a tap at its end: the Station, then the run', () => {
+  it('times each leg of a round from a tap at its end: the run, then the Station', () => {
     let run = onRound1(hyroxRun(1))
-    expect(run.blocks[run.block].name).toBe('Round 1 of 8')
-    expect(roundLegs(run.blocks[run.block])).toEqual(['sled-push', 'run'])
+    expect(run.blocks[run.block].name).toBe('Round 1 of 6')
+    expect(roundLegs(run.blocks[run.block])).toEqual(['run', 'sled-push'])
     expect(blockLeft(run, at(9))).toBeNull()
     expect(currentLeg(run)).toBe(0)
 
-    // The sled push in 3:00: the round goes on, onto the run, its clock from zero.
+    // The run in 3:00: the round goes on, onto the sled push, its clock from zero.
     run = nextBlock(run, at(10))
     expect(run).toMatchObject({ block: 2, legs: [{ block: 2, seconds: 180 }], asks: [] })
     expect(currentLeg(run)).toBe(1)
@@ -1187,40 +1187,49 @@ describe('HYROX', () => {
     // Rounds 2 to 4 are never answered: they log as written.
     run = legs(run, 19.5, 21.5)
     run = legs(run, 25, 27)
-    // Rounds 5 to 8: the four Stations again, straight on.
+    // Rounds 5 and 6: the last two Stations again, straight on.
     run = legs(run, 29, 31)
     run = legs(run, 33, 35)
-    run = legs(run, 37, 39)
-    run = legs(run, 41, 43)
     expect(run.blocks[run.block].kind).toBe('cooldown')
-    run = advance(run, at(47))
+    run = advance(run, at(39))
     expect(isOver(run)).toBe(true)
 
-    expect(stationLogs(run)).toHaveLength(8 * 3)
-    expect(stationLogs(run).at(-1)).toEqual({ round: 8, part: 'run', pounds: null, meters: 400, reps: null, seconds: 120 })
+    expect(stationLogs(run)).toHaveLength(6 * 3)
+    expect(stationLogs(run).at(-1)).toEqual({ round: 6, part: 'sandbag-lunges', pounds: 45, meters: 25, reps: null, seconds: 120 })
     expect(stationLogs(run).slice(0, 12)).toEqual([
       { round: 1, part: 'round', pounds: null, meters: null, reps: null, seconds: 360 },
-      { round: 1, part: 'sled-push', pounds: 315, meters: 25, reps: null, seconds: 180 },
       { round: 1, part: 'run', pounds: null, meters: 300, reps: null, seconds: 180 },
+      { round: 1, part: 'sled-push', pounds: 315, meters: 25, reps: null, seconds: 180 },
       { round: 2, part: 'round', pounds: null, meters: null, reps: null, seconds: 240 },
-      { round: 2, part: 'sled-pull', pounds: 225, meters: 25, reps: null, seconds: 120 },
       { round: 2, part: 'run', pounds: null, meters: 400, reps: null, seconds: 120 },
+      { round: 2, part: 'sled-pull', pounds: 225, meters: 25, reps: null, seconds: 120 },
       { round: 3, part: 'round', pounds: null, meters: null, reps: null, seconds: 270 },
-      { round: 3, part: 'farmers-carry', pounds: 55, meters: 100, reps: null, seconds: 150 },
-      { round: 3, part: 'run', pounds: null, meters: 400, reps: null, seconds: 120 },
+      { round: 3, part: 'run', pounds: null, meters: 400, reps: null, seconds: 150 },
+      { round: 3, part: 'farmers-carry', pounds: 55, meters: 100, reps: null, seconds: 120 },
       { round: 4, part: 'round', pounds: null, meters: null, reps: null, seconds: 330 },
-      { round: 4, part: 'sandbag-lunges', pounds: 45, meters: 25, reps: null, seconds: 210 },
-      { round: 4, part: 'run', pounds: null, meters: 400, reps: null, seconds: 120 },
+      { round: 4, part: 'run', pounds: null, meters: 400, reps: null, seconds: 210 },
+      { round: 4, part: 'sandbag-lunges', pounds: 45, meters: 25, reps: null, seconds: 120 },
     ])
     const input = { id: 'hyrox-1234', rpe: 7, distanceMeters: 1800, updatedAt: '2026-11-11T18:00:00.000Z' }
-    // 47 minutes on the clock, less the two setting up.
-    expect(liveLog(run, at(47), input)).toMatchObject({ status: 'done', minutes: 45, distanceMeters: null, stations: stationLogs(run) })
+    // 39 minutes on the clock, less the two setting up.
+    expect(liveLog(run, at(39), input)).toMatchObject({ status: 'done', minutes: 37, distanceMeters: null, stations: stationLogs(run) })
+  })
+
+  it('carries a changed load on to the same Station when it comes up again', () => {
+    let run = onRound1(hyroxRun(1))
+    run = legs(run, 10, 13)
+    run = legs(run, 15, 17)
+    run = legs(run, 19, 21)
+    // Round 3's farmers carry went down to 45 lb a hand: round 5, the carry again, is loaded the same.
+    const [carry] = run.blocks[4].stations
+    run = answerStations(run, 4, { stations: [{ ...carry, pounds: 45 }] })
+    expect(run.blocks[6].stations).toMatchObject([{ station: 'farmers-carry', pounds: 45 }])
   })
 
   it('logs only the rounds finished, Partial, when it ends early', () => {
     let run = onRound1(hyroxRun(1))
     run = end(nextBlock(nextBlock(run, at(10)), at(13)), at(25))
-    // Round 2's Station was done, but the round wasn't.
+    // Round 2's run was done, but the round wasn't.
     run = { ...run, legs: [...run.legs, { block: 3, seconds: 200 }] }
     expect(stationLogs(run).filter((l) => l.part === 'round')).toEqual([
       { round: 1, part: 'round', pounds: null, meters: null, reps: null, seconds: 360 },
@@ -1228,14 +1237,14 @@ describe('HYROX', () => {
     expect(liveStatusOf(run)).toBe('partial')
   })
 
-  it('goes back to a round on its last leg, the Station before it kept', () => {
+  it('goes back to a round on its last leg, the run before it kept', () => {
     let run = onRound1(hyroxRun(1))
     run = legs(run, 10, 13)
     run = nextBlock(run, at(16))
     run = goBack(run, 2, at(17))
     expect(run).toMatchObject({ block: 2, splits: [], legs: [{ block: 2, seconds: 180 }] })
     expect(currentLeg(run)).toBe(1)
-    // The run's clock runs on from its 3:00.
+    // The Station's clock runs on from its 3:00.
     expect(legElapsed(run, at(18))).toBe(240)
     expect(redone(nextBlock(run, at(19)), 2)).toEqual([2])
   })
@@ -1246,24 +1255,24 @@ describe('HYROX', () => {
     const old = { ...run, legs: [] }
     expect(stationLogs(old).filter((l) => l.round === 1).map((l) => [l.part, l.seconds])).toEqual([
       ['round', 360],
-      ['sled-push', null],
       ['run', null],
+      ['sled-push', null],
     ])
   })
 
   it('asks about a split quicker than anyone could go, and saves it put right or untimed', () => {
     let run = onRound1(hyroxRun(11, 'hyrox-b', '2027-01-20'))
-    // 0:14 for 750 m on the SkiErg: its tap slipped. The run took the rest of it.
-    run = nextBlock(run, at(7) + 14_000)
-    run = tap(run, at(14))
+    // The 1 km in 5:00, then 0:14 for 750 m on the SkiErg: its tap slipped.
+    run = nextBlock(run, at(12))
+    run = tap(run, at(12) + 14_000)
     expect(quickSplits(run)).toEqual([
-      { block: run.blocks.findIndex((b) => b.round === 1), leg: 0, seconds: 14, part: 'skierg', round: 1, meters: 750, reps: null, fastest: 113 },
+      { block: run.blocks.findIndex((b) => b.round === 1), leg: 1, seconds: 14, part: 'skierg', round: 1, meters: 750, reps: null, fastest: 113 },
     ])
     const [{ block }] = quickSplits(run)
     const line = (fixes: SplitFix[]) => stationLogs(run, fixes).find((l) => l.round === 1 && l.part === 'skierg')!.seconds
-    expect(line([{ block, leg: 0, seconds: 200 }])).toBe(200)
-    expect(line([{ block, leg: 0, seconds: null }])).toBeNull()
-    const input = { id: 'hyrox-1234', rpe: 8, distanceMeters: null, updatedAt: '', fixes: [{ block, leg: 0, seconds: 200 }] }
+    expect(line([{ block, leg: 1, seconds: 200 }])).toBe(200)
+    expect(line([{ block, leg: 1, seconds: null }])).toBeNull()
+    const input = { id: 'hyrox-1234', rpe: 8, distanceMeters: null, updatedAt: '', fixes: [{ block, leg: 1, seconds: 200 }] }
     expect(liveLog(run, at(30), input).stations.find((l) => l.part === 'skierg')!.seconds).toBe(200)
   })
 
@@ -1333,7 +1342,7 @@ describe('split warm-ups and the HYROX Set up', () => {
     expect(blocks.slice(0, 3).map((b) => [b.name, b.kind, b.seconds, b.work])).toEqual([
       ['Warm-up', 'warm-up', 300, false],
       ['Set up', 'setup', null, false],
-      ['Round 1 of 8', 'round', null, true],
+      ['Round 1 of 6', 'round', null, true],
     ])
     expect(blocks[1]).toMatchObject({ checklist: [], round: null, effort: null })
     expect(blocks[1].stations).toEqual([
@@ -1371,12 +1380,12 @@ describe('split warm-ups and the HYROX Set up', () => {
   it('leaves Set up out of the active time and the log’s minutes', () => {
     let run = nextBlock(onSetUp(), at(12))
     run = resume(run, at(13))
-    for (const t of [17, 21, 25, 29, 33, 37, 41, 45]) run = legs(run, t - 2, t)
-    run = advance(run, at(49))
+    for (const t of [17, 21, 25, 29, 33, 37]) run = legs(run, t - 2, t)
+    run = advance(run, at(41))
     expect(isOver(run)).toBe(true)
-    // 49 minutes on the clock, less a minute on Ready and seven setting up.
-    expect(activeSeconds(run, at(49))).toBe(41 * 60)
-    expect(liveLog(run, at(49), { id: 'x', rpe: 7, distanceMeters: null, updatedAt: '' }).minutes).toBe(41)
+    // 41 minutes on the clock, less a minute on Ready and seven setting up.
+    expect(activeSeconds(run, at(41))).toBe(33 * 60)
+    expect(liveLog(run, at(41), { id: 'x', rpe: 7, distanceMeters: null, updatedAt: '' }).minutes).toBe(33)
   })
 
   it('leaves Set up out of the active time when the Session ends during it', () => {

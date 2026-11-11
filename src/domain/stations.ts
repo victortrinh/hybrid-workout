@@ -171,9 +171,7 @@ function lastAgainstBest(logs: readonly SessionLog[], id: StationId): number {
 /**
  * A Deload HYROX session without the Station done best last time: the one
  * whose last log came closest to its Station best. Ties, and no logs at all,
- * keep the Program's choice. The Stations kept stay in race order, and a
- * Session that goes through them twice still does, so every round of the
- * dropped Station gives way to the spare.
+ * keep the Program's choice. The Stations kept stay in race order.
  */
 function dropBestLastTime(session: Session, logs: readonly SessionLog[]): Session {
   const spare = session.spareRound

@@ -662,7 +662,7 @@ const hyroxB = (week: number, date: string, seconds: [ski: number, jumps: number
   ).map(([part, pounds, meters, reps], i) => ({ round: i + 1, part, pounds, meters, reps, seconds: seconds[i] })),
 })
 
-test('a Deload HYROX session runs six rounds, three Stations twice, without the Station done best last time, and no Station targets', async ({ page }) => {
+test('a Deload HYROX session runs three rounds, without the Station done best last time, and no Station targets', async ({ page }) => {
   // Wednesday of Week 5, a Deload week: the wall balls matched their best in Week 4, every other Station came in slower.
   const wednesday = new Date('2026-12-09T12:00:00-05:00')
   const history = caughtUp(4, [hyroxB(3, '2026-11-25', [58, 48, 52, 72]), hyroxB(4, '2026-12-02', [62, 50, 56, 70])])
@@ -673,9 +673,9 @@ test('a Deload HYROX session runs six rounds, three Stations twice, without the 
   await page.clock.pauseAt(new Date(wednesday.getTime() + 1000))
   await page.getByRole('button', { name: 'Show the Prescription' }).click()
   const sheet = page.getByRole('dialog', { name: /^HYROX B, / })
-  await expect(sheet.getByRole('heading', { level: 3 })).toHaveText([/^Warm-up/, ...[1, 2, 3, 4, 5, 6].map((n) => new RegExp(`^Round ${n}`)), /^Cooldown/])
+  await expect(sheet.getByRole('heading', { level: 3 })).toHaveText([/^Warm-up/, ...[1, 2, 3].map((n) => new RegExp(`^Round ${n}`)), /^Cooldown/])
   const three = [/^SkiErg\s·\s250\sm$/, /^Burpee broad jumps\s·\s20\sm$/, /^Row\s·\s250\sm$/]
-  await expect(sheet.getByRole('listitem').filter({ hasNotText: /^(Run|Easy jog|Walk)/ })).toHaveText([...three, ...three])
+  await expect(sheet.getByRole('listitem').filter({ hasNotText: /^(Run|Easy jog|Walk)/ })).toHaveText(three)
   await expect(sheet.getByText(/Station target/)).toHaveCount(0)
   await page.keyboard.press('Escape')
 
@@ -685,11 +685,11 @@ test('a Deload HYROX session runs six rounds, three Stations twice, without the 
   // Nothing left to load without the wall balls: no Set up.
   await expect(page.getByRole('list', { name: 'Blocks' }).getByRole('listitem')).toHaveText([
     /^Warm-up/,
-    ...[1, 2, 3, 4, 5, 6].map((n) => new RegExp(`^Round ${n} of 6`)),
+    ...[1, 2, 3].map((n) => new RegExp(`^Round ${n} of 3`)),
     /^Cooldown/,
   ])
   await s.skip.click()
-  await expect(s.block).toHaveText(/^Ready\?\sUp\snext:\sRound\s1\sof\s6\s·\s250\sm\sSkiErg$/)
+  await expect(s.block).toHaveText(/^Ready\?\sUp\snext:\sRound\s1\sof\s3\s·\s400\sm\srun$/)
   await s.start.click()
   await expect(page.locator('header')).not.toContainText('Station target')
 })

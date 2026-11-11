@@ -102,7 +102,7 @@ const halfRaceVolume = (id: StationId): Volume => {
 }
 
 // ---------------------------------------------------------------------------
-// HYROX A and HYROX B: rounds of a Station, then a run at Race run pace (ADR-0009).
+// HYROX A and HYROX B: rounds of a run at Race run pace, then a Station (ADR-0009, ADR-0010).
 
 type Rotation = 'A' | 'B'
 
@@ -151,7 +151,7 @@ export const STATION_VOLUME: Record<VolumeTier, Record<StationId, Volume>> = {
 }
 
 /**
- * The run after each Station, by tier. HYROX B's stay at 600 m in Race
+ * The run before each Station, by tier. HYROX B's stay at 600 m in Race
  * specific: its Stations take about twice as long as A's.
  */
 export const RUN_METERS: Record<VolumeTier, Record<Rotation, number>> = {
@@ -162,11 +162,11 @@ export const RUN_METERS: Record<VolumeTier, Record<Rotation, number>> = {
 }
 
 /**
- * How many times a Session goes through its Stations, by tier: twice (8
- * rounds) in Foundation and Build early, where the Stations are short; once
- * (4 rounds) from Build late on.
+ * How many of a Session's last Stations come up a second time, by tier: two
+ * (6 rounds) in Foundation and Build early, where the Stations are short;
+ * none (4 rounds) from Build late on (ADR-0010).
  */
-const PASSES: Record<VolumeTier, number> = { foundation: 2, 'build-early': 2, 'build-late': 1, 'race-specific': 1 }
+const REPEATS: Record<VolumeTier, number> = { foundation: 2, 'build-early': 2, 'build-late': 0, 'race-specific': 0 }
 
 /** Every HYROX run: at Race run pace, RPE 7–8. Slowing one is how the athlete recovers; there's no prescribed rest. */
 const HYROX_RUN: RunEffort = { pace: 'race-run', rpe: [7, 8] }
@@ -174,8 +174,8 @@ const HYROX_RUN: RunEffort = { pace: 'race-run', rpe: [7, 8] }
 /** Rounds run straight on, the joins between repeated Stations included. */
 const CONTINUOUS = 'No rest between rounds: ease a run to recover.'
 
-/** The Stations in the order the rounds go through them, `passes` times over. */
-const passes = (ids: StationId[], times: number): StationId[] => Array.from({ length: times }, () => ids).flat()
+/** The Stations in the order the rounds go through them: all of them, then the last `repeats` again. */
+const withRepeats = (ids: StationId[], repeats: number): StationId[] => [...ids, ...ids.slice(ids.length - repeats)]
 
 /**
  * A Deload drops one Station: the Coach drops the one done best last time
@@ -220,7 +220,7 @@ function setUp(rounds: StationId[]): Block {
 
 interface Circuit {
   rotation: Rotation
-  /** Each round's Station, in order: a Station comes up twice when the Session goes through its Stations twice. */
+  /** Each round's Station, in order: a Station comes up twice when the Session repeats it. */
   ids: StationId[]
   /** A Deload Session's left-out Station, kept as its spare round. */
   spare?: StationId
@@ -230,12 +230,12 @@ interface Circuit {
   note?: string
 }
 
-/** A round is one Station at its Station volume, then the run: every run a Compromised run, at Race run pace. */
+/** A round is the run at Race run pace, then one Station at its Station volume, as in the race: the Session ends on a Station. */
 function hyrox({ rotation, ids, spare, volume, runMeters, key = false, note }: Circuit): Session {
   const round = (id: StationId, i: number): Block => ({
     name: `Round ${i + 1}`,
     main: true,
-    exercises: [station(id, volume(id)), { name: 'Run', prescription: { kind: 'run', meters: runMeters, effort: HYROX_RUN } }],
+    exercises: [{ name: 'Run', prescription: { kind: 'run', meters: runMeters, effort: HYROX_RUN } }, station(id, volume(id))],
   })
   const session: Session = {
     id: rotation === 'A' ? 'hyrox-a' : 'hyrox-b',
@@ -259,26 +259,22 @@ function hyrox({ rotation, ids, spare, volume, runMeters, key = false, note }: C
   return withHyroxMinutes(session, DEFAULT_RACE_RUN, (id, v) => defaultStationSeconds(stations[id], v))
 }
 
-/** A normal Week's HYROX: the four Stations at the tier's Station volume, twice through (8 rounds) or once (4). */
+/** A normal Week's HYROX: the four Stations at the tier's Station volume, the last two again where they are short (6 rounds), else once (4). */
 const hyroxRounds = (rotation: Rotation, tier: VolumeTier, key = false): Session =>
   hyrox({
     rotation,
-    ids: passes(ROTATION[rotation], PASSES[tier]),
+    ids: withRepeats(ROTATION[rotation], REPEATS[tier]),
     volume: (id) => STATION_VOLUME[tier][id],
     runMeters: RUN_METERS[tier][rotation],
     key,
     note: tier === 'foundation' ? `Technique before speed. ${CONTINUOUS}` : CONTINUOUS,
   })
 
-/**
- * A Deload week's HYROX: three Stations, Race load and volume kept, once
- * through (3 rounds) or, where a normal Week goes through twice, twice (6
- * rounds). Week 20 halves the volume too.
- */
+/** A Deload week's HYROX: three rounds, Race load and volume kept. Week 20 halves the volume too. */
 const deloadRounds = (rotation: Rotation, tier: VolumeTier, { half = false } = {}): Session =>
   hyrox({
     rotation,
-    ids: passes(THREE_ROUNDS[rotation], PASSES[tier]),
+    ids: THREE_ROUNDS[rotation],
     spare: ROTATION[rotation].find((id) => !THREE_ROUNDS[rotation].includes(id)),
     volume: half ? halfRaceVolume : (id) => STATION_VOLUME[tier][id],
     runMeters: RUN_METERS[tier][rotation],

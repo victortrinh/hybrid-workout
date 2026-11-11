@@ -58,7 +58,7 @@ export type LiveBlockKind =
   | 'run'
   | 'distance'
   | 'cooldown'
-  /** A round: a HYROX Station then its run, or a Compromised interval's run then its wall balls, with a tap at the end of each leg. */
+  /** A round: a HYROX run then its Station, or a Compromised interval's run then its wall balls, with a tap at the end of each leg. */
   | 'round'
   /** One Station of a Race simulation, timed on its own. */
   | 'station'
@@ -90,7 +90,7 @@ export interface LiveBlock {
   round: number | null
   /** A round's Stations, a Race simulation Station's one, or every Station to set up. Empty for everything else. */
   stations: LiveStation[]
-  /** A round whose run comes before its Stations (Compromised intervals); a HYROX round runs after them. */
+  /** A round whose run comes before its Stations: HYROX rounds and Compromised intervals. */
   runFirst: boolean
   /** Null where the Block isn't a run at a target: drills, plyometrics. */
   effort: RunEffort | null
@@ -695,7 +695,7 @@ export function nextBlock(run: LiveRun, now: number): LiveRun {
 /** Under this long, a leg's tap is the same thumb landing twice. */
 const LEG_BOUNCE_SECONDS = 2
 
-/** A round's legs, in order: each Station then its run, or the run first where the round says so. */
+/** A round's legs, in order: the run first where the round says so (HYROX, Compromised intervals), else each Station then its run. */
 export function roundLegs(block: LiveBlock): StationPart[] {
   if (block.kind !== 'round') return []
   const run: StationPart[] = block.meters !== null ? ['run'] : []

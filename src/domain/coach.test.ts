@@ -1020,13 +1020,13 @@ describe('the re-entry Suggestion', () => {
 
     const lighter = onDay('2026-12-30', logs, [decided('accepted', 're-entry-w7', '2026-12-30')])
     expect(lighter.upNext).toMatchObject({ id: 'run', headline: '2 × 8′', minutes: 30 })
-    expect(lighter.bucket.filter((e) => e.week === 8).map((e) => e.session.minutes)).toEqual([45, 45, 45, 40, 40])
+    expect(lighter.bucket.filter((e) => e.week === 8).map((e) => e.session.minutes)).toEqual([45, 35, 45, 30, 40])
     // What was done before the gap stays as it was.
     const week7 = prescribedWeek(program, 7, [...CLEARED, ...logs], [decided('accepted', 're-entry-w7', '2026-12-30')], DEFAULT_EQUIPMENT, {
       reports: [],
       today: localDate('2026-12-30'),
     })!
-    expect(week7.sessions.map((s) => s.minutes)).toEqual([45, 45, 30, 27, 23])
+    expect(week7.sessions.map((s) => s.minutes)).toEqual([45, 35, 30, 20, 23])
   })
 
   it('never lightens a Deload week, nor the Taper', () => {
@@ -1053,10 +1053,10 @@ describe('the re-entry Suggestion', () => {
     expect(day.suggestions[0]).toMatchObject({ decision: 'accepted', decidedOn: '2026-12-31' })
     expect(day.upNext).toMatchObject({ id: 'strength', minutes: 30 })
     // Week 7 was all Done, so Week 8 holds the second Easy run too.
-    expect(day.bucket.map((e) => e.session.minutes)).toEqual([30, 30, 30, 27, 27, 17])
+    expect(day.bucket.map((e) => e.session.minutes)).toEqual([30, 23, 30, 20, 27, 17])
     expect(firstStation(day.bucket.find((e) => e.session.id === 'hyrox-a')!.session)).toEqual([
-      { kind: 'station', station: 'sled-push', meters: 15, reps: undefined },
       { kind: 'run', meters: 300, minutes: undefined, effort: { pace: 'race-run', rpe: [7, 8] } },
+      { kind: 'station', station: 'sled-push', meters: 15, reps: undefined },
     ])
   })
 
@@ -1175,8 +1175,9 @@ describe('the pain rules', () => {
     const hyroxB = day.bucket.find((e) => e.session.id === 'hyrox-b')!.session
     const b = [['skierg 250'], ['skierg 250'], ['row 250'], ['wall-balls']]
     const a = [['row 500'], ['sled-pull 25'], ['farmers-carry 100'], ['sandbag-lunges 25']]
-    expect(roundStations(hyroxB)).toEqual([...b, ...b])
-    expect(roundStations(hyroxAOf(day))).toEqual([...a, ...a])
+    // Six rounds: the last two Stations come up again.
+    expect(roundStations(hyroxB)).toEqual([...b, ...b.slice(2)])
+    expect(roundStations(hyroxAOf(day))).toEqual([...a, ...a.slice(2)])
     const run = runOf(day)
     expect(run).toMatchObject({ headline: '2 × 8′', minutes: 36 })
     expect(mainIntervals(run)).toMatchObject({ kind: 'intervals', reps: 2, workSeconds: 480 })
@@ -1419,7 +1420,7 @@ describe('the recovery rules', () => {
     const day = withNights('2026-11-25', [...baseline, night('2026-11-25', 320, 40)], [], strengthMonday)
     expect(day.upNext!.id).toBe('hyrox-b')
     expect(day.recoveryCut).toBe('round')
-    expect(day.upNext!.blocks.filter((b) => b.main).map((b) => b.name)).toEqual([1, 2, 3, 4, 5, 6, 7].map((n) => `Round ${n}`))
+    expect(day.upNext!.blocks.filter((b) => b.main).map((b) => b.name)).toEqual([1, 2, 3, 4, 5].map((n) => `Round ${n}`))
     expect(recoveryOf(day)[0]).toMatchObject({ sessionId: 'hyrox-b', cut: 'round' })
   })
 
@@ -1452,7 +1453,7 @@ describe('the recovery rules', () => {
     ])
     // Until it's Accepted, the short-sleep rule stands.
     expect(day.recoveryChange).toBe('short-sleep')
-    expect(day.upNext!.blocks.filter((b) => b.main)).toHaveLength(7)
+    expect(day.upNext!.blocks.filter((b) => b.main)).toHaveLength(5)
   })
 
   it('raise no Suggestion for HRV only 14% under, or for low HRV after a full night', () => {
@@ -1482,7 +1483,7 @@ describe('the recovery rules', () => {
 
     const kept = withNights('2026-11-25', nights, [recoveryDecision('kept')], strengthMonday)
     expect(kept.recoveryChange).toBe('short-sleep')
-    expect(kept.upNext!.blocks.filter((b) => b.main)).toHaveLength(7)
+    expect(kept.upNext!.blocks.filter((b) => b.main)).toHaveLength(5)
   })
 
   it('apply to today only: tomorrow without a night is as written', () => {
@@ -1597,23 +1598,23 @@ describe('the lighter-Week Suggestion from Readiness', () => {
   it('changes nothing until Accepted, and the rest of the Week once it is', () => {
     const hyroxMondayDone = [log(3, 'hyrox-a', '2026-11-23')]
     const open = readiness('2026-11-25', { ...flags, logs: hyroxMondayDone })
-    expect(open.bucket.find((e) => e.session.id === 'hyrox-b')!.session.minutes).toBe(35)
+    expect(open.bucket.find((e) => e.session.id === 'hyrox-b')!.session.minutes).toBe(30)
 
     const accepted = readiness('2026-11-25', { ...flags, logs: hyroxMondayDone, decisions: [lighterDecision('accepted')] })
     expect(lighterOf(accepted)[0]).toMatchObject({ decision: 'accepted', decidedOn: '2026-11-25' })
     // HYROX A was done before the flags added up: it stays as written.
-    expect(accepted.bucket.map((e) => e.session.minutes)).toEqual([30, 23, 30, 35, 20])
+    expect(accepted.bucket.map((e) => e.session.minutes)).toEqual([30, 20, 30, 30, 20])
     expect(accepted.bucket.find((e) => e.session.id === 'run')!.session.headline).toBe('2 × 8′')
 
     const kept = readiness('2026-11-25', { ...flags, logs: hyroxMondayDone, decisions: [lighterDecision('kept')] })
-    expect(kept.bucket.map((e) => e.session.minutes)).toEqual([45, 35, 45, 35, 30])
+    expect(kept.bucket.map((e) => e.session.minutes)).toEqual([45, 30, 45, 30, 30])
   })
 
   it('shows the lighter Week on other screens too, given the nights', () => {
     const decisions = [lighterDecision('accepted')]
     const today = localDate('2026-11-25')
-    expect(prescribedWeek(program, 3, [], decisions, undefined, { ...flags, today })?.sessions[1].minutes).toBe(23)
-    expect(prescribedWeek(program, 3, [], decisions, undefined, { reports: flags.reports, today })?.sessions[1].minutes).toBe(35)
+    expect(prescribedWeek(program, 3, [], decisions, undefined, { ...flags, today })?.sessions[1].minutes).toBe(20)
+    expect(prescribedWeek(program, 3, [], decisions, undefined, { reports: flags.reports, today })?.sessions[1].minutes).toBe(30)
   })
 
   it('never comes in a Deload week or the Taper', () => {

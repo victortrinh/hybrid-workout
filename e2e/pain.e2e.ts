@@ -221,9 +221,9 @@ test('pain 4 Accepted: HYROX A rows instead of the sled push, and says why', asy
 
   await page.getByRole('button', { name: 'Show the Prescription' }).click()
   const sheet = page.getByRole('dialog', { name: /^HYROX A, / })
-  // Rounds 1 and 5, the sled push both times.
+  // Round 1, the sled push.
   const rows = sheet.getByRole('listitem').filter({ hasText: /^Row/ })
-  await expect(rows).toHaveCount(2)
+  await expect(rows).toHaveCount(1)
   for (const row of await rows.all()) await expect(row).toContainText('Instead of sled push: pain says no impact.')
   await expect(sheet.getByRole('listitem').filter({ hasText: /^Sled push/ })).toHaveCount(0)
   await expectNoAxeViolations(page)

@@ -97,8 +97,8 @@ describe('painAdapted at the ease level: no burpee broad jumps or sled push, few
     const hyroxB = week(1).sessions.find((s) => s.id === 'hyrox-b')!
     const eased = painAdapted(hyroxB, 'ease')
     const round2 = eased.blocks.find((b) => b.name === 'Round 2')!
-    expect(round2.exercises.map(describeLeg)).toEqual(['SkiErg 250 m: Instead of burpee broad jumps: pain says no impact.', 'Run'])
-    expect(eased.headline).toBe('8 rounds')
+    expect(round2.exercises.map(describeLeg)).toEqual(['Run', 'SkiErg 250 m: Instead of burpee broad jumps: pain says no impact.'])
+    expect(eased.headline).toBe('6 rounds')
     expect(eased.minutes).toBe(hyroxB.minutes)
   })
 
@@ -106,8 +106,8 @@ describe('painAdapted at the ease level: no burpee broad jumps or sled push, few
     const hyroxA = week(1).sessions.find((s) => s.id === 'hyrox-a')!
     const eased = painAdapted(hyroxA, 'ease')
     expect(eased.blocks.find((b) => b.name === 'Round 1')!.exercises.map(describeLeg)).toEqual([
-      'Row 500 m: Instead of sled push: pain says no impact.',
       'Run',
+      'Row 500 m: Instead of sled push: pain says no impact.',
     ])
     expect(eased.blocks.find((b) => b.setup)!.exercises.map((e) => e.name)).toEqual(['Sled pull', 'Farmers carry', 'Sandbag lunges'])
     // Race volume: 50 m of sled push is 1000 m of row.
@@ -150,7 +150,7 @@ describe('painAdapted at the ease level: no burpee broad jumps or sled push, few
     const easy = week(3).sessions.find((s) => s.id === 'easy')!
     expect(painAdapted(easy, 'ease')).toEqual(easy)
     const hyroxB = week(3).sessions.find((s) => s.id === 'hyrox-b')!
-    expect(mainBlocks(painAdapted(hyroxB, 'ease'))).toHaveLength(8)
+    expect(mainBlocks(painAdapted(hyroxB, 'ease'))).toHaveLength(6)
   })
 
   it('keeps the old jump and acceleration Substitutions gone: nothing goes to the bike', () => {
