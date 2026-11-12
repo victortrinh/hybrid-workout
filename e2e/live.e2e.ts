@@ -86,7 +86,9 @@ test('a full Threshold Run from Start to logged', async ({ page }) => {
   await expect(page).toHaveTitle('Live session · Compromised')
   const s = live(page)
   await expect(s.heading).toHaveText('Run, 3 × 8′')
-  await expect(s.heading).toBeFocused()
+  // On arrival: on a phone the screen, named for the Session, ahead of the actions on top; on desktop the heading.
+  if (test.info().project.name === 'phone') await expect(page.getByRole('group', { name: 'Run, 3 × 8′' })).toBeFocused()
+  else await expect(s.heading).toBeFocused()
   await expect(s.block).toHaveText('Warm-up · 10 min')
   await expect(s.timer).toHaveText('10:00')
   await expect(page.getByRole('navigation')).toHaveCount(0)
@@ -170,6 +172,12 @@ test('a full Threshold Run from Start to logged', async ({ page }) => {
   await expect(s.pause).toHaveCount(0)
   // The clock ran it out, no tap to take back: nothing to keep going with.
   await expect(page.getByRole('button', { name: 'Keep going' })).toHaveCount(0)
+  // No time on the clock for timed reps: the field leads with the reps held, as the log will count them.
+  const field = page.locator('header')
+  await expect(field.locator('.text-numeral-finish')).toHaveText('2')
+  await expect(field.getByText('of 3 reps on target')).toBeVisible()
+  await expect(field.getByText('One off target. The first rep sets the rest.')).toBeVisible()
+  await expect(field.getByText('on the clock')).toHaveCount(0)
   await page.getByRole('textbox', { name: 'Console distance, km' }).fill('9.4')
   // Paced reps were asked one by one: no By-feel speeds at the end.
   await expect(page.getByRole('region', { name: 'By-feel speeds' })).toHaveCount(0)
@@ -430,6 +438,36 @@ test('a Compromised run test logged after takes its four run splits and Station 
   await page.goto('/plan/week/2')
   await expect(page.getByText('Paces from your Compromised run test: Race run pace 5:07/km')).toBeVisible()
   await expect(page.getByText(/Race run pace 5:07\/km\s·\sFade \+19\ss\/km/)).toBeVisible()
+})
+
+test('the actions come first in focus order where they are first on screen: a phone, not desktop', async ({ page }, testInfo) => {
+  await withEstimate(page)
+  await serveHistory(page, HISTORY)
+  await page.clock.install({ time: aMinuteBefore(WEEK_3) })
+  await page.goto('/')
+  const s = await startRun(page, new Date(WEEK_3.getTime() + 1000))
+  await page.clock.fastForward('01:00')
+  await expect(s.timer).toHaveText('09:00')
+  const buttons = page.locator('div').filter({ has: s.pause }).filter({ has: s.skip }).last()
+
+  // The warm-up running: the first Tab from where focus landed on arrival.
+  await page.keyboard.press('Tab')
+  const firstStop = page.locator(':focus')
+  if (testInfo.project.name === 'phone') {
+    await expect(s.pause).toBeFocused()
+    await page.keyboard.press('Tab')
+    await expect(s.skip).toBeFocused()
+    // On screen in the same order: the bar above the field.
+    const [barBox, band] = await Promise.all([buttons.boundingBox(), page.locator('header').boundingBox()])
+    expect(barBox!.y + barBox!.height).toBeLessThanOrEqual(band!.y + 1)
+  } else {
+    // The heading had focus, so the next stop is End, on the field; the bar waits at the foot.
+    await expect(firstStop).toHaveText('End')
+    await expect(buttons.locator(':focus')).toHaveCount(0)
+    const [barBox, band] = await Promise.all([buttons.boundingBox(), page.locator('header').boundingBox()])
+    expect(barBox!.y).toBeGreaterThan(band!.y + band!.height)
+  }
+  await scan(page)
 })
 
 test('Done, Start, Undo, going back, and a Partial flipped to Done', async ({ page }) => {

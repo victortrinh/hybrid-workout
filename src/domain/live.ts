@@ -719,6 +719,63 @@ export function legElapsed(run: LiveRun, now: number): number {
   return currentLeg(run) === null ? elapsed : Math.max(0, elapsed - legsDone(run, run.block).reduce((sum, s) => sum + s, 0))
 }
 
+/** What the clock is up against on a leg or Block that counts up: a Station target, or a run's distance at its pace. */
+export interface ClockTarget {
+  seconds: number
+  kind: 'station' | 'run'
+}
+
+/**
+ * The time the current leg is racing: the Station target of the Station on
+ * the clock, or how long the run takes at its target pace. Null where the
+ * clock counts down, the Station has no target yet, or the run is RPE only.
+ */
+export function clockTarget(run: LiveRun, context: RunContext): ClockTarget | null {
+  const block = run.blocks[run.block]
+  if (!block || block.seconds !== null) return null
+  const leg = currentLeg(run)
+  const part = leg === null ? null : roundLegs(block)[leg]
+  if ((block.kind === 'distance' || part === 'run') && block.meters) {
+    const pace = liveTarget(block, context)?.pace ?? null
+    return pace === null ? null : { seconds: Math.round((pace * block.meters) / 1000), kind: 'run' }
+  }
+  const station = block.kind === 'station' ? block.stations[0] : block.stations.find((s) => s.station === part)
+  return station?.target === undefined ? null : { seconds: station.target, kind: 'station' }
+}
+
+/** A Station finished against its Station target. */
+export interface StationVerdict {
+  block: number
+  station: StationId
+  seconds: number
+  target: number
+}
+
+/** Every Station timed so far that had a Station target, in the order they were done. */
+export function stationVerdicts(run: LiveRun): StationVerdict[] {
+  return run.blocks.flatMap((block, i): StationVerdict[] => {
+    if (block.kind === 'station') {
+      const [station] = block.stations
+      const split = run.splits.find((s) => s.block === i)
+      return station?.target === undefined || !split
+        ? []
+        : [{ block: i, station: station.station, seconds: split.seconds, target: station.target }]
+    }
+    const done = legsDone(run, i)
+    return roundLegs(block).flatMap((part, leg) => {
+      const station = block.stations.find((s) => s.station === part)
+      return station?.target === undefined || done[leg] === undefined
+        ? []
+        : [{ block: i, station: station.station, seconds: done[leg], target: station.target }]
+    })
+  })
+}
+
+/** The seconds on the clock for the Session's work: every round, run and Station timed, added up. Null before the first. */
+export function clockedSeconds(run: LiveRun): number | null {
+  return run.splits.length === 0 ? null : run.splits.reduce((sum, s) => sum + s.seconds, 0)
+}
+
 /** Ends the current Block on a tap; Skip block and Done can be undone back to `before`. */
 function finishBlock(current: LiveRun, now: number, before: LiveRun): LiveRun {
   if (current.block >= current.blocks.length) return current
@@ -874,6 +931,16 @@ export function heldUnanswered(run: LiveRun, context: RunContext): LiveRun {
     if (b.rep === null || run.skipped.includes(block)) return next
     return answer(next, block, liveTarget(b, context)?.pace ?? null, null)
   }, run)
+}
+
+/**
+ * The reps run at a target pace and how many held it, as the log will say once
+ * it's saved: a rep still unanswered counts as Held it. Reps by feel or by RPE
+ * have no target and stay out. Null when no rep had one.
+ */
+export function repsOnTarget(run: LiveRun, context: RunContext): { held: number; targeted: number } | null {
+  const targeted = heldUnanswered(run, context).intervals.filter((rep) => rep.targetPace !== null)
+  return targeted.length === 0 ? null : { held: targeted.filter((rep) => rep.held).length, targeted: targeted.length }
 }
 
 /** What a HYROX round or a Race simulation Station actually was, when it wasn't as written. */

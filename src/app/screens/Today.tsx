@@ -17,6 +17,7 @@ import { isLive, type LiveSession } from '../../domain/lifts'
 import type { Environment, RunContext } from '../../domain/paces'
 import { painLevel, type PainArea } from '../../domain/pain'
 import { describeSession, LIFT_NAME, SESSION_TYPES, sessionName } from '../../domain/program/describe'
+import type { FinishSoFar } from '../../domain/progress'
 import { finishClock } from '../../domain/recap'
 import type { Program, Session, Station, StationId } from '../../domain/program/types'
 import type { RacePlan } from '../../domain/racePlan'
@@ -91,8 +92,11 @@ export function Today({
   onAnswer,
   race,
   afterRace,
+  finish,
 }: {
   day: CoachDay
+  /** The Projected finish in a line under the Week, linking to Progress; null while no lane is full. */
+  finish: FinishSoFar | null
   weekCount: number
   /** The Program's Stations, for a Prescription's HYROX lines. */
   stations: Record<StationId, Station>
@@ -208,7 +212,7 @@ export function Today({
               setLanded((n) => n + 1)
             }}
           />
-          <ThisWeek day={day} onOpen={openSheet} treadmill={treadmill} />
+          <ThisWeek day={day} finish={finish} onOpen={openSheet} treadmill={treadmill} />
         </>
       )}
       {open && action && (
@@ -1095,10 +1099,12 @@ function restCopy(
 
 function ThisWeek({
   day,
+  finish,
   onOpen,
   treadmill,
 }: {
   day: CoachDay
+  finish: FinishSoFar | null
   onOpen: (entry: BucketEntry) => void
   treadmill: (activity: Activity) => boolean
 }) {
@@ -1136,9 +1142,24 @@ function ThisWeek({
           />
         ))}
       </ul>
+      {/* Whether the Program is working, in one line: the way to Progress. Not before Week 1, with nothing to project. */}
+      {inWeek && finish && (
+        <Link
+          href={SCREEN_PATH.progress}
+          className="mt-2 inline-flex min-h-11 items-center text-[15px] font-bold text-link underline decoration-2 underline-offset-4 hover:decoration-[3px]"
+        >
+          {finishLine(finish)}
+        </Link>
+      )}
     </div>
   )
 }
+
+/** "Projected finish 1:11:28 · Doubles share 57:44", or "Projected finish · 3 of 9 lanes full" until there is a time. */
+const finishLine = (finish: FinishSoFar) =>
+  'solo' in finish
+    ? `Projected finish ${finishClock(finish.solo)} · Doubles share ${finishClock(finish.doubles)}`
+    : `Projected finish · ${finish.lanesFull} of 9 lanes full`
 
 const rowClass = 'grid w-full grid-cols-[36px_1fr_auto] items-center gap-3 py-3.5 text-left'
 

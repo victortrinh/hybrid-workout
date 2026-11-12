@@ -62,6 +62,32 @@ export function stationBest(logs: readonly SessionLog[], id: StationId, volume: 
   return times.length === 0 ? null : Math.min(...times)
 }
 
+/** The most of a Station's race volume timed in one go at Race load, with the time it took. */
+export interface StationReach {
+  /** Share of race volume, 0–1: 0.25 for 250 m of the SkiErg's 1000 m. */
+  share: number
+  seconds: number
+  week: number
+  meters: number | null
+  reps: number | null
+}
+
+/**
+ * How far toward race volume a Station has been timed at Race load: the
+ * line with the largest share of it, the fastest where two tie. Null before
+ * any. At a share of 1 it is the Station best.
+ */
+export function stationReach(logs: readonly SessionLog[], id: StationId): StationReach | null {
+  let reach: StationReach | null = null
+  for (const { log, line } of timedLines(logs, id)) {
+    const share = Math.min(1, volumeShare(stations[id], { meters: line.meters ?? undefined, reps: line.reps ?? undefined }))
+    const seconds = line.seconds!
+    if (!reach || share > reach.share || (share === reach.share && seconds < reach.seconds))
+      reach = { share, seconds, week: log.week, meters: line.meters, reps: line.reps }
+  }
+  return reach
+}
+
 /**
  * How long a Station is expected to take at this volume, in seconds: its
  * Station best there; otherwise the best at the logged volume nearest it,

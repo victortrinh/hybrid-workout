@@ -5,7 +5,10 @@ import { ROXZONE_SECONDS } from './racePlan'
 import { program } from './program/program'
 import type { StationId } from './program/types'
 import {
+  finishSoFar,
+  lanesFull,
   projectedFinish,
+  raceLanes,
   raceRunSeries,
   recoveryTrend,
   stationBests,
@@ -140,6 +143,77 @@ describe('the Projected finish', () => {
       'sandbag-lunges',
       'wall-balls',
     ])
+  })
+})
+
+describe('the race in lanes', () => {
+  it('runs first, then the eight Stations in race order, all empty before anything is timed', () => {
+    const lanes = raceLanes(program, [], localDate('2026-11-12'))
+    expect(lanes.map((l) => l.leg)).toEqual([
+      'run',
+      'skierg',
+      'sled-push',
+      'sled-pull',
+      'burpee-broad-jumps',
+      'row',
+      'farmers-carry',
+      'sandbag-lunges',
+      'wall-balls',
+    ])
+    expect(lanes[0]).toEqual({ leg: 'run', secondsPerKm: null, week: null })
+    expect(lanes.slice(1).every((l) => l.leg !== 'run' && l.reach === null)).toBe(true)
+    expect(lanesFull(lanes)).toBe(0)
+  })
+
+  it('fills a Station as far as it was timed toward race volume, and never past Race load', () => {
+    const hyrox = log(3, 'hyrox-a', '2026-11-24', {
+      stations: [
+        line(1, 'skierg', 63, { meters: 250 }),
+        line(2, 'row', 130, { meters: 500 }),
+        // Under Race load: another Station, so its lane stays empty.
+        line(3, 'sled-push', 150, { meters: 50, pounds: 225 }),
+      ],
+    })
+    const further = log(4, 'hyrox-b', '2026-12-01', { stations: [line(1, 'skierg', 128, { meters: 500 })] })
+    const lanes = raceLanes(program, [runTest(2, '2026-11-18', [300, 300, 300, 300]), hyrox, further], localDate('2026-12-02'))
+    const lane = (id: StationId) => lanes.find((l) => l.leg === id)
+    expect(lanes[0]).toEqual({ leg: 'run', secondsPerKm: 300, week: 2 })
+    expect(lane('skierg')).toEqual({ leg: 'skierg', reach: { share: 0.5, seconds: 128, week: 4, meters: 500, reps: null } })
+    expect(lane('row')).toEqual({ leg: 'row', reach: { share: 0.5, seconds: 130, week: 3, meters: 500, reps: null } })
+    expect(lane('sled-push')).toEqual({ leg: 'sled-push', reach: null })
+    // Only the run is full: half a SkiErg isn't a Station best.
+    expect(lanesFull(lanes)).toBe(1)
+  })
+
+  it('is nine full lanes exactly when there is a projection', () => {
+    const logs = [runTest(14, '2027-02-10', [290, 295, 300, 307]), HALF_A, HALF_B]
+    const today = localDate('2027-03-14')
+    const lanes = raceLanes(program, logs, today)
+    expect(lanesFull(lanes)).toBe(9)
+    expect(projectedFinish(program, logs, today).projection).not.toBeNull()
+    expect(lanes.find((l) => l.leg === 'wall-balls')).toEqual({
+      leg: 'wall-balls',
+      reach: { share: 1, seconds: 330, week: 18, meters: null, reps: 100 },
+    })
+  })
+})
+
+describe('the Projected finish in a line', () => {
+  it('says nothing before any lane is full', () => {
+    expect(finishSoFar(program, [], localDate('2026-11-12'))).toBeNull()
+  })
+
+  it('counts the full lanes until there is a projection', () => {
+    const logs = [runTest(2, '2026-11-18', [300, 300, 300, 300]), HALF_A]
+    expect(finishSoFar(program, logs, localDate('2027-03-01'))).toEqual({ lanesFull: 5 })
+  })
+
+  it('gives the Solo time and the Doubles share once all nine are full', () => {
+    const logs = [runTest(14, '2027-02-10', [290, 295, 300, 307]), HALF_A, HALF_B]
+    expect(finishSoFar(program, logs, localDate('2027-03-14'))).toEqual({
+      solo: 1795 + 8 * 298 + 360,
+      doubles: 1795 / 2 + 8 * 298 + 360,
+    })
   })
 })
 

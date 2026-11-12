@@ -3,6 +3,9 @@ import { localDate } from './calendar'
 import { findWeek } from './coach'
 import { equip } from './equipment'
 import {
+  clockTarget,
+  clockedSeconds,
+  stationVerdicts,
   advance,
   answer,
   blockElapsed,
@@ -22,6 +25,7 @@ import {
   end,
   hasByFeelReps,
   heldUnanswered,
+  repsOnTarget,
   isLive,
   isLiveRun,
   isOver,
@@ -500,6 +504,43 @@ describe('the Live run clock', () => {
     let cut = advance(go(start(THRESHOLD), at(10)), at(15))
     cut = heldUnanswered(nextBlock(cut, at(15)), indoor)
     expect(cut.intervals).toEqual([])
+  })
+})
+
+describe('repsOnTarget', () => {
+  /** The Threshold reps by feel: no pace to hold. */
+  const byFeel: Session = {
+    ...THRESHOLD,
+    blocks: THRESHOLD.blocks.map((b) =>
+      b.main
+        ? { ...b, exercises: [{ name: 'Hard reps', prescription: { kind: 'intervals', reps: 2, workSeconds: 720, recoverySeconds: 120, recovery: 'jog', effort: { feel: 'hard' } } }] }
+        : b,
+    ),
+  }
+
+  it('counts the reps held against those with a target, a rep left unanswered as Held it', () => {
+    const run = advance(go(start(THRESHOLD), at(10)), at(45))
+    expect(repsOnTarget(run, indoor)).toEqual({ held: 2, targeted: 2 })
+    expect(repsOnTarget(answer(run, 3, 292, 298), indoor)).toEqual({ held: 1, targeted: 2 })
+    expect(repsOnTarget(answer(answer(run, 1, 292, 300), 3, 292, 298), indoor)).toEqual({ held: 0, targeted: 2 })
+  })
+
+  it('agrees with the log the finish sheet saves', () => {
+    const run = answer(advance(go(start(THRESHOLD), at(10)), at(45)), 3, 292, 298)
+    const saved = heldUnanswered(run, indoor).intervals
+    expect(repsOnTarget(run, indoor)).toEqual({ held: saved.filter((i) => i.held).length, targeted: saved.length })
+  })
+
+  it('leaves out a rep cut short, and is null before any rep is over', () => {
+    expect(repsOnTarget(go(start(THRESHOLD), at(10)), indoor)).toBeNull()
+    const cut = nextBlock(advance(go(start(THRESHOLD), at(10)), at(15)), at(15))
+    expect(repsOnTarget(cut, indoor)).toBeNull()
+  })
+
+  it('is null for reps by feel, and for reps by RPE with no Training paces', () => {
+    expect(repsOnTarget(advance(go(start(byFeel), at(10)), at(45)), indoor)).toBeNull()
+    const rpeOnly: RunContext = { ...indoor, paces: null }
+    expect(repsOnTarget(advance(go(start(THRESHOLD), at(10)), at(45)), rpeOnly)).toBeNull()
   })
 })
 
@@ -1283,6 +1324,48 @@ describe('HYROX', () => {
     ['wall-balls', null, 50, 50],
   ] as const)('no %s of %s m or %s reps goes under %i s', (part, meters, reps, fastest) => {
     expect(fastestSplit(part, meters, reps)).toBe(fastest)
+  })
+})
+
+describe('racing the clock on a leg', () => {
+  /** Week 1's HYROX A on round 1, its sled push given a Station target of 1:15. */
+  const withTarget = (): LiveRun => {
+    const run = startRun({ week: 1, session: session(1, 'hyrox-a'), date: localDate('2026-11-11'), environment: 'indoor' }, T0)
+    const first = run.blocks.findIndex((b) => b.kind === 'round')
+    const blocks = run.blocks.map((b, i) => (i === first ? { ...b, stations: b.stations.map((s) => ({ ...s, target: 75 })) } : b))
+    return onRound1({ ...run, blocks })
+  }
+
+  it('races the run against its distance at Race run pace, then the Station against its Station target', () => {
+    const run = withTarget()
+    // 400 m at Race run pace, 5:07/km: 122.8 s.
+    expect(clockTarget(run, indoor)).toEqual({ seconds: 123, kind: 'run' })
+    expect(clockTarget(nextBlock(run, at(9)), indoor)).toEqual({ seconds: 75, kind: 'station' })
+  })
+
+  it('races nothing on a run by RPE, a Station with no target, or a Block on a countdown', () => {
+    const run = withTarget()
+    expect(clockTarget(run, { ...indoor, paces: null })).toBeNull()
+    // Round 2's sled pull has no Station target yet.
+    const round2 = legs(run, 9, 10)
+    expect(clockTarget(nextBlock(round2, at(12)), indoor)).toBeNull()
+    // The warm-up counts down.
+    expect(clockTarget({ ...run, block: 0 }, indoor)).toBeNull()
+  })
+
+  it('keeps each Station timed against a target, and the seconds clocked', () => {
+    const run = withTarget()
+    expect(stationVerdicts(run)).toEqual([])
+    expect(clockedSeconds(run)).toBeNull()
+    const first = run.block
+    // The run took 2 min, the sled push 1:10: five under its 1:15.
+    const done = legs(run, 9, 9 + 70 / 60)
+    expect(stationVerdicts(done)).toEqual([{ block: first, station: 'sled-push', seconds: 70, target: 75 }])
+    expect(clockedSeconds(done)).toBe(190)
+    // Round 2 has no target: nothing to judge, but its time counts.
+    const two = legs(done, 12, 13)
+    expect(stationVerdicts(two)).toHaveLength(1)
+    expect(clockedSeconds(two)).toBeGreaterThan(190)
   })
 })
 

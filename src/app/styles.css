@@ -342,6 +342,11 @@
   .lane-fill {
     transition: width 0.9s var(--ease-lane);
   }
+
+  /* Pace lane: fills second by second toward the time a leg is racing, like the rest bar. */
+  .pace-fill {
+    transition: width 1s linear;
+  }
 }
 
 @keyframes drop-in {

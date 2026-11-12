@@ -17,6 +17,7 @@ import { startingFields } from '../domain/startingPoint'
 import { program } from '../domain/program/program'
 import { racePlan, showsRacePlan } from '../domain/racePlan'
 import { afterRace, finishLog, programRecap, raceResult } from '../domain/recap'
+import { finishSoFar } from '../domain/progress'
 import { DockContext } from './components/ActionBar'
 import { Icon } from './components/Icons'
 import { StripedNumeral } from './components/StripedNumeral'
@@ -103,6 +104,8 @@ export function App() {
   )
   /** The race's log and finish time, which Today leads with after Race day. */
   const race = useMemo(() => raceResult(program, logs, today), [logs, today])
+  /** The Projected finish in a line, under Today's Week: the time, or how many lanes are full. */
+  const finish = useMemo(() => finishSoFar(program, logs, today), [logs, today])
   /** Whether a run of the watch's was on a treadmill: its own flag, else the month's Environment. */
   const treadmill = (activity: Activity) => isTreadmill(activity, (date) => environmentOn(date, settings))
   /** How a Session's runs read: the Training paces, in this Session's Environment and the chosen units. */
@@ -292,6 +295,7 @@ export function App() {
           {screen === 'today' && (
             <Today
               day={day}
+              finish={finish}
               afterRace={
                 afterRace(program, today)
                   ? {
@@ -378,7 +382,9 @@ export function App() {
 /**
  * New title on every screen; on a change of screen, back to the top with
  * focus on the heading. A screen that marks where the athlete will look
- * (Plan's current Week) opens there instead, a third of the way down.
+ * (Plan's current Week) opens there instead, a third of the way down; one
+ * whose actions come before its heading (a Live run on a phone) marks where
+ * focus lands instead, ahead of them.
  */
 function useScreenChange(screen: Screen, title: string, route: Route) {
   const key = `${screen}/${route.week ?? ''}/${route.sessionId ?? ''}`
@@ -395,7 +401,8 @@ function useScreenChange(screen: Screen, title: string, route: Route) {
     } else if (!first) {
       window.scrollTo(0, 0)
     }
-    if (!first) document.querySelector<HTMLElement>('main h1')?.focus({ preventScroll: true })
+    const arrival = document.querySelector<HTMLElement>('main [data-arrival]') ?? document.querySelector<HTMLElement>('main h1')
+    if (!first) arrival?.focus({ preventScroll: true })
   }, [key, title])
 }
 

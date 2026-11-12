@@ -113,3 +113,29 @@ export const REST_OVER_LINE = 'Rest over. Under the bar.'
 /** A checklist's rest over: the next jump set or acceleration. */
 export const SET_REST_OVER_LINE = 'Rest over. Next set.'
 export const ALL_SETS_LINE = 'Every set in. Finish when you’re ready.'
+
+/** "2 s under", "6 s over", "on target": a Station's time against its Station target. */
+export const underOver = (delta: number) => (delta === 0 ? 'on target' : `${Math.abs(delta)} s ${delta < 0 ? 'under' : 'over'}`)
+
+/** The Station just finished against its Station target, said once on the next Ready screen. */
+export function verdictLine(name: string, time: string, delta: number): string {
+  if (delta < 0) return `${name} in ${time}, ${-delta} s under the Station target. Keep that.`
+  if (delta > 0) return `${name} in ${time}, ${delta} s over the Station target. Smoother, not harder.`
+  return `${name} in ${time}: the Station target, to the second.`
+}
+
+/** "4 of 6 Stations under their Station target.": the finish sheet's count. */
+export function tallyLine(beat: number, judged: number): string {
+  if (judged === 1) return beat === 1 ? 'The one Station target: beaten.' : 'The one Station target: not today.'
+  return `${beat} of ${judged} Stations at or under their Station target.`
+}
+
+const COUNT = ['None', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine']
+const count = (n: number) => COUNT[n] ?? `${n}`
+
+/** The Coach on a Run session's reps against their target pace, under the finish sheet's count. */
+export function repsLine(held: number, targeted: number): string {
+  if (held === targeted) return targeted === 1 ? 'On target. Dull. Exactly right.' : `All ${targeted} on target. Dull. Exactly right.`
+  if (held === 0) return targeted === 1 ? 'Off target. Start it slower next time.' : `None of ${targeted} on target. Start the first one slower.`
+  return `${count(targeted - held)} off target. The first rep sets the rest.`
+}
