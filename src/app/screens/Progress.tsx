@@ -1,5 +1,5 @@
 import { Link } from 'react-aria-components'
-import { createContext, useContext, useId, useMemo, useRef, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { motion, useInView, useReducedMotion } from 'motion/react'
 import type { LocalDate } from '../../domain/calendar'
 import type { CoachDay } from '../../domain/coach'
@@ -9,6 +9,7 @@ import { stations as STATIONS } from '../../domain/program/program'
 import { LIFT_NAME } from '../../domain/program/describe'
 import type { Lane, Program, Station, StationId } from '../../domain/program/types'
 import {
+  lanesFull,
   progress,
   recoveryTrend,
   RECOVERY_NIGHTS,
@@ -16,6 +17,7 @@ import {
   TRANSITION_SECONDS,
   workingWeightRows,
   type ProjectedFinish,
+  type RaceLane,
   type StationBest,
   type StationTimes,
   type WeekCompletion,
@@ -72,7 +74,7 @@ export function Progress({ program, day, logs, recoveryNights, unit }: ProgressP
         </EmptyState>
       ) : (
         <div className="mt-3.5 grid gap-x-10 desktop:grid-cols-12">
-          <ProjectedPanel projected={data.projected} />
+          <ProjectedPanel projected={data.projected} lanes={data.lanes} bests={data.bests} />
           <CompletionPanel program={program} day={day} completion={data.completion} />
           <BestsPanel bests={data.bests} />
           <RaceRunPanel program={program} tests={data.raceRun} firstTestWeek={firstTest?.number ?? null} nextTestWeek={nextTest?.number ?? null} />
@@ -166,30 +168,46 @@ const ticks = (width: number, all: number[]) => (width < 480 ? all.filter((_, i)
 const RACE_ORDER = (Object.values(STATIONS) as Station[]).sort((a, b) => a.order - b.order)
 const STATION_NAME = (id: StationId) => STATIONS[id].name
 
-const listNames = (names: string[]) =>
-  names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`
+/** False for the first frame, so whatever fills from the start line has somewhere to start. */
+function useFilled(): boolean {
+  const [filled, setFilled] = useState(false)
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setFilled(true))
+    return () => cancelAnimationFrame(frame)
+  }, [])
+  return filled
+}
 
-function ProjectedPanel({ projected }: { projected: ProjectedFinish }) {
-  const { projection, missing, raceRun } = projected
+function ProjectedPanel({
+  projected,
+  lanes,
+  bests,
+}: {
+  projected: ProjectedFinish
+  lanes: RaceLane[]
+  bests: StationBest[]
+}) {
+  const { projection, raceRun } = projected
   if (!projection) {
-    const gaps = [
-      ...(missing.length > 0
-        ? [`no best at race volume yet for ${listNames(missing.map(STATION_NAME))}`]
-        : []),
-      ...(raceRun ? [] : ['no Compromised run test yet']),
-    ]
+    const full = lanesFull(lanes)
     return (
-      <Panel title="Projected finish" sub="Solo, with the Doubles share beside it." span={8}>
-        <EmptyState title={`No projection yet: ${gaps.join(', and ')}.`}>
-          It waits for all eight Station bests at full volume and a Race run pace rather than guess one.
-        </EmptyState>
-        {missing.length > 0 && (
-          <ul aria-label="Missing Stations" className="mt-3 flex flex-wrap gap-x-3.5 gap-y-1.5 text-label text-muted">
-            {missing.map((id) => (
-              <li key={id}>{STATION_NAME(id)}</li>
-            ))}
-          </ul>
-        )}
+      <Panel
+        title="Projected finish"
+        sub="The race in nine lanes: the runs, then the eight Stations in race order. A lane is full once it is timed at race volume."
+        span={8}
+      >
+        <p className="mt-3.5 flex items-baseline gap-2.5">
+          <span className="text-figure font-stretch-125%">{full}</span>
+          <span className="text-body">of 9 lanes full</span>
+        </p>
+        <ul aria-label="The race in lanes" className="mt-3.5 grid gap-3">
+          {lanes.map((lane, i) => (
+            <RaceLaneRow key={lane.leg} lane={lane} index={i} />
+          ))}
+        </ul>
+        <p className="mt-3.5 text-body-quiet text-muted">
+          No projection yet. It waits for all nine rather than guess one: half a SkiErg says little about the second half.
+        </p>
       </Panel>
     )
   }
@@ -199,25 +217,114 @@ function ProjectedPanel({ projected }: { projected: ProjectedFinish }) {
       sub={`A projection: the eight Station bests at full volume, eight runs at ${clock(raceRun!.secondsPerKm)}/km from Week ${raceRun!.week}’s test, and ${clock(TRANSITION_SECONDS)} of transitions.`}
       span={8}
     >
-      <dl className="mt-3 grid grid-cols-2 gap-x-6">
+      <dl className="mt-3.5 flex flex-wrap items-end gap-x-8 gap-y-3">
         <div>
           <dt className="text-label text-muted">Solo</dt>
-          <dd className="text-[44px] leading-none font-black tracking-[-0.03em] font-stretch-125%">
-            {finishClock(projection.solo)}
-          </dd>
+          <dd className="text-figure font-stretch-125%">{finishClock(projection.solo)}</dd>
         </div>
         <div>
           <dt className="text-label text-muted">Doubles share</dt>
-          <dd className="text-[44px] leading-none font-black tracking-[-0.03em] font-stretch-125%">
+          <dd className="text-[32px] leading-none font-black tracking-[-0.03em] font-stretch-125%">
             {finishClock(projection.doubles)}
           </dd>
         </div>
       </dl>
-      <p className="mt-3 text-body-quiet text-muted">
-        {nb(`Stations ${finishClock(projection.stations)}`)} · {nb(`running ${finishClock(projection.running)}`)} ·{' '}
-        {nb(`transitions ${clock(projection.transitions)}`)}. The Doubles share is half the Station work and all the running.
+      <RaceTape runSeconds={raceRun!.secondsPerKm} bests={bests} />
+      <ul aria-label="Where the time goes" className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 text-label">
+        <TapeKey swatch="bg-ink">{`Stations ${finishClock(projection.stations)}`}</TapeKey>
+        <TapeKey swatch="bg-link">{`Running ${finishClock(projection.running)}`}</TapeKey>
+        <TapeKey swatch="bg-edge">{`Transitions ${clock(projection.transitions)}`}</TapeKey>
+      </ul>
+      <p className="mt-2.5 text-body-quiet text-muted">
+        The Doubles share is half the Station work and all the running.
       </p>
     </Panel>
+  )
+}
+
+/**
+ * One lane of the race before there is a projection: its name and race
+ * volume, what has been timed, and a paper lane filled as far toward race
+ * volume as that went. Only a full lane is in ink weight: the rest is a
+ * split at less than the race asks, said as one.
+ */
+function RaceLaneRow({ lane, index }: { lane: RaceLane; index: number }) {
+  const filled = useFilled()
+  const name = lane.leg === 'run' ? 'Runs · 8 × 1 km' : `${STATIONS[lane.leg].name} · ${raceVolume(STATIONS[lane.leg])}`
+  const share = lane.leg === 'run' ? (lane.secondsPerKm === null ? 0 : 1) : (lane.reach?.share ?? 0)
+  let value: ReactNode
+  if (lane.leg === 'run') {
+    value =
+      lane.secondsPerKm === null ? (
+        <span className="text-muted">No test yet</span>
+      ) : (
+        <>
+          <b className="font-extrabold">{clock(lane.secondsPerKm)}/km</b> <span className="text-muted">W{lane.week}</span>
+        </>
+      )
+  } else if (!lane.reach) {
+    value = <span className="text-muted">Not timed</span>
+  } else if (lane.reach.share === 1) {
+    value = (
+      <>
+        <b className="font-extrabold">{clock(lane.reach.seconds)}</b> <span className="text-muted">W{lane.reach.week}</span>
+      </>
+    )
+  } else {
+    const over = lane.reach.reps !== null ? `${lane.reach.reps} reps` : `${lane.reach.meters} m`
+    value = <span className="text-muted">{nb(`${clock(lane.reach.seconds)} for ${over}`)} · W{lane.reach.week}</span>
+  }
+  return (
+    <li className="grid gap-1.5">
+      <div className="flex items-baseline justify-between gap-3 text-label">
+        <span className={share === 1 ? 'font-extrabold' : 'font-semibold'}>{name}</span>
+        <span className="shrink-0 font-semibold">{value}</span>
+      </div>
+      <span aria-hidden="true" className="relative block h-3 overflow-hidden bg-rule">
+        <i
+          className="lane-fill absolute inset-y-0 left-0 bg-ink"
+          style={{ width: `${filled ? Math.round(share * 100) : 0}%`, transitionDelay: `${index * 60}ms` }}
+        />
+      </span>
+    </li>
+  )
+}
+
+/**
+ * The projected race as one tape, start to finish: each 1 km run and the
+ * Station after it, as wide as the time it takes, with the transitions at
+ * the end. It rolls out from the start line once.
+ */
+function RaceTape({ runSeconds, bests }: { runSeconds: number; bests: StationBest[] }) {
+  const filled = useFilled()
+  const legs = bests.flatMap((best) => [
+    { key: `run-${best.station}`, seconds: runSeconds, tone: 'bg-link' },
+    { key: best.station, seconds: best.seconds!, tone: 'bg-ink' },
+  ])
+  const order = bests.map((best) => `1 km ${clock(runSeconds)}, ${STATION_NAME(best.station)} ${clock(best.seconds!)}`)
+  return (
+    <div
+      role="img"
+      aria-label={`The race in order: ${order.join('; ')}; then ${clock(TRANSITION_SECONDS)} of transitions.`}
+      className="@container mt-4 h-[26px]"
+    >
+      <div className="lane-fill h-full overflow-hidden" style={{ width: filled ? '100%' : '0%' }}>
+        <div className="flex h-full w-[100cqi] gap-0.5">
+          {[...legs, { key: 'transitions', seconds: TRANSITION_SECONDS, tone: 'bg-edge' }].map((leg) => (
+            <i key={leg.key} className={`min-w-0 basis-0 ${leg.tone}`} style={{ flexGrow: leg.seconds }} />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function TapeKey({ swatch, children }: { swatch: string; children: string }) {
+  return (
+    <li className="flex items-center gap-1.5 whitespace-nowrap">
+      <i aria-hidden="true" className={`block size-3 ${swatch}`} />
+      {children}
+    </li>
   )
 }
 

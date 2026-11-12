@@ -15,7 +15,7 @@ import { SESSION_TYPES } from './program/describe'
 import { LIFTS, type Lane, type LiftId, type Program, type Session, type Station, type StationId } from './program/types'
 import { ROXZONE_SECONDS } from './racePlan'
 import { nightOf, type RecoveryNight } from './recovery'
-import { stationBest } from './stations'
+import { stationBest, stationReach, type StationReach } from './stations'
 import type { WorkingWeightChange } from './weights'
 
 /** Where one Session of a past or current Week stands. Skipped with days left is still open. */
@@ -111,6 +111,7 @@ export function trainingLoad(program: Program, logs: SessionLog[], today: LocalD
 
 export interface ProgressDay {
   projected: ProjectedFinish
+  lanes: RaceLane[]
   bests: StationBest[]
   raceRun: RunTestResult[]
   completion: WeekCompletion[]
@@ -121,6 +122,7 @@ export function progress(program: Program, logs: SessionLog[], today: LocalDate)
   const bests = stationBests(program, logs, today)
   return {
     projected: projectedFinish(program, logs, today, bests),
+    lanes: raceLanes(program, logs, today),
     bests,
     raceRun: raceRunSeries(logs, today),
     completion: weeklyCompletion(program, logs, today),
@@ -259,6 +261,41 @@ export function projectedFinish(
     },
   }
 }
+
+/** One lane of the race: the eight 1 km runs, or a Station. */
+export type RaceLane =
+  | {
+      leg: 'run'
+      /** The Race run pace of the latest Compromised run test; null before the first. */
+      secondsPerKm: number | null
+      week: number | null
+    }
+  | {
+      leg: StationId
+      /** How much of race volume has been timed in one go at Race load; null before any. At a share of 1, the Station best. */
+      reach: StationReach | null
+    }
+
+/**
+ * The race the Projected finish is waiting on, in lanes: the runs first,
+ * then the eight Stations in race order, each as far as it has been timed
+ * toward race volume. A lane is full once it gives the projection its
+ * number; nothing short of full is stretched into one.
+ */
+export function raceLanes(program: Program, logs: SessionLog[], today: LocalDate): RaceLane[] {
+  const standing = standingBy(logs, today)
+  const latest = raceRunSeries(logs, today).at(-1)
+  return [
+    { leg: 'run', secondsPerKm: latest?.raceRun ?? null, week: latest?.week ?? null },
+    ...(Object.values(program.stations) as Station[])
+      .sort((a, b) => a.order - b.order)
+      .map(({ id }): RaceLane => ({ leg: id, reach: stationReach(standing, id) })),
+  ]
+}
+
+/** How many of the nine lanes are full: the Race run pace and each Station best. */
+export const lanesFull = (lanes: RaceLane[]): number =>
+  lanes.filter((l) => (l.leg === 'run' ? l.secondsPerKm !== null : l.reach?.share === 1)).length
 
 // ---------------------------------------------------------------------------
 // HYROX Stations

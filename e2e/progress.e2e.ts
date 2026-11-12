@@ -74,12 +74,16 @@ for (const colorScheme of ['light', 'dark'] as const) {
     // Nothing from the old goal: no race distance in K, no sub-NN time, no goal line.
     await expect(main).not.toContainText(/\b\dK\b|sub-\d\d|goal/i)
 
-    // Projected finish: Week 1's sled push was 25 m, not race volume, so every Station is missing and there's no time.
+    // Projected finish: the race in nine lanes. The baseline test fills the runs; Week 1's sled push was 25 m,
+    // half of race volume, so its lane is half full and there's no time.
     const projected = main.getByRole('region', { name: 'Projected finish' })
-    await expect(projected).toContainText(
-      'No projection yet: no best at race volume yet for SkiErg, Sled push, Sled pull, Burpee broad jumps, Row, Farmers carry, Sandbag lunges and Wall balls.',
-    )
-    await expect(projected.getByRole('list', { name: 'Missing Stations' }).getByRole('listitem')).toHaveCount(8)
+    await expect(projected).toContainText('1of 9 lanes full')
+    await expect(projected).toContainText('No projection yet.')
+    const lanes = projected.getByRole('list', { name: 'The race in lanes' }).getByRole('listitem')
+    await expect(lanes).toHaveCount(9)
+    await expect(lanes.first()).toHaveText('Runs · 8 × 1 km5:07/km W2')
+    await expect(lanes.filter({ hasText: 'Sled push' })).toHaveText('Sled push · 50 m1:35 for 25 m · W2')
+    await expect(lanes.filter({ hasText: 'Wall balls' })).toHaveText('Wall balls · 100 reps2:50 for 50 reps · W2')
     await expect(projected).not.toContainText(/\d:\d\d:\d\d/)
 
     // Station bests: eight tiles at race volume, none set yet.
@@ -198,7 +202,8 @@ test('before any data for them, the new panels say what fills them', async ({ pa
   await expect(panel('Working weights')).toContainText('No Working weights yet.Week 1’s Strength session finds them.')
   await expect(panel('Race run pace')).toContainText('No Compromised run test yet. The first is Week 2.')
   await expect(panel('Race run pace').getByRole('img')).toHaveCount(0)
-  await expect(panel('Projected finish')).toContainText('and no Compromised run test yet.')
+  await expect(panel('Projected finish')).toContainText('0of 9 lanes full')
+  await expect(panel('Projected finish')).toContainText('Runs · 8 × 1 kmNo test yet')
   await expectNoAxeViolations(page)
 })
 
@@ -243,7 +248,13 @@ test('with all eight Station bests at full volume, Progress leads with the Proje
   await expect(projected.getByRole('term')).toHaveText(['Solo', 'Doubles share'])
   await expect(projected.getByRole('definition').nth(1)).toHaveText('1:01:54')
   await expect(projected).toContainText('eight runs at 5:07/km from Week 2’s test, and 6:00 of transitions.')
-  await expect(projected).toContainText('Stations 29:55 · running 40:56 · transitions 6:00.')
+  await expect(projected.getByRole('list', { name: 'Where the time goes' }).getByRole('listitem')).toHaveText([
+    'Stations 29:55',
+    'Running 40:56',
+    'Transitions 6:00',
+  ])
+  // The race as one tape, each run and its Station in order.
+  await expect(projected.getByRole('img')).toHaveAccessibleName(/^The race in order: 1 km 5:07, SkiErg 4:00; .*Wall balls 5:30; then 6:00 of transitions\.$/)
 
   const bests = page.getByRole('main').getByRole('region', { name: 'Station bests' })
   await expect(bests).toContainText('All eight set.')
