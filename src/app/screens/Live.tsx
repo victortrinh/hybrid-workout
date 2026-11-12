@@ -31,6 +31,7 @@ import {
   byFeelPrefill,
   hasByFeelReps,
   heldUnanswered,
+  repsOnTarget,
   isChecklist,
   isOver,
   keepGoing,
@@ -74,7 +75,7 @@ import { RestCountdown } from '../components/RestCountdown'
 import { StripedNumeral } from '../components/StripedNumeral'
 import { nb } from '../format'
 import { blockChangeCue, keepAwake, letSleep, unlockSound } from '../liveCues'
-import { finishLine, liveLine, tallyLine, underOver, verdictLine } from '../liveCopy'
+import { finishLine, liveLine, repsLine, tallyLine, underOver, verdictLine } from '../liveCopy'
 import { finishClock } from '../../domain/recap'
 import { navigate, SCREEN_PATH } from '../router'
 import { useSideways } from '../useSideways'
@@ -377,6 +378,7 @@ function Running({
             <p className="mt-5 text-[20px] font-bold">{run.ending ? 'Ended early' : 'Session over'}</p>
             <p className="mt-2 text-[18px] font-semibold">{finishLine(liveStatus(run))}</p>
             <Clocked run={run} verdicts={verdicts} />
+            <OnTarget run={run} context={context} />
           </>
         ) : side ? (
           <>
@@ -676,6 +678,24 @@ function Clocked({ run, verdicts }: { run: LiveRun; verdicts: StationVerdict[] }
         {nb(rounds > 0 ? `on the clock · ${rounds} ${rounds === 1 ? 'round' : 'rounds'}` : 'on the clock')}
       </p>
       {verdicts.length > 0 && <p className="mt-1 text-[18px] font-semibold">{tallyLine(beat, verdicts.length)}</p>}
+    </>
+  )
+}
+
+/**
+ * A Run session's finish number when nothing was on the clock: the reps that
+ * held their target pace, as the log will count them. One hero only, so not beside Clocked.
+ */
+function OnTarget({ run, context }: { run: LiveRun; context: RunContext }) {
+  const reps = clockedSeconds(run) === null ? repsOnTarget(run, context) : null
+  if (!reps) return null
+  return (
+    <>
+      <p className="@container mt-4">
+        <StripedNumeral value={`${reps.held}`} className="text-numeral-finish" />
+      </p>
+      <p className="mt-2 text-[20px] font-bold">{nb(`of ${reps.targeted} ${reps.targeted === 1 ? 'rep' : 'reps'} on target`)}</p>
+      <p className="mt-1 text-[18px] font-semibold">{repsLine(reps.held, reps.targeted)}</p>
     </>
   )
 }

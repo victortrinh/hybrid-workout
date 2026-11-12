@@ -25,6 +25,7 @@ import {
   end,
   hasByFeelReps,
   heldUnanswered,
+  repsOnTarget,
   isLive,
   isLiveRun,
   isOver,
@@ -503,6 +504,43 @@ describe('the Live run clock', () => {
     let cut = advance(go(start(THRESHOLD), at(10)), at(15))
     cut = heldUnanswered(nextBlock(cut, at(15)), indoor)
     expect(cut.intervals).toEqual([])
+  })
+})
+
+describe('repsOnTarget', () => {
+  /** The Threshold reps by feel: no pace to hold. */
+  const byFeel: Session = {
+    ...THRESHOLD,
+    blocks: THRESHOLD.blocks.map((b) =>
+      b.main
+        ? { ...b, exercises: [{ name: 'Hard reps', prescription: { kind: 'intervals', reps: 2, workSeconds: 720, recoverySeconds: 120, recovery: 'jog', effort: { feel: 'hard' } } }] }
+        : b,
+    ),
+  }
+
+  it('counts the reps held against those with a target, a rep left unanswered as Held it', () => {
+    const run = advance(go(start(THRESHOLD), at(10)), at(45))
+    expect(repsOnTarget(run, indoor)).toEqual({ held: 2, targeted: 2 })
+    expect(repsOnTarget(answer(run, 3, 292, 298), indoor)).toEqual({ held: 1, targeted: 2 })
+    expect(repsOnTarget(answer(answer(run, 1, 292, 300), 3, 292, 298), indoor)).toEqual({ held: 0, targeted: 2 })
+  })
+
+  it('agrees with the log the finish sheet saves', () => {
+    const run = answer(advance(go(start(THRESHOLD), at(10)), at(45)), 3, 292, 298)
+    const saved = heldUnanswered(run, indoor).intervals
+    expect(repsOnTarget(run, indoor)).toEqual({ held: saved.filter((i) => i.held).length, targeted: saved.length })
+  })
+
+  it('leaves out a rep cut short, and is null before any rep is over', () => {
+    expect(repsOnTarget(go(start(THRESHOLD), at(10)), indoor)).toBeNull()
+    const cut = nextBlock(advance(go(start(THRESHOLD), at(10)), at(15)), at(15))
+    expect(repsOnTarget(cut, indoor)).toBeNull()
+  })
+
+  it('is null for reps by feel, and for reps by RPE with no Training paces', () => {
+    expect(repsOnTarget(advance(go(start(byFeel), at(10)), at(45)), indoor)).toBeNull()
+    const rpeOnly: RunContext = { ...indoor, paces: null }
+    expect(repsOnTarget(advance(go(start(THRESHOLD), at(10)), at(45)), rpeOnly)).toBeNull()
   })
 })
 

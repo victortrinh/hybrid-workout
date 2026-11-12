@@ -933,6 +933,16 @@ export function heldUnanswered(run: LiveRun, context: RunContext): LiveRun {
   }, run)
 }
 
+/**
+ * The reps run at a target pace and how many held it, as the log will say once
+ * it's saved: a rep still unanswered counts as Held it. Reps by feel or by RPE
+ * have no target and stay out. Null when no rep had one.
+ */
+export function repsOnTarget(run: LiveRun, context: RunContext): { held: number; targeted: number } | null {
+  const targeted = heldUnanswered(run, context).intervals.filter((rep) => rep.targetPace !== null)
+  return targeted.length === 0 ? null : { held: targeted.filter((rep) => rep.held).length, targeted: targeted.length }
+}
+
 /** What a HYROX round or a Race simulation Station actually was, when it wasn't as written. */
 export interface StationChange {
   /** A HYROX round's run. */
