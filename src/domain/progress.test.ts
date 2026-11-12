@@ -5,6 +5,7 @@ import { ROXZONE_SECONDS } from './racePlan'
 import { program } from './program/program'
 import type { StationId } from './program/types'
 import {
+  finishSoFar,
   lanesFull,
   projectedFinish,
   raceLanes,
@@ -193,6 +194,25 @@ describe('the race in lanes', () => {
     expect(lanes.find((l) => l.leg === 'wall-balls')).toEqual({
       leg: 'wall-balls',
       reach: { share: 1, seconds: 330, week: 18, meters: null, reps: 100 },
+    })
+  })
+})
+
+describe('the Projected finish in a line', () => {
+  it('says nothing before any lane is full', () => {
+    expect(finishSoFar(program, [], localDate('2026-11-12'))).toBeNull()
+  })
+
+  it('counts the full lanes until there is a projection', () => {
+    const logs = [runTest(2, '2026-11-18', [300, 300, 300, 300]), HALF_A]
+    expect(finishSoFar(program, logs, localDate('2027-03-01'))).toEqual({ lanesFull: 5 })
+  })
+
+  it('gives the Solo time and the Doubles share once all nine are full', () => {
+    const logs = [runTest(14, '2027-02-10', [290, 295, 300, 307]), HALF_A, HALF_B]
+    expect(finishSoFar(program, logs, localDate('2027-03-14'))).toEqual({
+      solo: 1795 + 8 * 298 + 360,
+      doubles: 1795 / 2 + 8 * 298 + 360,
     })
   })
 })

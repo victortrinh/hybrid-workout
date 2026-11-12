@@ -297,6 +297,21 @@ export function raceLanes(program: Program, logs: SessionLog[], today: LocalDate
 export const lanesFull = (lanes: RaceLane[]): number =>
   lanes.filter((l) => (l.leg === 'run' ? l.secondsPerKm !== null : l.reach?.share === 1)).length
 
+/** The Projected finish in a line: its Solo time and Doubles share, or how many of the nine lanes are full. */
+export type FinishSoFar = { solo: number; doubles: number } | { lanesFull: number }
+
+/**
+ * Where the Projected finish stands today, in the fewest numbers: the time
+ * once all nine lanes are full, else the count of full lanes. Null before
+ * any lane is full, when there is nothing to say yet.
+ */
+export function finishSoFar(program: Program, logs: SessionLog[], today: LocalDate): FinishSoFar | null {
+  const { projection } = projectedFinish(program, logs, today)
+  if (projection) return { solo: projection.solo, doubles: projection.doubles }
+  const full = lanesFull(raceLanes(program, logs, today))
+  return full > 0 ? { lanesFull: full } : null
+}
+
 // ---------------------------------------------------------------------------
 // HYROX Stations
 

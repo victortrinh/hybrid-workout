@@ -32,7 +32,7 @@ A coach for exactly one Program and one athlete. It knows the plan, the race dat
 
 ## Capabilities and Constraints
 
-- Today: Up next, the rest of the Week's Bucket, race countdown, "Something hurts".
+- Today: Up next, the rest of the Week's Bucket, race countdown, "Something hurts", and the Projected finish in one line linking to Progress.
 - Live session: interval timer with treadmill speed and incline cues, set logger with rest timer, HYROX round clock with the Station target to beat, wake lock, haptic and sound cues; logging afterwards is always possible.
 - Plan: Phases and Weeks timeline; Session logs for past Sessions.
 - Progress: Projected finish with its Doubles share, Station bests at race volume, Race run pace from the Compromised run tests, Working weights, Race simulation times, weekly completion and Training load, recovery trends.
