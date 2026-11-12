@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
 import {
   Button,
   Checkbox,
@@ -71,6 +71,7 @@ import type { Lane } from '../../domain/program/types'
 import type { StationPart } from '../../domain/log'
 import type { WorkingWeightSuggestion } from '../../domain/suggestion'
 import { dropIn, LanePresence, play, riseIn, useEntrances, wipeIn } from '../motion'
+import { useDesktop } from '../components/ActionBar'
 import { RestCountdown } from '../components/RestCountdown'
 import { StripedNumeral } from '../components/StripedNumeral'
 import { nb } from '../format'
@@ -189,6 +190,11 @@ function Running({
   const sideways = useSideways()
   // The finish sheet stays one column on its side too: a form, read top to bottom, the page scrolling.
   const side = sideways && !over
+  // The holder rule: on a phone, upright or on its side, the actions come first, on screen and in the
+  // page, so Tab and a screen reader reach Pause before the field. Desktop keeps them at the foot.
+  const desktop = useDesktop()
+  const barOnTop = side || !desktop
+  const headingId = useId()
 
   const runRef = useRef(run)
   runRef.current = run
@@ -337,17 +343,62 @@ function Running({
   // On its side, the screen's edges are the phone's long sides: clear of the notch and the rounded corners.
   const across = sideways ? `${INSET_LEFT} ${INSET_RIGHT}` : 'px-pad'
 
+  // One bar, rendered in one of two places. Where it goes changes only when the screen crosses the
+  // desktop width or turns, never with a Block, so the buttons keep focus all session long.
+  const toast = <UndoToast run={run} below={barOnTop} onUndo={() => act(undo)} />
+  const bar = !over && block && (
+    <div
+      className={
+        side
+          ? // Above everything, phone upright or on its side: a treadmill's holder covers the bottom edge.
+            `col-start-2 row-start-1 border-b-2 border-ink bg-paper pt-[calc(10px+env(safe-area-inset-top))] pb-2.5 pl-pad ${INSET_RIGHT}`
+          : barOnTop
+            ? 'flex-none border-b-2 border-ink bg-paper px-pad pt-[calc(12px+env(safe-area-inset-top))] pb-3'
+            : 'flex-none border-t-2 border-ink bg-paper px-gutter pt-3 pb-3'
+      }
+    >
+      {/* Under the buttons while they're on top, so a toast arriving never moves what the thumb is aiming at. */}
+      {!barOnTop && toast}
+      <div className="flex gap-2.5">
+        {run.ready ? (
+          <Button onPress={() => act(resume)} className={`${primaryButton} desktop:max-w-60`}>
+            Start
+          </Button>
+        ) : (
+          <>
+            <Button onPress={() => act(paused ? resume : pause)} className={`${leg !== null && !paused ? lineButton : primaryButton} desktop:max-w-60`}>
+              {paused ? 'Resume' : 'Pause'}
+            </Button>
+            {/* In a round the leg's tap is the one that matters, made from a few steps away: the big, filled one. */}
+            <Button
+              onPress={() => act(nextBlock)}
+              className={leg !== null && !paused ? `${primaryButton} min-h-18 flex-[2] desktop:max-w-90` : `${lineButton} desktop:max-w-60`}
+            >
+              {finishedLabel(block, leg)}
+            </Button>
+          </>
+        )}
+      </div>
+      {barOnTop && toast}
+    </div>
+  )
+  const first = barOnTop && bar
+
   return (
     // On the clock the page is one screen that never scrolls: the band keeps the target and the clock at
     // the top, the Blocks scroll in what's left (or fold away to make room), and the actions stay docked.
     // On its side, two columns: the target and the clock on the field, the rest beside them (DESIGN.md, Sideways).
+    // With the actions first, the screen, named for the Session, takes focus on arrival in place of the
+    // heading after them: the next Tab is Pause (or Start), and a screen reader hears the Session first.
     <div
       className={
         side
           ? 'grid h-dvh grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto]'
           : `flex flex-col ${over ? 'min-h-dvh' : 'h-dvh'}`
       }
+      {...(first && { role: 'group', 'aria-labelledby': headingId, tabIndex: -1, 'data-arrival': '' })}
     >
+      {first}
       {/* The field drops in from the top as the session opens, once. */}
       <motion.header
         ref={bandRef}
@@ -360,7 +411,7 @@ function Running({
         }
       >
         <div className="flex items-center justify-between gap-3">
-          <h1 tabIndex={-1} className="text-[22px]">
+          <h1 id={headingId} tabIndex={-1} className="text-[22px]">
             {nb(run.heading)}
           </h1>
           {!over && (
@@ -546,41 +597,7 @@ function Running({
         )}
       </LanePresence>
 
-      {!over && block && (
-        <div
-          className={
-            side
-              ? // Above everything, phone upright or on its side: a treadmill's holder covers the bottom edge.
-                `col-start-2 row-start-1 border-b-2 border-ink bg-paper pt-[calc(10px+env(safe-area-inset-top))] pb-2.5 pl-pad ${INSET_RIGHT}`
-              : 'order-first flex-none border-b-2 border-ink bg-paper px-pad pt-[calc(12px+env(safe-area-inset-top))] pb-3 desktop:order-none desktop:border-t-2 desktop:border-b-0 desktop:px-gutter desktop:pt-3 desktop:pb-3'
-          }
-        >
-          {/* Under the buttons while they're on top, so a toast arriving never moves what the thumb is aiming at. */}
-          <div className={side ? 'flex flex-col-reverse' : 'flex flex-col-reverse desktop:flex-col'}>
-          <UndoToast run={run} onUndo={() => act(undo)} />
-          <div className="flex gap-2.5">
-            {run.ready ? (
-              <Button onPress={() => act(resume)} className={`${primaryButton} desktop:max-w-60`}>
-                Start
-              </Button>
-            ) : (
-              <>
-                <Button onPress={() => act(paused ? resume : pause)} className={`${leg !== null && !paused ? lineButton : primaryButton} desktop:max-w-60`}>
-                  {paused ? 'Resume' : 'Pause'}
-                </Button>
-                {/* In a round the leg's tap is the one that matters, made from a few steps away: the big, filled one. */}
-                <Button
-                  onPress={() => act(nextBlock)}
-                  className={leg !== null && !paused ? `${primaryButton} min-h-18 flex-[2] desktop:max-w-90` : `${lineButton} desktop:max-w-60`}
-                >
-                  {finishedLabel(block, leg)}
-                </Button>
-              </>
-            )}
-          </div>
-          </div>
-        </div>
-      )}
+      {!barOnTop && bar}
     </div>
   )
 }
@@ -877,7 +894,7 @@ function Checklist({ block, ticked, onTick }: { block: LiveBlock; ticked: number
  * For a few seconds after Skip block or Done: the Block back, as it was, its
  * clock still running. Gone on its own; the run keeps the snapshot until the next tap.
  */
-function UndoToast({ run, onUndo }: { run: LiveRun; onUndo: () => void }) {
+function UndoToast({ run, below, onUndo }: { run: LiveRun; below: boolean; onUndo: () => void }) {
   const entrances = useEntrances()
   const at = run.undo?.at ?? null
   const [expired, setExpired] = useState<number | null>(null)
@@ -891,7 +908,7 @@ function UndoToast({ run, onUndo }: { run: LiveRun; onUndo: () => void }) {
   return (
     <LanePresence>
       {shown && left && (
-        <motion.div key={shown.at} {...play(riseIn, entrances)} role="status" className="mt-2 flex items-center justify-between gap-3 desktop:mt-0 desktop:mb-3">
+        <motion.div key={shown.at} {...play(riseIn, entrances)} role="status" className={`flex items-center justify-between gap-3 ${below ? 'mt-2' : 'mb-3'}`}>
           <p className="text-body font-semibold">{nb(`${left.name}: ${left.work ? 'skipped' : 'done'}.`)}</p>
           <Button onPress={onUndo} className={linkButton}>
             Undo

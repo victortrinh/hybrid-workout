@@ -382,7 +382,9 @@ export function App() {
 /**
  * New title on every screen; on a change of screen, back to the top with
  * focus on the heading. A screen that marks where the athlete will look
- * (Plan's current Week) opens there instead, a third of the way down.
+ * (Plan's current Week) opens there instead, a third of the way down; one
+ * whose actions come before its heading (a Live run on a phone) marks where
+ * focus lands instead, ahead of them.
  */
 function useScreenChange(screen: Screen, title: string, route: Route) {
   const key = `${screen}/${route.week ?? ''}/${route.sessionId ?? ''}`
@@ -399,7 +401,8 @@ function useScreenChange(screen: Screen, title: string, route: Route) {
     } else if (!first) {
       window.scrollTo(0, 0)
     }
-    if (!first) document.querySelector<HTMLElement>('main h1')?.focus({ preventScroll: true })
+    const arrival = document.querySelector<HTMLElement>('main [data-arrival]') ?? document.querySelector<HTMLElement>('main h1')
+    if (!first) arrival?.focus({ preventScroll: true })
   }, [key, title])
 }
 

@@ -159,6 +159,10 @@ for (const colorScheme of ['light', 'dark'] as const) {
 
 test('desktop lays the panels on twelve columns; a phone stacks them', async ({ page }, testInfo) => {
   await page.goto('/progress')
+  // Measured in the type the athlete reads: until Archivo swaps in, the fallback wraps a line more,
+  // and a box read before the swap does not meet one read after it.
+  await expect(page.getByRole('region', { name: 'Station bests' })).toBeVisible()
+  await page.evaluate(() => document.fonts.ready)
   const box = async (name: string) => (await page.getByRole('region', { name }).boundingBox())!
   const projected = await box('Projected finish')
   const completion = await box('Weekly completion')

@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type APIRequestContext } from '@playwright/test'
 import { expectNoAxeViolations as axe, WEEK_3 } from './axe'
 import { caughtUp, caughtUpOnServer, seedLogs, serveHistory, weekDone } from './history'
 
@@ -70,13 +70,11 @@ test('7 days without training bring a lighter Week: Accept lightens it, Undo res
   await expect(suggestion).toContainText(`Done. The rest of Week ${s.back} is 33% lighter.`)
   await axe(page)
 
-  // Stored and synced: it survives a reload and the API returns it.
+  // Stored and synced: the API returns it, and it survives a reload. A decision isn't kept on the device,
+  // so a reload before the server has it would take it back: the page shows it before the server answers.
+  await expect.poll(() => serverDecision(request, `re-entry-w${s.back}`)).toMatchObject({ decision: 'accepted', date: s.thursday })
   await page.reload()
   await expect(nextRow).toContainText(bare(s.lighter))
-  const state = await (await request.get('/api/state')).json()
-  expect(state.suggestionDecisions).toContainEqual(
-    expect.objectContaining({ id: `re-entry-w${s.back}`, decision: 'accepted', date: s.thursday }),
-  )
 
   await suggestion.getByRole('button', { name: 'Undo' }).click()
   await expect(nextRow).toContainText(bare(s.full))
@@ -86,12 +84,21 @@ test('7 days without training bring a lighter Week: Accept lightens it, Undo res
   await suggestion.getByRole('button', { name: 'Keep full volume' }).click()
   await expect(suggestion).toContainText('Keeping full volume. Your call. Your calves.')
   await expect(nextRow).toContainText(bare(s.full))
+  await expect.poll(() => serverDecision(request, `re-entry-w${s.back}`)).toMatchObject({ decision: 'kept' })
   await suggestion.getByRole('button', { name: 'Undo' }).click()
+  await expect(suggestion.getByRole('button', { name: 'Accept' })).toBeVisible()
 
+  await expect.poll(() => serverDecision(request, `re-entry-w${s.back}`)).toMatchObject({ decision: 'open' })
   await page.reload()
   await expect(nextRow).toContainText(bare(s.full))
   await expect(suggestion.getByRole('button', { name: 'Accept' })).toBeVisible()
 })
+
+/** The decision on this Suggestion the shared database holds, if any. */
+async function serverDecision(request: APIRequestContext, id: string): Promise<{ decision: string; date: string } | undefined> {
+  const state = await (await request.get('/api/state')).json()
+  return state.suggestionDecisions.find((d: { id: string }) => d.id === id)
+}
 
 /** A Readiness flag a day, Monday to Wednesday of Week 3: pain 3, a short night, pain 4. */
 const FLAGS = {
