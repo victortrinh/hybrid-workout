@@ -21,6 +21,8 @@ import {
   blockLeft,
   canKeepGoing,
   canUndo,
+  clockedSeconds,
+  clockTarget,
   currentLeg,
   end,
   endRest,
@@ -44,10 +46,13 @@ import {
   resume,
   roundLegs,
   shortBlocks,
+  stationVerdicts,
   tick,
   undo,
   UNDO_MS,
+  type ClockTarget,
   type LiveBlock,
+  type StationVerdict,
   type LiveRun,
   type LiveStation,
   type LiveTarget,
@@ -69,7 +74,8 @@ import { RestCountdown } from '../components/RestCountdown'
 import { StripedNumeral } from '../components/StripedNumeral'
 import { nb } from '../format'
 import { blockChangeCue, keepAwake, letSleep, unlockSound } from '../liveCues'
-import { finishLine, liveLine } from '../liveCopy'
+import { finishLine, liveLine, tallyLine, underOver, verdictLine } from '../liveCopy'
+import { finishClock } from '../../domain/recap'
 import { navigate, SCREEN_PATH } from '../router'
 import { useSideways } from '../useSideways'
 import { Lifting, type LiftsFinish } from './LiveLifts'
@@ -175,6 +181,9 @@ function Running({
   const block: LiveBlock | undefined = run.blocks[run.block]
   const leg = currentLeg(run)
   const target = block && targetFor(block, context, leg)
+  // What the clock is up against on a leg that counts up: a Station target, or the run's distance at its pace.
+  const racing = over ? null : clockTarget(run, context)
+  const verdicts = stationVerdicts(run)
   const [backTo, setBackTo] = useState<number | null>(null)
   const sideways = useSideways()
   // The finish sheet stays one column on its side too: a form, read top to bottom, the page scrolling.
@@ -184,6 +193,10 @@ function Running({
   runRef.current = run
   const timerRef = useRef<HTMLSpanElement>(null)
   const fillRef = useRef<HTMLElement>(null)
+  const racingRef = useRef(racing)
+  racingRef.current = racing
+  const paceFillRef = useRef<HTMLElement>(null)
+  const paceWordsRef = useRef<HTMLSpanElement>(null)
   const bandRef = useRef<HTMLElement>(null)
   const restRef = useRef<HTMLDivElement>(null)
 
@@ -196,6 +209,13 @@ function Running({
     if (timerRef.current) timerRef.current.textContent = timerText(left === null ? Math.floor(legElapsed(current, now)) : Math.ceil(left - 0.001))
     const seconds = current.blocks[current.block]?.seconds
     if (fillRef.current && seconds) fillRef.current.style.width = `${Math.min(100, (elapsed / seconds) * 100)}%`
+    // The pace lane fills to the time the leg is racing; only its words change once the time is up.
+    const racing = racingRef.current
+    if (racing && paceFillRef.current) {
+      const on = legElapsed(current, now)
+      paceFillRef.current.style.width = `${Math.min(100, (on / racing.seconds) * 100)}%`
+      if (paceWordsRef.current) paceWordsRef.current.textContent = racingWords(racing, on > racing.seconds)
+    }
   }, [])
 
   useLayoutEffect(() => paint(nowMs()))
@@ -260,16 +280,33 @@ function Running({
 
   // The parts that move to the other column when the phone is on its side: the Block, the Coach's line, the sets.
   const blockWords = block && nb(run.ready ? readyWords(block, target) : `${block.name} · ${blockLength(block)}`)
-  const coachLine = block && (run.ready ? 'The clock waits. Tap Start when you’re set.' : liveLine(block, run))
+  // The Station just finished, against its Station target: said once, while the clock waits.
+  const judged = run.ready ? verdicts.findLast((v) => v.block === run.block - 1) : undefined
+  const coachLine =
+    block &&
+    (run.ready
+      ? judged
+        ? `${verdictLine(stations[judged.station].name, clock(judged.seconds), judged.seconds - judged.target)} Tap Start when you’re set.`
+        : 'The clock waits. Tap Start when you’re set.'
+      : liveLine(block, run))
+  const paceLane = racing && (
+    <p key={`${run.block}-${leg}`} className="mt-3 grid gap-1.5 text-[20px] leading-tight font-bold">
+      <span aria-hidden="true" className="relative block h-2 overflow-hidden bg-cobalt-soft">
+        <i ref={paceFillRef} className="pace-fill absolute inset-y-0 left-0 bg-on-cobalt" />
+      </span>
+      <span ref={paceWordsRef}>{racingWords(racing, false)}</span>
+    </p>
+  )
   const legs = block && (leg !== null ? (
     <RoundLegs
       block={block}
       leg={leg}
       done={run.legs.filter((l) => l.block === run.block).map((l) => l.seconds)}
       effort={runEffortWords(block, context)}
+      racing={racing !== null}
     />
   ) : (
-    block.stations.length > 0 && <StationList block={block} />
+    block.stations.length > 0 && <StationList block={block} racing={racing !== null} />
   ))
   const checklist = block && isChecklist(block) && (
     <Checklist block={block} ticked={run.ticked} onTick={(row) => act((r, now) => tick(r, row, now))} />
@@ -306,7 +343,7 @@ function Running({
     <div
       className={
         side
-          ? 'grid h-dvh grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto_auto]'
+          ? 'grid h-dvh grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto]'
           : `flex flex-col ${over ? 'min-h-dvh' : 'h-dvh'}`
       }
     >
@@ -317,7 +354,8 @@ function Running({
         className={
           side
             ? `on-field col-start-1 row-span-3 row-start-1 flex min-h-0 flex-col overflow-y-auto bg-cobalt ${INSET_LEFT} pt-[calc(10px+env(safe-area-inset-top))] pr-pad pb-[max(12px,env(safe-area-inset-bottom))] text-on-cobalt`
-            : `on-field bg-cobalt ${across} pt-[calc(14px+env(safe-area-inset-top))] pb-5 text-on-cobalt desktop:px-gutter desktop:pb-7 ${over ? '' : 'relative min-h-0 flex-[0_1_auto] overflow-y-auto'}`
+            : // On the clock the actions sit above the field on a phone, so they take the top inset.
+              `on-field bg-cobalt ${across} pb-5 text-on-cobalt desktop:px-gutter desktop:pb-7 ${over ? 'pt-[calc(14px+env(safe-area-inset-top))]' : 'relative min-h-0 flex-[0_1_auto] overflow-y-auto pt-3.5 desktop:pt-[calc(14px+env(safe-area-inset-top))]'}`
         }
       >
         <div className="flex items-center justify-between gap-3">
@@ -338,6 +376,7 @@ function Running({
           <>
             <p className="mt-5 text-[20px] font-bold">{run.ending ? 'Ended early' : 'Session over'}</p>
             <p className="mt-2 text-[18px] font-semibold">{finishLine(liveStatus(run))}</p>
+            <Clocked run={run} verdicts={verdicts} />
           </>
         ) : side ? (
           <>
@@ -366,7 +405,11 @@ function Running({
             ) : (
               <p className="mt-2 text-headline">{nb(feelWords(block, context))}</p>
             )}
-            <div className="mt-auto flex justify-end pt-2">{timer(checklist ? 'text-[56px] leading-[0.9] font-black tracking-[-0.03em]' : 'text-figure')}</div>
+            {/* The pace lane over the clock, not under it: the holder's lip covers the bottom edge. */}
+            <div className="mt-auto">
+              {paceLane}
+              <div className="flex justify-end pt-2">{timer(checklist ? 'text-[56px] leading-[0.9] font-black tracking-[-0.03em]' : 'text-figure')}</div>
+            </div>
           </>
         ) : (
           <>
@@ -401,6 +444,7 @@ function Running({
               </span>
               {timer('text-figure')}
             </div>
+            {paceLane}
             {legs}
             {checklist || detail}
             <p aria-live="polite" className="mt-3.5 min-h-6 text-[18px] font-semibold">
@@ -416,14 +460,14 @@ function Running({
         ref={restRef}
         className={
           side
-            ? `relative col-start-2 row-start-1 flex min-h-0 flex-col overflow-y-auto pl-pad ${INSET_RIGHT} pb-6`
+            ? `relative col-start-2 row-start-2 flex min-h-0 flex-col overflow-y-auto pl-pad ${INSET_RIGHT} pb-6`
             : `flex flex-1 flex-col ${across} desktop:max-w-plan desktop:px-gutter ${over ? 'desktop:pb-6' : 'relative min-h-0 basis-0 overflow-y-auto pb-6 has-[section]:min-h-28'}`
         }
       >
         {/* On its side, the field goes on across the top of this column: the Block, the Coach's line, what's next, the sets. */}
         {side && block && (
           <div
-            className={`on-field -ml-pad ${BLEED_RIGHT} border-l-2 border-cobalt-soft bg-cobalt pt-[calc(10px+env(safe-area-inset-top))] pb-4 pl-pad ${INSET_RIGHT} text-on-cobalt`}
+            className={`on-field -ml-pad ${BLEED_RIGHT} border-l-2 border-cobalt-soft bg-cobalt pt-2.5 pb-4 pl-pad ${INSET_RIGHT} text-on-cobalt`}
           >
             <motion.p key={run.block} {...play(wipeIn, entrances)} className="flex min-h-11 items-center text-[20px] font-bold">
               {blockWords}
@@ -469,6 +513,7 @@ function Running({
             )}
             <Lanes
               run={run}
+              verdicts={verdicts}
               context={context}
               fillRef={fillRef}
               onBack={(b) => (redone(run, b).length > 0 ? setBackTo(b) : act((r, now) => goBack(r, b, now)))}
@@ -485,8 +530,8 @@ function Running({
             {...play(riseIn, entrances)}
             className={
               side
-                ? `col-start-2 row-start-2 bg-cobalt pl-pad ${INSET_RIGHT} py-2 text-on-cobalt`
-                : 'flex-none bg-cobalt px-pad py-2 text-on-cobalt desktop:px-gutter'
+                ? `col-start-2 row-start-3 bg-cobalt pl-pad ${INSET_RIGHT} pt-2 pb-[max(8px,env(safe-area-inset-bottom))] text-on-cobalt`
+                : 'flex-none bg-cobalt px-pad pt-2 pb-[calc(8px+env(safe-area-inset-bottom))] text-on-cobalt desktop:px-gutter desktop:pb-2'
             }
           >
             <RestCountdown
@@ -503,10 +548,13 @@ function Running({
         <div
           className={
             side
-              ? `col-start-2 row-start-3 border-t-2 border-ink bg-paper pt-2.5 pb-[max(10px,env(safe-area-inset-bottom))] pl-pad ${INSET_RIGHT}`
-              : 'flex-none border-t-2 border-ink bg-paper px-pad pt-3 pb-[calc(12px+env(safe-area-inset-bottom))] desktop:px-gutter'
+              ? // Above everything, phone upright or on its side: a treadmill's holder covers the bottom edge.
+                `col-start-2 row-start-1 border-b-2 border-ink bg-paper pt-[calc(10px+env(safe-area-inset-top))] pb-2.5 pl-pad ${INSET_RIGHT}`
+              : 'order-first flex-none border-b-2 border-ink bg-paper px-pad pt-[calc(12px+env(safe-area-inset-top))] pb-3 desktop:order-none desktop:border-t-2 desktop:border-b-0 desktop:px-gutter desktop:pt-3 desktop:pb-3'
           }
         >
+          {/* Under the buttons while they're on top, so a toast arriving never moves what the thumb is aiming at. */}
+          <div className={side ? 'flex flex-col-reverse' : 'flex flex-col-reverse desktop:flex-col'}>
           <UndoToast run={run} onUndo={() => act(undo)} />
           <div className="flex gap-2.5">
             {run.ready ? (
@@ -527,6 +575,7 @@ function Running({
                 </Button>
               </>
             )}
+          </div>
           </div>
         </div>
       )}
@@ -602,13 +651,44 @@ const targetWords = (leg: LiveStation | undefined) => (leg?.target === undefined
 /** A Station's words with its Station target after them. */
 const withTarget = (words: string, leg: LiveStation | undefined) => [words, targetWords(leg)].filter(Boolean).join(' · ')
 
+/** The pace lane's words: what the clock is racing, then that it's past it. Only the words change, never a number. */
+function racingWords({ seconds, kind }: ClockTarget, past: boolean): string {
+  const time = clock(seconds)
+  if (kind === 'station') return past ? `Over the Station target, ${time}` : `Station target ${time}`
+  return past ? `Past ${time}` : `${time} at this pace`
+}
+
+/**
+ * The finish sheet's number: the time on the clock for the Session's work, every
+ * round, run and Station added up, and how the Stations did against their Station targets.
+ */
+function Clocked({ run, verdicts }: { run: LiveRun; verdicts: StationVerdict[] }) {
+  const seconds = clockedSeconds(run)
+  if (seconds === null) return null
+  const rounds = run.splits.filter((s) => run.blocks[s.block]?.kind === 'round').length
+  const beat = verdicts.filter((v) => v.seconds <= v.target).length
+  return (
+    <>
+      <p className="@container mt-4">
+        <StripedNumeral value={finishClock(seconds)} className="text-numeral-finish" />
+      </p>
+      <p className="mt-2 text-[20px] font-bold">
+        {nb(rounds > 0 ? `on the clock · ${rounds} ${rounds === 1 ? 'round' : 'rounds'}` : 'on the clock')}
+      </p>
+      {verdicts.length > 0 && <p className="mt-1 text-[18px] font-semibold">{tallyLine(beat, verdicts.length)}</p>}
+    </>
+  )
+}
+
 /**
  * A round's Stations, large enough to read from the floor; a Race
  * simulation Station's load; every Station to load on Set up. Sled loads are the plates to add.
  */
-function StationList({ block }: { block: LiveBlock }) {
+function StationList({ block, racing }: { block: LiveBlock; racing: boolean }) {
   if (block.kind === 'station') {
-    const load = withTarget(poundsWords(stations[block.stations[0].station], block.stations[0].pounds), block.stations[0])
+    // The pace lane says the Station target when the clock is racing it.
+    const pounds = poundsWords(stations[block.stations[0].station], block.stations[0].pounds)
+    const load = racing ? pounds : withTarget(pounds, block.stations[0])
     return load ? <p className="mt-2 text-[22px] font-bold">{nb(load)}</p> : null
   }
   return (
@@ -628,7 +708,20 @@ function StationList({ block }: { block: LiveBlock }) {
  * through with their split, the load of the one on the clock (the hero names
  * it), then what's left to get ready for.
  */
-function RoundLegs({ block, leg, done, effort }: { block: LiveBlock; leg: number; done: number[]; effort: string }) {
+function RoundLegs({
+  block,
+  leg,
+  done,
+  effort,
+  racing,
+}: {
+  block: LiveBlock
+  leg: number
+  done: number[]
+  effort: string
+  /** The pace lane is up: it says the Station target, so the leg's own line leaves it out. */
+  racing: boolean
+}) {
   return (
     <ol aria-label="Legs" className="mt-3 grid gap-1.5">
       {roundLegs(block).map((part, i) => {
@@ -636,7 +729,8 @@ function RoundLegs({ block, leg, done, effort }: { block: LiveBlock; leg: number
         const words = station ? withTarget(stationWords(station), station) : [km(block.meters ?? 0), effort].filter(Boolean).join(' · ')
         if (i === leg) {
           // The hero says what and how far: the load and the time to beat, or how hard to run, are all that's left to say.
-          const load = station ? withTarget(poundsWords(stations[station.station], station.pounds), station) : effort
+          const pounds = station ? poundsWords(stations[station.station], station.pounds) : ''
+          const load = station ? (racing ? pounds : withTarget(pounds, station)) : effort
           return (
             <li key={part} aria-current="step" className={load ? 'text-[22px] leading-tight font-bold' : 'sr-only'}>
               <span className="sr-only">{legName(part)}, now{load ? ': ' : ''}</span>
@@ -777,7 +871,7 @@ function UndoToast({ run, onUndo }: { run: LiveRun; onUndo: () => void }) {
   return (
     <LanePresence>
       {shown && left && (
-        <motion.div key={shown.at} {...play(riseIn, entrances)} role="status" className="mb-3 flex items-center justify-between gap-3">
+        <motion.div key={shown.at} {...play(riseIn, entrances)} role="status" className="mt-2 flex items-center justify-between gap-3 desktop:mt-0 desktop:mb-3">
           <p className="text-body font-semibold">{nb(`${left.name}: ${left.work ? 'skipped' : 'done'}.`)}</p>
           <Button onPress={onUndo} className={linkButton}>
             Undo
@@ -829,11 +923,14 @@ function GoBackCheck({
 
 function Lanes({
   run,
+  verdicts,
   context,
   fillRef,
   onBack,
 }: {
   run: LiveRun
+  /** Each Station timed against its Station target. */
+  verdicts: StationVerdict[]
   context: RunContext
   fillRef: React.RefObject<HTMLElement | null>
   /** An earlier Block tapped: back to it. */
@@ -845,6 +942,15 @@ function Lanes({
         const current = i === run.block
         const target = b.kind === 'rep' ? liveTarget(b, context) : null
         const split = b.round !== null ? run.splits.find((s) => s.block === i) : undefined
+        // A round that's over is a line of the scoreboard: each leg's time, and its Stations against their targets.
+        const legTimes = i < run.block ? run.legs.filter((l) => l.block === i).map((l) => clock(l.seconds)) : []
+        const judged = verdicts.filter((v) => v.block === i)
+        const score =
+          legTimes.length > 1
+            ? [legTimes.join(' + '), judged.length > 0 && underOver(judged.reduce((sum, v) => sum + v.seconds - v.target, 0))]
+                .filter(Boolean)
+                .join(' · ')
+            : null
         return (
           <li
             key={i}
@@ -864,8 +970,12 @@ function Lanes({
               <span>{b.name}</span>
             )}
             <span className="text-muted">
-              {target ? target.figure : blockLength(b)}
-              {split && ` · ${clock(split.seconds)}`}
+              {score ?? (
+                <>
+                  {target ? target.figure : blockLength(b)}
+                  {split && ` · ${clock(split.seconds)}`}
+                </>
+              )}
             </span>
             <span aria-hidden="true" className={`relative col-span-full block overflow-hidden bg-rule transition-[height] duration-(--dur-enter) ${current ? 'h-[26px]' : 'h-3'}`}>
               <i

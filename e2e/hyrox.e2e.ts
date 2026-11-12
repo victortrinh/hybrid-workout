@@ -141,7 +141,7 @@ test('a six-round HYROX session: Set up off the clock, each run then its Station
     await s.finished.click()
   }
   await expect(s.block).toHaveText('Cooldown · 4 min')
-  await expect(blocks.nth(3)).toHaveText(/^Round 2 of 6, done\s*400 m \+ 1 Station · 5:30$/)
+  await expect(blocks.nth(3)).toHaveText(/^Round 2 of 6, done\s*2:00 \+ 3:30$/)
 
   await page.clock.fastForward('04:00')
   await expect(page.getByText('Session over')).toBeVisible()
@@ -449,9 +449,14 @@ test('each Station shows its Station target on the Session sheet and the round c
   await expect(s.legs).toHaveText(['Run, now: Race run pace · RPE 7–8', /^Sled\spush\s·\s25\sm\s·\s335\slb\splates\s\(7\s×\s45\s\+\s20\)\s·\sStation\starget\s2:45$/])
   await page.clock.fastForward('01:40')
   await s.finished.click()
-  await expect(s.legs).toHaveText([/^Run\s·\s400\sm\s·\sRace\srun\space\s·\sRPE\s7–8,\sdone\sin\s1:40$/, /^Sled\spush,\snow:\s335\slb\splates\s\(7\s×\s45\s\+\s20\)\s·\sStation\starget\s2:45$/])
+  await expect(s.legs).toHaveText([/^Run\s·\s400\sm\s·\sRace\srun\space\s·\sRPE\s7–8,\sdone\sin\s1:40$/, /^Sled\spush,\snow:\s335\slb\splates\s\(7\s×\s45\s\+\s20\)$/])
+  // The pace lane says what the clock is racing: the Station target, and that it's past once it is.
+  await expect(page.locator('header')).toContainText('Station target 2:45')
   await page.clock.fastForward('02:40')
   await s.finished.click()
+  // Five seconds under: the Coach says so while the clock waits, and the round's lane keeps the score.
+  await expect(page.locator('header')).toContainText(/Sled push in 2:40, 5 s under the Station target\. Keep that\./)
+  await expect(page.getByRole('list', { name: 'Blocks' }).getByRole('listitem').nth(2)).toHaveText(/^Round 1 of 6, done\s*1:40 \+ 2:40 · 5 s under$/)
   await s.start.click()
   await expect(s.legs).toHaveText(['Run, now: Race run pace · RPE 7–8', /^Sled\spull\s·\s25\sm\s·\s225\slb\splates\s\(5\s×\s45\)\s·\sStation\starget\s2:26$/])
   await scan(page)
