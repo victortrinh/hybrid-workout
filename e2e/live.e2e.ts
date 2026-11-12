@@ -170,6 +170,12 @@ test('a full Threshold Run from Start to logged', async ({ page }) => {
   await expect(s.pause).toHaveCount(0)
   // The clock ran it out, no tap to take back: nothing to keep going with.
   await expect(page.getByRole('button', { name: 'Keep going' })).toHaveCount(0)
+  // No time on the clock for timed reps: the field leads with the reps held, as the log will count them.
+  const field = page.locator('header')
+  await expect(field.locator('.text-numeral-finish')).toHaveText('2')
+  await expect(field.getByText('of 3 reps on target')).toBeVisible()
+  await expect(field.getByText('One off target. The first rep sets the rest.')).toBeVisible()
+  await expect(field.getByText('on the clock')).toHaveCount(0)
   await page.getByRole('textbox', { name: 'Console distance, km' }).fill('9.4')
   // Paced reps were asked one by one: no By-feel speeds at the end.
   await expect(page.getByRole('region', { name: 'By-feel speeds' })).toHaveCount(0)

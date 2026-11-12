@@ -3,7 +3,7 @@ import { localDate } from '../domain/calendar'
 import { findWeek } from '../domain/coach'
 import { startRun } from '../domain/live'
 import { program } from '../domain/program/program'
-import { liveLine, tankLine, tankWords } from './liveCopy'
+import { liveLine, repsLine, tankLine, tankWords } from './liveCopy'
 
 describe('tankWords', () => {
   it('reads reps in reserve as 10 minus RPE', () => {
@@ -53,5 +53,19 @@ describe('liveLine', () => {
     const run = startRun({ week: 2, session, date: localDate('2026-11-18'), environment: 'indoor' }, 0)
     const first = run.blocks.find((b) => b.kind === 'distance')!
     expect(liveLine(first, run)).toBe('Run 1. Full effort, but even. The Station is waiting.')
+  })
+})
+
+describe('repsLine', () => {
+  it('says all held, some held and none held, with the number', () => {
+    expect(repsLine(5, 5)).toBe('All 5 on target. Dull. Exactly right.')
+    expect(repsLine(4, 5)).toBe('One off target. The first rep sets the rest.')
+    expect(repsLine(2, 5)).toBe('Three off target. The first rep sets the rest.')
+    expect(repsLine(0, 5)).toBe('None of 5 on target. Start the first one slower.')
+  })
+
+  it('says a single rep without counting it', () => {
+    expect(repsLine(1, 1)).toBe('On target. Dull. Exactly right.')
+    expect(repsLine(0, 1)).toBe('Off target. Start it slower next time.')
   })
 })
