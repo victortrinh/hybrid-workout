@@ -1,6 +1,7 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import { BEFORE_WEEK_1, expectNoAxeViolations, WEEK_3 } from './axe'
-import { caughtUp, serveHistory, weekDone } from './history'
+import { BASELINE_HISTORY } from '../src/mock/scenarios/seed'
+import { caughtUp, serveHistory, weekDone, type SeedLog } from './history'
 
 const WEEK_2 = ['hyrox-a', 'hyrox-b', 'compromised-run-test', 'strength']
 
@@ -209,4 +210,72 @@ test('keeps to one Easy run after a Week with a required Session not Done', asyn
   const bucket = page.getByRole('list').filter({ hasText: 'Easy run' })
   await expect(bucket.getByRole('listitem')).toHaveCount(5)
   await expect(page.getByText('Second Easy run')).toHaveCount(0)
+})
+
+/** Every Station at full volume and Race load, as a Race simulation logs it: as in the Progress tests. */
+const FULL = [
+  ['skierg', 240, { meters: 1000 }],
+  ['sled-push', 180, { meters: 50, pounds: 335 }],
+  ['sled-pull', 200, { meters: 50, pounds: 225 }],
+  ['burpee-broad-jumps', 250, { meters: 80 }],
+  ['row', 245, { meters: 1000 }],
+  ['farmers-carry', 90, { meters: 200, pounds: 55 }],
+  ['sandbag-lunges', 260, { meters: 100, pounds: 45 }],
+  ['wall-balls', 330, { reps: 100, pounds: 13 }],
+] as const
+
+const simulation = (week: number, date: string, legs: typeof FULL[number][]): SeedLog => ({
+  week,
+  sessionId: 'race-simulation',
+  date,
+  status: 'done',
+  minutes: 65,
+  rpe: 8,
+  stations: legs.flatMap(([part, seconds, done], i) => [
+    { round: i + 1, part: 'run', pounds: null, meters: 1000, reps: null, seconds: 300 },
+    { round: i + 1, part, pounds: 'pounds' in done ? done.pounds : null, meters: 'meters' in done ? done.meters : null, reps: 'reps' in done ? done.reps : null, seconds },
+  ]),
+})
+
+const finishRow = (page: Page) => page.getByRole('link', { name: /^Projected finish/ })
+
+test('says nothing of the Projected finish until a lane is full', async ({ page }) => {
+  await serveHistory(page, caughtUp(1))
+  await page.clock.setFixedTime(WEEK_3)
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'This Week' })).toBeVisible()
+  await expect(finishRow(page)).toHaveCount(0)
+})
+
+test('under the Week, counts the full lanes, and following it opens Progress', async ({ page }) => {
+  // The baseline Compromised run test sets the Race run pace: the runs' lane is full, no Station's yet.
+  await serveHistory(page, BASELINE_HISTORY)
+  await page.clock.setFixedTime(WEEK_3)
+  await page.goto('/')
+
+  const row = finishRow(page)
+  await expect(row).toHaveText('Projected finish · 1 of 9 lanes full')
+  expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(44)
+  await row.click()
+  await expect(page).toHaveURL(/\/progress$/)
+  await expect(page.getByRole('main').getByRole('region', { name: 'Projected finish' })).toContainText('1of 9 lanes full')
+})
+
+test('with all nine lanes full, gives the Projected finish and its Doubles share in one line', async ({ page }) => {
+  await serveHistory(page, [
+    ...BASELINE_HISTORY,
+    simulation(16, '2027-02-27', FULL.slice(0, 4)),
+    simulation(18, '2027-03-13', FULL.slice(4)),
+  ])
+  await page.clock.setFixedTime(new Date('2027-03-15T12:00:00-04:00'))
+  await page.goto('/')
+
+  // Solo 1795 + 8 × 307 + 360 = 4611 s; Doubles 897.5 + 2456 + 360 = 3713.5 s, as on Progress.
+  const row = finishRow(page)
+  await expect(row).toHaveText('Projected finish 1:16:51 · Doubles share 1:01:54')
+  // One line, even at a phone's width.
+  expect((await row.boundingBox())!.height).toBeLessThanOrEqual(44)
+  await expectNoAxeViolations(page)
+  await row.click()
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Progress')
 })
