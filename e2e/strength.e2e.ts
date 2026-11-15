@@ -344,6 +344,10 @@ test('a pending Working weight is asked before set 1: Accept moves every squat s
   await expect(prompt).toContainText('Back squat: 185 → 190 lb?')
   await expect(prompt).toContainText('Week 2: 3 × 5 at 185 lb, top RPE 7 · +5 lb')
   await expect(prompt.getByRole('button', { name: 'Keep 185 lb' })).toBeVisible()
+  // Each lift says what its last sets were: Week 2's, or Week 1's calibration for the carry Week 2 didn't log.
+  await expect(page.getByRole('region', { name: 'Back squat', exact: true })).toContainText(/Last time 3\s×\s5\sat 185\slb, RPE 7/)
+  await expect(page.getByRole('region', { name: 'Romanian deadlift' })).toContainText(/Last time 3\s×\s6\sat 135\slb, RPE 8/)
+  await expect(page.getByRole('region', { name: 'Heavy farmers carry' })).toContainText(/Last time 1\s×\s40\sm at 70\slb, RPE 7/)
   await scan(page)
 
   await prompt.getByRole('button', { name: 'Accept' }).click()

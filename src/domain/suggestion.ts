@@ -130,6 +130,8 @@ export interface RecoverySuggestion {
 export type WorkingWeightReason =
   /** Every target rep at RPE 7 or easier: up. */
   | 'all-reps-easy'
+  /** Every set heavier than the Working weight, every target rep, nothing at RPE 9 or more: up to what was lifted. */
+  | 'lifted-heavier'
   /** RPE 9 or more, or missed reps, two Strength sessions in a row: down. */
   | 'two-holds'
 
@@ -147,7 +149,7 @@ export interface WorkingWeightSuggestion {
   to: { pounds: number }
   trigger: {
     reason: WorkingWeightReason
-    /** The Weeks of the Strength sessions behind it: one for an increase, the holds in a row for a reduction. */
+    /** The Weeks of the Strength sessions behind it: one for a move up, the holds in a row for a reduction. */
     weeks: number[]
     /** The latest of those Sessions: sets logged, the fewest reps and the lightest load of any set, and the hardest RPE. */
     sets: number

@@ -12,7 +12,7 @@ import { POUNDS, type SessionLog, type SetLog } from './log'
 import { sessionHeading } from './program/describe'
 import type { Block, LiftId, Prescription, Range, Session } from './program/types'
 import type { Suggestion, WorkingWeightSuggestion } from './suggestion'
-import { CALIBRATION_RPE, prescribedPounds, targetReps, type WorkingWeights } from './weights'
+import { CALIBRATION_RPE, prescribedPounds, targetReps, type LastLift, type WorkingWeights } from './weights'
 
 type Sets = Extract<Prescription, { kind: 'sets' }>
 
@@ -60,6 +60,8 @@ export interface LiveExercise {
   restSeconds: number
   /** No Working weight yet: ramp the sets up until one feels like RPE 7. */
   calibrate: boolean
+  /** "Last time 3 × 5 at 185 lb, RPE 7": the lift's sets the last time it was trained. Absent before the first. */
+  lastTime?: string | null
 }
 
 export interface LiveSet {
@@ -101,16 +103,18 @@ export interface LiftsStart {
   estimates?: WorkingWeights
   /** The Coach's Suggestions now: the open Working weight ones for this session's lifts are asked at the start. */
   suggestions?: Suggestion[]
+  /** Each lift's sets from the last Strength session that logged it (`lastLifted`). */
+  last?: Partial<Record<LiftId, LastLift>>
 }
 
 export function startLifts(
-  { week, session, date, weights, estimates = {}, suggestions = [] }: LiftsStart,
+  { week, session, date, weights, estimates = {}, suggestions = [], last = {} }: LiftsStart,
   now: number,
 ): LiveLifts {
   const lifts = session.blocks.flatMap((block) =>
     block.exercises.flatMap(({ name, note, prescription: rx }) =>
       rx.kind === 'sets'
-        ? [{ exercise: liveExercise(name, note ?? null, rx, block, weights), pounds: startingPounds(rx, weights, estimates) }]
+        ? [{ exercise: liveExercise(name, note ?? null, rx, block, weights, last), pounds: startingPounds(rx, weights, estimates) }]
         : [],
     ),
   )
@@ -170,8 +174,16 @@ export function answerPrompt(lifts: LiveLifts, id: string, decision: 'accepted' 
   }
 }
 
-function liveExercise(name: string, note: string | null, rx: Sets, block: Block, weights: WorkingWeights): LiveExercise {
+function liveExercise(
+  name: string,
+  note: string | null,
+  rx: Sets,
+  block: Block,
+  weights: WorkingWeights,
+  last: Partial<Record<LiftId, LastLift>>,
+): LiveExercise {
   const lift = 'lift' in rx.load ? rx.load.lift : null
+  const before = lift ? last[lift] : undefined
   const calibrate =
     rx.load.kind === 'find-working-weight' || (rx.load.kind === 'working-weight' && weights[rx.load.lift] === undefined)
   const rpe = calibrate ? CALIBRATION_RPE : (rx.rpeCap ?? rx.rpe?.[0] ?? DEFAULT_RPE)
@@ -193,7 +205,32 @@ function liveExercise(name: string, note: string | null, rx: Sets, block: Block,
           : null,
     restSeconds: rx.restSeconds?.[1] ?? (block.main ? REST_MAIN : REST_OTHER),
     calibrate,
+    lastTime: before ? lastTimeLine(before, rx) : null,
   }
+}
+
+/**
+ * What the lift's last sets were, in one line: "Last time 3 × 5 at 185 lb,
+ * RPE 7"; a ramp as "Last time 135, 165, 185 lb × 5, RPE 5–7"; reps missed as
+ * "Last time 185 lb × 5, 5, 3, RPE 7–9". A fact beside the load, never a target.
+ */
+export function lastTimeLine({ sets }: LastLift, rx: Pick<Sets, 'meters' | 'perLeg'>): string | null {
+  if (sets.length === 0) return null
+  const each = rx.perLeg ? ' / leg' : ''
+  const amount = (reps: number) => (rx.meters ? `${rx.meters} m` : `${reps}`)
+  const same = <T,>(values: T[]) => values.every((v) => v === values[0])
+  const pounds = sets.map((s) => s.pounds)
+  const reps = sets.map((s) => s.reps)
+  const rpes = sets.map((s) => s.rpe)
+  const done =
+    same(pounds) && same(reps)
+      ? `${sets.length} × ${amount(reps[0])}${each} at ${pounds[0]} lb`
+      : same(reps)
+        ? `${pounds.join(', ')} lb × ${amount(reps[0])}${each}`
+        : same(pounds)
+          ? `${pounds[0]} lb × ${reps.join(', ')}${each}`
+          : `${sets.map((s) => `${s.pounds} × ${s.reps}`).join(', ')} lb${each}`
+  return `Last time ${done}, RPE ${range([Math.min(...rpes), Math.max(...rpes)])}`
 }
 
 /** The Working weight (or its Deload or light share), or a calibration's starting load. */

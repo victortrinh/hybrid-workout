@@ -479,6 +479,7 @@ function ExerciseSets({
         </span>
       </div>
       {exercise.note && <p className="mt-0.5 text-[14px] text-muted">{exercise.note}</p>}
+      {exercise.lastTime && <p className="mt-0.5 text-[14px] font-semibold text-muted">{nb(exercise.lastTime)}</p>}
       <ol className="mt-2.5 grid gap-1.5">
         {sets.map((set, s) => (
           <SetRow

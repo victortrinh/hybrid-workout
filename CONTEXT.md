@@ -148,7 +148,11 @@ Training paces from the Starting point's estimated 1 km split, worked out as for
 Whether a run happens Indoors on a treadmill or Outdoors; Indoor Prescriptions are expressed as speed and incline.
 
 **Working weight**:
-The current load for a lift's main sets in a Strength session, first found in a calibration session and then progressed from logged reps and RPE. A calibration ramps from the empty bar, or from about 70% of the Starting point's estimate, rounded down to 5 lb. Stations have no Working weight: they are always at Race load.
+The current load for a lift's main sets in a Strength session, first found in a calibration session and then progressed from logged reps and RPE. A calibration ramps from the empty bar, or from about 70% of the Starting point's estimate, rounded down to 5 lb. The Coach suggests from the load actually lifted: sets all done heavier than the Working weight move it up to them, and an increase is counted from there. Stations have no Working weight: they are always at Race load.
+
+**Last time**:
+A lift's sets from the latest Strength session that logged it, shown under its Exercise in a Live session: "Last time 3 × 5 at 185 lb, RPE 7". A fact beside the load, never a target; the load a set starts at is still the Working weight.
+_Avoid_: previous best, history
 
 **Station**:
 One of the eight HYROX race stations: SkiErg, sled push, sled pull, burpee broad jumps, row, farmers carry, sandbag lunges, wall balls.

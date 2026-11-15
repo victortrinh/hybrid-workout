@@ -819,6 +819,7 @@ function recoverySummary(trend: Trend): string {
 const REASON: Record<WorkingWeightChange['reason'], string> = {
   calibration: 'calibrated',
   'all-reps-easy': 'every rep at RPE 7 or easier',
+  'lifted-heavier': 'lifted heavier, every rep',
   'two-holds': 'held twice in a row',
 }
 

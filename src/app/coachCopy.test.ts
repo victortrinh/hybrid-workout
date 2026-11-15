@@ -3,7 +3,7 @@ import { localDate } from '../domain/calendar'
 import { findWeek } from '../domain/coach'
 import { program } from '../domain/program/program'
 import type { ShortSleepCut } from '../domain/recovery'
-import type { RecoverySuggestion, Suggestion } from '../domain/suggestion'
+import type { RecoverySuggestion, Suggestion, WorkingWeightSuggestion } from '../domain/suggestion'
 import type { SessionLog } from '../domain/log'
 import type { ProgramRecap } from '../domain/recap'
 import { droppedLine, raceCopy, shortSleepLine, suggestedRestCopy, suggestionCopy, waitingLine } from './coachCopy'
@@ -175,5 +175,34 @@ describe('the lighter-Week Suggestion’s copy', () => {
     expect(copy.line).toBe('Three rough days this Week. That’s your body asking for a Deload. The rest of Week 3 goes 33% lighter.')
     expect(copy.why).toBe('Mon pain 3 · Tue slept 5 h 20 · Wed pain 4, slept 5 h 41 · every Prescription left in Week 3 at 67%')
     expect(copy.keep).toBe('Keep full volume')
+  })
+})
+
+describe('a Working weight Suggestion quotes the load that was lifted', () => {
+  const squat = (reason: WorkingWeightSuggestion['trigger']['reason'], to: number, pounds: number, topRpe: number): WorkingWeightSuggestion => ({
+    id: 'ww-back-squat-w2',
+    kind: 'working-weight',
+    week: 2,
+    sessionId: 'strength',
+    lift: 'back-squat',
+    date: localDate('2026-11-18'),
+    from: { pounds: 185 },
+    to: { pounds: to },
+    trigger: { reason, weeks: [2], sets: 3, reps: 5, pounds, topRpe },
+    decision: 'open',
+    decidedOn: null,
+  })
+
+  it('an increase from sets done over the Working weight', () => {
+    const copy = suggestionCopy(squat('all-reps-easy', 205, 200, 7))
+    expect(copy.line).toBe('Squat: every rep, nothing harder than RPE 7. 200 lb was a warm-up. 205 lb next time.')
+    expect(copy.why).toBe('Week 2: 3 × 5 at 200 lb, top RPE 7 · +20 lb')
+  })
+
+  it('sets lifted heavier than written', () => {
+    const copy = suggestionCopy(squat('lifted-heavier', 200, 200, 8))
+    expect(copy.line).toBe('Squat: I wrote 185 lb. You lifted 200 lb, every rep. 200 lb it is.')
+    expect(copy.why).toBe('Week 2: 3 × 5 at 200 lb, top RPE 8 · +15 lb')
+    expect(copy.keep).toBe('Keep 185 lb')
   })
 })

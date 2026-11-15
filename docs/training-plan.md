@@ -139,6 +139,7 @@ High-load compound lifts progressed by RPE: the kind of strength work that impro
 | Tendon | Seated calf raise, dumbbell or barbell on knees | 2 × 10 | same |
 
 - **Week 1 is calibration:** ramp each lift to RPE 7 to find its Working weight.
+- **After that:** each lift starts at its Working weight, with last time's sets shown beside it. Every target rep at RPE 7 or easier: +5 lb (calves and the carry +5%), counted from the load actually lifted. Every set lifted heavier than written, all reps, nothing at RPE 9: the Working weight moves up to that load. RPE 9 or missed reps twice in a row: −5%. Each is a Suggestion to accept or keep.
 - **Deload:** 2 sets of each main lift at ~85–90% Working weight, RPE ≤ 6.
 - Lift at least 3 hours away from any run, and first when they share a day; concurrent training costs explosive strength most when the two are in one session (research note, §3).
 
