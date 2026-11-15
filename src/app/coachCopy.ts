@@ -82,11 +82,20 @@ export function suggestionCopy(s: Suggestion): SuggestionCopy {
       const { trigger } = s
       if (trigger.reason === 'all-reps-easy') {
         return {
-          line: `${lift}: every rep, nothing harder than RPE ${trigger.topRpe}. ${from} was a warm-up. ${to} next time.`,
-          why: `Week ${s.week}: ${trigger.sets} × ${trigger.reps} at ${from}, top RPE ${trigger.topRpe} · ${step}`,
+          line: `${lift}: every rep, nothing harder than RPE ${trigger.topRpe}. ${trigger.pounds} lb was a warm-up. ${to} next time.`,
+          why: `Week ${s.week}: ${trigger.sets} × ${trigger.reps} at ${trigger.pounds} lb, top RPE ${trigger.topRpe} · ${step}`,
           keep: `Keep ${from}`,
           accepted: `${lift} is ${to} now. Same face, more plates.`,
           kept: `${lift} stays ${from}. Your call. It’ll still be light.`,
+        }
+      }
+      if (trigger.reason === 'lifted-heavier') {
+        return {
+          line: `${lift}: I wrote ${from}. You lifted ${to}, every rep. ${to} it is.`,
+          why: `Week ${s.week}: ${trigger.sets} × ${trigger.reps} at ${trigger.pounds} lb, top RPE ${trigger.topRpe} · ${step}`,
+          keep: `Keep ${from}`,
+          accepted: `${lift} is ${to} now. You picked it. I only wrote it down.`,
+          kept: `${lift} stays ${from}. Your call. The plates you added say otherwise.`,
         }
       }
       return {

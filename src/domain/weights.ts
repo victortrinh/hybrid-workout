@@ -6,7 +6,10 @@
  * athlete's decisions: every Working weight is replayed from the logs, oldest
  * first, each time it's asked for. A calibration sets a Working weight
  * outright, since the athlete picked those loads. Every change after that is a
- * Suggestion, and only an accepted one moves the weight, with one exception:
+ * Suggestion, and only an accepted one moves the weight. A Suggestion starts
+ * from the load actually lifted, not the one written: sets done heavier than
+ * the Working weight move it up to them, and an increase is counted from
+ * there. One exception to asking first:
  * while a lighter Week is in force (a Deload week, or one an accepted re-entry
  * lightened) an open increase is held rather than offered, and lands on its own
  * the Monday after.
@@ -144,11 +147,17 @@ export function strengthState(
       }
       if (rx.load.kind !== 'working-weight' || current === undefined) continue
 
-      const outcome = judge(sets, rx, current, log.status === 'done')
+      const done = log.status === 'done'
+      const outcome = judge(sets, rx, current, done)
+      // The lightest set: at or over the Working weight whenever the weight isn't held.
+      const lifted = Math.min(...sets.map((s) => s.pounds ?? 0))
       let change: { reason: WorkingWeightReason; to: number; weeks: number[] } | null = null
       if (outcome === 'increase') {
         holds.delete(lift)
-        change = { reason: 'all-reps-easy', to: current + increase(lift, current), weeks: [log.week] }
+        change = { reason: 'all-reps-easy', to: lifted + increase(lift, lifted), weeks: [log.week] }
+      } else if (outcome === 'steady' && done && lifted > current) {
+        holds.delete(lift)
+        change = { reason: 'lifted-heavier', to: lifted, weeks: [log.week] }
       } else if (outcome === 'hold') {
         const row = [...(holds.get(lift) ?? []), log.week]
         if (row.length >= HOLDS_TO_REDUCE) {
@@ -262,6 +271,38 @@ export function liftPrescription(session: Session, lift: LiftId): Sets | null {
   return null
 }
 
+/** What was lifted on a lift the last time it was trained: every set logged, in order. */
+export interface LastLift {
+  week: number
+  date: LocalDate
+  sets: { pounds: number; reps: number; rpe: number }[]
+}
+
+/**
+ * Each lift's sets from the latest Strength session that logged it, on or
+ * before `today`. `except` leaves a Session's own log out, so one started
+ * again doesn't quote itself.
+ */
+export function lastLifted(
+  program: Program,
+  logs: SessionLog[],
+  today: LocalDate,
+  except?: { week: number; sessionId: string },
+): Partial<Record<LiftId, LastLift>> {
+  const last: Partial<Record<LiftId, LastLift>> = {}
+  for (const { log } of strengthLogs(program, logs, today)) {
+    if (except && log.week === except.week && log.sessionId === except.sessionId) continue
+    for (const [lift, sets] of byLift(log.sets)) {
+      last[lift] = {
+        week: log.week,
+        date: log.date,
+        sets: sets.map((s) => ({ pounds: s.pounds ?? 0, reps: s.reps, rpe: s.rpe })),
+      }
+    }
+  }
+  return last
+}
+
 /** The lowest rep count that meets a target: 6 for "6–10". */
 export const targetReps = (reps: number | Range) => (typeof reps === 'number' ? reps : reps[0])
 
@@ -280,7 +321,9 @@ export function calibrated(sets: SetLog[]): number {
  * Up: every set logged at the Working weight or more, every target rep, all
  * at RPE 7 or easier, and the Session Done. Hold: a set at RPE 9 or more, a
  * missed rep, or a set lighter than the Working weight. Anything else (an
- * RPE 8, a Session cut short) leaves the weight alone and breaks a run of holds.
+ * RPE 8, a Session cut short) leaves the weight alone and breaks a run of
+ * holds; a Done Session's sets all heavier than the Working weight still move
+ * it up to them (`strengthState`).
  */
 export function judge(sets: SetLog[], rx: Sets, current: number, done: boolean): 'increase' | 'hold' | 'steady' {
   const reps = targetReps(rx.reps)

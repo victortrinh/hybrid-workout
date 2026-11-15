@@ -6,6 +6,7 @@ import { Link, RouterProvider } from 'react-aria-components'
 import { motion } from 'motion/react'
 import { coach, DROPPED_ID, findWeek, prescribedWeek, type CoachDay } from '../domain/coach'
 import { liftsLog, startLifts } from '../domain/lifts'
+import { lastLifted } from '../domain/weights'
 import { liveLog, loggedSpeeds, startRun } from '../domain/live'
 import { logDays, logFor, type SessionLog } from '../domain/log'
 import type { Environment, RunContext } from '../domain/paces'
@@ -198,6 +199,7 @@ export function App() {
               weights: day.workingWeights,
               estimates: day.estimatedWeights,
               suggestions: after.suggestions,
+              last: lastLifted(program, logs, today, { week, sessionId: started.id }),
             },
             now,
           )

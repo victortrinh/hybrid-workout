@@ -9,6 +9,7 @@ import {
   endRest,
   finish,
   keepGoing,
+  lastTimeLine,
   liftsLog,
   liftsStatus,
   logSet,
@@ -308,5 +309,40 @@ describe('rpeChoices', () => {
     expect(rpeChoices(6, 10)).toEqual([5, 6, 7, 8, 9, 10])
     expect(rpeChoices(7, 3)).toEqual([3, 4, 5, 6, 7, 8])
     expect(rpeChoices(7, 6)).toEqual([5, 6, 7, 8, 9, 10])
+  })
+})
+
+describe('last time', () => {
+  const last = (sets: [pounds: number, reps: number, rpe: number][]) => ({
+    week: 1,
+    date: localDate('2026-11-11'),
+    sets: sets.map(([pounds, reps, rpe]) => ({ pounds, reps, rpe })),
+  })
+
+  it('says the sets in one line, however they went', () => {
+    expect(lastTimeLine(last([[185, 5, 7], [185, 5, 7], [185, 5, 7]]), {})).toBe('Last time 3 × 5 at 185 lb, RPE 7')
+    expect(lastTimeLine(last([[135, 5, 5], [165, 5, 6], [185, 5, 7]]), {})).toBe('Last time 135, 165, 185 lb × 5, RPE 5–7')
+    expect(lastTimeLine(last([[185, 5, 7], [185, 5, 8], [185, 3, 9]]), {})).toBe('Last time 185 lb × 5, 5, 3, RPE 7–9')
+    expect(lastTimeLine(last([[185, 5, 7], [195, 3, 9]]), {})).toBe('Last time 185 × 5, 195 × 3 lb, RPE 7–9')
+    expect(lastTimeLine(last([[35, 8, 7], [35, 8, 7]]), { perLeg: true })).toBe('Last time 2 × 8 / leg at 35 lb, RPE 7')
+    expect(lastTimeLine(last([[70, 1, 7], [70, 1, 7], [70, 1, 7]]), { meters: 40 })).toBe('Last time 3 × 40 m at 70 lb, RPE 7')
+    expect(lastTimeLine(last([]), {})).toBeNull()
+  })
+
+  it('goes on each Exercise by its lift, and on none before the lift was ever logged', () => {
+    const session = equip(findWeek(program, 2)!.sessions.find((s) => s.id === 'strength')!, DEFAULT_EQUIPMENT)
+    const lifts = startLifts(
+      {
+        week: 2,
+        session,
+        date: localDate('2026-11-18'),
+        weights: WEIGHTS,
+        last: { 'back-squat': last([[135, 5, 5], [165, 5, 6], [185, 5, 7]]) },
+      },
+      T0,
+    )
+    expect(lifts.exercises.map((e) => [e.name, e.lastTime])).toContainEqual(['Back squat', 'Last time 135, 165, 185 lb × 5, RPE 5–7'])
+    expect(lifts.exercises.filter((e) => e.lastTime).map((e) => e.name)).toEqual(['Back squat'])
+    expect(start(2).exercises.every((e) => e.lastTime === null)).toBe(true)
   })
 })

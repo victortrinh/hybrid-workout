@@ -5,7 +5,7 @@ import type { LoggedStatus, SessionLog, SetLog } from './log'
 import { program } from './program/program'
 import type { LiftId } from './program/types'
 import type { Decision, SuggestionDecision } from './suggestion'
-import { calibrated, increase, reduced, strengthState } from './weights'
+import { calibrated, increase, lastLifted, reduced, strengthState } from './weights'
 
 /** Each Week's Strength session, done on its Wednesday. */
 const WEDNESDAY: Record<number, string> = {
@@ -161,10 +161,67 @@ describe('increase', () => {
     expect(state([CALIBRATION, easyWeek2, week3]).weights['back-squat']).toBe(185)
   })
 
+  it('counts the increase from the load actually lifted, when it was over the Working weight', () => {
+    const heavier = strength(2, { 'back-squat': [[205, 5, 7], [200, 5, 6], [205, 5, 7]] })
+    const { suggestions, weights } = state([CALIBRATION, heavier], [], '2026-11-19')
+    expect(suggestions[0]).toMatchObject({ from: { pounds: 185 }, to: { pounds: 205 } })
+    expect(suggestions[0].trigger).toEqual({ reason: 'all-reps-easy', weeks: [2], sets: 3, reps: 5, pounds: 200, topRpe: 7 })
+    expect(weights['back-squat']).toBe(185)
+  })
+
+  it('suggests the load lifted when every set was over the Working weight at RPE 8', () => {
+    const heavier = strength(2, { 'back-squat': [[200, 5, 7], [205, 5, 8], [205, 5, 8]] })
+    const open = state([CALIBRATION, heavier], [], '2026-11-19')
+    expect(open.suggestions.map((s) => [s.id, s.from.pounds, s.to.pounds, s.trigger.reason, s.decision])).toEqual([
+      ['ww-back-squat-w2', 185, 200, 'lifted-heavier', 'open'],
+    ])
+    expect(open.weights['back-squat']).toBe(185)
+    const accepted = state([CALIBRATION, heavier], [decide('ww-back-squat-w2', 'accepted')], '2026-11-19')
+    expect(accepted.weights['back-squat']).toBe(200)
+    expect(accepted.changes.at(-1)).toMatchObject({ pounds: 200, reason: 'lifted-heavier' })
+  })
+
+  it('suggests nothing from heavier sets when one was at the Working weight, missed a rep or hit RPE 9, or the Session was cut short', () => {
+    const one = (sets: SetSpec[], status: LoggedStatus = 'done') =>
+      state([CALIBRATION, strength(2, { 'back-squat': sets }, status)], [], '2026-11-19').suggestions
+    expect(one([[185, 5, 8], [205, 5, 8], [205, 5, 8]])).toEqual([])
+    expect(one([[205, 5, 8], [205, 4, 8], [205, 5, 8]])).toEqual([])
+    expect(one([[205, 5, 8], [205, 5, 9], [205, 5, 8]])).toEqual([])
+    expect(one(three(205, 5, 8), 'partial')).toEqual([])
+  })
+
   it('progresses from the accepted weight the next time', () => {
     const week3 = strength(3, { 'back-squat': three(190, 5, 7) })
     const { suggestions } = state([CALIBRATION, easyWeek2, week3], [decide('ww-back-squat-w2', 'accepted')], '2026-11-26')
     expect(suggestions.find((s) => s.lift === 'back-squat')).toMatchObject({ from: { pounds: 190 }, to: { pounds: 195 } })
+  })
+})
+
+describe('last time', () => {
+  it('has each lift’s sets from the latest Strength session that logged it', () => {
+    const week2 = strength(2, { 'back-squat': [[185, 5, 7], [185, 5, 8], [185, 4, 9]] })
+    const last = lastLifted(program, [CALIBRATION, week2], localDate('2026-11-25'))
+    expect(last['back-squat']).toEqual({
+      week: 2,
+      date: '2026-11-18',
+      sets: [
+        { pounds: 185, reps: 5, rpe: 7 },
+        { pounds: 185, reps: 5, rpe: 8 },
+        { pounds: 185, reps: 4, rpe: 9 },
+      ],
+    })
+    // The RDL wasn't lifted in Week 2: its last time is still the calibration.
+    expect(last['romanian-deadlift']).toMatchObject({ week: 1, sets: [{ pounds: 95 }, { pounds: 115 }, { pounds: 135 }] })
+    expect(last['heavy-farmers-carry']).toBeUndefined()
+  })
+
+  it('leaves out a log in the future, a Skipped one, and the Session being started', () => {
+    const week2 = strength(2, { 'back-squat': three(185, 5, 7) })
+    expect(lastLifted(program, [CALIBRATION, week2], localDate('2026-11-17'))['back-squat']?.week).toBe(1)
+    expect(lastLifted(program, [CALIBRATION, strength(2, {}, 'skipped')], localDate('2026-11-25'))['back-squat']?.week).toBe(1)
+    const again = lastLifted(program, [CALIBRATION, week2], localDate('2026-11-25'), { week: 2, sessionId: 'strength' })
+    expect(again['back-squat']?.week).toBe(1)
+    expect(lastLifted(program, [], localDate('2026-11-25'))).toEqual({})
   })
 })
 
