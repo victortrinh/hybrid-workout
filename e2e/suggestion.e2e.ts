@@ -53,8 +53,12 @@ test('7 days without training bring a lighter Week: Accept lightens it, Undo res
 
   const upNext = page.getByRole('heading', { level: 1 })
   const suggestion = page.getByRole('region', { name: 'Coach’s Suggestion' })
-  // Strength is Up next; the HYROX row shows the Week's volume.
-  const nextRow = page.getByRole('list').filter({ hasText: 'Strength' }).getByRole('listitem').filter({ hasText: s.row })
+  // Strength is Up next; the HYROX row shows the Week's volume. Until the logs load, earlier Weeks show as Late rows.
+  const nextRow = page
+    .getByRole('list')
+    .filter({ hasText: 'Strength' })
+    .getByRole('listitem')
+    .filter({ hasText: s.row, hasNotText: 'Late' })
   const bare = (text: string) => text.replaceAll(' ', ' ')
 
   await expect(upNext).toHaveText(s.heading)
@@ -117,7 +121,12 @@ test('three Readiness flags in a Week bring a lighter rest of it: Accept lighten
   await page.goto('/')
 
   const suggestion = page.getByRole('region', { name: 'Coach’s Suggestion: Readiness, Week 3' })
-  const nextRow = page.getByRole('list').filter({ hasText: 'Strength' }).getByRole('listitem').filter({ hasText: /^HYROX A/ })
+  // Until the logs load, Weeks 1 and 2 show as Late rows: this Week's row only.
+  const nextRow = page
+    .getByRole('list')
+    .filter({ hasText: 'Strength' })
+    .getByRole('listitem')
+    .filter({ hasText: /^HYROX A/, hasNotText: 'Late' })
   const bare = (text: string) => text.replaceAll(' ', ' ')
 
   await expect(suggestion).toContainText(
