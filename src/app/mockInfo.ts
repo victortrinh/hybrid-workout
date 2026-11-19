@@ -9,7 +9,7 @@ export interface MockInfo {
   /** A `?scenario=` that named no scenario, so the default stood in. */
   unknown: string | null
   scenarios: { name: string; summary: string }[]
-  /** The mock panel's: the network, and the Shortcut sends. */
+  /** The mock panel's: the network. */
   controls: import('../mock/controls').MockControls
 }
 

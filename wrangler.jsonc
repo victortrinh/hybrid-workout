@@ -30,9 +30,9 @@
   "durable_objects": {
     "bindings": [{ "name": "CUES", "class_name": "LiveCues", "script_name": "compromised-cues" }]
   },
-  // Cloudflare Access's team domain: the Worker checks Access's signed
-  // assertion for the recovery Shortcut's service token against its keys
-  // (src/worker/access.ts). Not a secret: it's the login page's address.
+  // Cloudflare Access's team domain. Not a secret: it's the login page's
+  // address. Nothing reads it since the Shortcut routes went; it stays so the
+  // previews block below isn't empty.
   "vars": { "ACCESS_TEAM_DOMAIN": "https://quiet-shape-374b.cloudflareaccess.com" },
   // Branch builds (Workers Builds on a PR) are mock builds (VITE_API=mock,
   // docs/deploy.md): /api/* is answered in the browser, so previews get no D1

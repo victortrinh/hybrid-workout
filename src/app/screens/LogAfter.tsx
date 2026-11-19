@@ -14,11 +14,9 @@ import {
   TextArea,
   TextField,
 } from 'react-aria-components'
-import type { Activity } from '../../domain/activity'
 import { addDays, daysBetween, type LocalDate } from '../../domain/calendar'
 import { nowMs } from '../../domain/clock'
 import {
-  DISTANCE_METERS,
   LOGGED_STATUSES,
   logDays,
   logFor,
@@ -30,17 +28,12 @@ import {
 import {
   clock,
   clockInput,
-  consoleDistance,
-  consoleMeters,
-  DISTANCE_UNIT,
   parseClock,
   RUN_TEST_SESSION_ID,
   SPLIT_SECONDS,
-  type SpeedUnit,
 } from '../../domain/paces'
 import { runTestLines, runTestRounds, runTestTimes, type RunTestRound } from '../../domain/runTest'
 import type { PainArea } from '../../domain/pain'
-import { sessionRpe } from '../../domain/live'
 import { describeSession } from '../../domain/program/describe'
 import { finishClock, parseFinish } from '../../domain/recap'
 import { stations } from '../../domain/program/program'
@@ -50,7 +43,7 @@ import { FinishTimeField, validateFinish } from '../components/FinishTimeField'
 import { Icon } from '../components/Icons'
 import { answered, PainFields, type PainAnswer } from '../components/PainFields'
 import { OverallRpe } from './liveUi'
-import { activitySummary, km, longDay, nb, shortWeekday, STATUS_LABEL, timeOfDay } from '../format'
+import { longDay, nb, shortWeekday, STATUS_LABEL } from '../format'
 import { navigate, SCREEN_PATH, weekPath } from '../router'
 
 const linkClass =
@@ -82,9 +75,6 @@ export function LogAfter({
   today,
   onSave,
   onPain,
-  activity,
-  treadmill,
-  unit,
 }: {
   week: Week
   session: Session
@@ -95,30 +85,16 @@ export function LogAfter({
   onSave: (log: SessionLog) => void
   /** The pain step's answer, if given: a Pain report for this Session, from today. */
   onPain: (score: number, area: PainArea | null) => void
-  /** The watch's workout the Coach attached to this Session, if any. */
-  activity: Activity | null
-  /** Whether a run of the watch's was on a treadmill. */
-  treadmill: (activity: Activity) => boolean
-  /** Settings → Treadmill units: the console reads km on km/h, mi on mph. */
-  unit: SpeedUnit
 }) {
   const existing = logFor(logs, week.number, session.id)
   const { days, outside, when } = logDays(week.startDate, loggableUntil, today)
   /** Early or late, it was opened from its Week: back there, not to Today. */
   const back = when ? { href: weekPath(week.number), label: `← Week ${week.number}` } : { href: SCREEN_PATH.today, label: '← Today' }
 
-  const onTreadmill = activity !== null && treadmill(activity)
   const [status, setStatus] = useState<LoggedStatus>(existing?.status ?? 'done')
-  // The watch knows the day and how long it took better than a guess does.
-  const watchDay =
-    activity && (days.includes(activity.date) || activity.date === outside) && daysBetween(activity.date, today) >= 0
-  const [date, setDate] = useState<LocalDate | null>(existing?.date ?? (watchDay ? activity.date : today))
-  const [minutes, setMinutes] = useState(existing?.minutes ?? activity?.minutes ?? session.minutes)
-  /** The treadmill console's distance in its km or mi; NaN while empty. */
-  const [distance, setDistance] = useState(consoleDistance(existing?.distanceMeters ?? null, unit))
-  /** From the watch, Overall RPE starts on the Coach's guess, as Live's finish sheet does. */
-  const [predicted] = useState(() => (activity && !existing ? sessionRpe(session) : null))
-  const [rpe, setRpe] = useState<number | null>(existing?.rpe ?? predicted)
+  const [date, setDate] = useState<LocalDate | null>(existing?.date ?? today)
+  const [minutes, setMinutes] = useState(existing?.minutes ?? session.minutes)
+  const [rpe, setRpe] = useState<number | null>(existing?.rpe ?? null)
   const [notes, setNotes] = useState(existing?.notes ?? '')
   const isRace = session.id === RACE_SESSION_ID
   const [time, setTime] = useState(
@@ -173,11 +149,7 @@ export function LogAfter({
       resultSeconds,
       // A Live session's Environment, console distance, recovery pace, reps and sets stay with the log through an edit.
       environment: existing?.environment ?? null,
-      distanceMeters: !trained
-        ? null
-        : onTreadmill
-          ? consoleMeters(distance, unit)
-          : (existing?.distanceMeters ?? null),
+      distanceMeters: trained ? (existing?.distanceMeters ?? null) : null,
       recoveryPace: trained ? (existing?.recoveryPace ?? null) : null,
       intervals: trained ? (existing?.intervals ?? []) : [],
       sets: trained ? (existing?.sets ?? []) : [],
@@ -205,25 +177,6 @@ export function LogAfter({
       <p className="mt-1 text-body-quiet text-muted">{nb(description.summary)}</p>
       {when && !existing && (
         <p className="mt-2 text-body">{nb(outsideWeekLine(when, week.number, week.startDate, addDays(week.startDate, 6)))}</p>
-      )}
-      {activity && (
-        <section aria-labelledby="from-the-watch" className="mt-5 border-t-2 border-ink pt-3.5">
-          <h2 id="from-the-watch" className="text-title-sm">
-            From the watch
-          </h2>
-          <p className="mt-1 text-body">
-            {nb(`${activity.workoutType}, ${longDay(activity.date)} at ${timeOfDay(activity.startedAt)}`)}
-            <span className="block">{nb(activitySummary(activity, onTreadmill))}</span>
-            {activity.maxHeartRate !== null && (
-              <span className="block text-body-quiet text-muted">Max {activity.maxHeartRate} bpm</span>
-            )}
-            {onTreadmill && activity.distanceMeters !== null && (
-              <span className="block text-body-quiet text-muted">
-                {nb(`It guessed ${km(activity.distanceMeters)}. Treadmill: the console’s distance counts.`)}
-              </span>
-            )}
-          </p>
-        </section>
       )}
 
       <Form onSubmit={submit} className="mt-6 grid gap-6 border-t-2 border-ink pt-4">
@@ -302,27 +255,6 @@ export function LogAfter({
               </Group>
             </NumberField>
 
-            {onTreadmill && (
-              <NumberField
-                value={distance}
-                onChange={setDistance}
-                minValue={Math.ceil(consoleDistance(DISTANCE_METERS[0], unit) * 10) / 10}
-                maxValue={Math.floor(consoleDistance(DISTANCE_METERS[1], unit))}
-                step={0.01}
-                formatOptions={{ maximumFractionDigits: 2 }}
-                className="grid gap-2"
-              >
-                <Label className={groupLabel}>Console distance, {DISTANCE_UNIT[unit]}</Label>
-                <Input
-                  inputMode="decimal"
-                  className="h-11 w-32 rounded-sm bg-paper px-3 text-center text-[17px] font-bold shadow-[inset_0_0_0_2px_var(--edge)] outline-none focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-link"
-                />
-                <Text slot="description" className="text-body-quiet text-muted">
-                  What the treadmill says. The watch guesses indoors.
-                </Text>
-              </NumberField>
-            )}
-
             {isTest && (
               <RunTestFields
                 rounds={rounds}
@@ -335,7 +267,7 @@ export function LogAfter({
               />
             )}
 
-            <OverallRpe value={rpe} missing={false} predicted={predicted} onChange={setRpe} />
+            <OverallRpe value={rpe} missing={false} onChange={setRpe} />
           </>
         )}
 

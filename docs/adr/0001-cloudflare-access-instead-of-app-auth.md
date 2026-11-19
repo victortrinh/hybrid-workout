@@ -1,3 +1,5 @@
 # Cloudflare Access instead of in-app authentication
 
 The app has exactly one user, so instead of building sign-in we host everything on Cloudflare (Workers, D1) and put the whole site behind Cloudflare Access with an email one-time code. Machine callers get narrow exceptions: the iOS Shortcuts (morning Recovery data and Apple Watch workouts) authenticate with an Access service token. (A Strava webhook path that bypassed Access was planned, then dropped in ADR-0004.) This keeps hosting free and removes all login code, at the cost of tying auth to Cloudflare; moving hosts later means adding real authentication.
+
+Since [ADR-0011](0011-no-recovery-data-or-activities.md) there are no machine callers: the Shortcuts and their service token are gone.

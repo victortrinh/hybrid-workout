@@ -1,5 +1,5 @@
 import { history } from './history'
-import { nights, scenario } from './scenario'
+import { scenario } from './scenario'
 
 const h = history()
 for (const week of [1, 2, 3]) h.week(week, { optional: week !== 3 })
@@ -21,6 +21,5 @@ export default scenario({
   server: {
     sessionLogs: h.logs,
     suggestionDecisions: h.decisions,
-    recoveryNights: nights('2026-11-19', '2026-12-03'),
   },
 })

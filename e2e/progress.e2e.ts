@@ -15,30 +15,6 @@ const HISTORY: SeedLog[] = [
   { week: 3, sessionId: 'hyrox-a', date: '2026-11-23', status: 'done', rpe: 7 },
 ]
 
-/** 14 mornings to Wednesday of Week 3: one missing, two short, last night 5 h 41 with HRV 38. */
-const NIGHTS = [
-  ['2026-11-12', 450, 54],
-  ['2026-11-13', 414, 51],
-  ['2026-11-14', 468, 57],
-  ['2026-11-15', 426, 53],
-  ['2026-11-16', 350, 47],
-  ['2026-11-17', 450, 55],
-  ['2026-11-19', 432, 52],
-  ['2026-11-20', 408, 50],
-  ['2026-11-21', 456, 56],
-  ['2026-11-22', 420, 53],
-  ['2026-11-23', 390, 49],
-  ['2026-11-24', 438, 52],
-  ['2026-11-25', 341, 38],
-].map(([date, sleepMinutes, hrvMs]) => ({
-  date,
-  sleepMinutes,
-  hrvMs,
-  restingHeartRate: 50,
-  source: 'Ultrahuman',
-  receivedAt: `${date}T11:00:00.000Z`,
-}))
-
 test.beforeEach(async ({ page }, testInfo) => {
   if (testInfo.title.startsWith('before any data')) return
   // A Starting point estimate kept on this device: the baseline test's splits replace it.
@@ -48,7 +24,7 @@ test.beforeEach(async ({ page }, testInfo) => {
       JSON.stringify({ point: { splitSeconds: 330, weights: {}, updatedAt: '2026-11-05T12:00:00.000Z' }, pending: false }),
     ),
   )
-  await serveHistory(page, HISTORY, [], { suggestionDecisions: BASELINE_DECISIONS, recoveryNights: NIGHTS })
+  await serveHistory(page, HISTORY, [], { suggestionDecisions: BASELINE_DECISIONS })
   await page.clock.setFixedTime(WEEK_3)
 })
 
@@ -65,7 +41,6 @@ for (const colorScheme of ['light', 'dark'] as const) {
       'Race run pace',
       'Training paces',
       'Training load',
-      'Recovery',
       'Working weights',
       'HYROX stations',
     ]) {
@@ -128,14 +103,6 @@ for (const colorScheme of ['light', 'dark'] as const) {
       'RDL135 lb135 lbWeek 1: calibrated',
     ])
 
-    // Recovery: the last 14 nights, short ones in the alert colour.
-    const recovery = page.getByRole('img', { name: /^Sleep and HRV/ })
-    await expect(recovery).toHaveAccessibleName(
-      'Sleep and HRV for the last 14 nights: 13 from the ring, 2 under 6 hours. Last night 5 h 41 and HRV 38 ms.',
-    )
-    await expect(recovery.locator('rect[fill="var(--alert)"]')).toHaveCount(2)
-    await expect(recovery.getByText('Last night: 5 h 41 · 38 ms')).toBeVisible()
-
     // HYROX stations: no Race simulation yet, so the first one's date, and the sled push's own split in Week 1's round.
     const stations = main.getByRole('region', { name: 'HYROX stations' })
     await expect(stations).toContainText('No Race simulation yet. The first is Week 16, the week of Mon 22 Feb.')
@@ -146,7 +113,6 @@ for (const colorScheme of ['light', 'dark'] as const) {
     for (const chart of [
       page.getByRole('img', { name: /^Training load:/ }),
       page.getByRole('img', { name: /^Race run pace:/ }),
-      recovery,
     ]) {
       const svg = (await chart.boundingBox())!
       const slot = (await chart.locator('xpath=..').boundingBox())!
@@ -173,11 +139,9 @@ test('desktop lays the panels on twelve columns; a phone stacks them', async ({ 
     expect(projected.width / completion.width).toBeGreaterThan(1.8)
     expect(bests.y).toBeGreaterThan(projected.y + projected.height - 1)
     expect(bests.width).toBeGreaterThan(projected.width * 1.4)
-    // Recovery beside Working weights, half each.
-    const recovery = await box('Recovery')
+    // Working weights alone on its row, the full width.
     const weights = await box('Working weights')
-    expect(weights.y).toBeCloseTo(recovery.y, 0)
-    expect(weights.width).toBeCloseTo(recovery.width, 0)
+    expect(weights.width).toBeCloseTo(bests.width, 0)
   } else {
     expect(completion.y).toBeGreaterThan(projected.y + projected.height - 1)
     expect(completion.width).toBeCloseTo(projected.width, 0)
@@ -201,8 +165,6 @@ test('before any data for them, the new panels say what fills them', async ({ pa
   const main = page.getByRole('main')
   const panel = (name: string) => main.getByRole('region', { name })
 
-  await expect(panel('Recovery')).toContainText('No nights from the ring yet.')
-  await expect(panel('Recovery').getByRole('img')).toHaveCount(0)
   await expect(panel('Working weights')).toContainText('No Working weights yet.Week 1’s Strength session finds them.')
   await expect(panel('Race run pace')).toContainText('No Compromised run test yet. The first is Week 2.')
   await expect(panel('Race run pace').getByRole('img')).toHaveCount(0)

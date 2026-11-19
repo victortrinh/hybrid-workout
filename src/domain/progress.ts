@@ -4,17 +4,16 @@
  * Pure, like the rest of the Coach (ADR-0002): the Projected finish, the
  * Station bests at race volume, the Race run pace from test to test, each
  * Week's completion by Session type, Training load per Week, the Working
- * weights, recent recovery and the Race simulation times. The screen picks what to show; this decides
- * what the numbers are.
+ * weights and the Race simulation times. The screen picks what to show; this
+ * decides what the numbers are.
  */
-import { addDays, daysBetween, type LocalDate } from './calendar'
+import { daysBetween, type LocalDate } from './calendar'
 import { findWeek, programStart, weekOutcome } from './coach'
 import { logFor, offeredSessions, trained, type SessionLog } from './log'
 import { runTestResult, type RunTestResult } from './paces'
 import { SESSION_TYPES } from './program/describe'
 import { LIFTS, type Lane, type LiftId, type Program, type Session, type Station, type StationId } from './program/types'
 import { ROXZONE_SECONDS } from './racePlan'
-import { nightOf, type RecoveryNight } from './recovery'
 import { stationBest, stationReach, type StationReach } from './stations'
 import type { WorkingWeightChange } from './weights'
 
@@ -156,20 +155,6 @@ export function workingWeightRows(changes: WorkingWeightChange[]): WorkingWeight
     if (!first || !last) return []
     const before = last.reason === 'calibration' ? null : (mine.at(-2)?.pounds ?? null)
     return [{ lift, first: { week: first.week, pounds: first.pounds }, current: last.pounds, last, before }]
-  })
-}
-
-// ---------------------------------------------------------------------------
-// Recovery
-
-/** The nights the Recovery chart shows, ending with last night. */
-export const RECOVERY_NIGHTS = 14
-
-/** The last 14 mornings to today, oldest first, each with its night if the Shortcut sent one. */
-export function recoveryTrend(nights: RecoveryNight[], today: LocalDate): { date: LocalDate; night: RecoveryNight | null }[] {
-  return Array.from({ length: RECOVERY_NIGHTS }, (_, i) => {
-    const date = addDays(today, i - RECOVERY_NIGHTS + 1)
-    return { date, night: nightOf(nights, date) }
   })
 }
 

@@ -32,9 +32,6 @@ async function day(name: string): Promise<CoachDay & { state: SyncState; scenari
     logs: state.sessionLogs,
     decisions: state.suggestionDecisions,
     painReports: state.painReports,
-    recoveryNights: state.recoveryNights,
-    activities: state.activities,
-    activityAnswers: state.activityAnswers,
     startingPoint: state.startingPoint,
     equipment: parseSettings(scenario.device.settings).equipment,
   })
@@ -44,7 +41,7 @@ async function day(name: string): Promise<CoachDay & { state: SyncState; scenari
 const byId = <T extends { id: string }>(rows: T[]) => [...rows].sort((a, b) => a.id.localeCompare(b.id))
 
 describe('scenarios', () => {
-  it('are the fifteen the specs list, each named once, with the default among them', () => {
+  it('are the fourteen the specs list, each named once, with the default among them', () => {
     expect(SCENARIOS.map((s) => s.name)).toEqual([
       'before-program',
       'first-launch',
@@ -54,7 +51,6 @@ describe('scenarios', () => {
       'midweek-mixed',
       'rollover',
       'deload',
-      'activities-pending',
       'race-specific',
       'dense-history',
       'race-week',
@@ -72,19 +68,7 @@ describe('scenarios', () => {
       expect(byId(state.sessionLogs)).toEqual(byId(server.sessionLogs))
       expect(byId(state.suggestionDecisions)).toEqual(byId(server.suggestionDecisions))
       expect(byId(state.painReports)).toEqual(byId(server.painReports))
-      expect(state.activityAnswers ?? []).toEqual(server.activityAnswers)
       expect(state.startingPoint ?? null).toEqual(server.startingPoint)
-      expect(
-        (state.recoveryNights ?? []).map(({ date, sleepMinutes, hrvMs, restingHeartRate, source }) => ({
-          date,
-          sleepMinutes,
-          hrvMs,
-          restingHeartRate,
-          source,
-        })),
-      ).toEqual(expect.arrayContaining(server.recoveryNights))
-      expect(state.recoveryNights ?? []).toHaveLength(server.recoveryNights.length)
-      expect((state.activities ?? []).map((a) => a.id).sort()).toEqual(server.activities.map((a) => a.start).sort())
     })
 
     it(`${scenario.name}: logs nothing after its day`, () => {
@@ -201,20 +185,13 @@ describe('each scenario falls where its name says', () => {
     expect(live.sets[0][0].pounds).toBeLessThan(d.workingWeights[live.exercises[0].lift!]!)
   })
 
-  it('activities-pending: mid-Program, two watch workouts asking which Session they were', async () => {
-    const d = await day('activities-pending')
-    expect(d.position).toMatchObject({ kind: 'in-week', week: 8 })
-    expect(d.activityQuestions.map((q) => q.activity.workoutType)).toEqual(['Running', 'Functional Strength Training'])
-  })
-
-  it('race-specific: Week 16, with Working weights, Station logs, pain and low Readiness', async () => {
+  it('race-specific: Week 16, with Working weights, Station logs and pain', async () => {
     const d = await day('race-specific')
     expect(d.position).toMatchObject({ kind: 'in-week', week: 16, phase: 'race-specific' })
     expect(Object.keys(d.workingWeights).length).toBeGreaterThanOrEqual(3)
     expect(d.state.sessionLogs.filter((l) => l.stations.length > 0).length).toBeGreaterThan(10)
     expect(d.pain?.level).toBe('ease')
-    expect(d.recovery).toMatchObject({ shortSleep: true, easyDay: true })
-    expect(d.suggestions.map((s) => s.kind)).toEqual(expect.arrayContaining(['pain', 'recovery']))
+    expect(d.suggestions.map((s) => s.kind)).toContain('pain')
   })
 
   it('dense-history: Week 17, almost every Session of sixteen Weeks logged', async () => {

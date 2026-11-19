@@ -1,7 +1,7 @@
 import initSqlJs from 'sql.js'
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { SessionLog, SyncState } from '../domain/log'
-import { MOCK_SERVICE_TOKEN, mockApi } from './api'
+import { mockApi } from './api'
 import { d1 } from './d1'
 import { openDatabase } from './database'
 
@@ -95,19 +95,6 @@ describe('the Worker in the browser', () => {
       }),
     )
     expect(refused.status).toBe(400)
-  })
-
-  it('lets the Shortcut in with the mock service token, and nobody else', async () => {
-    const night = { date: '2026-11-25', sleepMinutes: 420, hrvMs: 60, restingHeartRate: 50, source: 'Ring' }
-    const post = (headers: Record<string, string>) =>
-      api(new Request('http://localhost/api/recovery', { method: 'POST', headers, body: JSON.stringify(night) }))
-    expect((await post({})).status).toBe(401)
-    const response = await post({
-      'CF-Access-Client-Id': MOCK_SERVICE_TOKEN.id,
-      'CF-Access-Client-Secret': MOCK_SERVICE_TOKEN.secret,
-    })
-    expect(response.status).toBe(200)
-    expect((await state()).recoveryNights?.map((n) => n.sleepMinutes)).toEqual([420])
   })
 
   it('exports what it holds', async () => {

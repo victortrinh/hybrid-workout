@@ -2,7 +2,6 @@ import { Button, Checkbox, CheckboxGroup, DialogTrigger, Label, Link, Popover, T
 import { EQUIPMENT, EQUIPMENT_LABEL, type Equipment } from '../../domain/equipment'
 import { UNIT_LABEL, type SpeedUnit } from '../../domain/paces'
 import { MONTHS, type Settings, type Theme } from '../../domain/settings'
-import { SCREEN_PATH } from '../router'
 import { useCuesSetting, type CuesStatus } from '../useLockScreenCues'
 import type { StartingPoint } from '../../domain/startingPoint'
 import { ScenarioPicker } from './ScenarioPicker'
@@ -37,7 +36,7 @@ const linkClass =
  * Settings, from the athlete's initial on the field band: theme, treadmill
  * units, which months run on the treadmill, the Equipment profile, the
  * Starting point's estimates, lock-screen cues and the data export. Every
- * change applies at once, the estimates on Save. Integrations each have a page of their own.
+ * change applies at once, the estimates on Save.
  */
 export function SettingsPopover({
   settings,
@@ -129,23 +128,6 @@ export function SettingsPopover({
             />
           </div>
           <LockScreenCues />
-          <div className="grid gap-1 border-t border-rule pt-3">
-            <span className="text-[18px] font-bold">Integrations</span>
-            <Link
-              href={SCREEN_PATH.shortcut}
-              className={linkClass}
-            >
-              Recovery Shortcut setup
-            </Link>
-            <Text className="text-[12px] text-muted">Sleep, HRV and resting heart rate from the ring, every morning.</Text>
-            <Link
-              href={SCREEN_PATH.workouts}
-              className={linkClass}
-            >
-              Workout Shortcut setup
-            </Link>
-            <Text className="text-[12px] text-muted">Each Apple Watch workout, attached to its Session.</Text>
-          </div>
           <div className="grid gap-1 border-t border-rule pt-3">
             <span className="text-[18px] font-bold">Your data</span>
             <div className="flex gap-4">

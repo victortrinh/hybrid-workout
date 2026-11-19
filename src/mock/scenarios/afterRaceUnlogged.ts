@@ -1,5 +1,5 @@
 import { history } from './history'
-import { nights, scenario } from './scenario'
+import { scenario } from './scenario'
 
 const h = history()
 for (let week = 1; week <= 23; week++) h.week(week, { optional: week % 2 === 0 })
@@ -18,7 +18,6 @@ export default scenario({
   server: {
     sessionLogs: h.logs,
     suggestionDecisions: h.decisions,
-    recoveryNights: nights('2027-04-09', '2027-04-23'),
   },
   device: { settings: { theme: 'dark' } },
 })

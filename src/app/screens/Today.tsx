@@ -2,10 +2,7 @@ import { useEffect, useState } from 'react'
 import { Button, Link } from 'react-aria-components'
 import { motion } from 'motion/react'
 import { addDays, daysBetween } from '../../domain/calendar'
-import type { Activity } from '../../domain/activity'
 import type {
-  ActivityAttached,
-  ActivityQuestion,
   BucketEntry,
   CoachDay,
   Dropped,
@@ -29,8 +26,6 @@ import {
   droppedLine,
   outsideWeekLine,
   painLine,
-  recoveryWhy,
-  shortSleepLine,
   skippedTodayLine,
   suggestedRestCopy,
   suggestionCopy,
@@ -48,14 +43,12 @@ import { SessionSheet, useSheet, type SheetAction } from '../components/SessionS
 import { SettingsPopover, type StartingPointEdit } from '../components/SettingsPopover'
 import { StripedNumeral } from '../components/StripedNumeral'
 import {
-  activitySummary,
   longDay,
   nb,
   plural,
   shortDay,
   shortWeekday,
   STATUS_LABEL,
-  timeOfDay,
   weekday,
   weekRange,
 } from '../format'
@@ -88,8 +81,6 @@ export function Today({
   live,
   onStart,
   onSomethingHurts,
-  treadmill,
-  onAnswer,
   race,
   afterRace,
   finish,
@@ -130,10 +121,6 @@ export function Today({
   onStart: (week: number, session: Session, pain: PainAtStart, environment: Environment | null) => void
   /** A Pain report given from Today, outside any Session. */
   onSomethingHurts: (score: number, area: PainArea) => void
-  /** Whether a run of the watch's was on a treadmill. */
-  treadmill: (activity: Activity) => boolean
-  /** "Which Session was this?": a Session of its Week, or (both null) none of them. */
-  onAnswer: (activity: Activity, week: number | null, sessionId: string | null) => void
 }) {
   const [sheet, showSheet, closeSheet] = useSheet<{ week: number; sessionId: string }>()
   /** Bumped by a pick from the sheet: focus goes to Up next, now that Session. */
@@ -204,15 +191,13 @@ export function Today({
             live={live}
             onStart={onStart}
             onSomethingHurts={onSomethingHurts}
-            treadmill={treadmill}
-            onAnswer={onAnswer}
             onShow={openSheet}
             onAnyway={(week, sessionId) => {
               onPick(week, sessionId)
               setLanded((n) => n + 1)
             }}
           />
-          <ThisWeek day={day} finish={finish} onOpen={openSheet} treadmill={treadmill} />
+          <ThisWeek day={day} finish={finish} onOpen={openSheet} />
         </>
       )}
       {open && action && (
@@ -382,8 +367,6 @@ function UpNext({
   live,
   onStart,
   onSomethingHurts,
-  treadmill,
-  onAnswer,
   onShow,
   onAnyway,
   lead,
@@ -402,8 +385,6 @@ function UpNext({
   live: LiveSession | null
   onStart: (week: number, session: Session, pain: PainAtStart, environment: Environment | null) => void
   onSomethingHurts: (score: number, area: PainArea) => void
-  treadmill: (activity: Activity) => boolean
-  onAnswer: (activity: Activity, week: number | null, sessionId: string | null) => void
   /** Opens a Session's Prescription in the sheet. */
   onShow: (entry: BucketEntry) => void
   /** Do it anyway: past a suggested rest, that Session is Up next for today. */
@@ -514,18 +495,6 @@ function UpNext({
           Can’t wait? Start a Week {ahead} Session early
         </Link>
       )}
-      {day.recovery && day.recoveryChange === 'short-sleep' && (
-        <p className="mt-3 text-body">
-          {shortSleepLine(day.recovery.night.sleepMinutes, day.recoveryCut)}
-          {/* With low HRV too, the Suggestion below carries the numbers. */}
-          {!day.recovery.easyDay && (
-            <span className="text-muted">
-              {' '}
-              {recoveryWhy(day.recovery.night.sleepMinutes, day.recovery.night.hrvMs, day.recovery.hrvMean)}
-            </span>
-          )}
-        </p>
-      )}
       {!asking && upNext && upNextWeek && run && dependsOnEnvironment(upNext, run) && (
         <Segmented
           label="Where"
@@ -594,28 +563,6 @@ function UpNext({
         day={asking && painSuggestion ? { ...day, suggestions: day.suggestions.filter((s) => s !== painSuggestion) } : day}
         onDecide={onDecide}
       />
-      {day.activitiesAttached.map((a) => (
-        <AttachedNote
-          key={a.activity.id}
-          attached={a}
-          treadmill={treadmill(a.activity)}
-          onDetach={() => onAnswer(a.activity, null, null)}
-        />
-      ))}
-      {day.activityQuestions.map((q) => (
-        <WhichSession
-          key={q.activity.id}
-          question={q}
-          treadmill={treadmill(q.activity)}
-          onAnswer={(week, sessionId) => onAnswer(q.activity, week, sessionId)}
-        />
-      ))}
-      {day.bucket
-        // Not logged yet, the note's Log it asks for the console's distance itself.
-        .filter((e) => e.activity && treadmill(e.activity) && e.log && e.log.status !== 'skipped' && e.log.distanceMeters == null)
-        .map((e) => (
-          <ConsoleDistance key={e.activity!.id} entry={e} />
-        ))}
     </div>
   )
 }
@@ -630,7 +577,7 @@ function SyncLine({ pending, error, server }: { pending: number; error: string |
       {error && <p className="mt-3 text-body">{error}</p>}
       {server === 'failing' && (
         <p className="mt-3 text-body">
-          The server is failing, so nothing syncs: logs stay on this phone, and last night’s Recovery can’t arrive.
+          The server is failing, so nothing syncs: logs stay on this phone.
         </p>
       )}
       {server === 'signed-out' && (
@@ -646,126 +593,6 @@ function SyncLine({ pending, error, server }: { pending: number; error: string |
         <p className="mt-3 text-body-quiet text-muted">{plural(pending, 'log')} on this phone, waiting to sync.</p>
       )}
     </div>
-  )
-}
-
-/**
- * A workout attached to a Session: said in one line, undone in one tap, and,
- * while the Session isn't logged, logged in one more (Log after, filled in
- * from the watch).
- */
-function AttachedNote({
-  attached,
-  treadmill,
-  onDetach,
-}: {
-  attached: ActivityAttached
-  treadmill: boolean
-  onDetach: () => void
-}) {
-  const { activity, session, week, by, logged } = attached
-  const name = sessionName(session)
-  return (
-    <section
-      aria-label="From the watch"
-      aria-live="polite"
-      className="mt-[18px] border-t-2 border-t-ink py-3.5 desktop:border-b desktop:border-b-rule"
-    >
-      <p className="text-[17px] leading-[1.3] font-semibold">
-        {by === 'coach'
-          ? nb(`The watch’s ${activity.workoutType.toLowerCase()} went to ${name}.`)
-          : nb(`${name} it was. Not logged yet.`)}
-      </p>
-      <p className="mt-1 text-[14px] text-muted">
-        {nb(`${shortWeekday(activity.date)} ${timeOfDay(activity.startedAt)} · ${activitySummary(activity, treadmill)}`)}
-        {!logged && (treadmill ? nb(' · Bring the console’s distance.') : nb(' · The watch filled in the rest.'))}
-      </p>
-      <div className="mt-1 flex flex-wrap gap-x-5">
-        {!logged && (
-          <Link href={logPath(week, session.id)} className={linkButton}>
-            Log it
-          </Link>
-        )}
-        <Button onPress={onDetach} className={quietButton}>
-          Not that Session
-        </Button>
-      </div>
-    </section>
-  )
-}
-
-/** A workout more than one Session fits: one tap says which, or that it was none of them. */
-function WhichSession({
-  question,
-  treadmill,
-  onAnswer,
-}: {
-  question: ActivityQuestion
-  treadmill: boolean
-  onAnswer: (week: number | null, sessionId: string | null) => void
-}) {
-  const { activity, candidates, guess } = question
-  return (
-    <section
-      aria-label="Which Session was this?"
-      className="mt-[18px] border-t-2 border-t-ink py-3.5 desktop:border-b desktop:border-b-rule"
-    >
-      <p className="text-[17px] leading-[1.3] font-semibold">Which Session was this?</p>
-      <p className="mt-1 text-[14px] text-muted">
-        {nb(`${activity.workoutType} from the watch, ${shortWeekday(activity.date)} ${timeOfDay(activity.startedAt)} · ${activitySummary(activity, treadmill)}`)}
-      </p>
-      {guess && <p className="mt-1 text-[14px] text-ink">{nb(guessLine(question, guess))}</p>}
-      <div className="mt-2.5 flex flex-wrap gap-x-5">
-        {candidates.map((c) => (
-          <Button
-            key={`${c.week}/${c.session.id}`}
-            onPress={() => onAnswer(c.week, c.session.id)}
-            // With a guess, it leads in link blue and the others step back to ink.
-            className={!guess || c === guess ? linkButton : `${quietButton} underline decoration-1 underline-offset-4`}
-          >
-            {candidateName(question, c)}
-          </Button>
-        ))}
-        <Button onPress={() => onAnswer(null, null)} className={quietButton}>
-          None of these
-        </Button>
-      </div>
-    </section>
-  )
-}
-
-/** A candidate's Session type, with its Week when the question spans a Late session's Week and the current one. */
-function candidateName({ candidates }: ActivityQuestion, candidate: ActivityQuestion['candidates'][number]): string {
-  const name = sessionName(candidate.session)
-  return candidates.some((c) => c.week !== candidate.week) ? `${name} · Week ${candidate.week}` : name
-}
-
-/** Why the Coach guessed what it did: the heart rate when the watch has one, else the minutes. */
-function guessLine(question: ActivityQuestion, guess: ActivityQuestion['candidates'][number]): string {
-  const { activity, candidates } = question
-  const name = candidateName(question, guess)
-  const next = candidates.find((c) => c !== guess)!
-  return activity.averageHeartRate !== null
-    ? `The Coach’s guess: ${name}. ${activity.minutes} min at ${activity.averageHeartRate} bpm is no ${candidateName(question, next)}.`
-    : `The Coach’s guess: ${name}. ${activity.minutes} min is closest to its ${guess.session.minutes}.`
-}
-
-/** A treadmill run attached to a Session: the watch's distance is a guess, so ask for the console's. */
-function ConsoleDistance({ entry }: { entry: BucketEntry }) {
-  const { activity, session, week } = entry
-  if (!activity) return null
-  return (
-    <section aria-label="Console distance" className="mt-[18px] border-t-2 border-t-ink py-3.5 desktop:border-b desktop:border-b-rule">
-      <p className="text-[17px] leading-[1.3] font-semibold">
-        {nb(`${sessionName(session)} on the treadmill, ${shortWeekday(activity.date)}. What did the console say?`)}
-      </p>
-      <p className="mt-1 text-[14px] text-muted">
-        {nb(`The watch guesses distance indoors. Kept its ${activitySummary(activity, true)}.`)}
-      </p>
-      <Link href={logPath(week, session.id)} className={`mt-2.5 ${linkButton}`}>
-        Add console distance
-      </Link>
-    </section>
   )
 }
 
@@ -932,8 +759,6 @@ function suggestionTopic(s: Suggestion): string {
   switch (s.kind) {
     case 'pain':
       return 'pain'
-    case 'recovery':
-      return 'last night'
     case 're-entry':
       return `coming back, Week ${s.week}`
     case 'lighter-week':
@@ -1101,12 +926,10 @@ function ThisWeek({
   day,
   finish,
   onOpen,
-  treadmill,
 }: {
   day: CoachDay
   finish: FinishSoFar | null
   onOpen: (entry: BucketEntry) => void
-  treadmill: (activity: Activity) => boolean
 }) {
   const { week, position, bucket } = day
   if (!week) return null
@@ -1138,7 +961,6 @@ function ThisWeek({
             entry={entry}
             interactive={interactive}
             onOpen={() => onOpen(entry)}
-            treadmill={treadmill}
           />
         ))}
       </ul>
@@ -1172,14 +994,12 @@ function BucketRow({
   entry,
   interactive,
   onOpen,
-  treadmill,
 }: {
   entry: BucketEntry
   interactive: boolean
   onOpen: () => void
-  treadmill: (activity: Activity) => boolean
 }) {
-  const { session, state, log, week, activity } = entry
+  const { session, state, log, week } = entry
   const type = SESSION_TYPES[session.type]
   const content = (
     <>
@@ -1195,11 +1015,6 @@ function BucketRow({
             entry.late ? `${lateLine(entry)} · ${describeSession(session).summary}` : describeSession(session).summary,
           )}
         </span>
-        {activity && (
-          <span className="block text-[14px] text-muted">
-            {nb(`Watch, ${shortWeekday(activity.date)}: ${activitySummary(activity, treadmill(activity))}`)}
-          </span>
-        )}
       </span>
       <span className="text-[14px] font-bold">
         {state === 'next' ? (

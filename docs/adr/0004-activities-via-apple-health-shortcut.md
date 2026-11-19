@@ -1,5 +1,7 @@
 # Activities arrive through an iOS Shortcut, not Strava
 
+_Superseded by [ADR-0011](0011-no-recovery-data-or-activities.md): removed on 19 November 2026._
+
 The plan was to import Apple Watch workouts from Strava: OAuth from Settings, a webhook on every new activity, laps from Strava's API. Strava now asks for a paid subscription to use its API, which is a yearly fee to read the athlete's own workouts. Instead, a personal iOS Shortcut sends each workout to `/api/activities` when it ends, carrying the same Cloudflare Access service token as the Recovery Shortcut (ADR-0001, ADR-0003). There's no OAuth, no webhook, no token refresh, and no third party.
 
 Shortcuts can't read workouts back from Health at all, so the Apple Watch Workout automation times them: when any workout starts, a Shortcut saves the time; when one of the chosen types ends, another sends the type (fixed per automation), the saved start, now as the end, and the Health heart-rate and Walking + Running Distance samples of the last few hours, each with its own time. Shortcuts misreads a date read back from text, so it can't filter samples to the workout itself; the server keeps those between start and end. The server works out average and maximum heart rate from the raw samples, and adds up distance per device, keeping the device with the most, because the iPhone and the watch both log the same stretch.

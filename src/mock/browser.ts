@@ -7,7 +7,7 @@
  * tab ends it. `?scenario=<name>` switches scenario: everything the app kept
  * goes, and the scenario loads fresh.
  * Returns, with the scenarios, the mock panel's controls: the network
- * between the app and the Worker, and the Shortcut sends.
+ * between the app and the Worker.
  */
 import { http } from 'msw'
 import { setupWorker } from 'msw/browser'
@@ -23,7 +23,6 @@ import { network, NETWORK_KEY, throughNetwork } from './network'
 import { chooseScenario, type Current } from './scenarios/choose'
 import { findScenario, SCENARIOS } from './scenarios/index'
 import { deviceStorage, loadScenario } from './scenarios/load'
-import { DEFAULT_NIGHT, DEFAULT_WORKOUT, sendNight, sendWorkout } from './shortcut'
 
 const STORAGE_KEY = 'compromised:mock-db'
 const SCENARIO_KEY = 'compromised:mock-scenario'
@@ -97,20 +96,8 @@ export async function startMock(): Promise<MockInfo> {
       },
       subscribe: net.subscribe,
       today,
-      defaults: { night: DEFAULT_NIGHT, workout: DEFAULT_WORKOUT },
-      sendNight: async (fields) => refreshed(await sendNight(api, today(), fields)),
-      sendWorkout: async (fields) => refreshed(await sendWorkout(api, today(), fields)),
     },
   }
-}
-
-/**
- * The app reads Recovery data and workouts again whenever it comes back to
- * the front, as it does after the real Shortcut ran. So it does here.
- */
-function refreshed<T>(outcome: T): T {
-  document.dispatchEvent(new Event('visibilitychange'))
-  return outcome
 }
 
 /** Opens `scenario` fresh: a new page load, so nothing of the app holds the old one open. */

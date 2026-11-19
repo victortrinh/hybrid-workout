@@ -2,53 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { localDate } from '../domain/calendar'
 import { findWeek } from '../domain/coach'
 import { program } from '../domain/program/program'
-import type { ShortSleepCut } from '../domain/recovery'
-import type { RecoverySuggestion, Suggestion, WorkingWeightSuggestion } from '../domain/suggestion'
+import type { Suggestion, WorkingWeightSuggestion } from '../domain/suggestion'
 import type { SessionLog } from '../domain/log'
 import type { ProgramRecap } from '../domain/recap'
-import { droppedLine, raceCopy, shortSleepLine, suggestedRestCopy, suggestionCopy, waitingLine } from './coachCopy'
-
-const recovery = (cut: ShortSleepCut | null): RecoverySuggestion => ({
-  id: 'recovery-2026-11-11',
-  kind: 'recovery',
-  week: 3,
-  sessionId: 'hyrox-a',
-  date: localDate('2026-11-11'),
-  cut,
-  trigger: { sleepMinutes: 320, hrvMs: 40, hrvMean: 52 },
-  decision: 'open',
-  decidedOn: null,
-})
-
-describe('the short-sleep copy names what is cut', () => {
-  const cases: [ShortSleepCut, string][] = [
-    ['rep', 'rep'],
-    ['round', 'round'],
-    ['station', 'Station'],
-  ]
-
-  it.each(cases)('%s: the line', (cut, noun) => {
-    expect(shortSleepLine(320, cut)).toBe(`Slept 5 h 20. Bold of you. One fewer ${noun}, nothing past RPE 7.`)
-  })
-
-  it.each(cases)('%s: Keep and kept', (cut, noun) => {
-    const copy = suggestionCopy(recovery(cut))
-    expect(copy.keep).toBe(`Keep it, one ${noun} fewer`)
-    expect(copy.kept).toBe(`Keeping it. One ${noun} fewer, nothing past RPE 7. Your call.`)
-  })
-
-  it('says only the cap when nothing is cut', () => {
-    expect(shortSleepLine(320, null)).toBe('Slept 5 h 20. Bold of you. Nothing past RPE 7.')
-    const copy = suggestionCopy(recovery(null))
-    expect(copy.keep).toBe('Keep it, capped at RPE 7')
-    expect(copy.kept).toBe('Keeping it. Nothing past RPE 7. Your call.')
-  })
-
-  it('never says rep on a HYROX session', () => {
-    const copy = suggestionCopy(recovery('round'))
-    expect(`${shortSleepLine(320, 'round')} ${copy.keep} ${copy.kept}`).not.toMatch(/\brep\b/)
-  })
-})
+import { droppedLine, raceCopy, suggestedRestCopy, suggestionCopy, waitingLine } from './coachCopy'
 
 const race = findWeek(program, 24)!.sessions.find((s) => s.id === 'race')!
 const shakeout = findWeek(program, 24)!.sessions.find((s) => s.id === 'shakeout')!
@@ -161,9 +118,9 @@ describe('the lighter-Week Suggestion’s copy', () => {
     to: { volumePercent: 67 },
     trigger: {
       flags: [
-        { date: localDate('2026-11-23'), painScore: 3, sleepMinutes: null },
-        { date: localDate('2026-11-24'), painScore: null, sleepMinutes: 320 },
-        { date: localDate('2026-11-25'), painScore: 4, sleepMinutes: 341 },
+        { date: localDate('2026-11-23'), painScore: 3 },
+        { date: localDate('2026-11-24'), painScore: 4 },
+        { date: localDate('2026-11-25'), painScore: 5 },
       ],
     },
     decision: 'open',
@@ -173,7 +130,7 @@ describe('the lighter-Week Suggestion’s copy', () => {
   it('says the change and the three flags behind it', () => {
     const copy = suggestionCopy(lighter)
     expect(copy.line).toBe('Three rough days this Week. That’s your body asking for a Deload. The rest of Week 3 goes 33% lighter.')
-    expect(copy.why).toBe('Mon pain 3 · Tue slept 5 h 20 · Wed pain 4, slept 5 h 41 · every Prescription left in Week 3 at 67%')
+    expect(copy.why).toBe('Mon pain 3 · Tue pain 4 · Wed pain 5 · every Prescription left in Week 3 at 67%')
     expect(copy.keep).toBe('Keep full volume')
   })
 })

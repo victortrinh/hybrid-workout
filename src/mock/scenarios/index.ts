@@ -2,7 +2,6 @@
  * Every scenario mock mode can load (ADR-0005), by `?scenario=` name, in the
  * order the Program reaches them.
  */
-import activitiesPending from './activitiesPending'
 import afterBaseline from './afterBaseline'
 import afterRace from './afterRace'
 import afterRaceUnlogged from './afterRaceUnlogged'
@@ -30,7 +29,6 @@ export const SCENARIOS: readonly Scenario[] = [
   midweekMixed,
   rollover,
   deload,
-  activitiesPending,
   raceSpecific,
   denseHistory,
   raceWeek,

@@ -73,54 +73,6 @@ test('only suggests resting a Late Run the day after Strength', async ({ page })
   await expect(page.locator('p', { hasText: /^Week 1 · Late/ })).toBeVisible()
 })
 
-/**
- * A watch run on the Week 2 Tuesday fits both Week 1's Late Run and Week
- * 2's Compromised run test: Today asks, naming each with its Week, and the
- * answer attaches it to the Late row.
- */
-test('asks which Week’s Session a watch workout was when it fits a Late one and a current one', async ({ page }) => {
-  const activityAnswers: Record<string, unknown>[] = []
-  await serveHistory(
-    page,
-    [
-      ...['hyrox-a', 'hyrox-b', 'strength'].map((sessionId) => ({ week: 1, sessionId, date: '2026-11-10', status: 'done' as const })),
-      ...['hyrox-a', 'easy'].map((sessionId) => ({ week: 2, sessionId, date: '2026-11-16', status: 'done' as const })),
-    ],
-    [],
-    {
-      activities: [
-        {
-          id: '2026-11-17T12:00:00Z',
-          date: '2026-11-17',
-          startedAt: '2026-11-17T12:00:00Z',
-          workoutType: 'Running',
-          kind: 'run',
-          minutes: 40,
-          distanceMeters: 8000,
-          averageHeartRate: null,
-          maxHeartRate: null,
-          indoor: false,
-          receivedAt: '2026-11-17T13:00:00.000Z',
-        },
-      ],
-      activityAnswers,
-    },
-  )
-  await page.clock.setFixedTime(WEEK_2_TUESDAY)
-  await page.goto('/')
-
-  const question = page.getByRole('region', { name: 'Which Session was this?' })
-  await expect(question.getByRole('button')).toHaveText(['Run · Week 1', 'Compromised run test · Week 2', 'None of these'])
-  await expectNoAxeViolations(page)
-
-  await question.getByRole('button', { name: 'Run · Week 1' }).click()
-  await expect(question).toHaveCount(0)
-  await expect.poll(() => activityAnswers.at(-1)).toMatchObject({ week: 1, sessionId: 'run' })
-  await expect(page.getByRole('region', { name: 'From the watch' })).toContainText('Run it was. Not logged yet.')
-  const bucket = page.getByRole('list').filter({ hasText: 'Compromised run test' })
-  await expect(bucket.getByRole('listitem').first()).toHaveText(/^Run.*Week\s1\s·\sLate.*Watch/)
-})
-
 /** Monday 22 February 2027: Week 16, the first day of Race specific. */
 const RACE_SPECIFIC_MONDAY = new Date('2027-02-22T12:00:00-05:00')
 

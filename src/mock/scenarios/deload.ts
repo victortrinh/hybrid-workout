@@ -5,7 +5,7 @@ import { logSet, startLifts } from '../../domain/lifts'
 import { program } from '../../domain/program/program'
 import { strengthState } from '../../domain/weights'
 import { history } from './history'
-import { nights, scenario } from './scenario'
+import { scenario } from './scenario'
 
 const TODAY = localDate('2026-12-09')
 const MINUTE = 60_000
@@ -28,7 +28,6 @@ export default scenario({
   server: {
     sessionLogs: h.logs,
     suggestionDecisions: h.decisions,
-    recoveryNights: nights('2026-11-25', TODAY),
   },
   device: {
     live(now) {

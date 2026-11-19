@@ -10,7 +10,6 @@ import {
   projectedFinish,
   raceLanes,
   raceRunSeries,
-  recoveryTrend,
   stationBests,
   stationTimes,
   TRANSITION_SECONDS,
@@ -19,7 +18,6 @@ import {
   weeklyCompletion,
   workingWeightRows,
 } from './progress'
-import type { RecoveryNight } from './recovery'
 import type { WorkingWeightChange } from './weights'
 
 let n = 0
@@ -399,29 +397,6 @@ describe('Working weights', () => {
 
   it('is empty before any calibration', () => {
     expect(workingWeightRows([])).toEqual([])
-  })
-})
-
-describe('recovery trend', () => {
-  const night = (date: string, sleepMinutes: number, hrvMs: number | null): RecoveryNight => ({
-    date: localDate(date),
-    sleepMinutes,
-    hrvMs,
-    restingHeartRate: null,
-    source: 'Ultrahuman',
-    receivedAt: `${date}T11:00:00.000Z`,
-  })
-
-  it('is the 14 mornings to today, with a gap where no night was sent', () => {
-    const trend = recoveryTrend(
-      [night('2026-11-11', 341, 38), night('2026-11-09', 450, 52), night('2026-10-27', 400, 50)],
-      localDate('2026-11-11'),
-    )
-    expect(trend).toHaveLength(14)
-    expect(trend[0].date).toBe('2026-10-29')
-    expect(trend.at(-1)).toMatchObject({ date: '2026-11-11', night: { sleepMinutes: 341 } })
-    expect(trend.at(-2)!.night).toBeNull()
-    expect(trend.filter((t) => t.night).length).toBe(2)
   })
 })
 
