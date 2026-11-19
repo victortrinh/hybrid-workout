@@ -1,7 +1,6 @@
 import { Link } from 'react-aria-components'
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { motion, useInView, useReducedMotion } from 'motion/react'
-import type { LocalDate } from '../../domain/calendar'
 import type { CoachDay } from '../../domain/coach'
 import type { SessionLog } from '../../domain/log'
 import { clock, speedFor, UNIT_LABEL, type RunTestResult, type SpeedUnit, type TrainingPaces } from '../../domain/paces'
@@ -11,8 +10,6 @@ import type { Lane, Program, Station, StationId } from '../../domain/program/typ
 import {
   lanesFull,
   progress,
-  recoveryTrend,
-  RECOVERY_NIGHTS,
   stationTimes,
   TRANSITION_SECONDS,
   workingWeightRows,
@@ -25,7 +22,6 @@ import {
   type WorkingWeightRow,
 } from '../../domain/progress'
 import { finishClock } from '../../domain/recap'
-import { isShortSleep, sleepText, SHORT_SLEEP_MINUTES, type RecoveryNight } from '../../domain/recovery'
 import type { WorkingWeightChange } from '../../domain/weights'
 import { EmptyState } from '../components/EmptyState'
 import { LANES, LaneLegend } from '../components/LaneChip'
@@ -40,7 +36,6 @@ interface ProgressProps {
   program: Program
   day: CoachDay
   logs: SessionLog[]
-  recoveryNights: RecoveryNight[]
   unit: SpeedUnit
 }
 
@@ -48,10 +43,10 @@ interface ProgressProps {
  * Progress: whether the Program is working. The Projected finish first, with
  * its Doubles share, then the eight Station bests at race volume, the Race run
  * pace from test to test, each Week's completion by Session type, Training
- * load per Week, the current Training paces, recent recovery, the Working
- * weights and the Race simulation times. Twelve columns on desktop, stacked on a phone.
+ * load per Week, the current Training paces, the Working weights and the
+ * Race simulation times. Twelve columns on desktop, stacked on a phone.
  */
-export function Progress({ program, day, logs, recoveryNights, unit }: ProgressProps) {
+export function Progress({ program, day, logs, unit }: ProgressProps) {
   const data = useMemo(() => progress(program, logs, day.today), [program, logs, day.today])
   const stations = useMemo(() => stationTimes(program, logs, day.today), [program, logs, day.today])
   const testWeeks = program.phases.flatMap((p) => p.weeks).filter((w) => w.compromisedRunTest)
@@ -64,9 +59,9 @@ export function Progress({ program, day, logs, recoveryNights, unit }: ProgressP
         Progress
       </h1>
       <p className="mt-1 text-body-quiet text-muted">
-        The Projected finish, Station bests, Race run pace, weekly completion, Training load and recovery.
+        The Projected finish, Station bests, Race run pace, weekly completion and Training load.
       </p>
-      {logs.length === 0 && recoveryNights.length === 0 ? (
+      {logs.length === 0 ? (
         <EmptyState title="Nothing logged yet, so nothing to chart.">
           {firstTest
             ? `The first Compromised run test is Week ${firstTest.number}. It sets the Race run pace the Projected finish runs on.`
@@ -80,7 +75,6 @@ export function Progress({ program, day, logs, recoveryNights, unit }: ProgressP
           <RaceRunPanel program={program} tests={data.raceRun} firstTestWeek={firstTest?.number ?? null} nextTestWeek={nextTest?.number ?? null} />
           <PacesPanel paces={day.paces} unit={unit} firstTestWeek={firstTest?.number ?? null} />
           <LoadPanel program={program} load={data.load} />
-          <RecoveryPanel nights={recoveryNights} today={day.today} />
           <WeightsPanel program={program} changes={day.workingWeightChanges} />
           <StationsPanel times={stations} />
         </div>
@@ -680,140 +674,6 @@ function PacesPanel({
 }
 
 // ---------------------------------------------------------------------------
-// Recovery
-
-function RecoveryPanel({ nights, today }: { nights: RecoveryNight[]; today: LocalDate }) {
-  const trend = useMemo(() => recoveryTrend(nights, today), [nights, today])
-  const sent = trend.filter((t) => t.night !== null)
-  if (sent.length === 0) {
-    const latest = nights.at(-1)
-    return (
-      <Panel title="Recovery" sub={`Last ${RECOVERY_NIGHTS} nights from the ring. Bars are sleep; the line is HRV.`} span={6}>
-        <EmptyState title="No nights from the ring yet.">
-          {latest
-            ? `The last one the Shortcut sent was ${shortDay(latest.date)}.`
-            : 'The morning Shortcut sends each night’s sleep and HRV from Apple Health.'}
-        </EmptyState>
-      </Panel>
-    )
-  }
-  return (
-    <Panel title="Recovery" sub={`Last ${RECOVERY_NIGHTS} nights from the ring. Bars are sleep; the line is HRV.`} span={6}>
-      <ChartSlot render={(width) => <RecoveryChart width={width} trend={trend} />} />
-      <ul aria-label="Chart key" className="mt-3 flex flex-wrap gap-x-3.5 gap-y-1.5 text-label text-muted">
-        <li className="flex items-center gap-1.5">
-          <i aria-hidden="true" className="inline-block size-2.5 bg-easy" />
-          Sleep
-        </li>
-        <li className="flex items-center gap-1.5">
-          <i aria-hidden="true" className="inline-block size-2.5 bg-alert" />
-          Under {SHORT_SLEEP_MINUTES / 60} h
-        </li>
-        <li className="flex items-center gap-1.5">
-          <i aria-hidden="true" className="inline-block h-[3px] w-3.5 bg-link" />
-          HRV, ms
-        </li>
-      </ul>
-    </Panel>
-  )
-}
-
-type Trend = ReturnType<typeof recoveryTrend>
-
-function RecoveryChart({ width: W, trend }: { width: number; trend: Trend }) {
-  const H = 210
-  const [L, R, T, B] = [34, 34, 26, 24]
-  const n = trend.length
-  const hours = trend.flatMap((t) => (t.night ? [t.night.sleepMinutes / 60] : []))
-  const hrvs = trend.flatMap((t) => (t.night?.hrvMs ? [t.night.hrvMs] : []))
-  const top = Math.max(10, Math.ceil(Math.max(...hours)))
-  const hrvLow = hrvs.length ? Math.floor((Math.min(...hrvs) - 5) / 10) * 10 : 30
-  const hrvHigh = Math.max(hrvLow + 30, hrvs.length ? Math.ceil((Math.max(...hrvs) + 5) / 10) * 10 : 70)
-  const x = (i: number) => L + ((i + 0.5) / n) * (W - L - R)
-  const ys = (h: number) => H - B - (h / top) * (H - T - B)
-  const yh = (v: number) => H - B - ((v - hrvLow) / (hrvHigh - hrvLow)) * (H - T - B)
-  const bar = Math.max(4, Math.min(18, (W - L - R) / n - 6))
-  const hrvTicks = Array.from({ length: (hrvHigh - hrvLow) / 10 - 1 }, (_, i) => hrvLow + 10 * (i + 1))
-  // The HRV line breaks where a night is missing or has no HRV.
-  const path = trend
-    .map((t, i) => {
-      if (!t.night?.hrvMs) return ''
-      const joined = i > 0 && trend[i - 1].night?.hrvMs
-      return `${joined ? 'L' : 'M'}${x(i)},${yh(t.night.hrvMs)}`
-    })
-    .join('')
-  const latest = [...trend].reverse().find((t) => t.night !== null)!
-  const lastNight = latest === trend.at(-1)
-
-  return (
-    <svg className="chart" width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={recoverySummary(trend)}>
-      {[0, SHORT_SLEEP_MINUTES / 60, 8].map((h) => (
-        <text key={h} x={L - 6} y={ys(h) + 4} textAnchor="end">
-          {h}h
-        </text>
-      ))}
-      {hrvTicks.map((v) => (
-        <text key={v} x={W - R + 6} y={yh(v) + 4}>
-          {v}
-        </text>
-      ))}
-      <text x={x(0)} y={H - 6} textAnchor="middle">
-        {shortDay(trend[0].date).split(' ').slice(1).join(' ')}
-      </text>
-      <text x={x(n - 1)} y={H - 6} textAnchor="middle">
-        {shortDay(trend[n - 1].date).split(' ').slice(1).join(' ')}
-      </text>
-      <line x1={L} x2={W - R} y1={ys(0)} y2={ys(0)} stroke="var(--rule)" />
-      <line
-        x1={L}
-        x2={W - R}
-        y1={ys(SHORT_SLEEP_MINUTES / 60)}
-        y2={ys(SHORT_SLEEP_MINUTES / 60)}
-        stroke="var(--ink)"
-        strokeDasharray="4 4"
-      />
-      <Sweep width={W} height={H}>
-      {trend.map(({ date, night }, i) =>
-        night ? (
-          <rect
-            key={date}
-            x={x(i) - bar / 2}
-            y={ys(night.sleepMinutes / 60)}
-            width={bar}
-            height={ys(0) - ys(night.sleepMinutes / 60)}
-            fill={isShortSleep(night) ? 'var(--alert)' : 'var(--easy)'}
-          />
-        ) : (
-          <rect key={date} x={x(i) - bar / 2} y={ys(0) - 2} width={bar} height={2} fill="var(--edge)" />
-        ),
-      )}
-      {/* A paper halo under the line keeps it legible over the bars in either theme. */}
-      <path d={path} fill="none" stroke="var(--paper)" strokeWidth={8} strokeLinejoin="round" strokeLinecap="round" />
-      <path d={path} fill="none" stroke="var(--link)" strokeWidth={3} strokeLinejoin="round" strokeLinecap="round" />
-      {trend.map(({ date, night }, i) =>
-        night?.hrvMs ? (
-          <circle key={date} cx={x(i)} cy={yh(night.hrvMs)} r={4} fill="var(--link)" stroke="var(--paper)" strokeWidth={2} />
-        ) : null,
-      )}
-      </Sweep>
-      <text className="strong" x={W - R} y={12} textAnchor="end">
-        {lastNight ? 'Last night' : shortDay(latest.date)}: {sleepText(latest.night!.sleepMinutes)}
-        {latest.night!.hrvMs !== null && ` · ${latest.night!.hrvMs} ms`}
-      </text>
-    </svg>
-  )
-}
-
-function recoverySummary(trend: Trend): string {
-  const sent = trend.filter((t) => t.night !== null)
-  const short = sent.filter((t) => isShortSleep(t.night!)).length
-  const latest = sent.at(-1)!
-  const when = latest === trend.at(-1) ? 'Last night' : shortDay(latest.date)
-  const hrv = latest.night!.hrvMs === null ? '' : ` and HRV ${latest.night!.hrvMs} ms`
-  return `Sleep and HRV for the last ${trend.length} nights: ${sent.length} from the ring, ${short} under ${SHORT_SLEEP_MINUTES / 60} hours. ${when} ${sleepText(latest.night!.sleepMinutes)}${hrv}.`
-}
-
-// ---------------------------------------------------------------------------
 // Working weights
 
 const REASON: Record<WorkingWeightChange['reason'], string> = {
@@ -830,7 +690,7 @@ function WeightsPanel({ program, changes }: { program: Program; changes: Working
     .find((w) => w.sessions.some((s) => s.type === 'strength'))?.number
   if (rows.length === 0) {
     return (
-      <Panel title="Working weights" sub="Found by calibration, then moved by your RPE." span={6}>
+      <Panel title="Working weights" sub="Found by calibration, then moved by your RPE." span={12}>
         <EmptyState title="No Working weights yet.">
           {firstStrength ? `Week ${firstStrength}’s Strength session finds them.` : 'The first Strength session finds them.'}
         </EmptyState>
@@ -838,7 +698,7 @@ function WeightsPanel({ program, changes }: { program: Program; changes: Working
     )
   }
   return (
-    <Panel title="Working weights" sub="Found by calibration, then moved by your RPE. In pounds." span={6}>
+    <Panel title="Working weights" sub="Found by calibration, then moved by your RPE. In pounds." span={12}>
       <table className="mt-2.5 w-full border-collapse text-[16px]">
         <thead>
           <tr className="border-b border-rule text-left text-label text-muted">

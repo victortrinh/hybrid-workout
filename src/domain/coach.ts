@@ -5,36 +5,22 @@
  * Program and today's date in America/Toronto and it answers the same way
  * every time, which is what makes it testable.
  */
-import { matchActivities, type Activity, type ActivityAnswer, type ActivityOutcome } from './activity'
 import { lighten, RE_ENTRY_PERCENT } from './adapt'
 import { addDays, daysBetween, mondayOf, type LocalDate } from './calendar'
 import { DEFAULT_EQUIPMENT, equip, equipWeek, type Equipment } from './equipment'
 import { logFor, offeredSessions, trained, type LoggedStatus, type SessionLog } from './log'
 import { inOrder, painAdapted, painLevel, standingPain, type PainLevel, type PainReport } from './pain'
 import { currentPaces, type TrainingPaces } from './paces'
-import {
-  easyDayAdapted,
-  isShortSleep,
-  nightOf,
-  readout,
-  shortSleepAdapted,
-  shortSleepCut,
-  type Readout,
-  type RecoveryNight,
-  type ShortSleepCut,
-} from './recovery'
 import type { Phase, PhaseId, Program, Session, SessionType, Week } from './program/types'
 import {
   decisionFor,
   lighterWeekId,
   painId,
   reEntryId,
-  recoveryId,
   type LighterWeekSuggestion,
   type PainSuggestion,
   type ReadinessFlag,
   type ReEntrySuggestion,
-  type RecoverySuggestion,
   type Suggestion,
   type SuggestionDecision,
 } from './suggestion'
@@ -56,12 +42,6 @@ export interface CoachInput {
   equipment?: readonly Equipment[]
   /** Every Pain report, from any day. */
   painReports?: PainReport[]
-  /** Every night of Recovery data the Shortcut has sent. */
-  recoveryNights?: RecoveryNight[]
-  /** Every workout the Workout Shortcut has sent. */
-  activities?: Activity[]
-  /** The athlete's answers to "Which Session was this?". */
-  activityAnswers?: ActivityAnswer[]
   /** The estimates given at first launch, if any. */
   startingPoint?: StartingPoint | null
 }
@@ -84,24 +64,11 @@ export interface BucketEntry {
   log: SessionLog | null
   /** A required Session of a Week that is over: not logged yet, or logged today. */
   late: boolean
-  /** The watch's workout attached to this Session, if any. */
-  activity: Activity | null
   /** Whether it can be picked to do today: not a Session pinned to another day, like the race. */
   pickable: boolean
   /** Still to do: nothing logged, or a required Session of this Week Skipped while it has days left. */
   toDo: boolean
 }
-
-/** A workout more than one Session fits: Today asks which. */
-export type ActivityQuestion = Extract<ActivityOutcome, { state: 'ambiguous' }>
-export type ActivityAttached = Extract<ActivityOutcome, { state: 'attached' }> & {
-  session: Session
-  /** Whether the Session has a log yet: attaching a workout never logs it. */
-  logged: boolean
-}
-
-/** How far back Today still asks about a workout. */
-export const ACTIVITY_QUESTION_DAYS = 7
 
 /** Why there is no Up next today. */
 export type RestReason =
@@ -201,24 +168,6 @@ export interface CoachDay {
   workingWeightChanges: WorkingWeightChange[]
   /** The Pain report standing today, and what the pain rules make of it; null before the first. */
   pain: StandingPain | null
-  /** Last night's Recovery data and what it means for today; null when the Shortcut sent none. */
-  recovery: Readout | null
-  /**
-   * What last night did to Up next: a little less of the main Block and an
-   * RPE cap, or (after the recovery Suggestion is accepted) an easy day. Null
-   * when it changed nothing.
-   */
-  recoveryChange: 'short-sleep' | 'easy-day' | null
-  /** On a short-sleep day, what came off Up next: a rep, a round or a Station; null when only RPE is capped. */
-  recoveryCut: ShortSleepCut | null
-  /** Workouts from the last week that fit more than one Session, oldest first. */
-  activityQuestions: ActivityQuestion[]
-  /**
-   * Workouts attached to a Session, oldest first: today's that the Coach
-   * attached on its own, said once so it's never silent, and any from the
-   * last week whose Session isn't logged yet, so logging it is one tap.
-   */
-  activitiesAttached: ActivityAttached[]
 }
 
 /** The Late sessions Coach-Skipped when Race specific started, and the Weeks they came from (ADR-0007). */
@@ -248,9 +197,6 @@ export function coach({
   decisions = [],
   equipment = DEFAULT_EQUIPMENT,
   painReports = [],
-  recoveryNights = [],
-  activities = [],
-  activityAnswers = [],
   startingPoint = null,
 }: CoachInput): CoachDay {
   const position = positionOf(program, today)
@@ -258,7 +204,7 @@ export function coach({
     position.kind === 'in-week' ? position.week : position.kind === 'before-start' ? 1 : null
   const listed = shownWeek === null ? null : findWeek(program, shownWeek)
   const planned = listed && offeredSessions(program, listed, logs)
-  const readiness: ReadinessInput = { reports: painReports, nights: recoveryNights, today }
+  const readiness: ReadinessInput = { reports: painReports, today }
   const paces = currentPaces(logs, startingPoint?.splitSeconds ?? null, today)
   const strength = strengthState(program, logs, decisions, today, lighterSpans(program, logs, decisions, today, readiness))
   const suggestions = [
@@ -289,17 +235,8 @@ export function coach({
       ? chooseUpNext({ program, logged, logs, today, picked, daysLeft: position.daysLeft })
       : // Before the Program nothing is Up next until the athlete picks a Week 1 Session to do early.
         { upNext: position.kind === 'before-start' ? pickedToday(logged, picked, today) : null, rest: null }
-  const { rest } = chosen
-  const recovery = readout(recoveryNights, today)
-  const recovered = recoveryFor(chosen.upNext, recovery, today, decisions)
-  if (recovered.suggestion) suggestions.push(recovered.suggestion)
-  const upNext = recovered.upNext
-  if (upNext !== chosen.upNext) logged[logged.indexOf(chosen.upNext!)] = upNext!
+  const { rest, upNext } = chosen
   const standing = standingPain(painReports, today)
-  const matched = matchActivities(program, activities, logs, activityAnswers)
-  const attached = new Map(
-    matched.flatMap((o) => (o.state === 'attached' ? [[`${o.week}/${o.sessionId}`, o.activity] as const] : [])),
-  )
 
   return {
     today,
@@ -311,7 +248,6 @@ export function coach({
     bucket: logged.map((entry) => ({
       ...entry,
       state: entry === upNext ? 'next' : entry.log ? entry.log.status : 'planned',
-      activity: attached.get(`${entry.week}/${entry.session.id}`) ?? null,
       pickable: pickableOn(entry.session, today),
       toDo: toDo(entry),
     })),
@@ -326,23 +262,6 @@ export function coach({
     estimatedWeights: startingWeights(startingPoint, strength.weights),
     workingWeightChanges: strength.changes,
     pain: standing && { ...standing, level: painLevel(standing.report.score, standing.previous?.score ?? null) },
-    recovery,
-    recoveryChange: recovered.change,
-    recoveryCut: recovered.cut,
-    activityQuestions: matched
-      .filter((o): o is ActivityQuestion => o.state === 'ambiguous')
-      .filter((o) => o.activity.date <= today && daysBetween(o.activity.date, today) < ACTIVITY_QUESTION_DAYS)
-      .sort((a, b) => a.activity.startedAt.localeCompare(b.activity.startedAt)),
-    activitiesAttached: matched
-      .flatMap((o): ActivityAttached[] => {
-        if (o.state !== 'attached' || o.activity.date > today) return []
-        const logged = logs.some((l) => l.week === o.week && l.sessionId === o.sessionId)
-        const said = o.by === 'coach' && o.activity.date === today
-        if (!said && (logged || daysBetween(o.activity.date, today) >= ACTIVITY_QUESTION_DAYS)) return []
-        const session = findWeek(program, o.week)?.sessions.find((s) => s.id === o.sessionId)
-        return session ? [{ ...o, session, logged }] : []
-      })
-      .sort((a, b) => a.activity.startedAt.localeCompare(b.activity.startedAt)),
   }
 }
 
@@ -667,12 +586,10 @@ export const RE_ENTRY_DAYS = 7
 
 /**
  * Readiness, and the day it is read on: pain only changes the Week holding
- * today; the nights, with the reports, count the Week's Readiness flags.
+ * today; the reports count the Week's Readiness flags.
  */
 export interface ReadinessInput {
   reports: PainReport[]
-  /** Without them, only pain flags the Week. */
-  nights?: RecoveryNight[]
   today: LocalDate
   /** A Session of this Week done today, early or late: today's pain counts for it too. */
   doneToday?: boolean
@@ -705,14 +622,14 @@ export const READINESS_FLAGS = 3
 function lighterWeekFor(
   program: Program,
   week: Week,
-  { reports, nights = [], today }: ReadinessInput,
+  { reports, today }: ReadinessInput,
   decisions: SuggestionDecision[],
   reEntry: ReEntrySuggestion | null,
 ): LighterWeekSuggestion | null {
   if (week.deload || phaseOfWeek(program, week.number).id === 'taper' || reEntry?.decision === 'accepted') return null
   if (today < week.startDate) return null
   const sunday = addDays(week.startDate, 6)
-  const flags = readinessFlags(reports, nights, week.startDate, today < sunday ? today : sunday).slice(0, READINESS_FLAGS)
+  const flags = readinessFlags(reports, week.startDate, today < sunday ? today : sunday).slice(0, READINESS_FLAGS)
   if (flags.length < READINESS_FLAGS) return null
 
   const id = lighterWeekId(week.number)
@@ -733,21 +650,17 @@ function lighterWeekFor(
 
 /**
  * The days from `from` to `to` that Readiness acted on, oldest first: a Pain
- * report the pain rules act on (3 or more, or higher than the one before), or
- * a night under 6 hours ending that morning. A day counts once.
+ * report the pain rules act on (3 or more, or higher than the one before). A
+ * day counts once.
  */
-function readinessFlags(reports: PainReport[], nights: RecoveryNight[], from: LocalDate, to: LocalDate): ReadinessFlag[] {
+function readinessFlags(reports: PainReport[], from: LocalDate, to: LocalDate): ReadinessFlag[] {
   const ordered = inOrder(reports)
   const flags: ReadinessFlag[] = []
   for (let date = from; date <= to; date = addDays(date, 1)) {
     const scores = ordered.flatMap((r, i) =>
       r.date === date && painLevel(r.score, ordered[i - 1]?.score ?? null) ? [r.score] : [],
     )
-    const night = nightOf(nights, date)
-    const sleepMinutes = night && isShortSleep(night) ? night.sleepMinutes : null
-    if (scores.length > 0 || sleepMinutes !== null) {
-      flags.push({ date, painScore: scores.length > 0 ? Math.max(...scores) : null, sleepMinutes })
-    }
+    if (scores.length > 0) flags.push({ date, painScore: Math.max(...scores) })
   }
   return flags
 }
@@ -789,58 +702,6 @@ function painFor(
     decision: decided?.decision ?? 'open',
     decidedOn: decided?.date ?? null,
   }
-}
-
-/**
- * The recovery rules, for today's Up next only, when it is a Hard session:
- * sleep under 6 hours takes a rep, round or Station off (by Session
- * type) and caps RPE; with HRV at least 15%
- * under its mean too, the Coach suggests an easy day, which replaces both
- * once accepted. A day without a night changes nothing.
- */
-function recoveryFor(
-  upNext: Logged | null,
-  recovery: Readout | null,
-  today: LocalDate,
-  decisions: SuggestionDecision[],
-): {
-  upNext: Logged | null
-  suggestion: RecoverySuggestion | null
-  change: CoachDay['recoveryChange']
-  cut: ShortSleepCut | null
-} {
-  const unchanged = { upNext, suggestion: null, change: null, cut: null }
-  if (!upNext || !recovery?.shortSleep || !isHard(upNext.session.type) || upNext.session.date) return unchanged
-
-  const cut = shortSleepCut(upNext.session)
-
-  let suggestion: RecoverySuggestion | null = null
-  if (recovery.easyDay) {
-    const id = recoveryId(today)
-    const decided = decisionFor(decisions, id)
-    suggestion = {
-      id,
-      kind: 'recovery',
-      week: upNext.week,
-      sessionId: upNext.session.id,
-      date: today,
-      cut,
-      trigger: {
-        sleepMinutes: recovery.night.sleepMinutes,
-        hrvMs: recovery.night.hrvMs!,
-        hrvMean: recovery.hrvMean!,
-      },
-      decision: decided?.decision ?? 'open',
-      decidedOn: decided?.date ?? null,
-    }
-  }
-  if (suggestion?.decision === 'accepted') {
-    return { upNext: { ...upNext, session: easyDayAdapted(upNext.session) }, suggestion, change: 'easy-day', cut: null }
-  }
-  const session = shortSleepAdapted(upNext.session, recovery.night)
-  return session === upNext.session
-    ? { ...unchanged, suggestion }
-    : { upNext: { ...upNext, session }, suggestion, change: 'short-sleep', cut }
 }
 
 /**
@@ -979,9 +840,6 @@ function adapt(
           }
         case 'working-weight':
           // Moves a lift's Working weight, not the Prescription: the load is resolved on Start.
-          return adapted
-        case 'recovery':
-          // Today's Up next only: the Coach applies it once Up next is chosen.
           return adapted
       }
     }, hyroxMinutes(stationRules(program, week, logs), logs, paces)),

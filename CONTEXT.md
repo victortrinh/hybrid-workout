@@ -200,17 +200,10 @@ A proposed change to a Prescription or a Week, with a one-line reason, that the 
 _Avoid_: auto-adjustment, recommendation (when meaning a change)
 
 **Readiness**:
-The athlete's state for a day, combining Recovery data and the latest Pain report.
+The athlete's state for a day, read from the latest Pain report.
 
 **Readiness flag**:
-A day the Readiness rules acted on: a Pain report of 3 or more, or rising, or a night under 6 hours. A day counts once. Three in one Week make the Coach suggest the rest of it a third lighter, never in a Deload week or the Taper.
-
-**Recovery data**:
-Sleep duration, heart-rate variability and resting heart rate measured by the ring overnight.
+A day the Readiness rules acted on: a Pain report of 3 or more, or rising. A day counts once. Three in one Week make the Coach suggest the rest of it a third lighter, never in a Deload week or the Taper.
 
 **Pain report**:
 A 0–10 pain score with a body area, given at the start of a Session, in Log after, or at any time; "No" is a score of 0. The latest one stands until the next.
-
-**Activity**:
-A workout recorded by the watch and sent from Apple Health by the Workout Shortcut, which the Coach matches to a Session.
-_Avoid_: using Session for imported data

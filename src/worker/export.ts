@@ -12,6 +12,7 @@ export const EXPORT_TABLES = [
   'set_logs',
   'suggestion_decisions',
   'pain_reports',
+  // Nothing writes these since the Shortcuts went; what they hold is still the athlete's.
   'recovery_nights',
   'activities',
   'activity_answers',

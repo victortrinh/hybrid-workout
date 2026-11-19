@@ -1,3 +1,5 @@
 # Recovery data arrives through an iOS Shortcut, filtered to the ring
 
+_Superseded by [ADR-0011](0011-no-recovery-data-or-activities.md): removed on 19 November 2026._
+
 Sleep, HRV and resting heart rate come from the Ultrahuman ring, but Ultrahuman's API is partner-only and Apple Health has no web API. A personal iOS Shortcut automation therefore reads last night's values from Apple Health each morning, filtered to the ring as the source, and POSTs them to the app. Filtering matters: the Apple Watch also writes HRV and sleep to Health, and mixing two devices would distort the baselines. If the Shortcut does not run, the Readiness rules that need this data simply do not fire; the athlete is never asked to type it in.

@@ -4,8 +4,6 @@
  * front of the whole site (ADR-0001), so no route here handles sign-in.
  */
 import { Hono } from 'hono'
-import { isServiceToken } from './access'
-import { parseActivity, parseActivityAnswer, type Activity, type ActivityAnswer } from '../domain/activity'
 import { localDateIn } from '../domain/calendar'
 import { nowDate } from '../domain/clock'
 import { parseCues, parseSubscription, type Cue, type PushSubscriptionKeys } from '../domain/cues'
@@ -14,7 +12,6 @@ import { isCircuit, isLiveRun } from '../domain/live'
 import { parseSessionLog, RACE_SESSION_ID, resultRange, type SessionLog, type StationPart, type SyncState } from '../domain/log'
 import { parsePainReport, type PainReport } from '../domain/pain'
 import { program } from '../domain/program/program'
-import { parseRecoveryNight, type RecoveryNight } from '../domain/recovery'
 import { parseStartingPoint, type StartingPoint } from '../domain/startingPoint'
 import { parseDecision, type SuggestionDecision } from '../domain/suggestion'
 import { EXPORT_TABLES, readTables, toCsv, zip } from './export'
@@ -67,10 +64,9 @@ app.post('/sync', async (c) => {
   let logs: SessionLog[]
   let decisions: SuggestionDecision[]
   let reports: PainReport[]
-  let answers: ActivityAnswer[]
   let startingPoint: StartingPoint | null
   try {
-    ;({ logs, decisions, reports, answers, startingPoint } = parseSyncRequest(await c.req.json()))
+    ;({ logs, decisions, reports, startingPoint } = parseSyncRequest(await c.req.json()))
   } catch (error) {
     return c.json({ error: error instanceof Error ? error.message : 'Invalid request' }, 400)
   }
@@ -158,16 +154,6 @@ app.post('/sync', async (c) => {
     )
     await c.env.DB.batch(reports.map((r) => upsert.bind(r.id, r.date, r.score, r.area, r.week, r.sessionId, r.updatedAt)))
   }
-  if (answers.length > 0) {
-    const upsert = c.env.DB.prepare(
-      `insert into activity_answers (activity_id, week, session_id, updated_at)
-       values (?, ?, ?, ?)
-       on conflict (activity_id) do update set
-         week = excluded.week, session_id = excluded.session_id, updated_at = excluded.updated_at
-       where excluded.updated_at > activity_answers.updated_at`,
-    )
-    await c.env.DB.batch(answers.map((a) => upsert.bind(a.activityId, a.week, a.sessionId, a.updatedAt)))
-  }
   if (startingPoint) {
     const { splitSeconds, weights, updatedAt } = startingPoint
     await c.env.DB.prepare(
@@ -182,70 +168,6 @@ app.post('/sync', async (c) => {
       .run()
   }
   return c.json(await readState(c.env.DB))
-})
-
-/**
- * One night of Recovery data from the morning iOS Shortcut (ADR-0003). Only
- * the Access service token gets in: Cloudflare Access checks it at the edge
- * (ADR-0001), and the Worker checks it again against its own copy, so a
- * signed-in browser can't post nights and a missing Access policy fails closed.
- * Idempotent per morning: the latest send for a date replaces the last.
- */
-app.post('/recovery', async (c) => {
-  if (!(await isServiceToken(c.req.raw.headers, c.env))) {
-    return c.json({ error: 'Send the Access service token: CF-Access-Client-Id and CF-Access-Client-Secret' }, 401)
-  }
-  let night: RecoveryNight
-  try {
-    night = parseRecoveryNight(await c.req.json(), nowDate().toISOString())
-  } catch (error) {
-    return c.json({ error: error instanceof Error ? error.message : 'Invalid request' }, 400)
-  }
-  await c.env.DB.prepare(
-    `insert into recovery_nights (date, sleep_minutes, hrv_ms, resting_heart_rate, source, received_at)
-     values (?, ?, ?, ?, ?, ?)
-     on conflict (date) do update set
-       sleep_minutes = excluded.sleep_minutes, hrv_ms = excluded.hrv_ms,
-       resting_heart_rate = excluded.resting_heart_rate, source = excluded.source,
-       received_at = excluded.received_at`,
-  )
-    .bind(night.date, night.sleepMinutes, night.hrvMs, night.restingHeartRate, night.source, night.receivedAt)
-    .run()
-  return c.json({ ok: true, night })
-})
-
-/**
- * One workout from the Workout Shortcut, read from Apple Health when an Apple
- * Watch workout ends (ADR-0004). The same service token as /api/recovery, the
- * same checks. Idempotent per workout: it is keyed on its start, so a resend
- * replaces it.
- */
-app.post('/activities', async (c) => {
-  if (!(await isServiceToken(c.req.raw.headers, c.env))) {
-    return c.json({ error: 'Send the Access service token: CF-Access-Client-Id and CF-Access-Client-Secret' }, 401)
-  }
-  let activity: Activity
-  try {
-    activity = parseActivity(await c.req.json(), nowDate().toISOString())
-  } catch (error) {
-    return c.json({ error: error instanceof Error ? error.message : 'Invalid request' }, 400)
-  }
-  await c.env.DB.prepare(
-    `insert into activities
-       (id, date, workout_type, minutes, distance_meters, average_heart_rate, max_heart_rate, indoor, received_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?, ?)
-     on conflict (id) do update set
-       date = excluded.date, workout_type = excluded.workout_type, minutes = excluded.minutes,
-       distance_meters = excluded.distance_meters, average_heart_rate = excluded.average_heart_rate,
-       max_heart_rate = excluded.max_heart_rate, indoor = excluded.indoor, received_at = excluded.received_at`,
-  )
-    .bind(
-      activity.id, activity.date, activity.workoutType, activity.minutes, activity.distanceMeters,
-      activity.averageHeartRate, activity.maxHeartRate, activity.indoor === null ? null : activity.indoor ? 1 : 0,
-      activity.receivedAt,
-    )
-    .run()
-  return c.json({ ok: true, activity })
 })
 
 /**
@@ -315,7 +237,6 @@ function parseSyncRequest(body: unknown): {
   logs: SessionLog[]
   decisions: SuggestionDecision[]
   reports: PainReport[]
-  answers: ActivityAnswer[]
   startingPoint: StartingPoint | null
 } {
   if (typeof body !== 'object' || body === null) throw new Error('The body must be an object')
@@ -323,14 +244,12 @@ function parseSyncRequest(body: unknown): {
     sessionLogs = [],
     suggestionDecisions = [],
     painReports = [],
-    activityAnswers = [],
     startingPoint = null,
   } = body as Record<string, unknown>
   return {
     logs: parseLogs(sessionLogs),
     decisions: parseDecisions(suggestionDecisions),
     reports: parseReports(painReports),
-    answers: parseAnswers(activityAnswers),
     startingPoint: startingPoint === null ? null : parseStarting(startingPoint),
   }
 }
@@ -341,22 +260,6 @@ function parseStarting(raw: unknown): StartingPoint {
   } catch (error) {
     throw new Error(`startingPoint: ${error instanceof Error ? error.message : 'invalid'}`)
   }
-}
-
-function parseAnswers(raw: unknown): ActivityAnswer[] {
-  if (!Array.isArray(raw)) throw new Error('activityAnswers must be an array')
-  if (raw.length > MAX_BATCH) throw new Error(`At most ${MAX_BATCH} answers per sync`)
-  return raw.map((value, i) => {
-    try {
-      const answer = parseActivityAnswer(value)
-      if (answer.week !== null && !findWeek(program, answer.week)?.sessions.some((s) => s.id === answer.sessionId)) {
-        throw new Error(`Week ${answer.week} has no Session "${answer.sessionId}"`)
-      }
-      return answer
-    } catch (error) {
-      throw new Error(`activityAnswers[${i}]: ${error instanceof Error ? error.message : 'invalid'}`)
-    }
-  })
 }
 
 function parseReports(raw: unknown): PainReport[] {
@@ -471,33 +374,6 @@ interface SetRow {
   rpe: number
 }
 
-interface RecoveryRow {
-  date: string
-  sleep_minutes: number
-  hrv_ms: number | null
-  resting_heart_rate: number | null
-  source: string
-  received_at: string
-}
-
-interface ActivityRow {
-  id: string
-  workout_type: string
-  minutes: number
-  distance_meters: number | null
-  average_heart_rate: number | null
-  max_heart_rate: number | null
-  indoor: number | null
-  received_at: string
-}
-
-interface AnswerRow {
-  activity_id: string
-  week: number | null
-  session_id: string | null
-  updated_at: string
-}
-
 interface StartingRow {
   split_seconds: number | null
   back_squat_pounds: number | null
@@ -519,22 +395,16 @@ type StateRow =
   | StationRow
   | SetRow
   | PainRow
-  | RecoveryRow
-  | ActivityRow
-  | AnswerRow
   | StartingRow
 
 async function readState(db: D1Database): Promise<SyncState> {
-  const [{ results }, decisions, intervals, stationRows, setRows, pain, nights, activityRows, answerRows, starting] = (await db.batch<StateRow>([
+  const [{ results }, decisions, intervals, stationRows, setRows, pain, starting] = (await db.batch<StateRow>([
     db.prepare('select * from session_logs order by date, updated_at'),
     db.prepare('select * from suggestion_decisions order by updated_at'),
     db.prepare('select * from interval_logs order by session_log_id, block'),
     db.prepare('select * from station_logs order by session_log_id, round, rowid'),
     db.prepare('select * from set_logs order by session_log_id, exercise, "set"'),
     db.prepare('select * from pain_reports order by date, updated_at'),
-    db.prepare('select * from recovery_nights order by date'),
-    db.prepare('select * from activities order by id'),
-    db.prepare('select * from activity_answers order by updated_at'),
     db.prepare('select * from starting_point'),
   ])) as [
     D1Result<SessionLogRow>,
@@ -543,9 +413,6 @@ async function readState(db: D1Database): Promise<SyncState> {
     D1Result<StationRow>,
     D1Result<SetRow>,
     D1Result<PainRow>,
-    D1Result<RecoveryRow>,
-    D1Result<ActivityRow>,
-    D1Result<AnswerRow>,
     D1Result<StartingRow>,
   ]
   const reps = new Map<string, IntervalRow[]>()
@@ -565,40 +432,6 @@ async function readState(db: D1Database): Promise<SyncState> {
           updatedAt: point.updated_at,
         })
       : null,
-    activities: activityRows.results.map((row) =>
-      parseActivity(
-        {
-          type: row.workout_type,
-          start: row.id,
-          minutes: row.minutes,
-          distanceMeters: row.distance_meters,
-          averageHeartRate: row.average_heart_rate,
-          maxHeartRate: row.max_heart_rate,
-          indoor: row.indoor === null ? null : row.indoor === 1,
-        },
-        row.received_at,
-      ),
-    ),
-    activityAnswers: answerRows.results.map((row) =>
-      parseActivityAnswer({
-        activityId: row.activity_id,
-        week: row.week,
-        sessionId: row.session_id,
-        updatedAt: row.updated_at,
-      }),
-    ),
-    recoveryNights: nights.results.map((row) =>
-      parseRecoveryNight(
-        {
-          date: row.date,
-          sleepMinutes: row.sleep_minutes,
-          hrvMs: row.hrv_ms,
-          restingHeartRate: row.resting_heart_rate,
-          source: row.source,
-        },
-        row.received_at,
-      ),
-    ),
     painReports: pain.results.map((row) =>
       parsePainReport({
         id: row.id,

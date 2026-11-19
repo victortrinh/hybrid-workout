@@ -1,5 +1,5 @@
 import { history } from './history'
-import { nights, scenario } from './scenario'
+import { scenario } from './scenario'
 
 const TODAY = '2027-04-21'
 
@@ -21,7 +21,6 @@ export default scenario({
   server: {
     sessionLogs: h.logs,
     suggestionDecisions: h.decisions,
-    recoveryNights: nights('2027-04-07', TODAY),
   },
   device: { settings: { theme: 'dark' } },
 })

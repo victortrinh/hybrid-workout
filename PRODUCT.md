@@ -26,7 +26,6 @@ A coach for exactly one Program and one athlete. It knows the plan, the race dat
 
 - Days are flexible: a Week is a Bucket of Sessions done in any order; the Coach recommends Up next.
 - During a Live session the phone is usually propped on the treadmill console (read at arm's length while running) or lying on the floor or a bench during HYROX circuits (glanced at from a distance). Often the Apple Watch records the Session and the phone stays in a pocket, so logging happens afterwards.
-- Recovery data (sleep, HRV, resting heart rate) arrives on its own each morning from the Ultrahuman ring via an iOS Shortcut; workouts arrive from the Apple Watch via a second iOS Shortcut when each one ends. The athlete is never asked to type daily data.
 - Reviewing trends and the Program happens on desktop or phone outside training.
 - Domain vocabulary is defined in `CONTEXT.md` and must be used in UI copy.
 
@@ -35,7 +34,7 @@ A coach for exactly one Program and one athlete. It knows the plan, the race dat
 - Today: Up next, the rest of the Week's Bucket, race countdown, "Something hurts", and the Projected finish in one line linking to Progress.
 - Live session: interval timer with treadmill speed and incline cues, set logger with rest timer, HYROX round clock with the Station target to beat, wake lock, haptic and sound cues; logging afterwards is always possible.
 - Plan: Phases and Weeks timeline; Session logs for past Sessions.
-- Progress: Projected finish with its Doubles share, Station bests at race volume, Race run pace from the Compromised run tests, Working weights, Race simulation times, weekly completion and Training load, recovery trends.
+- Progress: Projected finish with its Doubles share, Station bests at race volume, Race run pace from the Compromised run tests, Working weights, Race simulation times, weekly completion and Training load.
 - Settings: treadmill units (km/h default, mph option), Environment defaults, equipment profile, integrations, export.
 - Free to run; works offline in the gym; English only; America/Toronto time zone.
 - Units: distances and speeds are metric (km, m, km/h, with an mph option for the treadmill); every weight is in pounds (lb), matching the gym's plates and dumbbells.

@@ -8,7 +8,6 @@ import { describeSession, LIFT_NAME, sessionName } from '../domain/program/descr
 import { program } from '../domain/program/program'
 import type { Dropped, RestAnyway, RestReason } from '../domain/coach'
 import type { Session } from '../domain/program/types'
-import { CUT_NOUN, EASY_DAY_MINUTES, SLEEP_RPE_CAP, sleepText, type ShortSleepCut } from '../domain/recovery'
 import { finishClock, type ProgramRecap, type RaceResult } from '../domain/recap'
 import type { ReadinessFlag, Suggestion } from '../domain/suggestion'
 import { plural, shortDay, shortWeekday, weekday } from './format'
@@ -63,17 +62,6 @@ export function suggestionCopy(s: Suggestion): SuggestionCopy {
         kept: 'Keeping it as written. Your call. Stop if it gets worse.',
       }
     }
-    case 'recovery': {
-      const { sleepMinutes, hrvMs, hrvMean } = s.trigger
-      const down = Math.round(((hrvMean - hrvMs) / hrvMean) * 100)
-      return {
-        line: `Slept ${sleepText(sleepMinutes)} and HRV is down ${down}%. Your nervous system called in sick. Easy ${EASY_DAY_MINUTES}′ or rest today.`,
-        why: recoveryWhy(sleepMinutes, hrvMs, hrvMean),
-        keep: s.cut ? `Keep it, one ${CUT_NOUN[s.cut]} fewer` : `Keep it, capped at RPE ${SLEEP_RPE_CAP}`,
-        accepted: `Done. Easy ${EASY_DAY_MINUTES}′ or nothing. The hard one waits for a better night.`,
-        kept: `Keeping it. ${s.cut ? `One ${CUT_NOUN[s.cut]} fewer, nothing` : 'Nothing'} past RPE ${SLEEP_RPE_CAP}. Your call.`,
-      }
-    }
     case 'working-weight': {
       const lift = LIFT_NAME[s.lift]
       const from = `${s.from.pounds} lb`
@@ -109,22 +97,9 @@ export function suggestionCopy(s: Suggestion): SuggestionCopy {
   }
 }
 
-/** One Readiness flag in a few words: "Mon pain 4", "Tue slept 5 h 20", "Wed pain 3, slept 5 h 50". */
-function flagWords({ date, painScore, sleepMinutes }: ReadinessFlag): string {
-  const what = [painScore !== null && `pain ${painScore}`, sleepMinutes !== null && `slept ${sleepText(sleepMinutes)}`].filter(Boolean)
-  return `${shortWeekday(date)} ${what.join(', ')}`
-}
-
-/** The numbers behind a recovery change: "Sleep 5 h 41 · HRV 38 ms against a 52 ms average". */
-export function recoveryWhy(sleepMinutes: number, hrvMs: number | null, hrvMean: number | null): string {
-  const hrv = hrvMs === null ? '' : ` · HRV ${hrvMs} ms${hrvMean === null ? '' : ` against a ${hrvMean} ms average`}`
-  return `Sleep ${sleepText(sleepMinutes)}${hrv}`
-}
-
-/** Today's line when short sleep alone changed Up next, naming what came off it. */
-export function shortSleepLine(sleepMinutes: number, cut: ShortSleepCut | null): string {
-  const what = cut ? `One fewer ${CUT_NOUN[cut]}, nothing` : 'Nothing'
-  return `Slept ${sleepText(sleepMinutes)}. Bold of you. ${what} past RPE ${SLEEP_RPE_CAP}.`
+/** One Readiness flag in a few words: "Mon pain 4". */
+function flagWords({ date, painScore }: ReadinessFlag): string {
+  return `${shortWeekday(date)} pain ${painScore}`
 }
 
 /** The pain step's line and a pain Suggestion's: what the score does to training. */

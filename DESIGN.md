@@ -248,12 +248,12 @@ Each Session type owns one colour, used only for that type, in lane chips, Plan 
 - **Burnt Orange** (`threshold`): Run sessions (threshold and compromised intervals).
 - **Infield Green** (`hyrox`): HYROX sessions.
 - **Plate Violet** (`strength`): Strength sessions.
-- **Warm-up Grey** (`easy`): Easy runs, warm-ups, jogs and cooldowns; also normal-night sleep bars.
+- **Warm-up Grey** (`easy`): Easy runs, warm-ups, jogs and cooldowns.
 
 Dark theme lifts each to a brighter sibling (`*-dark`) for contrast on near-black.
 
 ### Tertiary: status
-- **Alert Orange** (`alert`): short-sleep bars and caution data. Shares the threshold hue.
+- **Alert Orange** (`alert`): caution data. Shares the threshold hue.
 - **Done Green** (`good`): a logged set's "Logged" label. Shares the HYROX hue.
 
 ### Neutral
@@ -306,7 +306,7 @@ Vertical rhythm is tight within a group and generous between groups: 4–6px ins
 ### Named Rules
 **The One Answer Rule.** Each screen opens with one hero number or one instruction in the first viewport; everything else follows as rows. A screen has at most one cobalt primary: on the Week screen it is the Session Today offers as Next (tagged Next, with Today's Start / Log after pair); every other Session gets a line Start and a Log after link.
 
-**The Exercise Row Rule.** In an exercise row the name is 700 and the prescription after it is 400: the numbers stand out by tabular figures, not by weight. Notes follow in Body Quiet; a substitution ("Instead, if…") sits apart behind a 2px `edge` left rule. Setup steps (the Shortcut pages) follow the same contrast: the step text is 400, the action names in it bold. In a strength Live session each exercise is its own block, 20px above and below its hairline.
+**The Exercise Row Rule.** In an exercise row the name is 700 and the prescription after it is 400: the numbers stand out by tabular figures, not by weight. Notes follow in Body Quiet; a substitution ("Instead, if…") sits apart behind a 2px `edge` left rule. In a strength Live session each exercise is its own block, 20px above and below its hairline.
 
 ## Elevation & Depth
 
@@ -322,7 +322,7 @@ Inset 2px box-shadows on toggles, steppers, line buttons and Plan cells are stro
 
 ## Shapes
 
-Square-shouldered. Controls take a 4px corner (`rounded.sm`); lanes, Plan cells, chart bars and rules are dead square (`rounded.none`); the avatar is the one circle (`rounded.full`). Lanes are flat bars with hard ends, never pills. Chart markers are squares (test points), never dots, except the latest HRV reading.
+Square-shouldered. Controls take a 4px corner (`rounded.sm`); lanes, Plan cells, chart bars and rules are dead square (`rounded.none`); the avatar is the one circle (`rounded.full`). Lanes are flat bars with hard ends, never pills. Chart markers are squares (test points), never dots.
 
 ## Components
 
@@ -383,7 +383,7 @@ On the phone a screen's primary action sits at the bottom, where the thumb alrea
 Sticky cobalt strip at the bottom of a strength Live session, in two rows: "Rest", an 8px field lane, the countdown at 26px/900 expanded and Skip; then the set's RPE as a white-stroked 54px chip and the next set's Log set in white with a cobalt label. Tapping the RPE swaps the row for six white-stroked toggles; the picked one inverts to white, as the side rail's active item does.
 
 ### Charts
-SVG on paper: 12px/600 muted axis text, `rule` gridlines, Session-type stacked bars, `link` plan and HRV lines, `speed` goal line, square markers, one bold ink annotation for the latest value.
+SVG on paper: 12px/600 muted axis text, `rule` gridlines, Session-type stacked bars, `link` plan lines, `speed` goal line, square markers, one bold ink annotation for the latest value.
 
 ## Motion
 

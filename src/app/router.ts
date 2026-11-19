@@ -4,15 +4,13 @@
  */
 import { useSyncExternalStore } from 'react'
 
-export type Screen = 'today' | 'log' | 'live' | 'plan' | 'week' | 'progress' | 'shortcut' | 'workouts' | 'not-found'
+export type Screen = 'today' | 'log' | 'live' | 'plan' | 'week' | 'progress' | 'not-found'
 
 const PATHS: Record<string, Screen> = {
   '/': 'today',
   '/live': 'live',
   '/plan': 'plan',
   '/progress': 'progress',
-  '/settings/shortcut': 'shortcut',
-  '/settings/workouts': 'workouts',
 }
 
 export const SCREEN_PATH: Record<Exclude<Screen, 'log' | 'week' | 'not-found'>, string> = {
@@ -21,10 +19,6 @@ export const SCREEN_PATH: Record<Exclude<Screen, 'log' | 'week' | 'not-found'>, 
   live: '/live',
   plan: '/plan',
   progress: '/progress',
-  /** Settings → Recovery Shortcut: how to set up the morning iOS Shortcut. */
-  shortcut: '/settings/shortcut',
-  /** Settings → Workout Shortcut: how to send Apple Watch workouts from Apple Health. */
-  workouts: '/settings/workouts',
 }
 
 export const weekPath = (week: number) => `/plan/week/${week}`

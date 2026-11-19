@@ -9,7 +9,6 @@
 import { localDate, type LocalDate } from './calendar'
 import type { PainArea, PainLevel } from './pain'
 import type { LiftId } from './program/types'
-import type { ShortSleepCut } from './recovery'
 
 export const DECISIONS = ['open', 'accepted', 'kept'] as const
 
@@ -51,15 +50,13 @@ export interface ReEntrySuggestion {
 }
 
 /**
- * A day Readiness acted on: a Pain report of 3 or more, or rising, or a night
- * under 6 hours. A day counts once, whatever flagged it.
+ * A day Readiness acted on: a Pain report of 3 or more, or rising. A day
+ * counts once.
  */
 export interface ReadinessFlag {
   date: LocalDate
-  /** The highest score the pain rules acted on that day; null when only the night flagged it. */
-  painScore: number | null
-  /** The short night ending that morning; null when only pain flagged it. */
-  sleepMinutes: number | null
+  /** The highest score the pain rules acted on that day. */
+  painScore: number
 }
 
 /** The rest of a Week a third lighter, after three Readiness flags in it: the lighter-Week Suggestion, like re-entry's. */
@@ -99,28 +96,6 @@ export interface PainSuggestion {
     area: PainArea | null
     /** The report before it, when this one is higher: rising pain. */
     risingFrom: number | null
-  }
-  decision: Decision
-  decidedOn: LocalDate | null
-}
-
-/** A short night with low HRV: today's Hard session as an easy 30′, or rest. */
-export interface RecoverySuggestion {
-  id: string
-  kind: 'recovery'
-  /** The Week of the Session it changes. */
-  week: number
-  /** The Hard session Up next on the morning. */
-  sessionId: string
-  /** The morning: the change is for this day only. */
-  date: LocalDate
-  /** What the short-sleep rule takes off the Session if the athlete keeps it; null when only RPE is capped. */
-  cut: ShortSleepCut | null
-  trigger: {
-    sleepMinutes: number
-    hrvMs: number
-    /** The 7-night mean the HRV is compared with. */
-    hrvMean: number
   }
   decision: Decision
   decidedOn: LocalDate | null
@@ -166,16 +141,12 @@ export type Suggestion =
   | LighterWeekSuggestion
   | WorkingWeightSuggestion
   | PainSuggestion
-  | RecoverySuggestion
 
 export const reEntryId = (week: number) => `re-entry-w${week}`
 export const lighterWeekId = (week: number) => `lighter-week-w${week}`
 export const workingWeightId = (lift: LiftId, week: number) => `ww-${lift}-w${week}`
 /** One per Pain report: a decision on it stands as long as the report does. */
 export const painId = (reportId: string) => `pain-${reportId}`
-
-/** One per morning: whichever Hard session is Up next that day. */
-export const recoveryId = (date: LocalDate) => `recovery-${date}`
 
 const ID = /^[a-z0-9-]{1,64}$/
 const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/

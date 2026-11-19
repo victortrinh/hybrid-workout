@@ -7,9 +7,7 @@
  */
 import { addDays, daysBetween, localDate, type LocalDate } from './calendar'
 import { ENVIRONMENTS, type Environment } from './paces'
-import type { Activity, ActivityAnswer } from './activity'
 import type { PainReport } from './pain'
-import type { RecoveryNight } from './recovery'
 import type { StartingPoint } from './startingPoint'
 import { LIFTS, type LiftId, type Program, type Range, type Week } from './program/types'
 import { stations } from './program/program'
@@ -127,12 +125,6 @@ export interface SyncState {
   sessionLogs: SessionLog[]
   suggestionDecisions: SuggestionDecision[]
   painReports: PainReport[]
-  /** Sent by the morning Shortcut, never by a device; older servers and stand-ins may leave it out. */
-  recoveryNights?: RecoveryNight[]
-  /** Sent by the Workout Shortcut, never by a device; older servers and stand-ins may leave it out. */
-  activities?: Activity[]
-  /** The athlete's answers to "Which Session was this?". */
-  activityAnswers?: ActivityAnswer[]
   /** Null until the athlete answers the Starting point; older servers and stand-ins may leave it out. */
   startingPoint?: StartingPoint | null
 }

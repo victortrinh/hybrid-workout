@@ -17,8 +17,8 @@ export type SuggestionBlock =
 /** Blocks shown above This Week; the rest wait behind "more from the Coach". */
 export const VISIBLE_BLOCKS = 2
 
-/** What matters most first: pain, then last night, then the Week, then the lifts. */
-const ORDER: Record<Suggestion['kind'], number> = { pain: 0, recovery: 1, 'lighter-week': 2, 're-entry': 3, 'working-weight': 4 }
+/** What matters most first: pain, then the Week, then the lifts. */
+const ORDER: Record<Suggestion['kind'], number> = { pain: 0, 'lighter-week': 1, 're-entry': 2, 'working-weight': 3 }
 
 /** Open Suggestions, and those decided today so Undo stays one tap away, most important first. */
 export function suggestionBlocks(suggestions: Suggestion[], today: LocalDate): SuggestionBlock[] {

@@ -1,5 +1,5 @@
 import { history } from './history'
-import { nights, scenario } from './scenario'
+import { scenario } from './scenario'
 
 const TODAY = '2027-02-25'
 
@@ -16,21 +16,17 @@ h.log(16, 'run', '2027-02-22')
  * Working weights found and progressed since Week 1, fifteen Weeks of Station
  * logs behind, and the half Race simulation, the Key session, still to do at
  * Race loads. The left Achilles went from 2 to 3 yesterday, so the pain rules
- * stand; last night was 5 h 20 with HRV well under its mean, so Readiness is
- * low and the Coach suggests an easy day.
+ * stand.
  */
 export default scenario({
   name: 'race-specific',
-  summary: 'Week 16: Working weights, Station logs, pain and low Readiness',
+  summary: 'Week 16: Working weights, Station logs and pain',
   today: TODAY,
   time: '06:40',
   server: {
     sessionLogs: h.logs,
     suggestionDecisions: h.decisions,
     painReports: h.painReports,
-    recoveryNights: nights('2027-02-11', TODAY, (night) =>
-      night.date === TODAY ? { ...night, sleepMinutes: 320, hrvMs: 41, restingHeartRate: 57 } : night,
-    ),
   },
   device: { settings: { theme: 'dark' } },
 })

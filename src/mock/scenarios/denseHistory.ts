@@ -1,6 +1,6 @@
 import { EQUIPMENT } from '../../domain/equipment'
 import { history } from './history'
-import { nights, scenario, workout } from './scenario'
+import { scenario } from './scenario'
 
 const TODAY = '2027-03-04'
 const FULL_GYM = [...EQUIPMENT]
@@ -22,8 +22,7 @@ h.log(17, 'hyrox-a', '2027-03-01').log(17, 'strength', '2027-03-03')
 /**
  * Thursday 4 March 2027, Week 17: sixteen Weeks logged with a few Partial
  * and Skipped Sessions, three Compromised run tests, a Race simulation, every Working
- * weight's climb, three months of nights from the ring and a fortnight of
- * watch workouts. For Progress, Training load and the export with real data.
+ * weight's climb. For Progress, Training load and the export with real data.
  * A gym with every machine, so no Substitutions.
  */
 export default scenario({
@@ -35,15 +34,6 @@ export default scenario({
     sessionLogs: h.logs,
     suggestionDecisions: h.decisions,
     painReports: h.painReports,
-    recoveryNights: nights('2026-12-01', TODAY, (night, i) => (i % 17 === 9 ? null : night)),
-    activities: [
-      workout('2027-02-22', '23:00', 'Running', 50, { distanceKm: 9.4, indoor: false }),
-      workout('2027-02-24', '23:00', 'Traditional Strength Training', 62),
-      workout('2027-02-26', '23:00', 'Running', 55, { distanceKm: 11.2, indoor: false }),
-      workout('2027-02-28', '16:00', 'Functional Strength Training', 70),
-      workout('2027-03-01', '23:00', 'Running', 48, { indoor: true }),
-      workout('2027-03-03', '23:00', 'Traditional Strength Training', 60),
-    ],
   },
   device: { settings: { equipment: FULL_GYM } },
 })

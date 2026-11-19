@@ -240,7 +240,6 @@ Projected finish = sum of the eight Station bests at full Station volume + 8 × 
 
 1. RPE 7 ≈ 3 reps in reserve; RPE 8 ≈ 2.
 2. Pain ≥ 3 or rising the next morning → no burpee broad jumps or sled push that day (row or SkiErg instead), interval reps −30%. Pain ≥ 5 → easy/low-impact Session or rest.
-3. Sleep under 6 h → one rep fewer, one round fewer, and an RPE cap.
-4. Station targets are to beat, not to chase at the cost of form; technique before speed.
-5. Threshold reps are never raced.
-6. Finish every Hard session fresh enough for the next one.
+3. Station targets are to beat, not to chase at the cost of form; technique before speed.
+4. Threshold reps are never raced.
+5. Finish every Hard session fresh enough for the next one.
